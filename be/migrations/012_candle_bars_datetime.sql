@@ -1,0 +1,2 @@
+-- Applied automatically by MigrateCandleBarsV2IfNeeded on startup.
+-- Converts candle_bars.bar_time from VARCHAR to DATETIME for index-friendly pagination.

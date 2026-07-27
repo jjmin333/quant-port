@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS news_articles (
+  id              VARCHAR(64)  NOT NULL PRIMARY KEY,
+  market          VARCHAR(16)  NOT NULL DEFAULT 'domestic',
+  url_hash        CHAR(64)     NOT NULL,
+  url             TEXT         NOT NULL,
+  headline        VARCHAR(512) NOT NULL,
+  summary         TEXT         NULL,
+  source_id       VARCHAR(32)  NOT NULL,
+  tags_json       JSON         NULL,
+  symbols_json    JSON         NULL,
+  keywords_json   JSON         NULL,
+  published_at    DATETIME(3)  NOT NULL,
+  view_count      INT          NOT NULL DEFAULT 0,
+  highlighted     TINYINT(1)   NOT NULL DEFAULT 0,
+  created_at      DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at      DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uk_news_url_hash (url_hash),
+  KEY idx_news_market_published (market, published_at DESC),
+  KEY idx_news_source_published (source_id, published_at DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

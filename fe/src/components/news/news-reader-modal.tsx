@@ -1,0 +1,193 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { ExternalLink, Loader2, X } from "lucide-react";
+import type { NewsArticle, NewsReaderContent } from "@/lib/news-types";
+import { fetchNewsReader } from "@/lib/news-api";
+import { formatRelativeTime } from "@/lib/format-news";
+import {
+  NewsPreviewZoomToolbar,
+  NewsPreviewZoomViewport,
+  useNewsPreviewZoom,
+} from "@/components/news/news-preview-zoom";
+import { cn } from "@/lib/utils";
+
+type NewsReaderModalProps = {
+  article: NewsArticle | null;
+  onClose: () => void;
+};
+
+export function NewsReaderModal({ article, onClose }: NewsReaderModalProps) {
+  const previewZoom = useNewsPreviewZoom();
+  const [content, setContent] = useState<NewsReaderContent | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    previewZoom.reset();
+  }, [article?.id, previewZoom.reset]);
+
+  useEffect(() => {
+    if (!article?.url || article.url === "#") {
+      setContent(null);
+      setError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setContent(null);
+
+    fetchNewsReader(article.url)
+      .then((data) => {
+        if (!cancelled) {
+          setContent(data);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "본문을 불러오지 못했습니다");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [article]);
+
+  useEffect(() => {
+    if (!article) {
+      return;
+    }
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [article, onClose]);
+
+  if (!article) {
+    return null;
+  }
+
+  const title = content?.title || article.headline;
+  const hasUrl = Boolean(article.url && article.url !== "#");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+      <button
+        type="button"
+        aria-label="닫기"
+        className="absolute inset-0 bg-black/60 backdrop-blur-[1px]"
+        onClick={onClose}
+      />
+
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="news-reader-title"
+        className="relative flex h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-[var(--border)] bg-[var(--surface-elevated)] shadow-2xl sm:h-[85vh] sm:rounded-2xl"
+      >
+        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border)] px-4 py-4 sm:px-5">
+          <div className="min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold",
+                  article.publisher.badgeClass,
+                )}
+              >
+                {article.publisher.name}
+              </span>
+              <span className="rounded-md bg-violet-500/15 px-2 py-0.5 text-[11px] font-semibold text-violet-300">
+                Reader API
+              </span>
+              <time dateTime={article.publishedAt} className="text-[11px] text-[var(--text-muted)]">
+                {formatRelativeTime(article.publishedAt)}
+              </time>
+            </div>
+            <h2
+              id="news-reader-title"
+              className="text-base font-semibold leading-snug text-[var(--text-primary)] sm:text-lg"
+            >
+              {title}
+            </h2>
+            {content?.byline && (
+              <p className="text-xs text-[var(--text-muted)]">{content.byline}</p>
+            )}
+            {content?.excerpt && (
+              <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{content.excerpt}</p>
+            )}
+          </div>
+
+          <button
+            type="button"
+            aria-label="닫기"
+            onClick={onClose}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface)] hover:text-[var(--text-primary)]"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        <div className="flex min-h-0 flex-1 flex-col bg-[var(--background)]">
+          <div className="flex shrink-0 items-center justify-end border-b border-[var(--border)] px-4 py-2 sm:px-5">
+            <NewsPreviewZoomToolbar {...previewZoom} />
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-8 sm:py-6">
+            {loading && (
+              <div className="flex h-40 items-center justify-center gap-2 text-sm text-[var(--text-muted)]">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                본문 추출 중…
+              </div>
+            )}
+            {error && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                {error}
+              </div>
+            )}
+            {!loading && !error && content && (
+              <NewsPreviewZoomViewport zoom={previewZoom.zoom}>
+                <article className="mx-auto max-w-2xl whitespace-pre-wrap text-[15px] leading-7 text-[var(--text-primary)]">
+                  {content.textContent}
+                </article>
+              </NewsPreviewZoomViewport>
+            )}
+          </div>
+        </div>
+
+        <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border)] px-4 py-3 sm:px-5">
+          <span className="text-[11px] text-[var(--text-muted)]">
+            {content?.siteName ? `${content.siteName} · ` : ""}Reader API 추출
+          </span>
+          {hasUrl && (
+            <a
+              href={article.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--background)]"
+            >
+              원문 새 탭에서 열기
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          )}
+        </footer>
+      </div>
+    </div>
+  );
+}

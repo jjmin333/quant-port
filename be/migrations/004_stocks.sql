@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS stocks (
+  symbol              VARCHAR(32)  NOT NULL PRIMARY KEY,
+  name                VARCHAR(200) NOT NULL,
+  english_name        VARCHAR(200) NOT NULL DEFAULT '',
+  isin_code           VARCHAR(20)  NOT NULL DEFAULT '',
+  market              VARCHAR(32)  NOT NULL,
+  security_type       VARCHAR(64)  NOT NULL DEFAULT '',
+  currency            CHAR(3)      NOT NULL,
+  asset_type          VARCHAR(16)  NOT NULL DEFAULT 'domestic',
+  status              VARCHAR(32)  NOT NULL DEFAULT 'NORMAL',
+  shares_outstanding  BIGINT UNSIGNED NULL,
+  list_date           DATE NULL,
+  delist_date         DATE NULL,
+  created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_stocks_name (name),
+  INDEX idx_stocks_market_currency (market, currency),
+  INDEX idx_stocks_asset_type (asset_type),
+  FULLTEXT INDEX ft_stocks_search (symbol, name, english_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

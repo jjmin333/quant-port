@@ -1,0 +1,17 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: quant-port-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - quant_port_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  quant_port_redis_data:

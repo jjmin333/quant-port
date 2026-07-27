@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quant Port — 통합 대시보드 레이아웃 제안 v1</title>
+  <style>
+    /* quant-port general(dark) 토큰 근사 */
+    :root {
+      --background: #0b0f17;
+      --surface: #111827;
+      --surface-elevated: #1a2030;
+      --border: #1f2937;
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent: #3b82f6;
+      --accent-muted: rgba(59, 130, 246, 0.12);
+      --profit: #ef4444;
+      --loss: #3b82f6;
+      --live: #22c55e;
+      --eod: #64748b;
+      --max: 1280px;
+      --radius: 14px;
+      --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+      --mono: "Geist Mono", "Consolas", monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--background);
+      color: var(--text-primary);
+      font-family: var(--font);
+      line-height: 1.5;
+      padding: 24px 16px 64px;
+    }
+
+    .wrap { max-width: var(--max); margin: 0 auto; }
+
+    /* ── 목업 컨트롤 ── */
+    .mockup-bar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      margin-bottom: 20px;
+      padding: 12px 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .mockup-bar h1 { font-size: 14px; font-weight: 700; }
+    .mockup-bar p { font-size: 12px; color: var(--text-muted); max-width: 520px; }
+    .tabs { display: flex; gap: 6px; }
+    .tab {
+      border: 1px solid var(--border);
+      background: var(--surface-elevated);
+      color: var(--text-secondary);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .tab.active { border-color: var(--accent); color: var(--accent); background: var(--accent-muted); }
+    .toggle-row { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--text-secondary); }
+    .toggle-row input { accent-color: var(--accent); }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .note-box {
+      margin-bottom: 20px;
+      padding: 14px 16px;
+      border-left: 3px solid var(--accent);
+      background: var(--accent-muted);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .note-box strong { color: var(--text-primary); }
+
+    /* ── 공통 ── */
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+    .card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 16px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+    }
+    .pill.live { color: var(--live); border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.08); }
+    .pill.eod { color: var(--eod); }
+    .pill.closed { color: var(--text-muted); }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .up { color: var(--profit); }
+    .down { color: var(--loss); }
+    .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .api-tag {
+      display: inline-block;
+      margin-top: 8px;
+      font-size: 10px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+    }
+    .anno {
+      outline: 1px dashed rgba(59,130,246,.45);
+      outline-offset: 3px;
+      position: relative;
+    }
+    .anno::after {
+      content: attr(data-anno);
+      position: absolute;
+      top: -8px;
+      right: 8px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      color: var(--accent);
+      background: var(--background);
+      padding: 0 4px;
+    }
+
+    /* ── CURRENT ── */
+    .current-only { padding: 32px; text-align: center; color: var(--text-muted); }
+    .current-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 10px;
+    }
+    .index-mini {
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+    }
+    .index-mini .name { font-size: 12px; color: var(--text-muted); }
+    .index-mini .val { font-size: 18px; font-weight: 700; margin-top: 4px; }
+
+    /* ── PROPOSED ── */
+    .pulse {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .pulse-left { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .pulse-right { font-size: 13px; color: var(--text-secondary); }
+    .pulse-right strong { color: var(--text-primary); font-family: var(--mono); }
+
+    .hero-row {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 800px) { .hero-row { grid-template-columns: 1fr; } }
+
+    .hero-kospi {
+      padding: 20px 22px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, var(--surface) 0%, var(--surface-elevated) 100%);
+    }
+    .hero-kospi .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .hero-kospi h2 { font-size: 15px; font-weight: 600; color: var(--text-secondary); }
+    .hero-kospi .price { font-size: 36px; font-weight: 800; letter-spacing: -0.02em; margin: 8px 0 4px; }
+    .hero-kospi .sub { font-size: 12px; color: var(--text-muted); }
+    .hero-kospi .delta { font-size: 15px; font-weight: 600; margin-top: 6px; }
+
+    .key-strip {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .key-item {
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+    }
+    .key-item .label { font-size: 11px; color: var(--text-muted); }
+    .key-item .val { font-size: 17px; font-weight: 700; margin-top: 2px; }
+    .key-item .chg { font-size: 11px; margin-top: 2px; }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 900px) { .main-grid { grid-template-columns: 1fr; } }
+
+    .watch-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .watch-table th {
+      text-align: left;
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+      padding: 0 8px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .watch-table td { padding: 10px 8px; border-bottom: 1px solid rgba(31,41,55,.6); }
+    .watch-table tr:last-child td { border-bottom: none; }
+    .sym { font-weight: 600; }
+    .sym small { display: block; font-size: 11px; color: var(--text-muted); font-weight: 400; }
+
+    .news-list { list-style: none; }
+    .news-list li {
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(31,41,55,.6);
+      font-size: 13px;
+    }
+    .news-list li:last-child { border-bottom: none; }
+    .news-meta { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+    .bottom-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 700px) { .bottom-row { grid-template-columns: 1fr; } }
+
+    .chip-scroll {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .chip {
+      flex: 0 0 auto;
+      min-width: 120px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface-elevated);
+    }
+    .chip .label { font-size: 10px; color: var(--text-muted); }
+    .chip .val { font-size: 14px; font-weight: 700; margin-top: 2px; }
+
+    .portfolio-banner {
+      margin-top: 16px;
+      padding: 14px 16px;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      background: rgba(59,130,246,.06);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .portfolio-banner.hidden { display: none; }
+
+    .legend {
+      margin-top: 28px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+    .legend h3 { font-size: 13px; margin-bottom: 10px; }
+    .legend table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .legend th, .legend td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+    .legend th { color: var(--text-muted); font-weight: 500; }
+    .legend code { font-family: var(--mono); font-size: 11px; color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="mockup-bar">
+      <div>
+        <h1>Quant Port · 통합 대시보드 레이아웃 제안 v1</h1>
+        <p>레퍼런스 UI 복제가 아닌, <strong style="color:var(--text-primary)">한눈에 보기</strong> 개선안입니다. 다크 테마 유지. 주석(A1~…)은 구현 시 섹션 ID로 사용 가능.</p>
+      </div>
+      <div class="tabs">
+        <button class="tab active" data-view="current">현재 (계좌 숨김)</button>
+        <button class="tab" data-view="proposed">제안 레이아웃</button>
+      </div>
+    </div>
+
+    <!-- ═══ CURRENT ═══ -->
+    <div id="view-current" class="view active">
+      <div class="note-box">
+        <strong>현재 상태</strong> — <code>ACCOUNT_FEATURES_VISIBLE=false</code> 이므로
+        <code>DashboardClient</code>(자산·보유·브리핑)가 렌더되지 않고
+        <strong>MarketOverview(지수 12개 그리드)만</strong> 표시됩니다.
+      </div>
+      <div class="section-label">통합 대시보드 · as-is</div>
+      <div class="current-grid">
+        <div class="index-mini"><div class="name">KOSPI</div><div class="val mono">6,690.62</div></div>
+        <div class="index-mini"><div class="name">KOSDAQ</div><div class="val mono">748.22</div></div>
+        <div class="index-mini"><div class="name">USD/KRW</div><div class="val mono">1,466</div></div>
+        <div class="index-mini"><div class="name">S&P 500</div><div class="val mono">7,411</div></div>
+        <div class="index-mini"><div class="name">… ×12</div><div class="val mono" style="font-size:14px;color:var(--text-muted)">동일 크기 카드</div></div>
+      </div>
+      <p class="current-only">↓ 그 아래 빈 공간 (스크롤 끝까지 콘텐츠 없음)</p>
+    </div>
+
+    <!-- ═══ PROPOSED ═══ -->
+    <div id="view-proposed" class="view">
+      <div class="note-box">
+        <strong>제안 핵심</strong> — 지수만 균일 그리드 → <strong>시장 pulse + 핵심 숫자 + 관심/뉴스</strong> 3층 구조.
+        계좌 연동 켜면 하단 배너 영역에 기존 <code>DashboardClient</code> 삽입 (BE 변경 없음).
+      </div>
+
+      <label class="toggle-row" style="margin-bottom:14px">
+        <input type="checkbox" id="show-portfolio" />
+        계좌 연동 ON일 때 포트폴리오 섹션 표시 (미리보기)
+      </label>
+
+      <!-- A0 -->
+      <div class="pulse anno" data-anno="A0">
+        <div class="pulse-left">
+          <span class="pill live"><span class="dot"></span> 해외 ETF·암호화폐 실시간</span>
+          <span class="pill eod"><span class="dot"></span> 국내·FRED 종가</span>
+          <span class="pill closed"><span class="dot"></span> 국내장 마감 · 개장 21h 45m</span>
+        </div>
+        <div class="pulse-right">USD/KRW <strong class="mono">1,466.40</strong> <span class="down mono">-0.9%</span></div>
+        <span class="api-tag">API: indices groups + exchange rate · 신규 MarketPulseBar</span>
+      </div>
+
+      <!-- A1 + A2 -->
+      <div class="hero-row">
+        <div class="hero-kospi anno" data-anno="A1">
+          <div class="top">
+            <h2>KOSPI</h2>
+            <span class="pill eod"><span class="dot"></span> 7.24 15:30 종가</span>
+          </div>
+          <div class="price mono">6,690.62</div>
+          <div class="delta down mono">-406.27 · -5.72%</div>
+          <div class="sub">전일 대비 · 국내 대표 지수 Hero</div>
+          <span class="api-tag">API: GET /quotes/indices · IndexHeroCard</span>
+        </div>
+        <div class="key-strip anno" data-anno="A2">
+          <div class="key-item">
+            <div class="label">KOSDAQ <span class="pill eod" style="padding:1px 6px;font-size:9px">종가</span></div>
+            <div class="val mono">748.22</div>
+            <div class="chg down mono">-5.32%</div>
+          </div>
+          <div class="key-item">
+            <div class="label">S&P 500</div>
+            <div class="val mono">7,411.98</div>
+            <div class="chg up mono">+0.05%</div>
+          </div>
+          <div class="key-item">
+            <div class="label">VIX</div>
+            <div class="val mono">18.70</div>
+            <div class="chg up mono">+12.4%</div>
+          </div>
+          <div class="key-item">
+            <div class="label">BTC <span class="pill live" style="padding:1px 6px;font-size:9px">실시간</span></div>
+            <div class="val mono">₩94.3M</div>
+            <div class="chg up mono">+0.13%</div>
+          </div>
+          <span class="api-tag" style="grid-column:1/-1">API: indices · KeyMetricsGrid (4~6개 고정)</span>
+        </div>
+      </div>
+
+      <!-- A3 + A4 -->
+      <div class="main-grid">
+        <div class="card anno" data-anno="A3">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div class="section-label" style="margin:0">관심종목</div>
+            <a href="#" style="font-size:12px;color:var(--accent);text-decoration:none">전체 →</a>
+          </div>
+          <table class="watch-table">
+            <thead>
+              <tr><th>종목</th><th>현재가</th><th>등락</th><th>상태</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="sym">NVDA<small>엔비디아</small></span></td>
+                <td class="mono">$892.50</td>
+                <td class="mono up">+2.1%</td>
+                <td><span class="pill live"><span class="dot"></span> 실시간</span></td>
+              </tr>
+              <tr>
+                <td><span class="sym">005930<small>삼성전자</small></span></td>
+                <td class="mono">₩58,200</td>
+                <td class="mono down">-1.2%</td>
+                <td><span class="pill eod"><span class="dot"></span> 종가</span></td>
+              </tr>
+              <tr>
+                <td><span class="sym">ARM<small>Arm Holdings</small></span></td>
+                <td class="mono">$142.30</td>
+                <td class="mono up">+0.8%</td>
+                <td><span class="pill live"><span class="dot"></span> 실시간</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <span class="api-tag">API: GET /quotes?filter=watchlist · WatchlistSnapshot (신규)</span>
+        </div>
+
+        <div class="card anno" data-anno="A4">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div class="section-label" style="margin:0">뉴스</div>
+            <a href="#" style="font-size:12px;color:var(--accent);text-decoration:none">더보기 →</a>
+          </div>
+          <ul class="news-list">
+            <li>
+              반도체 업황 회복 기대… HBM 수요 확대
+              <div class="news-meta">매일경제 · 32분 전 · NVDA, SK하이닉스</div>
+            </li>
+            <li>
+              Fed 금리 경로 재점검… 증시 변동성 확대
+              <div class="news-meta">Reuters · 1시간 전</div>
+            </li>
+            <li>
+              원·달러 환율, 1,460원대 후반
+              <div class="news-meta">연합 · 2시간 전</div>
+            </li>
+          </ul>
+          <span class="api-tag">API: GET /news · NewsFeedCompact (신규, 3~5건)</span>
+        </div>
+      </div>
+
+      <!-- A5 + A6 -->
+      <div class="bottom-row">
+        <div class="card anno" data-anno="A5">
+          <div class="section-label">미국 · 변동성 (스크롤)</div>
+          <div class="chip-scroll">
+            <div class="chip"><div class="label">나스닥</div><div class="val mono">24,975</div></div>
+            <div class="chip"><div class="label">QQQ</div><div class="val mono">684.2</div></div>
+            <div class="chip"><div class="label">SOXX</div><div class="val mono">527.0</div></div>
+            <div class="chip"><div class="label">다우</div><div class="val mono">51,947</div></div>
+          </div>
+          <span class="api-tag">API: indices subset · IndexChipStrip</span>
+        </div>
+        <div class="card anno" data-anno="A6">
+          <div class="section-label">원자재 · 기타</div>
+          <div class="chip-scroll">
+            <div class="chip"><div class="label">금 (실시간)</div><div class="val mono">$4,130</div></div>
+            <div class="chip"><div class="label">USD/KRW</div><div class="val mono">1,466</div></div>
+          </div>
+          <span class="api-tag">API: indices · 동일 데이터, compact 표시</span>
+        </div>
+      </div>
+
+      <!-- A7 optional -->
+      <div id="portfolio-banner" class="portfolio-banner hidden anno" data-anno="A7">
+        <strong>계좌 연동 ON 시</strong> — 여기에 기존 <code>AssetSummary</code> + <code>HoldingsPreview</code> + <code>MorningBriefing</code> 블록 삽입.
+        지수/관심/뉴스는 위에 유지하고, 포트폴리오는 접을 수 있는 섹션으로.
+        <span class="api-tag">API: 기존 /portfolio, /insights 그대로 · DashboardClient 재배치</span>
+      </div>
+
+      <!-- Legend -->
+      <div class="legend">
+        <h3>섹션 ↔ 구현 매핑 (검토용)</h3>
+        <table>
+          <thead>
+            <tr><th>ID</th><th>역할</th><th>데이터 소스</th><th>FE 작업</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>A0</td><td>장 상태 + 환율 한 줄</td><td><code>indices.groups</code>, 환율 API</td><td><code>MarketPulseBar</code> 신규</td></tr>
+            <tr><td>A1</td><td>대표 지수 Hero (KOSPI)</td><td><code>indices[kospi]</code></td><td><code>IndexHeroCard</code> · MarketOverview 분리</td></tr>
+            <tr><td>A2</td><td>핵심 4지표</td><td><code>indices</code> pick 4</td><td><code>KeyMetricsGrid</code></td></tr>
+            <tr><td>A3</td><td>관심종목 스냅샷</td><td><code>/quotes?filter=watchlist</code></td><td><code>WatchlistSnapshot</code> 신규</td></tr>
+            <tr><td>A4</td><td>뉴스 헤드라인</td><td><code>/news</code> (top N)</td><td><code>NewsFeedCompact</code> 신규</td></tr>
+            <tr><td>A5–A6</td><td>나머지 지수 compact</td><td><code>indices</code></td><td><code>IndexChipStrip</code> · 기존 그리드 대체</td></tr>
+            <tr><td>A7</td><td>포트폴리오 (옵션)</td><td>기존 portfolio API</td><td><code>DashboardClient</code> 위치만 변경</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.querySelectorAll(".tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
+        document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById("view-" + btn.dataset.view).classList.add("active");
+      });
+    });
+    document.getElementById("show-portfolio").addEventListener("change", (e) => {
+      document.getElementById("portfolio-banner").classList.toggle("hidden", !e.target.checked);
+    });
+  </script>
+</body>
+</html>
