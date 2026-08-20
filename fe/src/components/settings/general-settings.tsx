@@ -52,7 +52,7 @@ function OptionCard({
       className={cn(
         "flex flex-col items-center gap-2 rounded-xl border-2 p-3 transition-colors",
         selected
-          ? "border-[var(--accent)] bg-[var(--accent-muted)]"
+          ? "border-[var(--brand)] bg-[var(--brand-muted)]"
           : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--text-muted)]",
       )}
     >
@@ -60,7 +60,7 @@ function OptionCard({
       <span
         className={cn(
           "whitespace-nowrap text-sm font-medium",
-          selected ? "text-[var(--accent)]" : "text-[var(--text-secondary)]",
+          selected ? "text-[var(--brand)]" : "text-[var(--text-secondary)]",
         )}
       >
         {label}
@@ -109,7 +109,7 @@ export function GeneralSettings() {
                 className={cn(
                   "min-w-[3rem] rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
                   preferences.currency === currency
-                    ? "bg-[var(--accent-muted)] text-[var(--accent)]"
+                    ? "bg-[var(--brand-muted)] text-[var(--brand)]"
                     : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
                 )}
               >

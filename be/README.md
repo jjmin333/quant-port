@@ -25,25 +25,19 @@ be/
 ## 실행
 
 ```bash
-# 1. 인프라 (MySQL, Redis) — 프로젝트 루트에서
-docker compose up -d
-
-# 2. 환경 변수
-cp .env.example .env
-
-# 3. API 서버 (권장: go build → 고정 바이너리 실행)
-make run
+# 프로젝트 루트 — Redis + API (Tesseract 포함)
+docker compose up -d --build
 ```
 
-**Windows** — `go run`은 임시 exe를 만들어 방화벽 팝업이 뜰 수 있습니다. 아래를 사용하세요:
+**Windows** — BE 재시작은 **Docker only**:
 
 ```powershell
-.\scripts\restart.ps1              # 포트 8080 정리 → build → 실행
-.\scripts\restart.ps1 -Background  # 백그라운드 + tmp\api.log
-.\scripts\stop.ps1                 # 8080 리스너만 종료
+.\scripts\restart.ps1 -Background
 ```
 
-빌드 산출물: `be/bin/api.exe` (`.gitignore` 대상)
+Tesseract·health 검증 포함. 로그: `docker logs -f quant-port-api`
+
+상세: [`docs/docker.md`](docs/docker.md)
 
 - Health: `GET http://localhost:8080/health`
 - Ready:  `GET http://localhost:8080/ready`

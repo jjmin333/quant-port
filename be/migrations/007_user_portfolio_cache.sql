@@ -1,4 +1,6 @@
--- Per-user portfolio snapshot (holdings, accounts, totals) synced from Toss in background.
+-- Historical: per-user Toss-linked portfolio cache.
+-- Dropped by 054_drop_broker_linking.sql. Do not re-apply on existing DBs
+-- (removed from extendedMigrations so a missing table is not recreated).
 
 USE quantport;
 

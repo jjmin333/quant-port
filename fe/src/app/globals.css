@@ -1,78 +1,355 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+/*
+ * shadcn 컴포넌트의 `dark:` 유틸을 이 앱의 테마 스위치에 연결한다.
+ * 이 앱은 `.dark` 클래스가 아니라 <html data-theme="dark"> 로 테마를 바꾼다.
+ * 선택자에 `[data-theme="dark"]` 자신과 그 후손을 모두 넣는 이유는 <html>에 붙은
+ * 속성이라 <html> 자체에도 `dark:` 유틸이 걸릴 수 있어야 하기 때문이다.
+ */
+@custom-variant dark (&:is([data-theme="dark"], [data-theme="dark"] *));
 
 :root {
-  --sidebar-width: 256px;
+  --sidebar-width: 220px;
   --sidebar-collapsed-width: 48px;
   --header-min-width: 480px;
   --dashboard-content-min: 300px;
   --dashboard-stat-min: 140px;
   --shell-min-width: calc(var(--sidebar-width) + var(--dashboard-content-min));
+  /*
+   * 레이아웃 아케타입 — 중앙 정렬 규칙과 거터는 공유하고 max-width만 다르다.
+   *   reading: 문서형(뉴스·설정·관리자·홈·포트폴리오). 참고 mockup 기준 중앙 65~68% 폭
+   *   wide:    터미널형(마켓 레이더·시세·종목 워크스페이스). 폭 전체를 쓴다.
+   *
+   * wide를 72rem으로 잘라 reading과 폭까지 맞춰본 적이 있으나(1908px에서 1152px·좌우 268px,
+   * reading과 4px 차) 워크스페이스가 1318 → 830으로 줄어 **사용자가 보기 불편하다고 판단해
+   * 되돌림**. 터미널형은 밀도가 곧 기능이라 폭을 통일하지 않는다 — 아케타입이 통일하는 것은
+   * "헤더 컬럼과 본문 컬럼이 같은 규칙을 쓴다"는 것까지다.
+   * 상한을 다시 도입하려면 `min(<값>, 100%)` 형태여야 한다. `100%` 항이 없으면 좁은 화면에서
+   * AppShell의 overflow-x-auto가 가로 스크롤을 만든다.
+   */
+  --content-max-reading: min(72rem, max(42rem, 68%));
+  --content-max-wide: 100%;
+  --content-gutter: max(1.25rem, 4vw);
+  --font-pretendard:
+    "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui,
+    "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
 }
 
-/* 미드나잇 모드 — 블루 틴트 다크 (기존 일반 모드) */
-[data-theme="midnight"],
-[data-theme="general"] {
-  --background: #0B0F17;
-  --surface: #111827;
-  --surface-elevated: #1A2030;
-  --border: #1F2937;
-  --text-primary: #F1F5F9;
-  --text-secondary: #94A3B8;
-  --text-muted: #64748B;
-  --accent: #3B82F6;
-  --accent-muted: rgba(59, 130, 246, 0.12);
-  --profit: #EF4444;
-  --loss: #3B82F6;
-  --chart-grid: rgba(148, 163, 184, 0.08);
-  --chart-toolbar-active-bg: rgba(59, 130, 246, 0.16);
-  --chart-toolbar-active-text: #93C5FD;
+/* ───────────────────────────────────────────────────────────────────────────
+ * 테마 — 라이트 / 다크 2종. (docs/UI_SPEC.md §12·§13)
+ *
+ * 색 값은 shadcn 레지스트리 `neutral` 베이스 원본이다.
+ *
+ * 이 앱 고유 토큰(`--surface`·`--text-*`)은 **shadcn 토큰의 별칭**으로 정의한다.
+ * 아직 교체하지 않은 화면 137곳이 `var(--surface)`를 그대로 쓰면서 색만 shadcn으로
+ * 넘어간다. 별칭을 걷어내는 건 컴포넌트 교체가 끝난 뒤의 일이다.
+ *
+ * `midnight`/`general`(푸른 남색)은 제거했다 — shadcn 팔레트에 없는 색이라 토큰 30개를
+ * 계속 따로 관리해야 하고 모든 색 결정을 세 번씩 검증하게 된다. 저장된 값의 변환은
+ * `lib/preferences.ts`가 담당한다.
+ *
+ * 라이트를 `:root`에 두는 이유: `data-theme` 속성이 없는 순간(스크립트 실행 전 등)에도
+ * 색이 비지 않는다. 다크는 `[data-theme="dark"]`가 덮는다.
+ *
+ * ⚠️ `--accent`는 shadcn 의미(은은한 hover 표면)다. **브랜드 파랑은 `--brand`**.
+ * ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  --radius: 0.625rem;
+
+  /*
+   * 페이지 배경만 shadcn 기본값(순백)에서 한 단 내렸다.
+   * 기본값대로 두면 `--card`도 순백이라 **카드가 배경에서 분리되지 않는다** — 라이트
+   * 모드에서 화면 전체가 흰 판 하나가 되고 헤어라인 테두리만 남는다(실측).
+   * 이 앱은 카드가 21개씩 깔리는 화면이 많아 그 분리가 정보 구조 자체다.
+   * 다크는 이미 배경 0.145 / 카드 0.205로 단차가 있어 그대로 둔다.
+   */
+  --background: oklch(0.97 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  /*
+   * 레지스트리 기본 0.556은 흰 카드 위에서 대비 4.74 — 본문 크기(16px) 기준 AA는 넘지만
+   * 이 앱의 보조 텍스트는 대부분 **10~11px**이라 그 여유로는 읽기 힘들다. 한 단 내려
+   * 5.4로 올린다(실측). 더 내리면 본문(19.8)과 위계가 무너진다.
+   */
+  --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.93 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  /*
+   * 레지스트리 기본 0.922는 흰 카드 위 대비가 **1.26**이라 사실상 보이지 않는다.
+   * 카드가 스무 개씩 깔리는 화면에서 경계선이 안 보이면 카드가 서로 녹아붙는다.
+   * 0.87 = 대비 1.45 — 여전히 헤어라인이지만 경계로 읽힌다.
+   */
+  --border: oklch(0.87 0 0);
+  --input: oklch(0.87 0 0);
+  --ring: oklch(0.708 0 0);
+
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  /*
+   * 레지스트리 기본값은 0.97인데, `--sidebar`(0.985)와 차이가 너무 미세해서 라이트
+   * 모드에서 **활성 메뉴가 보이지 않는다**(목업 실측). 한 단 내렸다. `--accent`도 같은
+   * 이유로 0.97 → 0.93.
+   */
+  --sidebar-accent: oklch(0.93 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.87 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+
+  /* 이 앱 고유 — shadcn에 대응물이 없다 */
+  --brand: #2563EB;
+  --brand-muted: rgba(37, 99, 235, 0.1);
+  --profit: #DC2626; /* 상승 = 빨강 (한국식) */
+  --loss: #2563EB; /* 하락 = 파랑 (한국식) */
+
+  /*
+   * 예시(샘플) 데이터 표시색.
+   *
+   * 보라를 쓰는 이유는 이 앱에서 **빨강·파랑이 이미 상승·하락이라는 뜻을 갖고 있어서**다.
+   * 예시 띠나 점선 틀에 그 둘을 쓰면 시세 신호로 읽힌다. 브랜드 파랑(`--brand`)도
+   * 하락색과 같은 계열이라 같은 이유로 피한다.
+   */
+  --sample: #7C3AED;
+  --sample-muted: rgba(124, 58, 237, 0.1);
+  --sample-border: rgba(124, 58, 237, 0.35);
+
+  /*
+   * 상태색. `--success`/`--danger`는 **정의된 적이 없는데 13곳에서 쓰이고 있었다**
+   * (관리자 배치·점수 패널, 시장 브리핑, 종합 점수 전부) — 값이 없으니 `var()`가
+   * 상속색으로 떨어져 성공/실패가 똑같은 검정으로 보였다. 여기서 처음 정의한다.
+   */
+  --success: #15803D;
+  --danger: #B91C1C;
+
+  /*
+   * 점수 신호등 (사용자 결정 08-11). 초록 → 주황 → 빨강.
+   *
+   * ⚠️ 이 앱에서 빨강은 `--profit`(상승)이기도 하다. 의미가 겹치는 걸 알고도 신호등을
+   * 고른 것이므로, 점수 색은 **점수를 말하는 자리에만** 쓴다 — 등급 배지·점수 숫자·5축.
+   * 등락률 칸에는 절대 쓰지 않는다(거기는 profit/loss가 주인이다).
+   */
+  --score-high: #15803D;
+  --score-mid: #C2410C;
+  --score-low: #B91C1C;
+
+  /*
+   * 카테고리 색 (구성 도넛 같은 "서로 다른 것들"을 나란히 놓는 자리).
+   *
+   * `--success`/`--danger`와 같은 사고를 한 번 더 발견해 여기서 정의한다 —
+   * `@theme inline`은 `--color-chart-1: var(--chart-1)`을 매핑하고 있었는데
+   * `--chart-1` 자체는 **정의된 적이 없었다**. 그대로 쓰면 도넛 조각이 전부
+   * 상속색(검정) 한 덩어리로 나온다.
+   *
+   * ⚠️ 이 색은 **범주 구분**용이다. 상승/하락(`--profit`/`--loss`)이나 점수
+   * (`--score-*`)에 쓰지 않는다 — 뜻이 있는 색을 무늬로 쓰면 둘 다 의미를 잃는다.
+   * 그래서 빨강·파랑 계열은 첫 조각에서 피했다.
+   */
+  --chart-1: #0891B2;
+  --chart-2: #7C3AED;
+  --chart-3: #0D9488;
+  --chart-4: #D97706;
+  --chart-5: #DB2777;
+
+  /* 레거시 별칭 — 교체 전 화면들이 계속 참조한다 */
+  --surface: var(--card);
+  --surface-elevated: var(--accent);
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-muted: oklch(0.65 0 0);
+
+  /* 차트 크롬. 활성 표시는 중립(UI_SPEC §5) */
+  --chart-grid: rgba(0, 0, 0, 0.08);
+  --chart-toolbar-active-bg: var(--accent);
+  --chart-toolbar-active-text: var(--foreground);
+  --chart-crosshair-bg: var(--popover);
+  --chart-crosshair-text: var(--popover-foreground);
+  --chart-crosshair-border: var(--border);
 }
 
 [data-theme="dark"] {
-  --background: #000000;
-  --surface: #0A0A0A;
-  --surface-elevated: #141414;
-  --border: #1F1F1F;
-  --text-primary: #FAFAFA;
-  --text-secondary: #A3A3A3;
-  --text-muted: #737373;
-  --accent: #60A5FA;
-  --accent-muted: rgba(96, 165, 250, 0.15);
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  /* 라이트와 같은 이유 — 10%는 카드(0.205) 위에서 거의 보이지 않는다 */
+  --border: oklch(1 0 0 / 16%);
+  --input: oklch(1 0 0 / 20%);
+  --ring: oklch(0.556 0 0);
+
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.922 0 0);
+  --sidebar-primary-foreground: oklch(0.205 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 16%);
+  --sidebar-ring: oklch(0.556 0 0);
+
+  --brand: #60A5FA;
+  --brand-muted: rgba(96, 165, 250, 0.15);
   --profit: #F87171;
   --loss: #60A5FA;
-  --chart-grid: rgba(163, 163, 163, 0.1);
-  --chart-toolbar-active-bg: rgba(96, 165, 250, 0.18);
-  --chart-toolbar-active-text: #93C5FD;
-}
 
-[data-theme="light"] {
-  --background: #F1F5F9;
-  --surface: #FFFFFF;
-  --surface-elevated: #E2E8F0;
-  --border: #CBD5E1;
-  --text-primary: #0F172A;
-  --text-secondary: #475569;
-  --text-muted: #64748B;
-  --accent: #2563EB;
-  --accent-muted: rgba(37, 99, 235, 0.1);
-  --profit: #DC2626;
-  --loss: #2563EB;
-  --chart-grid: rgba(15, 23, 42, 0.08);
-  --chart-toolbar-active-bg: rgba(37, 99, 235, 0.12);
-  --chart-toolbar-active-text: #1D4ED8;
+  --sample: #A78BFA;
+  --sample-muted: rgba(167, 139, 250, 0.14);
+  --sample-border: rgba(167, 139, 250, 0.4);
+
+  /* 어두운 배경에서는 채도를 낮추고 밝기를 올려야 같은 대비가 나온다 */
+  --success: #4ADE80;
+  --danger: #F87171;
+
+  --score-high: #4ADE80;
+  --score-mid: #FB923C;
+  --score-low: #F87171;
+
+  --chart-1: #22D3EE;
+  --chart-2: #A78BFA;
+  --chart-3: #2DD4BF;
+  --chart-4: #FBBF24;
+  --chart-5: #F472B6;
+
+  --text-muted: oklch(0.6 0 0);
+
+  --chart-grid: rgba(255, 255, 255, 0.1);
 }
 
 @theme inline {
   --color-background: var(--background);
-  --color-foreground: var(--text-primary);
-  --font-sans: var(--font-geist-sans);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-pretendard);
   --font-mono: var(--font-geist-mono);
+
+  /* shadcn 컴포넌트가 쓰는 유틸 매핑. `border-border`/`bg-card` 등이 여기서 생긴다. */
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* 이 앱 고유 토큰 — shadcn에 대응물이 없다. 손익 색은 한국식(상승 빨강/하락 파랑)이다. */
+  --color-brand: var(--brand);
+  --color-brand-muted: var(--brand-muted);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-profit: var(--profit);
+  --color-loss: var(--loss);
+
+  /*
+   * shadcn 반경 스케일. 이건 shadcn 전용 토큰이 아니라 **Tailwind 기본 반경 스케일을
+   * 덮어쓴다** — 앱 전체 341곳(`rounded-md` 105 · `lg` 194 · `xl` 39 · `sm` 3)이 함께
+   * 움직인다. 그래서 1단계에서 미뤘다가 컴포넌트 교체와 같은 시점에 켰다.
+   */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/*
+ * shadcn base 레이어. 색을 지정하지 않은 테두리가 `currentColor`(= 글자색)로 그려지던
+ * 것을 토큰 색으로 바꾼다. shadcn 컴포넌트의 `border` 유틸이 이걸 전제한다.
+ */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
 }
 
 body {
   background: var(--background);
   color: var(--text-primary);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-pretendard);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.page-shell {
+  width: 100%;
+  max-width: var(--content-max-reading);
+  margin-inline: auto;
+  padding-inline: var(--content-gutter);
+}
+
+/*
+ * 터미널형 컬럼. 내부 패널이 자체 border/padding을 가지므로 거터를 두지 않는다.
+ * 헤더도 같은 클래스를 써야 헤더 컬럼과 본문 컬럼의 좌우 경계가 맞는다 — 어긋난 상태가
+ * 마켓 레이더만 겉돌아 보이던 원인이다.
+ * 경계선은 긋지 않는다: 현재 상한이 100%라 컬럼이 항상 꽉 차서, 좌측 경계선이 사이드바
+ * 테두리와 겹쳐 이중선이 되고 우측은 뷰포트 가장자리에 붙는다.
+ */
+.page-shell-wide {
+  width: 100%;
+  max-width: var(--content-max-wide);
+  margin-inline: auto;
+  /*
+   * 08-11: wide가 기본 아케타입이 되면서 거터를 여기로 옮겼다.
+   * 예전엔 터미널 페이지만 wide였고 내부 패널이 자체 px-3을 가져서 거터가 0이었는데,
+   * 문서형 화면까지 wide로 오면 본문이 화면 가장자리에 붙는다.
+   * 값(0.75rem)은 터미널 패널의 px-3과 같다 — 헤더와 본문의 좌우 경계가 맞아야 한다.
+   */
+  padding-inline: 0.75rem;
+}
+
+/* Mobile / webview — drop desktop min-widths, full-width content column */
+html[data-shell="mobile"],
+html[data-shell="webview"] {
+  --header-min-width: 0;
+  --dashboard-content-min: 0;
+  --shell-min-width: 0;
+  --content-max-reading: 100%;
+  --content-max-wide: 100%;
+  --content-gutter: max(1rem, 4vw);
+}
+
+html[data-shell="webview"] body {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 * {
@@ -111,3 +388,85 @@ body {
 .animate-sidebar-chevron-right {
   animation: sidebar-chevron-turn-right 300ms ease-in-out;
 }
+
+/*
+ * 스크롤바를 감추되 **스크롤 기능은 남긴다**.
+ *
+ * 홈 지수 스트립이 쓴다. 그 띠는 가만히 두면 알아서 흐르고 손을 대면 멈추는데, 멈춘
+ * 김에 직접 밀어 볼 수 있어야 한다 — 흐름을 멈춰 놓고 볼 수 있는 것이 화면에 걸린
+ * 일곱 칸뿐이면 멈춘 보람이 없다. 그래서 자동 흐름을 CSS transform이 아니라
+ * `scrollLeft`로 돌린다(`index-ticker-strip.tsx`): 같은 속성이라 손으로 미는 것과
+ * 저절로 흐르는 것이 서로 싸우지 않는다.
+ *
+ * 전역 `* { scrollbar-width: thin }`을 덮어야 하므로 여기서 `none`을 다시 준다.
+ */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* News publisher badges — light mode uses darker text for contrast */
+.news-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 0.375rem;
+  border-width: 1px;
+  padding: 0.125rem 0.5rem;
+  font-size: 11px;
+  font-weight: 600;
+}
+.news-badge--neutral {
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+  border-color: color-mix(in srgb, var(--text-muted) 28%, transparent);
+  color: var(--text-secondary);
+}
+[data-theme="light"] .news-badge--neutral {
+  color: var(--text-primary);
+  background: #e2e8f0;
+  border-color: #94a3b8;
+}
+.news-badge--rose { background: rgb(244 63 94 / 0.12); border-color: rgb(244 63 94 / 0.28); color: #be123c; }
+.news-badge--orange { background: rgb(249 115 22 / 0.12); border-color: rgb(249 115 22 / 0.28); color: #c2410c; }
+.news-badge--amber { background: rgb(245 158 11 / 0.12); border-color: rgb(245 158 11 / 0.28); color: #b45309; }
+.news-badge--sky { background: rgb(14 165 233 / 0.12); border-color: rgb(14 165 233 / 0.28); color: #0369a1; }
+.news-badge--blue { background: rgb(59 130 246 / 0.12); border-color: rgb(59 130 246 / 0.28); color: #1d4ed8; }
+.news-badge--indigo { background: rgb(99 102 241 / 0.12); border-color: rgb(99 102 241 / 0.28); color: #4338ca; }
+.news-badge--cyan { background: rgb(6 182 212 / 0.12); border-color: rgb(6 182 212 / 0.28); color: #0e7490; }
+.news-badge--green { background: rgb(34 197 94 / 0.12); border-color: rgb(34 197 94 / 0.28); color: #15803d; }
+.news-badge--teal { background: rgb(20 184 166 / 0.12); border-color: rgb(20 184 166 / 0.28); color: #0f766e; }
+.news-badge--lime { background: rgb(132 204 22 / 0.12); border-color: rgb(132 204 22 / 0.28); color: #4d7c0f; }
+.news-badge--pink { background: rgb(236 72 153 / 0.12); border-color: rgb(236 72 153 / 0.28); color: #be185d; }
+.news-badge--red { background: rgb(239 68 68 / 0.12); border-color: rgb(239 68 68 / 0.28); color: #b91c1c; }
+.news-badge--red-dark { background: rgb(220 38 38 / 0.12); border-color: rgb(220 38 38 / 0.28); color: #991b1b; }
+.news-badge--slate { background: rgb(100 116 139 / 0.12); border-color: rgb(100 116 139 / 0.28); color: #334155; }
+.news-badge--stone { background: rgb(120 113 108 / 0.12); border-color: rgb(120 113 108 / 0.28); color: #44403c; }
+.news-badge--emerald { background: rgb(16 185 129 / 0.12); border-color: rgb(16 185 129 / 0.28); color: #047857; }
+.news-badge--blue-dark { background: rgb(37 99 235 / 0.12); border-color: rgb(37 99 235 / 0.28); color: #1e40af; }
+.news-badge--violet { background: rgb(139 92 246 / 0.12); border-color: rgb(139 92 246 / 0.28); color: #6d28d9; }
+.news-badge--fuchsia { background: rgb(217 70 239 / 0.12); border-color: rgb(217 70 239 / 0.28); color: #a21caf; }
+.news-badge--yellow { background: rgb(234 179 8 / 0.12); border-color: rgb(234 179 8 / 0.28); color: #a16207; }
+[data-theme="dark"] .news-badge--rose { color: #fda4af; }
+[data-theme="dark"] .news-badge--orange { color: #fdba74; }
+[data-theme="dark"] .news-badge--amber { color: #fcd34d; }
+[data-theme="dark"] .news-badge--sky { color: #7dd3fc; }
+[data-theme="dark"] .news-badge--blue { color: #93c5fd; }
+[data-theme="dark"] .news-badge--indigo { color: #a5b4fc; }
+[data-theme="dark"] .news-badge--cyan { color: #67e8f9; }
+[data-theme="dark"] .news-badge--green { color: #86efac; }
+[data-theme="dark"] .news-badge--teal { color: #5eead4; }
+[data-theme="dark"] .news-badge--lime { color: #bef264; }
+[data-theme="dark"] .news-badge--pink { color: #f9a8d4; }
+[data-theme="dark"] .news-badge--red { color: #fca5a5; }
+[data-theme="dark"] .news-badge--red-dark { color: #f87171; }
+[data-theme="dark"] .news-badge--slate { color: #cbd5e1; }
+[data-theme="dark"] .news-badge--stone { color: #d6d3d1; }
+[data-theme="dark"] .news-badge--emerald { color: #6ee7b7; }
+[data-theme="dark"] .news-badge--blue-dark { color: #93c5fd; }
+[data-theme="dark"] .news-badge--violet { color: #c4b5fd; }
+[data-theme="dark"] .news-badge--fuchsia { color: #f0abfc; }
+[data-theme="dark"] .news-badge--yellow { color: #fde047; }
+[data-theme="dark"] .news-badge--neutral { color: #d4d4d8; }

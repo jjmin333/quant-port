@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>종목 분석 — 위젯 선택용 목업 v1</title>
+<style>
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.97 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.93 0 0);
+  --border: oklch(0.87 0 0);
+  --brand: #2563EB;
+  --brand-muted: rgba(37, 99, 235, 0.1);
+  --profit: #DC2626;
+  --loss: #2563EB;
+  /* 제안값 — 현재 앱에는 정의돼 있지 않다(아래 '점수 색' 절 참고) */
+  --score-high: #059669;
+  --score-mid: #D97706;
+  --score-low: #6B7280;
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 16%);
+  --brand: #60A5FA;
+  --brand-muted: rgba(96, 165, 250, 0.15);
+  --profit: #F87171;
+  --loss: #60A5FA;
+  --score-high: #34D399;
+  --score-mid: #FBBF24;
+  --score-low: #9CA3AF;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 24px;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1180px; margin: 0 auto; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+.sub { color: var(--muted-foreground); font-size: 12px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.up { color: var(--profit); }
+.down { color: var(--loss); }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-bottom: 16px; margin-bottom: 20px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--background); z-index: 5;
+}
+button.tgl {
+  font: inherit; cursor: pointer; border: 1px solid var(--border);
+  background: var(--card); color: var(--foreground);
+  border-radius: 8px; padding: 5px 12px;
+}
+button.tgl:hover { background: var(--accent); }
+
+.opt { margin-bottom: 26px; }
+.opt-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.tag {
+  font-size: 11px; font-weight: 700; letter-spacing: .02em;
+  background: var(--brand-muted); color: var(--brand);
+  border-radius: 6px; padding: 2px 7px;
+}
+.note { color: var(--muted-foreground); font-size: 11px; margin-top: 6px; }
+
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 10px;
+}
+.card + .card { margin-top: 10px; }
+.card-h {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-bottom: 8px;
+}
+.card-t { font-size: 12px; font-weight: 600; }
+.more { font-size: 11px; color: var(--muted-foreground); }
+
+.row {
+  display: flex; align-items: center; gap: 8px;
+  height: 32px; padding: 0 4px; border-radius: 6px;
+}
+.row:hover { background: var(--accent); }
+.row + .row { border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent); }
+.rank { width: 14px; text-align: right; color: var(--muted-foreground); font-size: 11px; font-weight: 600; }
+.nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.av {
+  width: 18px; height: 18px; border-radius: 999px; flex: none;
+  background: var(--muted); display: grid; place-items: center;
+  font-size: 9px; font-weight: 700; color: var(--muted-foreground);
+}
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media (max-width: 880px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+
+.kv { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
+.kv span:first-child { color: var(--muted-foreground); font-size: 11px; }
+
+/* 등락 강도 배경 */
+.pct { width: 62px; text-align: right; border-radius: 5px; padding: 1px 4px; font-size: 12px; }
+.heat-u3 { background: color-mix(in oklab, var(--profit) 22%, transparent); color: var(--profit); }
+.heat-u2 { background: color-mix(in oklab, var(--profit) 13%, transparent); color: var(--profit); }
+.heat-u1 { background: color-mix(in oklab, var(--profit) 6%, transparent); color: var(--profit); }
+.heat-d1 { background: color-mix(in oklab, var(--loss) 6%, transparent); color: var(--loss); }
+.heat-d2 { background: color-mix(in oklab, var(--loss) 13%, transparent); color: var(--loss); }
+.heat-d3 { background: color-mix(in oklab, var(--loss) 22%, transparent); color: var(--loss); }
+
+/* 정렬 헤더 */
+.sorth {
+  display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 4px;
+  border-bottom: 1px solid var(--border); color: var(--muted-foreground); font-size: 11px;
+}
+.sorth b { font-weight: 600; color: var(--foreground); }
+.sortable { cursor: pointer; }
+.sortable:hover { color: var(--foreground); }
+
+/* 타임라인 */
+.tl { position: relative; padding-left: 14px; }
+.tl::before { content: ""; position: absolute; left: 3px; top: 4px; bottom: 4px; width: 1px; background: var(--border); }
+.tl-i { position: relative; padding: 5px 0; }
+.tl-i::before {
+  content: ""; position: absolute; left: -14px; top: 10px;
+  width: 7px; height: 7px; border-radius: 999px;
+  background: var(--card); border: 2px solid var(--muted-foreground);
+}
+.tl-i.hot::before { border-color: var(--brand); }
+.tl-d { font-size: 11px; color: var(--muted-foreground); }
+
+/* 스파크라인 / 차트 */
+svg.spark { width: 62px; height: 20px; flex: none; }
+svg.mini { width: 100%; height: 88px; display: block; }
+
+/* 레이더 */
+svg.radar { width: 190px; height: 175px; display: block; margin: 0 auto; }
+
+/* 모달 */
+.modal-demo {
+  border: 1px dashed var(--border); border-radius: 12px; padding: 14px;
+  background: color-mix(in oklab, var(--muted) 55%, transparent);
+}
+.modal {
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.16); max-width: 460px; margin: 0 auto; overflow: hidden;
+}
+.modal-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.modal-b { padding: 12px 14px; }
+.modal-f { display: flex; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--border); }
+.btn {
+  flex: 1; text-align: center; font-size: 11px; font-weight: 500;
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; background: var(--card);
+}
+.btn.primary { background: var(--brand); color: #fff; border-color: transparent; }
+
+/* 점수 색 후보 */
+.bar { height: 6px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 999px; }
+.axis { display: grid; grid-template-columns: 52px 1fr 26px; gap: 8px; align-items: center; padding: 3px 0; }
+.axis span:first-child { color: var(--muted-foreground); font-size: 11px; }
+.axis .v { text-align: right; font-size: 11px; }
+.badge { border-radius: 6px; padding: 1px 6px; font-size: 11px; font-weight: 600; }
+
+.pick {
+  margin-top: 10px; padding: 8px 10px; border-radius: 8px;
+  background: var(--brand-muted); color: var(--brand);
+  font-size: 11px; font-weight: 600;
+}
+.warn {
+  border-left: 3px solid var(--profit); background: color-mix(in oklab, var(--profit) 8%, transparent);
+  padding: 10px 12px; border-radius: 0 8px 8px 0; margin-bottom: 20px;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div>
+      <h1>종목 분석 — 위젯 선택용 목업</h1>
+      <p class="sub">삼성전자(005930) 실제 값 기준 · 원하는 옵션 번호를 알려주세요</p>
+    </div>
+    <button class="tgl" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme==='dark'?'light':'dark'">라이트 / 다크</button>
+  </div>
+
+  <div class="warn">
+    <b>먼저 고쳐야 할 것 — 점수 색이 죽어 있습니다</b>
+    <p class="note" style="margin-top:4px">
+      <code>--success</code>·<code>--danger</code>가 <b>정의된 적이 없는데</b> 종합 점수·랭킹·5축 막대가 이 두 변수를 씁니다.
+      그래서 지금은 등급 색이 전부 <b>본문 검정</b>으로 렌더됩니다(실측 확인). 아래 <b>옵션 0</b>에서 색 체계를 골라주세요.
+    </p>
+  </div>
+
+  <!-- ───────── 옵션 0 : 점수 색 ───────── -->
+  <section class="opt">
+    <div class="opt-head"><span class="tag">옵션 0</span><h2>점수 색 체계</h2></div>
+    <p class="sub">
+      주의: 이 앱은 <span class="up">빨강 = 상승</span>, <span class="down">파랑 = 하락</span>입니다.
+      점수에 빨강/파랑을 쓰면 손익 색과 의미가 충돌합니다.
+    </p>
+    <div class="grid3" style="margin-top:10px">
+      <div class="card">
+        <div class="card-h"><span class="card-t">0-A · 초록/앰버/회색</span></div>
+        <p class="note" style="margin:0 0 8px">손익 색(빨강·파랑)과 완전히 분리. 권장.</p>
+        <div class="axis"><span>추세</span><div class="bar"><i style="width:84%;background:var(--score-high)"></i></div><b class="v mono" style="color:var(--score-high)">84</b></div>
+        <div class="axis"><span>수익성</span><div class="bar"><i style="width:56%;background:var(--score-mid)"></i></div><b class="v mono" style="color:var(--score-mid)">56</b></div>
+        <div class="axis"><span>가치</span><div class="bar"><i style="width:31%;background:var(--score-low)"></i></div><b class="v mono" style="color:var(--score-low)">31</b></div>
+        <div style="margin-top:8px"><span class="badge" style="background:color-mix(in oklab,var(--score-high) 15%,transparent);color:var(--score-high)">A+ 90점</span></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><span class="card-t">0-B · 중립 단색 + 등급 배지만 색</span></div>
+        <p class="note" style="margin:0 0 8px">가장 조용함. 숫자는 검정, 등급 배지에만 색.</p>
+        <div class="axis"><span>추세</span><div class="bar"><i style="width:84%;background:var(--foreground);opacity:.7"></i></div><b class="v mono">84</b></div>
+        <div class="axis"><span>수익성</span><div class="bar"><i style="width:56%;background:var(--foreground);opacity:.7"></i></div><b class="v mono">56</b></div>
+        <div class="axis"><span>가치</span><div class="bar"><i style="width:31%;background:var(--foreground);opacity:.7"></i></div><b class="v mono">31</b></div>
+        <div style="margin-top:8px"><span class="badge" style="background:color-mix(in oklab,var(--score-high) 15%,transparent);color:var(--score-high)">A+ 90점</span></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><span class="card-t">0-C · 한 색 농도만</span></div>
+        <p class="note" style="margin:0 0 8px">점수가 높을수록 진하게. 색은 하나뿐이라 충돌 없음.</p>
+        <div class="axis"><span>추세</span><div class="bar"><i style="width:84%;background:var(--brand);opacity:1"></i></div><b class="v mono" style="color:var(--brand)">84</b></div>
+        <div class="axis"><span>수익성</span><div class="bar"><i style="width:56%;background:var(--brand);opacity:.6"></i></div><b class="v mono" style="color:var(--brand);opacity:.75">56</b></div>
+        <div class="axis"><span>가치</span><div class="bar"><i style="width:31%;background:var(--brand);opacity:.32"></i></div><b class="v mono" style="color:var(--brand);opacity:.55">31</b></div>
+        <div style="margin-top:8px"><span class="badge" style="background:var(--brand-muted);color:var(--brand)">A+ 90점</span></div>
+      </div>
+    </div>
+    <div class="pick">→ 0-A · 0-B · 0-C 중 하나</div>
+  </section>
+
+  <!-- ───────── 옵션 1 : 실적·공시 일정 ───────── -->
+  <section class="opt">
+    <div class="opt-head"><span class="tag">옵션 1</span><h2>실적 · 공시 일정</h2><span class="sub">우측 레일 카드</span></div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-h"><span class="card-t">실적 · 공시 일정</span><span class="more">더보기 →</span></div>
+        <div class="tl">
+          <div class="tl-i hot">
+            <div>[기재정정] 연결재무제표기준 영업(잠정)실적</div>
+            <div class="tl-d">2026-07-30 · 공정공시</div>
+          </div>
+          <div class="tl-i">
+            <div>주요사항보고서(자기주식취득결정)</div>
+            <div class="tl-d">2026-07-24</div>
+          </div>
+          <div class="tl-i">
+            <div>분기보고서 (2026.06)</div>
+            <div class="tl-d">2026-07-15</div>
+          </div>
+          <div class="tl-i">
+            <div>연결재무제표기준 영업(잠정)실적</div>
+            <div class="tl-d">2026-07-08 · 공정공시</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><span class="card-t">실적 추이</span></div>
+        <div class="kv"><span>2026 Q2 매출</span><b class="mono">79.1조원</b></div>
+        <div class="kv"><span>영업이익</span><b class="mono">10.4조원 <span class="up">+18.2%</span></b></div>
+        <div class="kv"><span>EPS</span><b class="mono">1,204원</b></div>
+        <div class="kv"><span>다음 발표 예정</span><b class="mono">2026-10-08</b></div>
+        <p class="note">※ 국내는 DART 공시, 해외는 SEC 파일링에서 날짜를 가져옵니다.</p>
+      </div>
+    </div>
+    <div class="pick">→ 1 채택 / 미채택</div>
+  </section>
+
+  <!-- ───────── 옵션 2 : 내부자 거래 ───────── -->
+  <section class="opt">
+    <div class="opt-head"><span class="tag">옵션 2</span><h2>내부자 거래 요약</h2><span class="sub">우측 레일 카드</span></div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-h"><span class="card-t">내부자 거래</span><span class="more">최근 90일</span></div>
+        <div style="display:flex;gap:8px;padding:6px 4px 10px;border-bottom:1px solid var(--border)">
+          <div style="flex:1"><div class="note">매수</div><b class="mono up" style="font-size:15px">3건</b></div>
+          <div style="flex:1"><div class="note">매도</div><b class="mono down" style="font-size:15px">1건</b></div>
+          <div style="flex:1"><div class="note">순증</div><b class="mono up" style="font-size:15px">+12,400주</b></div>
+        </div>
+        <div class="row"><span class="nm">손영수 <span class="note">비등기임원·부사장</span></span><span class="mono up">매수 5,000</span></div>
+        <div class="row"><span class="nm">김한결 <span class="note">등기임원</span></span><span class="mono up">매수 4,200</span></div>
+        <div class="row"><span class="nm">박정호 <span class="note">주요주주</span></span><span class="mono down">매도 1,800</span></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><span class="card-t">가장 조용한 안</span></div>
+        <p class="note" style="margin-bottom:8px">카드를 따로 두지 않고 우측 레일 한 줄 요약으로만.</p>
+        <div class="kv"><span>내부자 거래(90일)</span><b class="mono"><span class="up">매수 3</span> · <span class="down">매도 1</span></b></div>
+        <div class="kv"><span>순증</span><b class="mono up">+12,400주</b></div>
+      </div>
+    </div>
+    <div class="pick">→ 2 카드형 / 2 한줄형 / 미채택</div>
+  </section>
+
+  <!-- ───────── 옵션 3 : 일별 종가 미니차트 ───────── -->
+  <section class="opt">
+    <div class="opt-head"><span class="tag">옵션 3</span><h2>일별 종가 추이 미니차트</h2><span class="sub">우측 레일 카드</span></div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-h"><span class="card-t">최근 30거래일 종가</span><span class="more">일봉 →</span></div>
+        <svg class="mini" viewBox="0 0 300 88" preserveAspectRatio="none">
+          <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--profit)" stop-opacity=".22"/>
+            <stop offset="100%" stop-color="var(--profit)" stop-opacity="0"/>
+          </linearGradient></defs>
+          <path d="M0,62 L20,58 L40,66 L60,54 L80,60 L100,44 L120,50 L140,38 L160,46 L180,30 L200,36 L220,24 L240,32 L260,18 L280,26 L300,14 L300,88 L0,88 Z" fill="url(#g1)"/>
+          <path d="M0,62 L20,58 L40,66 L60,54 L80,60 L100,44 L120,50 L140,38 L160,46 L180,30 L200,36 L220,24 L240,32 L260,18 L280,26 L300,14"
+                fill="none" stroke="var(--profit)" stroke-width="1.8" stroke-linejoin="round"/>
+        </svg>
+        <div style="display:flex;justify-content:space-between;margin-top:6px" class="note">
+          <span>7/1 · 214,500원</span><span>8/11 · 241,000원 <span class="up">+12.4%</span></span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><span class="card-t">표로 보는 안</span></div>
+        <div class="sorth"><b style="flex:1">날짜</b><b style="width:76px;text-align:right">종가</b><b style="width:62px;text-align:right">전일비</b></div>
+        <div class="row"><span class="nm">08-11 (화)</span><span class="mono" style="width:76px;text-align:right">241,000</span><span class="mono up" style="width:62px;text-align:right">+0.42%</span></div>
+        <div class="row"><span class="nm">08-10 (월)</span><span class="mono" style="width:76px;text-align:right">240,000</span><span class="mono up" style="width:62px;text-align:right">+3.68%</span></div>
+        <div class="row"><span class="nm">08-08 (금)</span><span class="mono" style="width:76px;text-align:right">231,500</span><span class="mono down" style="width:62px;text-align:right">-1.07%</span></div>
+        <div class="row"><span class="nm">08-07 (목)</span><span class="mono" style="width:76px;text-align:right">234,000</span><span class="mono up" style="width:62px;text-align:right">+0.86%</span></div>
+      </div>
+    </div>
+    <div class="pick">→ 3 차트형 / 3 표형 / 둘 다 / 미채택</div>
+  </section>
+
+  <!-- ───────── 옵션 4 : 레이더 ───────── -->
+  <section class="opt">
+    <div class="opt-head"><span class="tag">옵션 4</span><h2>점수 5축 레이더 차트</h2><span class="sub">지금은 가로 막대</span></div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-h"><span class="card-t">레이더로 바꿨을 때</span></div>
+        <svg class="radar" viewBox="0 0 200 185">
+          <g fill="none" stroke="var(--border)">
+            <polygon points="100,20 176,75 147,165 53,165 24,75"/>
+            <polygon points="100,44 157,85 135,152 65,152 43,85"/>
+            <polygon points="100,68 138,95 122,138 78,138 62,95"/>
+          </g>
+          <g stroke="var(--border)">
+            <line x1="100" y1="100" x2="100" y2="20"/><line x1="100" y1="100" x2="176" y2="75"/>
+            <line x1="100" y1="100" x2="147" y2="165"/><line x1="100" y1="100" x2="53" y2="165"/>
+            <line x1="100" y1="100" x2="24" y2="75"/>
+          </g>
+          <polygon points="100,33 165,81 132,150 68,146 51,88"
+                   fill="color-mix(in oklab, var(--score-high) 22%, transparent)"
+                   stroke="var(--score-high)" stroke-width="2"/>
+          <g fill="var(--muted-foreground)" font-size="10" text-anchor="middle" font-family="Pretendard,sans-serif">
+            <text x="100" y="12">추세 84</text><text x="187" y="72">수익성 66</text>
+            <text x="151" y="178">성장 72</text><text x="49" y="178">가치 31</text><text x="14" y="72">심리 58</text>
+          </g>
+        </svg>
+      </div>
+      <div class="card">
+        <div class="card-h"><span class="card-t">지금(가로 막대) — 비교용</span></div>
+        <div class="axis"><span>추세</span><div class="bar"><i style="width:84%;background:var(--score-high)"></i></div><b class="v mono">84</b></div>
+        <div class="axis"><span>수익성</span><div class="bar"><i style="width:66%;background:var(--score-high)"></i></div><b class="v mono">66</b></div>
+        <div class="axis"><span>성장</span><div class="bar"><i style="width:72%;background:var(--score-high)"></i></div><b class="v mono">72</b></div>
+        <div class="axis"><span>가치</span><div class="bar"><i style="width:31%;background:var(--score-low)"></i></div><b class="v mono">31</b></div>
+        <div class="axis"><span>심리</span><div class="bar"><i style="width:58%;background:var(--score-mid)"></i></div><b class="v mono">58</b></div>
+        <p class="note">막대는 값을 정확히 읽기 좋고, 레이더는 강·약점 모양이 한눈에 들어옵니다.</p>
+      </div>
+    </div>
+    <div class="pick">→ 4 레이더로 교체 / 레이더 추가(막대 유지) / 미채택</div>
+  </section>
+
+  <!-- ───────── 옵션 5 : 미리보기 모달 ───────── -->
+  <section class="opt">
+    <div class="opt-head"><span class="tag">옵션 5</span><h2>종목 빠른 미리보기 모달</h2><span class="sub">좌측 랭킹에서 종목 클릭 시</span></div>
+    <div class="modal-demo">
+      <div class="modal">
+        <div class="modal-h">
+          <div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span class="av">삼</span>
+              <b style="font-size:14px">삼성전자</b>
+              <span class="badge" style="background:color-mix(in oklab,var(--score-high) 15%,transparent);color:var(--score-high)">A+ 90</span>
+            </div>
+            <div class="note">005930 · KOSPI · KRW</div>
+          </div>
+          <div style="text-align:right">
+            <div class="mono" style="font-size:17px;font-weight:700">241,000원</div>
+            <div class="mono up">+0.42%</div>
+          </div>
+        </div>
+        <div class="modal-b">
+          <div class="axis"><span>추세</span><div class="bar"><i style="width:84%;background:var(--score-high)"></i></div><b class="v mono">84</b></div>
+          <div class="axis"><span>수익성</span><div class="bar"><i style="width:66%;background:var(--score-high)"></i></div><b class="v mono">66</b></div>
+          <div class="axis"><span>가치</span><div class="bar"><i style="width:31%;background:var(--score-low)"></i></div><b class="v mono">31</b></div>
+          <div style="height:1px;background:var(--border);margin:10px 0"></div>
+          <div class="kv"><span>52주</span><b class="mono">90,200 ~ 380,000</b></div>
+          <div class="kv"><span>시가총액</span><b class="mono">1,406조원</b></div>
+          <div class="kv"><span>이 종목 리포트</span><b class="mono">매수 2 · 관망 1</b></div>
+          <div style="height:1px;background:var(--border);margin:10px 0"></div>
+          <div class="note" style="margin-bottom:4px">최근 뉴스</div>
+          <div style="font-size:11px;line-height:1.55">
+            · 삼성전자, HBM4 양산 라인 증설 검토<br>
+            · 외국인 5거래일 연속 순매수
+          </div>
+        </div>
+        <div class="modal-f">
+          <span class="btn">관심종목 추가</span>
+          <span class="btn primary">종목 분석 열기</span>
+        </div>
+      </div>
+    </div>
+    <p class="note">랭킹에서 종목을 훑을 때 페이지를 옮기지 않고 확인 → 마음에 들면 «종목 분석 열기».</p>
+    <div class="pick">→ 5 채택 / 미채택</div>
+  </section>
+
+  <!-- ───────── 옵션 6 : 목록 개선 ───────── -->
+  <section class="opt">
+    <div class="opt-head"><span class="tag">옵션 6</span><h2>좌측 랭킹 목록 개선</h2><span class="sub">관심종목·보유종목에도 같은 규칙 적용</span></div>
+    <div class="grid3">
+      <div class="card">
+        <div class="card-h"><span class="card-t">6-A · 지금</span></div>
+        <div class="row"><span class="rank">1</span><span class="av">오</span><span class="nm">오스코텍</span><span class="mono" style="color:var(--score-high)">90</span></div>
+        <div class="row"><span class="rank">2</span><span class="av">R</span><span class="nm">RF머트리얼즈</span><span class="mono" style="color:var(--score-high)">89</span></div>
+        <div class="row"><span class="rank">3</span><span class="av">셀</span><span class="nm">셀바이오휴먼텍</span><span class="mono" style="color:var(--score-high)">89</span></div>
+        <div class="row"><span class="rank">4</span><span class="av">인</span><span class="nm">인지소프트</span><span class="mono" style="color:var(--score-high)">88</span></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><span class="card-t">6-B · + 스파크라인</span></div>
+        <div class="row"><span class="rank">1</span><span class="av">오</span><span class="nm">오스코텍</span>
+          <svg class="spark" viewBox="0 0 62 20"><path d="M0,15 L10,13 L20,16 L31,9 L41,11 L51,5 L62,3" fill="none" stroke="var(--profit)" stroke-width="1.5"/></svg>
+          <span class="mono" style="color:var(--score-high)">90</span></div>
+        <div class="row"><span class="rank">2</span><span class="av">R</span><span class="nm">RF머트리얼즈</span>
+          <svg class="spark" viewBox="0 0 62 20"><path d="M0,5 L10,8 L20,6 L31,11 L41,9 L51,14 L62,17" fill="none" stroke="var(--loss)" stroke-width="1.5"/></svg>
+          <span class="mono" style="color:var(--score-high)">89</span></div>
+        <div class="row"><span class="rank">3</span><span class="av">셀</span><span class="nm">셀바이오휴먼텍</span>
+          <svg class="spark" viewBox="0 0 62 20"><path d="M0,12 L10,10 L20,13 L31,8 L41,10 L51,6 L62,7" fill="none" stroke="var(--profit)" stroke-width="1.5"/></svg>
+          <span class="mono" style="color:var(--score-high)">89</span></div>
+        <div class="row"><span class="rank">4</span><span class="av">인</span><span class="nm">인지소프트</span>
+          <svg class="spark" viewBox="0 0 62 20"><path d="M0,8 L10,9 L20,7 L31,12 L41,14 L51,11 L62,13" fill="none" stroke="var(--loss)" stroke-width="1.5"/></svg>
+          <span class="mono" style="color:var(--score-high)">88</span></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><span class="card-t">6-C · + 정렬헤더 + 등락 강도</span></div>
+        <div class="sorth"><span style="width:14px"></span><b class="sortable" style="flex:1">종목</b><span class="sortable" style="width:62px;text-align:right">등락 ▾</span><span class="sortable" style="width:26px;text-align:right">점수</span></div>
+        <div class="row"><span class="rank">1</span><span class="nm">오스코텍</span><span class="pct mono heat-u3">+8.4%</span><span class="mono" style="width:26px;text-align:right;color:var(--score-high)">90</span></div>
+        <div class="row"><span class="rank">2</span><span class="nm">RF머트리얼즈</span><span class="pct mono heat-d2">-3.1%</span><span class="mono" style="width:26px;text-align:right;color:var(--score-high)">89</span></div>
+        <div class="row"><span class="rank">3</span><span class="nm">셀바이오휴먼텍</span><span class="pct mono heat-u1">+0.9%</span><span class="mono" style="width:26px;text-align:right;color:var(--score-high)">89</span></div>
+        <div class="row"><span class="rank">4</span><span class="nm">인지소프트</span><span class="pct mono heat-d3">-6.7%</span><span class="mono" style="width:26px;text-align:right;color:var(--score-high)">88</span></div>
+      </div>
+    </div>
+    <div class="pick">→ 6-B · 6-C · 둘 다(스파크라인+정렬+강도) · 미채택</div>
+  </section>
+
+  <p class="sub" style="margin-top:26px;padding-top:14px;border-top:1px solid var(--border)">
+    답 예시: <b>“0-A, 1, 2 한줄형, 3 차트형, 5, 6 둘 다”</b> 처럼 알려주시면 그대로 만들겠습니다.
+  </p>
+</div>
+</body>
+</html>

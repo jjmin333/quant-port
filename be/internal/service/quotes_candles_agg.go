@@ -33,11 +33,59 @@ func needsCandleAggregation(interval model.CandleInterval) bool {
 	}
 }
 
+// maxIntradayRawBars caps 1m history fetched for aggregated intraday intervals.
+// 7200 ≈ 120×60m bars (~5 US regular sessions of 1m data).
+const maxIntradayRawBars = 7200
+
+// intradayDisplayBars is the default tail length returned per intraday interval.
+const intradayDisplayBars = 120
+
+func candleDisplayBarCount(interval model.CandleInterval) int {
+	if minutes := intervalMinutes(interval); minutes >= 1 {
+		return intradayDisplayBars
+	}
+	switch interval {
+	case model.Interval1w:
+		return tossCandlePageSize * 2
+	case model.Interval1M:
+		return tossCandlePageSize
+	default:
+		return tossCandlePageSize
+	}
+}
+
+func trimCandlesTail(candles []model.Candle, maxBars int) []model.Candle {
+	if maxBars <= 0 || len(candles) <= maxBars {
+		return candles
+	}
+	return candles[len(candles)-maxBars:]
+}
+
+// needsIntradayDepthRefresh reports whether an aggregated intraday snapshot is too shallow
+// (all intervals sharing the same ~200 1m tail look identical on the chart).
+func needsIntradayDepthRefresh(interval model.CandleInterval, snap model.CandleSnapshot) bool {
+	minutes := intervalMinutes(interval)
+	if minutes <= 1 {
+		return false
+	}
+	target := candleDisplayBarCount(interval)
+	if len(snap.Completed) < target {
+		return true
+	}
+	if len(snap.Completed) < 2 {
+		return false
+	}
+	first := parseQuoteCandleTime(snap.Completed[0].Time)
+	last := parseQuoteCandleTime(snap.Completed[len(snap.Completed)-1].Time)
+	minSpan := time.Duration(minutes*(len(snap.Completed)-1)) * time.Minute
+	return last.Sub(first) < minSpan/3
+}
+
 func candleFetchCount(interval model.CandleInterval) int {
 	if minutes := intervalMinutes(interval); minutes > 1 {
 		count := 120 * minutes
-		if count > tossCandlePageSize*8 {
-			return tossCandlePageSize * 8
+		if count > maxIntradayRawBars {
+			return maxIntradayRawBars
 		}
 		return count
 	}
@@ -163,7 +211,8 @@ func aggregateCandlesPeriod(candles []model.Candle, kind periodKind) []model.Can
 			hasKey = true
 			next := c
 			if kind == periodMonth {
-				next.Time = t.Format("2006-01-02")
+				monthStart := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
+				next.Time = monthStart.Format("2006-01-02")
 			} else {
 				next.Time = weekStart(t).Format("2006-01-02")
 			}

@@ -92,7 +92,7 @@ func (st *MarketIndexStore) List(ctx context.Context) ([]model.MarketIndex, time
 	if len(snap) == 0 {
 		return emptyIndicesFromCatalog(), time.Time{}
 	}
-	return st.enrichIndicesForAPI(ctx, st.mergeZeros(ctx, snap)), at
+	return st.enrichIndicesForAPI(ctx, st.mergeZeros(ctx, alignIndicesToCatalog(snap))), at
 }
 
 func (st *MarketIndexStore) loadFromStorage(ctx context.Context) {

@@ -31,6 +31,7 @@ export type QuoteSummary = {
   market: string;
   currency: QuoteCurrency;
   assetType: QuoteAssetType;
+  logoUrl?: string;
   currentPrice: number;
   change: number;
   changeRate: number;
@@ -38,6 +39,21 @@ export type QuoteSummary = {
   tradingValue: number;
   isWatchlisted: boolean;
   isHeld: boolean;
+  watchlistMetrics?: WatchlistMetrics;
+};
+
+export type WatchlistMetrics = {
+  addedAt: string;
+  changeRatePrevClose: number;
+  prevClose?: number;
+  changeRatePrevWeek?: number | null;
+  prevWeekClose?: number;
+  changeRatePrevMonth?: number | null;
+  prevMonthClose?: number;
+  week52High?: number;
+  week52Low?: number;
+  changeRateWeek52High?: number | null;
+  changeRateWeek52Low?: number | null;
 };
 
 export type QuoteDetail = QuoteSummary & {
@@ -45,6 +61,8 @@ export type QuoteDetail = QuoteSummary & {
   high: number;
   low: number;
   prevClose: number;
+  regularClose?: number;
+  marketSession?: string;
   week52High: number;
   week52Low: number;
   marketCap: number;
@@ -116,10 +134,48 @@ export type StreamEvent = {
   completed?: Candle[];
 };
 
+export type QuoteStreamEvent = {
+  type: "quote_update";
+  symbol: string;
+  currentPrice: number;
+  change: number;
+  changeRate: number;
+  prevClose: number;
+  regularClose?: number;
+  marketSession?: string;
+  updatedAt: string;
+};
+
+/** Baseline price used for displayed change / changeRate. */
+export function quoteChangeBaseline(quote: Pick<QuoteDetail, "prevClose" | "regularClose" | "marketSession">): number {
+  if (
+    (quote.marketSession === "after" || quote.marketSession === "closed") &&
+    quote.regularClose != null &&
+    quote.regularClose > 0
+  ) {
+    return quote.regularClose;
+  }
+  return quote.prevClose;
+}
+
+export function quoteChangeBasisLabel(quote: Pick<QuoteDetail, "prevClose" | "regularClose" | "marketSession">): string {
+  const baseline = quoteChangeBaseline(quote);
+  if (
+    baseline > 0 &&
+    quote.regularClose != null &&
+    quote.regularClose > 0 &&
+    baseline === quote.regularClose
+  ) {
+    return "정규장 종가 대비";
+  }
+  return "전일 정규장 종가 대비";
+}
+
 export type WatchlistItem = {
   id: number;
   symbol: string;
   createdAt: string;
+  addedPrice?: number;
 };
 
 export type StockInfo = {
@@ -128,6 +184,8 @@ export type StockInfo = {
   englishName?: string;
   market: string;
   currency: QuoteCurrency;
+  assetType?: QuoteAssetType;
+  logoUrl?: string;
   securityType?: string;
   listDate?: string;
   sharesOutstanding?: string;

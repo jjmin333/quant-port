@@ -457,3 +457,87 @@ func reverseFloats(values []float64) []float64 {
 }
 
 
+
+// DatedObservation is one FRED data point with the date it belongs to.
+type DatedObservation struct {
+	Date  time.Time
+	Value float64
+}
+
+// SeriesHistory returns dated observations, newest first, for backfilling an
+// index's daily close history.
+//
+// The existing helpers deliberately drop the dates — a sparkline only needs the
+// shape — but writing index_daily_closes rows requires knowing which session
+// each value belongs to, so this keeps them.
+func (c *FREDClient) SeriesHistory(ctx context.Context, seriesID string, limit int) ([]DatedObservation, error) {
+	if !c.Enabled() {
+		return nil, fmt.Errorf("fred not configured")
+	}
+	if limit <= 0 {
+		limit = 60
+	}
+	if c.budget != nil {
+		if err := c.budget.Check(ctx, apibudget.ProviderFRED); err != nil {
+			return nil, err
+		}
+		c.budget.Record(ctx, apibudget.ProviderFRED)
+	}
+
+	q := url.Values{
+		"series_id":  {seriesID},
+		"api_key":    {c.apiKey},
+		"file_type":  {"json"},
+		"sort_order": {"desc"},
+		"limit":      {strconv.Itoa(limit)},
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		"https://api.stlouisfed.org/fred/series/observations?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	res, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusTooManyRequests {
+		if c.budget != nil {
+			c.budget.BlockFor(ctx, apibudget.ProviderFRED, time.Minute)
+		}
+		return nil, fmt.Errorf("fred %s: status 429", seriesID)
+	}
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fred %s: status %d", seriesID, res.StatusCode)
+	}
+
+	var payload struct {
+		Observations []struct {
+			Date  string `json:"date"`
+			Value string `json:"value"`
+		} `json:"observations"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {
+		return nil, err
+	}
+
+	out := make([]DatedObservation, 0, len(payload.Observations))
+	for _, obs := range payload.Observations {
+		// FRED marks missing sessions with "."; those are holidays, not zeros.
+		raw := strings.TrimSpace(obs.Value)
+		if raw == "" || raw == "." {
+			continue
+		}
+		v, err := strconv.ParseFloat(raw, 64)
+		if err != nil || v <= 0 {
+			continue
+		}
+		d, err := time.Parse("2006-01-02", strings.TrimSpace(obs.Date))
+		if err != nil {
+			continue
+		}
+		out = append(out, DatedObservation{Date: d, Value: v})
+	}
+	return out, nil
+}

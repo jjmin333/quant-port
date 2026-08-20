@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -68,6 +69,27 @@ func (h *QuotesHandler) SearchStocksCatalog(w http.ResponseWriter, r *http.Reque
 	response.JSON(w, http.StatusOK, map[string]any{
 		"data":  items,
 		"total": total,
+	})
+}
+
+func (h *QuotesHandler) BatchQuotes(w http.ResponseWriter, r *http.Request) {
+	raw := strings.TrimSpace(r.URL.Query().Get("symbols"))
+	if raw == "" {
+		response.JSON(w, http.StatusOK, map[string]any{
+			"data":   []model.QuoteSummary{},
+			"source": h.source(),
+		})
+		return
+	}
+	parts := parseSymbolList(raw, service.BatchQuoteSummariesMax)
+	summaries := h.svc.BatchQuoteSummaries(r.Context(), parts)
+	response.JSON(w, http.StatusOK, map[string]any{
+		"data":   summaries,
+		"source": h.source(),
+		// 서버가 한 번에 풀어 주는 심볼 수. 보유·메모·목표가처럼 사용자 데이터에서
+		// 심볼을 만드는 화면은 이 수를 넘길 수 있는데, 지금까지는 넘겼다는 사실이
+		// 응답 어디에도 없어 화면이 조용히 일부만 그렸다.
+		"limit": service.BatchQuoteSummariesMax,
 	})
 }
 
@@ -172,6 +194,11 @@ func (h *QuotesHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		interval = "5m"
 	}
 	h.svc.ServeStream(w, r, symbol, model.CandleInterval(interval))
+}
+
+func (h *QuotesHandler) QuoteStream(w http.ResponseWriter, r *http.Request) {
+	symbol := chi.URLParam(r, "symbol")
+	h.svc.ServeQuoteStream(w, r, symbol)
 }
 
 func (h *QuotesHandler) source() string {

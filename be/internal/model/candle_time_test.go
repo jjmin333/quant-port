@@ -38,6 +38,30 @@ func TestNormalizeBarTime_intradayCanonical(t *testing.T) {
 	}
 }
 
+func TestCanonicalPaginationCursor_dailyMidnight(t *testing.T) {
+	got := CanonicalPaginationCursor("2024-01-26", Interval1d)
+	want := "2024-01-26T00:00:00+09:00"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestCanonicalPaginationCursor_idempotentRFC3339(t *testing.T) {
+	in := "2026-03-25T09:04:00+09:00"
+	got := CanonicalPaginationCursor(in, Interval1m)
+	if got != in {
+		t.Fatalf("got %q want %q", got, in)
+	}
+}
+
+func TestCanonicalPaginationCursor_dailyFromRFC3339(t *testing.T) {
+	got := CanonicalPaginationCursor("2024-01-26T15:30:00+09:00", Interval1d)
+	want := "2024-01-26T00:00:00+09:00"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
 func TestFormatCandleTime_sortable(t *testing.T) {
 	a := FormatCandleTime(ParseCandleTime("2026-03-25T09:04:00+09:00"), Interval5m)
 	b := FormatCandleTime(ParseCandleTime("2026-03-25T09:05:00+09:00"), Interval5m)

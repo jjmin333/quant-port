@@ -1,0 +1,674 @@
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>스탬프 v2 — 예상 주가 · 검증기간 · 판정 규칙</title>
+<style>
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.97 0 0); --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0); --muted: oklch(0.97 0 0); --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.93 0 0); --border: oklch(0.87 0 0);
+  --brand: #2563EB; --brand-muted: rgba(37, 99, 235, 0.1);
+  --profit: #DC2626; --loss: #2563EB;
+  --hit: #059669; --hit-muted: rgba(5,150,105,.12);
+  --miss: #B45309; --warn: #D97706; --warn-muted: rgba(217,119,6,.12);
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0); --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0); --muted: oklch(0.269 0 0); --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0); --border: oklch(1 0 0 / 16%);
+  --brand: #60A5FA; --brand-muted: rgba(96,165,250,.15);
+  --profit: #F87171; --loss: #60A5FA;
+  --hit: #34D399; --hit-muted: rgba(52,211,153,.14);
+  --miss: #FBBF24; --warn: #FBBF24; --warn-muted: rgba(251,191,36,.14);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--background); color: var(--foreground);
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 12px; line-height: 1.5; padding: 24px; -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1240px; margin: 0 auto; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
+h2 { font-size: 15px; font-weight: 600; }
+h3 { font-size: 12px; font-weight: 600; }
+.sub { color: var(--muted-foreground); font-size: 12px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.up { color: var(--profit); } .down { color: var(--loss); } .dim { color: var(--muted-foreground); }
+.hit { color: var(--hit); } .miss { color: var(--miss); }
+code { font-family: ui-monospace, monospace; background: var(--muted); padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-bottom: 16px; margin-bottom: 20px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--background); z-index: 20;
+}
+button.tgl { font: inherit; cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--foreground); padding: 6px 12px; border-radius: 8px; }
+.opt { margin: 32px 0 0; padding-top: 20px; border-top: 2px solid var(--border); }
+.opt-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; flex-wrap: wrap; }
+.tag { display: inline-block; font-size: 11px; font-weight: 700; background: var(--brand); color: #fff; padding: 2px 8px; border-radius: 999px; }
+.tag.warn { background: var(--warn); }
+.note { color: var(--muted-foreground); font-size: 11px; margin: 6px 0 14px; max-width: 940px; }
+.note b { color: var(--foreground); font-weight: 600; }
+
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.card-pad { padding: 12px; }
+.card-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.card-head .count { margin-left: auto; font-size: 11px; color: var(--muted-foreground); }
+.cols { display: grid; gap: 14px; }
+.cols.c2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.cols.c3 { grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
+
+.badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 5px; background: var(--muted); color: var(--muted-foreground); white-space: nowrap; }
+.badge.b-up { background: rgba(220,38,38,.12); color: var(--profit); }
+.badge.b-down { background: rgba(37,99,235,.12); color: var(--loss); }
+.badge.b-hit { background: var(--hit-muted); color: var(--hit); }
+.badge.b-miss { background: rgba(180,83,9,.12); color: var(--miss); }
+.badge.b-due { background: var(--warn-muted); color: var(--warn); }
+[data-theme="dark"] .badge.b-up { background: rgba(248,113,113,.15); }
+[data-theme="dark"] .badge.b-down { background: rgba(96,165,250,.15); }
+[data-theme="dark"] .badge.b-miss { background: rgba(251,191,36,.15); }
+.av { width: 22px; height: 22px; border-radius: 6px; flex: 0 0 auto; background: var(--muted); display: grid; place-items: center; font-size: 9px; font-weight: 700; color: var(--muted-foreground); }
+.av.lg { width: 30px; height: 30px; font-size: 11px; border-radius: 8px; }
+
+.btn { font: inherit; font-size: 11px; cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--foreground); padding: 5px 11px; border-radius: 7px; }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
+.btn.ghost { border-color: transparent; color: var(--muted-foreground); }
+.btn.on { border-color: var(--brand); background: var(--brand-muted); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.field { width: 100%; font: inherit; font-size: 12px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--card); color: var(--foreground); }
+.field:focus { outline: none; border-color: var(--brand); }
+.lbl { font-size: 10.5px; color: var(--muted-foreground); display: block; margin-bottom: 3px; }
+.req { color: var(--profit); font-weight: 700; }
+.pillrow { display: flex; flex-wrap: wrap; gap: 4px; }
+.pillrow .btn { flex: 1 1 auto; padding: 4px 8px; text-align: center; }
+
+/* ---- 스탬프 생성 팝오버 ---- */
+.pop { width: 300px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 12px; box-shadow: 0 10px 28px rgba(0,0,0,.13); }
+[data-theme="dark"] .pop { box-shadow: 0 10px 28px rgba(0,0,0,.5); }
+.pop .grp { margin-top: 10px; }
+.pop .hint { font-size: 10px; color: var(--muted-foreground); margin-top: 3px; }
+
+/* 목표가 슬라이더 미리보기 */
+.tprev { border: 1px solid var(--border); border-radius: 8px; padding: 8px 9px; background: color-mix(in oklch, var(--muted) 55%, transparent); }
+.tline { position: relative; height: 26px; margin: 6px 2px 2px; }
+.tline .rail { position: absolute; left: 0; right: 0; top: 11px; height: 3px; border-radius: 2px; background: var(--border); }
+.tline .fill { position: absolute; top: 11px; height: 3px; border-radius: 2px; background: var(--profit); }
+.tline .now, .tline .tgt { position: absolute; top: 4px; width: 2px; height: 17px; }
+.tline .now { background: var(--muted-foreground); }
+.tline .tgt { background: var(--profit); width: 9px; height: 9px; border-radius: 50%; top: 8px; transform: translateX(-4px); }
+.tline em { position: absolute; top: -12px; font-size: 9.5px; font-style: normal; color: var(--muted-foreground); transform: translateX(-50%); white-space: nowrap; }
+
+/* ---- 판정 규칙 비교 ---- */
+.rule { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; background: var(--card); }
+.rule.pick { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-muted); }
+.rule h3 { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.rule .fx { font-size: 11px; color: var(--muted-foreground); margin-bottom: 9px; }
+table.ex { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+table.ex th { font-weight: 500; color: var(--muted-foreground); text-align: right; padding: 3px 2px; font-size: 10px; }
+table.ex th:first-child, table.ex td:first-child { text-align: left; }
+table.ex td { padding: 4px 2px; border-top: 1px solid var(--border); text-align: right; }
+.pros { font-size: 10.5px; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--border); }
+.pros li { list-style: none; padding-left: 13px; position: relative; margin-top: 2px; color: var(--muted-foreground); }
+.pros li::before { position: absolute; left: 0; }
+.pros li.p::before { content: "+"; color: var(--hit); font-weight: 700; }
+.pros li.c::before { content: "−"; color: var(--miss); font-weight: 700; }
+
+/* ---- 행 + 도장 실링 ---- */
+.row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--border); cursor: pointer; }
+.row:hover { background: var(--accent); }
+.row .name { font-size: 12.5px; font-weight: 600; }
+.row .meta { font-size: 10.5px; color: var(--muted-foreground); margin-top: 1px; display: flex; gap: 8px; flex-wrap: wrap; }
+.col-main { min-width: 0; flex: 1 1 auto; }
+.grp-h { padding: 5px 14px; font-size: 10.5px; color: var(--muted-foreground); background: color-mix(in oklch, var(--muted) 60%, transparent); border-top: 1px solid var(--border); }
+
+.seal {
+  width: 46px; height: 46px; border-radius: 50%; flex: 0 0 auto; display: grid; place-items: center;
+  border: 1.6px dashed currentColor; text-align: center; line-height: 1.05;
+  font-size: 9.5px; font-weight: 800; letter-spacing: -.02em; transform: rotate(-9deg); opacity: .82;
+}
+.seal small { display: block; font-size: 8px; font-weight: 600; opacity: .8; letter-spacing: 0; }
+.seal.s-hit { color: var(--hit); }
+.seal.s-miss { color: var(--miss); }
+.seal.s-due { color: var(--warn); border-style: solid; }
+.seal.s-pend { color: var(--muted-foreground); border-style: dotted; }
+
+/* 목표가 진행 게이지 */
+.tgauge { flex: 0 0 132px; }
+.tgauge .bar { position: relative; height: 5px; border-radius: 3px; background: var(--muted); overflow: visible; margin: 4px 0 3px; }
+.tgauge .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--profit); }
+.tgauge .bar i.neg { background: var(--loss); }
+.tgauge .bar b { position: absolute; top: -3px; width: 2px; height: 11px; background: var(--foreground); opacity: .55; }
+.tgauge .k { font-size: 9.5px; color: var(--muted-foreground); display: flex; justify-content: space-between; }
+.tgauge .v { font-size: 10px; }
+
+.hz { display: flex; gap: 3px; flex: 0 0 auto; }
+.hz .h { width: 42px; text-align: center; }
+.hz .h .k { font-size: 9px; color: var(--muted-foreground); }
+.hz .h .bar { height: 18px; position: relative; margin: 1px 0; }
+.hz .h .bar .mid { position: absolute; left: 0; right: 0; top: 9px; height: 1px; background: var(--border); }
+.hz .h .bar i { position: absolute; left: 11px; right: 11px; border-radius: 2px; }
+.hz .h .bar i.pos { bottom: 9px; background: var(--profit); }
+.hz .h .bar i.neg { top: 9px; background: var(--loss); }
+.hz .h .v { font-size: 10px; font-family: ui-monospace, monospace; }
+.path { width: 84px; height: 28px; flex: 0 0 auto; }
+.path svg { width: 100%; height: 100%; display: block; }
+
+/* ---- 모달 ---- */
+.modal-shell { border: 1px solid var(--border); border-radius: 12px; background: var(--card); box-shadow: 0 12px 32px rgba(0,0,0,.14); overflow: hidden; }
+[data-theme="dark"] .modal-shell { box-shadow: 0 12px 32px rgba(0,0,0,.5); }
+.modal-head { display: flex; align-items: flex-start; gap: 10px; padding: 13px 15px; border-bottom: 1px solid var(--border); }
+.modal-body { padding: 13px 15px; display: grid; gap: 11px; }
+.modal-foot { display: flex; gap: 8px; align-items: center; padding: 11px 15px; border-top: 1px solid var(--border); }
+.panel { border: 1px solid var(--border); border-radius: 9px; padding: 9px 10px; }
+.panel h4 { font-size: 10.5px; font-weight: 600; color: var(--muted-foreground); margin-bottom: 6px; }
+.kv { display: flex; justify-content: space-between; font-size: 11px; padding: 1.5px 0; }
+.kv span:first-child { color: var(--muted-foreground); }
+
+/* A-1 타일 */
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.tile { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 13px; }
+.tile.click { cursor: pointer; }
+.tile.click:hover { border-color: var(--brand); }
+.tile .l { font-size: 11px; color: var(--muted-foreground); display: flex; align-items: center; gap: 4px; }
+.tile .val { font-size: 21px; font-weight: 700; letter-spacing: -.02em; margin-top: 2px; }
+.tile .foot { font-size: 10px; color: var(--muted-foreground); margin-top: 3px; }
+.donut { display: flex; align-items: center; gap: 12px; }
+.ring { width: 54px; height: 54px; border-radius: 50%; flex: 0 0 auto; position: relative; background: conic-gradient(var(--hit) 0 62%, var(--muted) 62% 100%); }
+.ring::after { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: var(--card); }
+.ring span { position: absolute; inset: 0; display: grid; place-items: center; z-index: 1; font-size: 13px; font-weight: 700; }
+.minibars { display: grid; gap: 4px; }
+.mb { display: grid; grid-template-columns: 44px 1fr 52px; align-items: center; gap: 6px; font-size: 10px; }
+.mb .track { height: 6px; border-radius: 999px; background: var(--muted); overflow: hidden; display: flex; }
+.mb .track i { display: block; height: 100%; }
+.mb .track i.h { background: var(--hit); } .mb .track i.m { background: var(--miss); opacity: .55; }
+.tabs { display: flex; gap: 3px; background: var(--muted); padding: 2.5px; border-radius: 8px; }
+.tabs button { flex: 1; font: inherit; font-size: 11px; padding: 4px 8px; border: none; border-radius: 6px; background: transparent; color: var(--muted-foreground); cursor: pointer; }
+.tabs button.on { background: var(--card); color: var(--foreground); font-weight: 600; }
+.gbar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; align-items: end; height: 96px; }
+.gbar .g { display: flex; gap: 5px; align-items: flex-end; justify-content: center; height: 100%; }
+.gbar .g i { width: 18px; border-radius: 3px 3px 0 0; display: block; }
+.gbar .g i.me { background: var(--brand); } .gbar .g i.bm { background: var(--muted-foreground); opacity: .45; }
+.gbar-x { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; font-size: 10px; color: var(--muted-foreground); text-align: center; margin-top: 5px; }
+.legend { display: flex; gap: 12px; font-size: 10px; color: var(--muted-foreground); margin-top: 8px; }
+.legend s { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin-right: 4px; text-decoration: none; }
+
+.sql { background: var(--muted); border-radius: 8px; padding: 10px 12px; font-family: ui-monospace, monospace; font-size: 10.5px; line-height: 1.65; white-space: pre; overflow-x: auto; }
+.sql .del { color: var(--profit); font-weight: 600; }
+.sql .add { color: var(--hit); }
+.sql .cmt { color: var(--muted-foreground); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div>
+    <h1>스탬프 v2 — 예상 주가 · 검증기간 · 판정 규칙</h1>
+    <p class="sub">B안에서 요청하신 <b>예상 주가(필수)</b>와 <b>자유 검증기간</b>은 스키마·판정 로직까지 바뀝니다. 결정할 것만 모았습니다.</p>
+  </div>
+  <button class="tgl" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme==='dark'?'light':'dark'">🌗 라이트/다크</button>
+</div>
+
+<!-- ============================================================ 1. 생성 폼 -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">1</span><h2>스탬프 찍는 순간 — 폼이 언제 뜨나</h2></div>
+  <p class="note">
+    지금 스탬프 버튼은 <b>한 번 누르면 바로 저장</b>되고 가설(관점·기간·메모)은 저장 후 팝오버에서 붙입니다.
+    코드 주석에 그 이유가 적혀 있습니다 — <i>"폼을 먼저 받으면 그 순간에만 의미 있는 캡처와 사용자 사이에 폼이 끼어든다."</i>
+    그런데 <b>예상 주가를 필수</b>로 만들면 저장 전에 값을 받아야 합니다. 두 방식이 있습니다.
+  </p>
+  <div class="cols c2">
+
+    <div>
+      <h3 style="margin-bottom:7px">1-A. 폼 먼저 → 저장 <span class="badge" style="background:var(--brand-muted);color:var(--brand)">단순</span></h3>
+      <div class="pop">
+        <div style="display:flex;align-items:flex-start;gap:8px">
+          <span class="av lg">삼성</span>
+          <div style="flex:1;min-width:0">
+            <b style="font-size:12.5px">삼성전자</b>
+            <div class="dim mono" style="font-size:10.5px">현재가 74,200원 <span class="up">+1.2%</span></div>
+          </div>
+          <span class="dim" style="font-size:10px;text-align:right">08-15<br>14:32</span>
+        </div>
+        <div class="hint" style="margin-top:6px;padding:5px 7px;background:var(--brand-muted);border-radius:6px;color:var(--brand)">
+          이 화면의 시세·점수·뉴스가 <b>지금 이대로</b> 박제됩니다
+        </div>
+
+        <div class="grp">
+          <span class="lbl">예상 주가 <span class="req">*</span></span>
+          <div style="display:flex;gap:5px">
+            <input class="field mono" value="82,000" style="flex:1">
+            <button class="btn" style="flex:0 0 auto">원</button>
+          </div>
+          <div class="tprev" style="margin-top:6px">
+            <div class="tline">
+              <span class="rail"></span>
+              <span class="fill" style="left:22%;width:48%"></span>
+              <span class="now" style="left:22%"></span><em style="left:22%">현재 74,200</em>
+              <span class="tgt" style="left:70%"></span><em style="left:70%;color:var(--profit)">목표 82,000</em>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:10px" class="dim">
+              <span>52주 저 52,900</span><span class="up"><b>+10.5%</b> 상승 예상</span><span>52주 고 88,800</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grp">
+          <span class="lbl">검증 기간 <span class="req">*</span></span>
+          <div class="pillrow">
+            <button class="btn">이번 장 종료</button>
+            <button class="btn">다음 장 종료</button>
+          </div>
+          <div class="pillrow" style="margin-top:4px">
+            <button class="btn">1주</button><button class="btn on">1개월</button>
+            <button class="btn">3개월</button><button class="btn">직접</button>
+          </div>
+          <p class="hint">개봉일 <b>2026-09-15 (월) 15:30 KST</b> · 코스피 정규장 마감 기준</p>
+        </div>
+
+        <div class="grp">
+          <span class="lbl">확신도</span>
+          <div class="pillrow">
+            <button class="btn">1</button><button class="btn">2</button>
+            <button class="btn">3</button><button class="btn on">4</button><button class="btn">5</button>
+          </div>
+        </div>
+
+        <div class="grp">
+          <span class="lbl">이유 한 줄 (선택)</span>
+          <input class="field" placeholder="예: HBM 수주 기대 + 외국인 순매수 전환">
+        </div>
+
+        <div class="grp" style="display:flex;gap:6px">
+          <button class="btn ghost" style="flex:0 0 auto">취소</button>
+          <button class="btn primary" style="flex:1">🔖 스탬프 찍기</button>
+        </div>
+      </div>
+      <ul class="pros" style="border:none;max-width:300px">
+        <li class="p">규칙이 하나 — 저장된 스탬프는 전부 완성본</li>
+        <li class="p">판정·통계에 빈 값이 안 섞임</li>
+        <li class="c">"일단 찍어두기"의 즉시성은 사라짐 (3초 → 15초)</li>
+        <li class="c">폼 채우는 동안 시세가 움직임 → <b>폼 연 시점 시세로 고정</b> 필요</li>
+      </ul>
+    </div>
+
+    <div>
+      <h3 style="margin-bottom:7px">1-B. 즉시 저장 → 미완성 표시 <span class="badge">즉시성 유지</span></h3>
+      <div class="pop">
+        <div style="display:flex;align-items:flex-start;gap:8px">
+          <span class="av lg">삼성</span>
+          <div style="flex:1;min-width:0">
+            <b style="font-size:12.5px">스탬프 저장됨</b>
+            <div class="dim mono" style="font-size:10.5px">14:32 · 74,200원 · 점수 64</div>
+          </div>
+        </div>
+        <div class="hint" style="margin-top:7px;padding:6px 8px;background:var(--warn-muted);border-radius:6px;color:var(--warn)">
+          ⚠ <b>예상 주가를 넣어야 검증됩니다</b> — 비워두면 판정·통계에서 빠집니다
+        </div>
+        <div class="grp">
+          <span class="lbl">예상 주가 <span class="req">*</span></span>
+          <input class="field mono" placeholder="82,000">
+        </div>
+        <div class="grp">
+          <span class="lbl">검증 기간 <span class="req">*</span></span>
+          <div class="pillrow">
+            <button class="btn">이번 장</button><button class="btn">다음 장</button>
+            <button class="btn">1주</button><button class="btn on">1개월</button>
+            <button class="btn">3개월</button><button class="btn">직접</button>
+          </div>
+        </div>
+        <div class="grp" style="display:flex;gap:6px">
+          <button class="btn primary" style="flex:1">가설 저장</button>
+        </div>
+      </div>
+      <div class="card" style="margin-top:10px;max-width:300px">
+        <div class="row" style="border-top:none;padding:8px 11px">
+          <span class="seal s-pend" style="width:38px;height:38px;font-size:8.5px">미완성<small>목표가 없음</small></span>
+          <div class="col-main">
+            <span class="name">카카오</span>
+            <div class="meta"><span>08-15 11:04</span><span class="mono">41,300원</span></div>
+          </div>
+          <button class="btn" style="flex:0 0 auto">채우기</button>
+        </div>
+      </div>
+      <ul class="pros" style="border:none;max-width:300px">
+        <li class="p">지금의 원클릭 캡처 감각 유지</li>
+        <li class="p">시세 고정 문제 없음 (누르는 즉시 서버가 박제)</li>
+        <li class="c">"미완성 스탬프" 상태가 하나 늘어남 — 목록·필터·통계 전부 분기</li>
+        <li class="c">required가 사실상 required가 아님</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 2. 판정 규칙 -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">2</span><h2>적중/빗나감을 무엇으로 판정할까 <span class="dim" style="font-size:12px;font-weight:400">— 가장 중요한 결정</span></h2></div>
+  <p class="note">
+    지금 규칙은 <b>방향만</b> 봅니다 (<code>강세 → 수익률&gt;0이면 적중</code>). 예상 주가가 생기면 "얼마나 정확했나"를 물을 수 있습니다.
+    아래 표의 예시는 <b>전부 같은 스탬프 4건</b>에 규칙만 바꿔 적용한 것입니다.
+  </p>
+  <div class="cols c3">
+
+    <div class="rule">
+      <h3>2-A. 방향만 <span class="badge">현행 유지</span></h3>
+      <p class="fx">강세 → 오르면 적중 · 약세 → 내리면 적중 · 관망 → ±3% 이내면 적중.<br>예상 주가는 <b>참고 표시만</b>.</p>
+      <table class="ex">
+        <tr><th>스탬프</th><th>목표</th><th>결과</th><th>판정</th></tr>
+        <tr><td>삼성 강세</td><td class="mono">82,000</td><td class="mono up">+9.6%</td><td class="hit">적중</td></tr>
+        <tr><td>SK 약세</td><td class="mono">185,000</td><td class="mono up">+8.3%</td><td class="miss">빗나감</td></tr>
+        <tr><td>NVDA 강세</td><td class="mono">$210</td><td class="mono up">+0.4%</td><td class="hit">적중</td></tr>
+        <tr><td>애플 강세</td><td class="mono">$260</td><td class="mono up">+18%</td><td class="hit">적중</td></tr>
+      </table>
+      <ul class="pros">
+        <li class="p">기존 적중률 통계가 그대로 이어짐</li>
+        <li class="p">머리로 재현 가능한 규칙</li>
+        <li class="c">NVDA <b>+0.4%인데 적중</b> — 목표 $210(+18%)엔 한참 못 미침</li>
+        <li class="c">예상 주가를 필수로 받는 의미가 약함</li>
+      </ul>
+    </div>
+
+    <div class="rule pick">
+      <h3>2-B. 목표가 도달 <span class="badge" style="background:var(--brand);color:#fff">엄격</span></h3>
+      <p class="fx">만기 종가가 <b>목표가에 도달</b>했는가.<br>강세 → 종가 ≥ 목표 · 약세 → 종가 ≤ 목표.</p>
+      <table class="ex">
+        <tr><th>스탬프</th><th>목표</th><th>만기 종가</th><th>판정</th></tr>
+        <tr><td>삼성 강세</td><td class="mono">82,000</td><td class="mono">81,300</td><td class="miss">빗나감</td></tr>
+        <tr><td>SK 약세</td><td class="mono">185,000</td><td class="mono">214,500</td><td class="miss">빗나감</td></tr>
+        <tr><td>NVDA 강세</td><td class="mono">$210</td><td class="mono">$178.9</td><td class="miss">빗나감</td></tr>
+        <tr><td>애플 강세</td><td class="mono">$260</td><td class="mono">$268</td><td class="hit">적중</td></tr>
+      </table>
+      <ul class="pros">
+        <li class="p">예상 주가가 진짜 의미를 가짐</li>
+        <li class="c">삼성 <b>81,300원(+9.6%)인데 빗나감</b> — 700원 차이</li>
+        <li class="c">적중률이 크게 떨어져 (예시 4건 중 1건) 의욕이 꺾임</li>
+        <li class="c">목표를 보수적으로 적는 쪽이 유리해짐</li>
+      </ul>
+    </div>
+
+    <div class="rule pick">
+      <h3>2-C. 방향 + 정확도 2단 <span class="badge" style="background:var(--hit);color:#fff">추천</span></h3>
+      <p class="fx"><b>적중/빗나감은 방향</b>으로 (기존 통계 유지).<br>거기에 <b>목표가 정확도</b>를 별도 지표로 — <code>오차 = |만기가 − 목표| ÷ 목표</code>.</p>
+      <table class="ex">
+        <tr><th>스탬프</th><th>목표</th><th>만기</th><th>판정 · 정확도</th></tr>
+        <tr><td>삼성 강세</td><td class="mono">82,000</td><td class="mono">81,300</td><td><span class="hit">적중</span> <span class="badge b-hit">오차 0.9%</span></td></tr>
+        <tr><td>SK 약세</td><td class="mono">185,000</td><td class="mono">214,500</td><td><span class="miss">빗나감</span> <span class="badge b-miss">오차 16%</span></td></tr>
+        <tr><td>NVDA 강세</td><td class="mono">$210</td><td class="mono">$178.9</td><td><span class="hit">적중</span> <span class="badge b-miss">오차 15%</span></td></tr>
+        <tr><td>애플 강세</td><td class="mono">$260</td><td class="mono">$268</td><td><span class="hit">적중</span> <span class="badge b-hit">오차 3.1%</span></td></tr>
+      </table>
+      <ul class="pros">
+        <li class="p">"방향은 맞췄지만 폭은 틀렸다"가 드러남 (NVDA)</li>
+        <li class="p">기존 적중률 지표를 안 깨면서 새 축 추가</li>
+        <li class="p">성적표에 <b>적중률 62% · 평균 오차 8.4%</b> 두 숫자</li>
+        <li class="c">읽을 숫자가 하나 늘어남</li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="note" style="margin-top:14px">
+    <b>덧붙여 정할 것</b> — 목표가 도달을 <b>만기 종가</b>로만 볼지, <b>기간 중 장중 한 번이라도 닿으면</b> 인정할지.
+    장중 도달은 <code>candle_bars</code>의 고가/저가로 계산 가능합니다 ("한 번 닿았다가 되돌아온" 경우를 살려줍니다).
+    2-B·2-C 선택 시에만 의미가 있고, 별도로 여쭙겠습니다.
+  </p>
+</section>
+
+<!-- ============================================================ 3. 행 + 실링 -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">3</span><h2>B-1 목록 행 + 도장 실링 + 목표가 게이지</h2></div>
+  <p class="note">왼쪽 아바타 자리에 <b>도장 실링</b>을 넣고(판정별 색·테두리), 4구간 막대 앞에 <b>목표가까지 얼마나 왔나</b> 게이지를 둡니다. 판정은 <b>2-C 기준</b>으로 그렸습니다.</p>
+  <div class="card">
+    <div class="card-head"><h3>스탬프 목록</h3><span class="badge">타임라인</span><span class="count">48건</span></div>
+    <div class="grp-h">2026-08-14 · 3건</div>
+
+    <div class="row">
+      <span class="seal s-hit">적중<small>오차 0.9%</small></span>
+      <div class="col-main">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span class="av">삼성</span><span class="name">삼성전자</span>
+          <span class="badge b-up">강세</span><span class="badge">확신 4</span>
+        </div>
+        <div class="meta">
+          <span>08-14 14:32 → 09-14 개봉</span>
+          <span class="mono">74,200 → <b class="up">81,300 +9.6%</b></span>
+          <span class="mono">목표 82,000</span>
+        </div>
+        <div class="dim" style="font-size:10.5px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">HBM 수주 기대 + 외국인 순매수 전환</div>
+      </div>
+      <div class="tgauge">
+        <div class="k"><span>현재</span><span>목표</span></div>
+        <div class="bar"><i style="width:91%"></i><b style="left:100%"></b></div>
+        <div class="v"><span class="up">목표의 91% 도달</span></div>
+      </div>
+      <div class="path"><svg viewBox="0 0 84 28" preserveAspectRatio="none">
+        <line x1="0" y1="4" x2="84" y2="4" stroke="var(--profit)" stroke-width="1" stroke-dasharray="2 2" stroke-opacity=".5" vector-effect="non-scaling-stroke"/>
+        <polyline points="0,19 11,21 22,16 33,18" fill="none" stroke="var(--muted-foreground)" stroke-width="1.3" vector-effect="non-scaling-stroke"/>
+        <line x1="33" y1="2" x2="33" y2="26" stroke="var(--brand)" stroke-opacity=".35" stroke-width="1" vector-effect="non-scaling-stroke"/>
+        <polyline points="33,18 48,14 64,8 82,6" fill="none" stroke="var(--profit)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+        <circle cx="33" cy="18" r="2.2" fill="var(--brand)"/>
+      </svg></div>
+      <div class="hz">
+        <div class="h"><div class="k">1D</div><div class="bar"><span class="mid"></span><i class="pos" style="height:3px"></i></div><div class="v up">+0.8</div></div>
+        <div class="h"><div class="k">1W</div><div class="bar"><span class="mid"></span><i class="pos" style="height:6px"></i></div><div class="v up">+3.1</div></div>
+        <div class="h"><div class="k">1M</div><div class="bar"><span class="mid"></span><i class="pos" style="height:9px"></i></div><div class="v up">+9.6</div></div>
+        <div class="h"><div class="k">3M</div><div class="bar"><span class="mid"></span></div><div class="v dim">—</div></div>
+      </div>
+    </div>
+
+    <div class="row">
+      <span class="seal s-miss">빗나감<small>오차 16%</small></span>
+      <div class="col-main">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span class="av">SK</span><span class="name">SK하이닉스</span>
+          <span class="badge b-down">약세</span><span class="badge">확신 3</span>
+        </div>
+        <div class="meta">
+          <span>08-14 10:05 → 09-14 개봉</span>
+          <span class="mono">198,000 → <b class="up">214,500 +8.3%</b></span>
+          <span class="mono">목표 185,000</span>
+        </div>
+        <div class="dim" style="font-size:10.5px;margin-top:2px">고점 부담 — 조정 예상</div>
+      </div>
+      <div class="tgauge">
+        <div class="k"><span>목표</span><span>현재</span></div>
+        <div class="bar"><i class="neg" style="width:0%"></i><b style="left:34%"></b><i style="left:34%;width:56%;background:var(--profit);opacity:.5"></i></div>
+        <div class="v"><span class="down">목표와 반대로 +8.3%</span></div>
+      </div>
+      <div class="path"><svg viewBox="0 0 84 28" preserveAspectRatio="none">
+        <line x1="0" y1="22" x2="84" y2="22" stroke="var(--loss)" stroke-width="1" stroke-dasharray="2 2" stroke-opacity=".5" vector-effect="non-scaling-stroke"/>
+        <polyline points="0,12 11,10 22,15 33,13" fill="none" stroke="var(--muted-foreground)" stroke-width="1.3" vector-effect="non-scaling-stroke"/>
+        <line x1="33" y1="2" x2="33" y2="26" stroke="var(--brand)" stroke-opacity=".35" stroke-width="1" vector-effect="non-scaling-stroke"/>
+        <polyline points="33,13 48,15 64,8 82,5" fill="none" stroke="var(--profit)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+        <circle cx="33" cy="13" r="2.2" fill="var(--brand)"/>
+      </svg></div>
+      <div class="hz">
+        <div class="h"><div class="k">1D</div><div class="bar"><span class="mid"></span><i class="neg" style="height:2px"></i></div><div class="v down">-0.4</div></div>
+        <div class="h"><div class="k">1W</div><div class="bar"><span class="mid"></span><i class="pos" style="height:4px"></i></div><div class="v up">+2.2</div></div>
+        <div class="h"><div class="k">1M</div><div class="bar"><span class="mid"></span><i class="pos" style="height:8px"></i></div><div class="v up">+8.3</div></div>
+        <div class="h"><div class="k">3M</div><div class="bar"><span class="mid"></span></div><div class="v dim">—</div></div>
+      </div>
+    </div>
+
+    <div class="row">
+      <span class="seal s-due">개봉<small>D-day</small></span>
+      <div class="col-main">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span class="av">NV</span><span class="name">NVIDIA</span>
+          <span class="badge b-up">강세</span><span class="badge">확신 5</span>
+        </div>
+        <div class="meta">
+          <span>08-14 09:12 → <b style="color:var(--warn)">오늘 개봉</b></span>
+          <span class="mono">$178.20 → <b class="down">$171.40 -3.8%</b></span>
+          <span class="mono">목표 $210</span>
+        </div>
+        <div class="dim" style="font-size:10.5px;margin-top:2px">실적 발표 앞두고 눌림목이라 판단</div>
+      </div>
+      <div class="tgauge">
+        <div class="k"><span>현재</span><span>목표</span></div>
+        <div class="bar"><i class="neg" style="width:0%"></i><b style="left:100%"></b></div>
+        <div class="v"><span class="down">목표의 0% (하락 중)</span></div>
+      </div>
+      <div class="path"><svg viewBox="0 0 84 28" preserveAspectRatio="none">
+        <line x1="0" y1="3" x2="84" y2="3" stroke="var(--profit)" stroke-width="1" stroke-dasharray="2 2" stroke-opacity=".5" vector-effect="non-scaling-stroke"/>
+        <polyline points="0,14 11,11 22,10 33,8" fill="none" stroke="var(--muted-foreground)" stroke-width="1.3" vector-effect="non-scaling-stroke"/>
+        <line x1="33" y1="2" x2="33" y2="26" stroke="var(--brand)" stroke-opacity=".35" stroke-width="1" vector-effect="non-scaling-stroke"/>
+        <polyline points="33,8 48,13 64,19 82,22" fill="none" stroke="var(--loss)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+        <circle cx="33" cy="8" r="2.2" fill="var(--brand)"/>
+      </svg></div>
+      <div class="hz">
+        <div class="h"><div class="k">1D</div><div class="bar"><span class="mid"></span><i class="neg" style="height:4px"></i></div><div class="v down">-1.2</div></div>
+        <div class="h"><div class="k">1W</div><div class="bar"><span class="mid"></span><i class="neg" style="height:7px"></i></div><div class="v down">-3.8</div></div>
+        <div class="h"><div class="k">1M</div><div class="bar"><span class="mid"></span></div><div class="v dim">—</div></div>
+        <div class="h"><div class="k">3M</div><div class="bar"><span class="mid"></span></div><div class="v dim">—</div></div>
+      </div>
+    </div>
+
+    <div class="grp-h">2026-08-13 · 1건</div>
+    <div class="row">
+      <span class="seal s-pend">검증<small>D-12</small></span>
+      <div class="col-main">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span class="av">애플</span><span class="name">애플</span>
+          <span class="badge">관망</span><span class="badge">확신 2</span>
+        </div>
+        <div class="meta">
+          <span>08-13 22:40 → 08-27 개봉</span>
+          <span class="mono">$228.40 → <b class="up">$231.10 +1.2%</b></span>
+          <span class="mono">목표 $232</span>
+        </div>
+      </div>
+      <div class="tgauge">
+        <div class="k"><span>현재</span><span>목표</span></div>
+        <div class="bar"><i style="width:75%"></i><b style="left:100%"></b></div>
+        <div class="v"><span class="up">목표의 75% 도달</span></div>
+      </div>
+      <div class="path"><svg viewBox="0 0 84 28" preserveAspectRatio="none">
+        <line x1="0" y1="6" x2="84" y2="6" stroke="var(--profit)" stroke-width="1" stroke-dasharray="2 2" stroke-opacity=".5" vector-effect="non-scaling-stroke"/>
+        <polyline points="0,17 11,18 22,15 33,16" fill="none" stroke="var(--muted-foreground)" stroke-width="1.3" vector-effect="non-scaling-stroke"/>
+        <line x1="33" y1="2" x2="33" y2="26" stroke="var(--brand)" stroke-opacity=".35" stroke-width="1" vector-effect="non-scaling-stroke"/>
+        <polyline points="33,16 48,14 64,11 82,10" fill="none" stroke="var(--profit)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+        <circle cx="33" cy="16" r="2.2" fill="var(--brand)"/>
+      </svg></div>
+      <div class="hz">
+        <div class="h"><div class="k">1D</div><div class="bar"><span class="mid"></span><i class="pos" style="height:2px"></i></div><div class="v up">+0.3</div></div>
+        <div class="h"><div class="k">1W</div><div class="bar"><span class="mid"></span><i class="pos" style="height:3px"></i></div><div class="v up">+1.2</div></div>
+        <div class="h"><div class="k">1M</div><div class="bar"><span class="mid"></span></div><div class="v dim">—</div></div>
+        <div class="h"><div class="k">3M</div><div class="bar"><span class="mid"></span></div><div class="v dim">—</div></div>
+      </div>
+    </div>
+  </div>
+  <p class="note" style="margin-top:10px">실링 4종: <span class="hit">적중</span>(초록 파선) · <span class="miss">빗나감</span>(주황 파선) · <span style="color:var(--warn)">개봉</span>(실선) · <span class="dim">검증 중</span>(점선, D-N 카운트다운). 좁은 화면에서는 게이지 → 4구간 막대 → 경로 순으로 접힙니다.</p>
+</section>
+
+<!-- ============================================================ 4. A-1 → A-2 모달 -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">4</span><h2>A-1 타일 → 클릭 시 A-2 성적표 모달</h2></div>
+  <p class="note">타일 4개는 목록 위에 두고, <b>적중률 타일을 누르면</b> 성적표 모달이 열립니다. 모달용으로 A-2를 재구성했습니다 — 레일 폭 제약이 없으니 <b>탭으로 관점/기간/정확도를 나누고</b>, 누적 알파 곡선과 벤치마크 비교(F)를 여기 넣었습니다.</p>
+
+  <div class="tiles" style="max-width:900px">
+    <div class="tile click" style="border-color:var(--brand)">
+      <div class="donut">
+        <div class="ring"><span>62%</span></div>
+        <div><div class="l">적중률 <span class="dim" style="font-size:9px">클릭 →</span></div><div class="foot">판정 34건 중 21건<br><b>평균 오차 8.4%</b></div></div>
+      </div>
+    </div>
+    <div class="tile"><div class="l">평균 알파</div><div class="val up">+2.4%</div><div class="foot">평균 수익률 +3.8% · 벤치 +1.4%</div></div>
+    <div class="tile click"><div class="l">개봉 대기</div><div class="val" style="color:var(--warn)">5건</div><div class="foot">가장 오래된 것 12일 경과</div></div>
+    <div class="tile"><div class="l">스탬프</div><div class="val">48<span style="font-size:13px;font-weight:500" class="dim">건 · 19종목</span></div><div class="foot">마지막 08-14 · 이번 달 11건</div></div>
+  </div>
+
+  <div class="modal-shell" style="max-width:620px;margin-top:16px">
+    <div class="modal-head">
+      <div style="flex:1">
+        <b style="font-size:14px">내 스탬프 성적표</b>
+        <div class="dim" style="font-size:11px">판정 완료 34건 · 검증 중 9건 · 개봉 대기 5건</div>
+      </div>
+      <button class="btn ghost">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:132px 1fr;gap:16px;align-items:center">
+        <div style="text-align:center">
+          <div class="ring" style="width:96px;height:96px;margin:0 auto"><span style="font-size:21px">62%</span></div>
+          <div class="dim" style="font-size:10.5px;margin-top:7px">적중 21 / 판정 34</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+          <div class="panel"><h4>평균 알파</h4><div style="font-size:19px;font-weight:700" class="up">+2.4%</div><div class="dim" style="font-size:10px">내 +3.8% · 벤치 +1.4%</div></div>
+          <div class="panel"><h4>목표가 평균 오차</h4><div style="font-size:19px;font-weight:700">8.4%</div><div class="dim" style="font-size:10px">±5% 이내 13건 (38%)</div></div>
+          <div class="panel"><h4>최고 성적</h4><div style="font-size:12px;font-weight:600">애플 · 07-02</div><div class="up" style="font-size:10.5px">+18.2% · α +11.4</div></div>
+          <div class="panel"><h4>최악 성적</h4><div style="font-size:12px;font-weight:600">카카오 · 06-19</div><div class="down" style="font-size:10.5px">-9.8% · α -12.1</div></div>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="on">관점별</button><button>검증기간별</button><button>확신도별</button><button>목표가 정확도</button>
+      </div>
+      <div class="panel">
+        <div class="minibars">
+          <div class="mb"><span class="up">강세</span><span class="track"><i class="h" style="width:71%"></i><i class="m" style="width:29%"></i></span><span class="mono">71% (12/17)</span></div>
+          <div class="mb"><span class="dim">관망</span><span class="track"><i class="h" style="width:50%"></i><i class="m" style="width:50%"></i></span><span class="mono">50% (4/8)</span></div>
+          <div class="mb"><span class="down">약세</span><span class="track"><i class="h" style="width:56%"></i><i class="m" style="width:44%"></i></span><span class="mono">56% (5/9)</span></div>
+        </div>
+        <p class="dim" style="font-size:10.5px;margin-top:8px;padding-top:7px;border-top:1px solid var(--border)">
+          강세 판단이 가장 잘 맞습니다. 약세 스탬프는 평균 알파도 <b class="down">-1.8%</b>로 유일하게 마이너스입니다.
+        </p>
+      </div>
+
+      <div class="panel">
+        <h4>누적 알파 (스탬프 순서 · 34건)</h4>
+        <svg viewBox="0 0 560 70" preserveAspectRatio="none" style="width:100%;height:70px;display:block">
+          <line x1="0" y1="52" x2="560" y2="52" stroke="var(--border)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+          <polyline points="0,52 34,47 68,55 102,44 136,49 170,38 204,41 238,30 272,34 306,22 340,26 374,17 408,23 442,12 476,15 510,7 544,4"
+            fill="none" stroke="var(--brand)" stroke-width="1.8" vector-effect="non-scaling-stroke"/>
+          <circle cx="544" cy="4" r="3" fill="var(--brand)"/>
+        </svg>
+        <div style="display:flex;justify-content:space-between;font-size:10px" class="dim"><span>0%p</span><span>6월 → 8월</span><span class="up">누적 +81%p</span></div>
+      </div>
+
+      <div class="panel">
+        <h4>구간별 평균 수익률 — 내 스탬프 vs 벤치마크</h4>
+        <div class="gbar">
+          <div class="g"><i class="me" style="height:22%"></i><i class="bm" style="height:14%"></i></div>
+          <div class="g"><i class="me" style="height:44%"></i><i class="bm" style="height:26%"></i></div>
+          <div class="g"><i class="me" style="height:78%"></i><i class="bm" style="height:48%"></i></div>
+          <div class="g"><i class="me" style="height:58%"></i><i class="bm" style="height:66%"></i></div>
+        </div>
+        <div class="gbar-x"><span>1D</span><span>1W</span><span>1M</span><span>3M</span></div>
+        <div class="legend"><span><s style="background:var(--brand)"></s>내 스탬프</span><span><s style="background:var(--muted-foreground);opacity:.45"></s>벤치마크</span></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <span class="dim" style="font-size:10.5px">매매 신호가 아닙니다 · 판정 규칙은 방향 기준, 오차는 목표가 기준</span>
+      <button class="btn primary" style="margin-left:auto">개봉 대기 5건 열기 →</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 5. 스키마 -->
+<section class="opt">
+  <div class="opt-head"><span class="tag warn">5</span><h2>스키마 변경 — 기존 스탬프 전량 삭제</h2></div>
+  <p class="note">
+    "이번 장 종료 / 다음 장 종료"는 <b>일수로 표현할 수 없어서</b> <code>horizon_days</code>를 만기 시각(<code>due_at</code>) + 종류(<code>horizon_kind</code>)로 바꿔야 합니다.
+    만기는 <b>생성 시점에 확정 저장</b>합니다 — 나중에 계산하면 휴장일 데이터가 바뀔 때 과거 판정이 흔들립니다.
+    장 마감 시각은 기존 <code>marketdata/calendar</code>가 이미 알고 있습니다 (KRX 15:30 KST · US 16:00 ET, 휴장일 포함).
+  </p>
+  <div class="sql"><span class="cmt">-- be/migrations/046_stamps_target_price.sql</span>
+<span class="del">TRUNCATE TABLE stamps;</span>   <span class="cmt">← 전체 사용자의 스탬프가 사라집니다 (복구 불가)</span>
+
+ALTER TABLE stamps
+  <span class="add">ADD COLUMN target_price DOUBLE       NOT NULL AFTER conviction,</span>
+  <span class="add">ADD COLUMN horizon_kind VARCHAR(20)  NOT NULL DEFAULT '1m' AFTER target_price,</span>
+  <span class="add">ADD COLUMN due_at       TIMESTAMP(3) NOT NULL AFTER horizon_kind,</span>
+  <span class="del">DROP COLUMN horizon_days;</span>
+
+<span class="cmt">-- horizon_kind: session_close | next_session_close | 1w | 1m | 3m | custom
+-- due_at:       생성 시 캘린더로 확정한 UTC 만기 (표시는 KST)</span></div>
+  <p class="note" style="margin-top:10px">
+    현재 DB에 스탬프가 몇 건 있는지 확인한 뒤 진행하겠습니다. <b>삭제 대신</b> 기존 행을 남기고
+    <code>target_price = 0</code>인 것을 "구버전 스탬프"로 목록 하단에 따로 보여주는 방법도 있습니다 — 통계에서는 제외하고요.
+  </p>
+</section>
+
+</div>
+</body>
+</html>

@@ -5,12 +5,12 @@ import "time"
 type indexBatchID string
 
 const (
-	batchTossKR       indexBatchID = "toss:kr"
-	batchTossFX       indexBatchID = "toss:fx"
-	batchFREDUS       indexBatchID = "fred:us"
-	batchFinnhubUS    indexBatchID = "finnhub:us"
-	batchUpbitCrypto  indexBatchID = "upbit:crypto"
-	batchGoldSpot     indexBatchID = "goldprice:spot"
+	batchTossKR      indexBatchID = "toss:kr"
+	batchTossFX      indexBatchID = "toss:fx"
+	batchFREDUS      indexBatchID = "fred:us"
+	batchFinnhubUS   indexBatchID = "finnhub:us"
+	batchUpbitCrypto indexBatchID = "upbit:crypto"
+	batchGoldSpot    indexBatchID = "goldprice:spot"
 )
 
 type indexBatch struct {
@@ -39,7 +39,7 @@ var indexBatches = []indexBatch{
 		id:          batchFREDUS,
 		source:      "fred",
 		minInterval: 3 * time.Minute,
-		indexIDs:    []string{"nasdaq", "nasdaq100", "sp500", "dow", "vix"},
+		indexIDs:    []string{"nasdaq", "nasdaq100", "sp500", "dow", "vix", "us10y"},
 		eodAfter:    true,
 	},
 	{

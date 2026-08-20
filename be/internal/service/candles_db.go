@@ -35,6 +35,30 @@ func rawFetchLimitForInterval(interval model.CandleInterval, pageSize int) int {
 	}
 }
 
+// oldestBarCursor returns the pagination cursor for the earliest bar in a page.
+func oldestBarCursor(candles []model.Candle, base model.CandleInterval) *string {
+	if len(candles) == 0 {
+		return nil
+	}
+	oldest := candles[0]
+	for _, c := range candles[1:] {
+		if parseQuoteCandleTime(c.Time).Before(parseQuoteCandleTime(oldest.Time)) {
+			oldest = c
+		}
+	}
+	nb := normalizeCandleBarTime(oldest.Time, base)
+	return model.CanonicalPaginationCursorPtr(&nb, base)
+}
+
+// mergePaginationCursor keeps DB continuation token, or falls back to oldest bar
+// so clients can reach Toss backfill when the DB tail is partial.
+func mergePaginationCursor(stored []model.Candle, base model.CandleInterval, dbNext *string) *string {
+	if dbNext != nil {
+		return model.CanonicalPaginationCursorPtr(dbNext, base)
+	}
+	return oldestBarCursor(stored, base)
+}
+
 func (s *QuotesService) persistRawCandles(ctx context.Context, symbol string, base model.CandleInterval, raw []model.Candle) {
 	if s.candles == nil || !s.candles.HasTable(ctx) || len(raw) == 0 {
 		return
@@ -70,7 +94,9 @@ func (s *QuotesService) loadHistoricalFromDB(
 		if err != nil || len(stored) == 0 {
 			return CandlesPage{}, false
 		}
-		return CandlesPage{Candles: stored, NextBefore: nextBefore}, true
+		cursor := mergePaginationCursor(stored, base, nextBefore)
+		page := CandlesPage{Candles: stored, NextBefore: cursor}
+		return normalizeCandlesPageCursor(page, base), true
 	}
 
 	rawLimit := rawFetchLimitForInterval(interval, pageSize)
@@ -83,7 +109,21 @@ func (s *QuotesService) loadHistoricalFromDB(
 	if len(page.Candles) == 0 {
 		return CandlesPage{}, false
 	}
-	return page, true
+	if page.NextBefore == nil {
+		page.NextBefore = oldestBarCursor(page.Candles, base)
+	}
+	return normalizeCandlesPageCursor(page, base), true
+}
+
+func ensureSnapshotPaginationCursor(snap model.CandleSnapshot) model.CandleSnapshot {
+	base, ok := storageBaseInterval(snap.Interval)
+	if !ok {
+		return snap
+	}
+	if snap.NextBefore == nil && len(snap.Completed) > 0 {
+		snap.NextBefore = oldestBarCursor(snap.Completed, base)
+	}
+	return normalizeSnapshotCursor(snap)
 }
 
 // loadLatestCandlesFromDB returns the most recent candle tail from MySQL when live
@@ -102,19 +142,19 @@ func (s *QuotesService) loadLatestCandlesFromDB(
 		return model.CandleSnapshot{}, false
 	}
 
-	limit := candleFetchCount(interval)
+	limit := candleDisplayBarCount(interval)
 	if interval == base {
 		stored, nextBefore, err := s.candles.ListBefore(ctx, symbol, base, "", limit)
 		if err != nil || len(stored) == 0 {
 			return model.CandleSnapshot{}, false
 		}
-		return model.CandleSnapshot{
+		return ensureSnapshotPaginationCursor(model.CandleSnapshot{
 			Symbol:     symbol,
 			Interval:   interval,
 			Completed:  stored,
-			NextBefore: nextBefore,
+			NextBefore: mergePaginationCursor(stored, base, nextBefore),
 			Source:     "db",
-		}, true
+		}), true
 	}
 
 	rawLimit := rawFetchLimitForInterval(interval, limit)
@@ -128,11 +168,11 @@ func (s *QuotesService) loadLatestCandlesFromDB(
 		return model.CandleSnapshot{}, false
 	}
 
-	return model.CandleSnapshot{
+	return ensureSnapshotPaginationCursor(model.CandleSnapshot{
 		Symbol:     symbol,
 		Interval:   interval,
 		Completed:  page.Candles,
 		NextBefore: page.NextBefore,
 		Source:     "db",
-	}, true
+	}), true
 }

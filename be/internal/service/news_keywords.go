@@ -7,7 +7,31 @@ import (
 	"time"
 )
 
+// trackedSymbolsTTL — 관심·보유가 바뀌고 뉴스 태깅에 반영되기까지의 최대 지연.
+//
+// 이 목록을 만드는 데 watchlist 전수 조회 + 수동 보유 조회가 들어가는데,
+// extractSymbols가 **기사마다** 이걸 부른다. 목록 요청 하나에 기사 수만큼 나가던
+// 조회다. 관심종목을 담자마자 뉴스 태그가 갱신돼야 하는 화면은 없다.
+const trackedSymbolsTTL = time.Minute
+
 func (st *NewsStore) trackedSymbols(ctx context.Context) []string {
+	st.mu.RLock()
+	cached, at := st.trackedSymbolsCache, st.trackedSymbolsAt
+	st.mu.RUnlock()
+	if len(cached) > 0 && time.Since(at) < trackedSymbolsTTL {
+		return cached
+	}
+	out := st.trackedSymbolsUncached(ctx)
+	if len(out) > 0 {
+		st.mu.Lock()
+		st.trackedSymbolsCache = out
+		st.trackedSymbolsAt = time.Now()
+		st.mu.Unlock()
+	}
+	return out
+}
+
+func (st *NewsStore) trackedSymbolsUncached(ctx context.Context) []string {
 	seen := map[string]struct{}{}
 	var out []string
 	add := func(sym string) {
@@ -29,9 +53,12 @@ func (st *NewsStore) trackedSymbols(ctx context.Context) []string {
 			}
 		}
 	}
-	if st.portfolio != nil {
-		for _, sym := range st.portfolio.AllTrackedSymbols(ctx) {
-			add(sym)
+	if st.holdings != nil {
+		symbols, err := st.holdings.ListAllSymbols(ctx)
+		if err == nil {
+			for _, sym := range symbols {
+				add(sym)
+			}
 		}
 	}
 	return out
@@ -58,7 +85,7 @@ func (st *NewsStore) buildKeywordQueue(ctx context.Context) []newsKeyword {
 		}
 	}
 
-	for _, kw := range adminNewsKeywords {
+	for _, kw := range st.adminKeywordsForMarket(ctx, "domestic") {
 		queue = append(queue, newsKeyword{
 			Text:     kw,
 			Priority: 1,

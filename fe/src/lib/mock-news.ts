@@ -21,6 +21,18 @@ export const NEWS_SOURCES: NewsSource[] = [
     badgeClass: "bg-zinc-500/15 text-zinc-300 border-zinc-500/25",
   },
   {
+    id: "finnhub",
+    name: "Finnhub",
+    market: "us",
+    badgeClass: "bg-teal-500/15 text-teal-300 border-teal-500/25",
+  },
+  {
+    id: "financial-juice",
+    name: "FinancialJuice",
+    market: "us",
+    badgeClass: "bg-amber-500/15 text-amber-300 border-amber-500/25",
+  },
+  {
     id: "financial-news",
     name: "파이낸셜뉴스",
     market: "domestic",
@@ -31,6 +43,24 @@ export const NEWS_SOURCES: NewsSource[] = [
     name: "연합뉴스",
     market: "domestic",
     badgeClass: "bg-sky-500/15 text-sky-400 border-sky-500/25",
+  },
+  {
+    id: "tokenpost",
+    name: "토큰포스트",
+    market: "domestic",
+    badgeClass: "bg-orange-500/15 text-orange-300 border-orange-500/25",
+  },
+  {
+    id: "coinreaders",
+    name: "코인리더스",
+    market: "domestic",
+    badgeClass: "bg-purple-500/15 text-purple-300 border-purple-500/25",
+  },
+  {
+    id: "blockmedia",
+    name: "블록미디어",
+    market: "domestic",
+    badgeClass: "bg-indigo-500/15 text-indigo-300 border-indigo-500/25",
   },
   {
     id: "save-pick",
@@ -45,10 +75,22 @@ export const NEWS_SOURCES: NewsSource[] = [
     badgeClass: "bg-orange-500/15 text-orange-400 border-orange-500/25",
   },
   {
+    id: "rss",
+    name: "RSS",
+    market: "us",
+    badgeClass: "bg-zinc-500/15 text-zinc-300 border-zinc-500/25",
+  },
+  {
     id: "bloomberg",
     name: "블룸버그",
     market: "us",
     badgeClass: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25",
+  },
+  {
+    id: "google_news",
+    name: "Google News",
+    market: "us",
+    badgeClass: "bg-blue-500/15 text-blue-300 border-blue-500/25",
   },
 ];
 
@@ -218,5 +260,5 @@ export function getMockNews(filter: NewsListFilter): NewsArticle[] {
 
 export const NEWS_MARKET_LABELS: Record<NewsMarket, string> = {
   domestic: "국내 주식",
-  us: "미국 주식",
+  us: "해외 주식",
 };

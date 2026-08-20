@@ -42,8 +42,13 @@ func (st *MarketIndexStore) fetchTossIndex(ctx context.Context, entry indexCatal
 			break
 		}
 	case "usd-krw":
-		if val := st.usdKrwRate(ctx); val > 0 {
-			fresh.Value = val
+		if st.fx != nil {
+			snap, ok := st.fx.Get(ctx)
+			if ok && snap.MidRate > 0 {
+				fresh.Value = snap.MidRate
+				q := marketdata.Quote{Value: snap.MidRate, AsOf: snap.UpdatedAt}
+				applyIndexMeta(&fresh, entry, q, snap.UpdatedAt)
+			}
 		}
 	}
 	return fresh

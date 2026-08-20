@@ -25,6 +25,12 @@ var publisherRules = []struct {
 	{Match: "mt.co.kr", ID: "mt", Name: "머니투데이"},
 	{Match: "news.naver.com", ID: "naver-news", Name: "네이버뉴스"},
 	{Match: "n.news.naver.com", ID: "naver-news", Name: "네이버뉴스"},
+	{Match: "tf.co.kr", ID: "the-fact", Name: "더팩트"},
+	{Match: "tokenpost.kr", ID: "tokenpost", Name: "토큰포스트"},
+	{Match: "coinreaders.com", ID: "coinreaders", Name: "코인리더스"},
+	{Match: "blockmedia.co.kr", ID: "blockmedia", Name: "블록미디어"},
+	{Match: "kmaeil.com", ID: "kmaeil", Name: "경북매일"},
+	{Match: "newspim.com", ID: "newspim", Name: "뉴스핌"},
 	{Match: "bizwatch.co.kr", ID: "bizwatch", Name: "비즈워치"},
 	{Match: "newsis.com", ID: "newsis", Name: "뉴시스"},
 	{Match: "heraldcorp.com", ID: "herald", Name: "헤럴드경제"},
@@ -36,6 +42,17 @@ var publisherRules = []struct {
 	{Match: "sbs.co.kr", ID: "sbs", Name: "SBS"},
 	{Match: "mbn.co.kr", ID: "mbn", Name: "MBN"},
 	{Match: "cnbc.com", ID: "cnbc", Name: "CNBC"},
+	{Match: "marketwatch.com", ID: "marketwatch", Name: "MarketWatch"},
+	{Match: "finance.yahoo.com", ID: "yahoo-finance", Name: "Yahoo Finance"},
+	{Match: "yahoo.com", ID: "yahoo-finance", Name: "Yahoo Finance"},
+	{Match: "financialjuice.com", ID: "financial-juice", Name: "FinancialJuice"},
+	{Match: "reuters.com", ID: "reuters", Name: "Reuters"},
+	{Match: "bloomberg.com", ID: "bloomberg", Name: "Bloomberg"},
+	{Match: "investing.com", ID: "investing", Name: "Investing.com"},
+	{Match: "seekingalpha.com", ID: "seekingalpha", Name: "Seeking Alpha"},
+	{Match: "benzinga.com", ID: "benzinga", Name: "Benzinga"},
+	{Match: "fool.com", ID: "motley-fool", Name: "Motley Fool"},
+	{Match: "nasdaq.com", ID: "nasdaq", Name: "Nasdaq"},
 }
 
 // ResolvePublisher maps an article URL to the original media outlet.
@@ -80,6 +97,9 @@ func ReaderAllowedHost(rawURL string) bool {
 	}
 	host = strings.TrimPrefix(host, "www.")
 	host = strings.TrimPrefix(host, "m.")
+	if strings.Contains(host, "news.naver.com") || strings.Contains(host, "n.news.naver.com") {
+		return false
+	}
 	for _, rule := range publisherRules {
 		if strings.Contains(host, rule.Match) {
 			return true

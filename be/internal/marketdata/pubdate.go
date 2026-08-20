@@ -10,9 +10,14 @@ var newsPubDateLayouts = []string{
 	"Mon, 02 Jan 2006 15:04:05 -0700",
 	time.RFC1123Z,
 	time.RFC1123,
+	time.RFC822,
+	time.RFC822Z,
+	time.RFC850,
 	"2006-01-02T15:04:05Z07:00",
 	"2006-01-02T15:04:05",
+	"2006-01-02 15:04:05",
 	time.RFC3339,
+	time.RFC3339Nano,
 }
 
 // ParseNewsPubDate parses provider pubDate strings. Returns zero time when unknown.

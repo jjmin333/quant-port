@@ -1,172 +1,224 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, LogOut, Search, Settings, X } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { SidebarToggle } from "@/components/layout/sidebar-toggle";
+import {
+  pageShellClass,
+  type PageShellWidth,
+} from "@/components/layout/page-content-shell";
+import { StockSearchField } from "@/components/layout/stock-search-field";
 import { useAuth } from "@/components/providers/auth-provider";
 import { useHeaderSearch } from "@/components/providers/header-search-provider";
-import { ACCOUNT_FEATURES_VISIBLE } from "@/lib/account-features";
+import { useShellMode } from "@/components/providers/shell-mode-provider";
 import { cn } from "@/lib/utils";
 
 type HeaderProps = {
   sidebarOpen: boolean;
   onSidebarToggle: () => void;
+  showSidebarToggle?: boolean;
 };
 
-export function Header({ sidebarOpen, onSidebarToggle }: HeaderProps) {
+function HeaderActions({ compact }: { compact?: boolean }) {
   const { session, logout, loading } = useAuth();
   const initial = session?.user.displayName?.[0]?.toUpperCase() ?? "U";
-  const {
-    config,
-    inputValue,
-    setInputValue,
-    clearSearch,
-    submitSearch,
-    isSearchActive,
-  } = useHeaderSearch();
 
+  if (!loading && !session) {
+    return (
+      <>
+        <Button
+          asChild
+          variant="outline"
+          size={compact ? "sm" : "default"}
+          className="hidden sm:inline-flex"
+        >
+          <Link href="/login">로그인</Link>
+        </Button>
+        <Button asChild size={compact ? "sm" : "default"}>
+          <Link href="/signup">회원가입</Link>
+        </Button>
+      </>
+    );
+  }
+
+  if (!loading && session) {
+    /*
+     * 헤더 우측은 아바타 하나로 통합했다 (docs/UI_SPEC.md §4).
+     *  - 알림 🔔: 미구현이었다. 배지 숫자 3이 하드코딩이고 클릭해도 아무 동작이 없었다.
+     *    동작하지 않는 버튼을 상시 노출하지 않는다 — 실제로 만들 때 다시 넣는다.
+     *  - 설정 ⚙: 사이드바 하단과 진입점이 중복이었다. 드롭다운 안으로 넣는다.
+     * 예전 메뉴는 group-hover CSS라 키보드로 열 수 없었다. DropdownMenu가 이를 해결한다.
+     */
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          className={cn(
+            "flex shrink-0 cursor-pointer items-center justify-center rounded-full bg-muted font-medium text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+            compact ? "size-7 text-[11px]" : "size-8 text-xs",
+          )}
+          aria-label="계정 메뉴"
+        >
+          {initial}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuLabel className="font-normal">
+            <p className="truncate text-xs font-medium">{session.user.displayName}</p>
+            <p className="truncate text-[11px] text-muted-foreground">{session.user.email}</p>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem asChild>
+            <Link href="/settings">
+              <Settings />
+              설정
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void logout()}>
+            <LogOut />
+            로그아웃
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
+
+  return null;
+}
+
+function BrandLink({ compact }: { compact?: boolean }) {
+  return (
+    <Link href="/" className="flex shrink-0 items-center gap-1.5 whitespace-nowrap lg:gap-2.5">
+      <span
+        className={cn("leading-none text-[var(--brand)]", compact ? "text-sm" : "text-base")}
+        aria-hidden
+      >
+        ◆
+      </span>
+      <span
+        className={cn(
+          "font-bold text-[var(--text-primary)]",
+          compact
+            ? "text-[10px] tracking-[0.12em]"
+            : "text-sm tracking-[0.18em]",
+        )}
+      >
+        QUANT PORT
+      </span>
+    </Link>
+  );
+}
+
+export function Header({
+  sidebarOpen,
+  onSidebarToggle,
+  showSidebarToggle = true,
+}: HeaderProps) {
+  const { config } = useHeaderSearch();
+  const { isCompact } = useShellMode();
   const showSearch = config.mode !== "hidden";
 
+  if (isCompact) {
+    return (
+      <header className="shrink-0 border-b border-[var(--border)] bg-[var(--background)] px-3 py-2">
+        <div className="flex items-center gap-2">
+          {showSidebarToggle && (
+            <SidebarToggle open={sidebarOpen} onToggle={onSidebarToggle} />
+          )}
+          <BrandLink compact />
+          <div className="flex-1" />
+          <div className="flex shrink-0 items-center gap-1.5">
+            <HeaderActions compact />
+          </div>
+        </div>
+        {showSearch && (
+          <div className="mt-2 flex w-full min-w-0 justify-center">
+            <StockSearchField
+              compact
+              className="w-full min-w-0 max-w-md"
+              suggestionsId="header-stock-suggestions"
+            />
+          </div>
+        )}
+      </header>
+    );
+  }
+
   return (
-    <header className="flex h-16 min-w-[var(--header-min-width)] shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--background)] px-4 sm:px-6">
+    // 높이 56px 고정 (docs/UI_SPEC.md §4). 화면 종류와 무관하게 같은 높이를 쓴다.
+    <header className="flex h-14 min-w-0 shrink-0 items-center gap-3 border-b bg-background px-4 sm:px-6">
       <div className="flex shrink-0 items-center gap-2">
-        <SidebarToggle open={sidebarOpen} onToggle={onSidebarToggle} />
-        <Link href="/" className="flex shrink-0 items-center gap-2.5 whitespace-nowrap">
-          <span className="text-base leading-none text-[var(--accent)]" aria-hidden>
-            ◆
-          </span>
-          <span className="text-sm font-bold tracking-[0.18em] text-[var(--text-primary)]">
-            QUANT PORT
-          </span>
-        </Link>
+        {showSidebarToggle && (
+          <SidebarToggle open={sidebarOpen} onToggle={onSidebarToggle} />
+        )}
+        <BrandLink />
       </div>
 
-      <div className="flex min-w-[12rem] flex-1 justify-center px-1 sm:px-2">
+      <div className="flex min-w-0 flex-1 justify-center px-1 sm:px-2">
         {showSearch ? (
-          <div className="relative w-full min-w-[12rem] max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input
-              type="search"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  submitSearch();
-                }
-                if (e.key === "Escape") {
-                  clearSearch();
-                }
-              }}
-              placeholder={config.placeholder}
-              aria-label={config.placeholder}
-              className="h-9 w-full min-w-[12rem] rounded-lg border border-[var(--border)] bg-[var(--surface)] pl-9 pr-9 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-            />
-            {isSearchActive && (
-              <button
-                type="button"
-                onClick={clearSearch}
-                aria-label="검색어 지우기"
-                className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-[var(--text-muted)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
+          <StockSearchField className="w-full min-w-0 max-w-md" />
         ) : (
-          <div className="h-9 w-full max-w-md" aria-hidden />
+          <div className="h-8 w-full max-w-md" aria-hidden />
         )}
       </div>
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-        {!loading && !session && (
-          <>
-            <Link
-              href="/login"
-              className="hidden h-9 items-center rounded-lg border border-[var(--border)] px-3 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] sm:inline-flex"
-            >
-              로그인
-            </Link>
-            <Link
-              href="/signup"
-              className="inline-flex h-9 items-center rounded-lg bg-[var(--accent)] px-3 text-sm font-semibold text-white hover:opacity-90"
-            >
-              회원가입
-            </Link>
-          </>
-        )}
-
-        {!loading && session && ACCOUNT_FEATURES_VISIBLE && !session.brokerLinked && (
-          <Link
-            href="/onboarding/link-broker"
-            className="hidden rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-300 sm:inline-flex"
-          >
-            계좌 연동
-          </Link>
-        )}
-
-        {!loading && session && (
-          <>
-            <button
-              type="button"
-              className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              aria-label="알림"
-            >
-              <Bell className="h-4 w-4" />
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white">
-                3
-              </span>
-            </button>
-
-            <Link
-              href="/settings"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              aria-label="설정"
-            >
-              <Settings className="h-4 w-4" />
-            </Link>
-
-            <div className="group relative">
-              <div
-                className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-[var(--accent-muted)] text-sm font-semibold text-[var(--accent)]"
-                title={session.user.email}
-              >
-                {initial}
-              </div>
-              <div className="invisible absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-[var(--border)] bg-[var(--surface)] py-1 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
-                <div className="border-b border-[var(--border)] px-3 py-2">
-                  <p className="truncate text-sm font-medium text-[var(--text-primary)]">
-                    {session.user.displayName}
-                  </p>
-                  <p className="truncate text-xs text-[var(--text-muted)]">{session.user.email}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void logout()}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]"
-                >
-                  <LogOut className="h-4 w-4" />
-                  로그아웃
-                </button>
-              </div>
-            </div>
-          </>
-        )}
+        <HeaderActions />
       </div>
     </header>
   );
 }
 
-export function PageHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+export function PageHeader({
+  title,
+  subtitle,
+  width = "wide",
+  actions,
+}: {
+  title: string;
+  subtitle?: string;
+  /** Must match the page body's archetype, or the two columns' edges disagree. */
+  width?: PageShellWidth;
+  /**
+   * 페이지 단위 동작(필터·정렬·새로 만들기 등). 제목 오른쪽에 붙는다.
+   *
+   * 이 자리가 없던 동안 각 페이지가 본문 최상단에 제각기 버튼 줄을 만들었고, 그래서
+   * 리포트 필터·관심종목 추가·관리자 실행 버튼이 화면마다 다른 위치에 있었다.
+   * 새 화면의 동작 버튼은 본문이 아니라 여기에 넣는다 (docs/UI_SPEC.md §7).
+   */
+  actions?: React.ReactNode;
+}) {
   return (
-    <div className="min-w-[var(--dashboard-content-min)] shrink-0 border-b border-[var(--border)] bg-[var(--background)] px-4 py-4 sm:px-6">
-      <h1 className="whitespace-nowrap text-lg font-semibold text-[var(--text-primary)]">
-        {title}
-      </h1>
-      {subtitle && (
-        <p className={cn("mt-0.5 whitespace-nowrap text-xs text-[var(--text-muted)]")}>{subtitle}</p>
-      )}
+    <div className="shrink-0 border-b bg-background lg:min-w-[var(--dashboard-content-min)]">
+      <div
+        className={cn(
+          pageShellClass(width),
+          // 거터는 `.page-shell-wide`가 가진다. 헤더가 따로 px를 얹으면 본문 컬럼과
+          // 좌우 경계가 어긋난다 — 과거 마켓 레이더가 겉돌아 보이던 원인이 그것이었다.
+          "flex min-w-0 flex-wrap items-start gap-x-3 gap-y-2 py-3 sm:py-4",
+        )}
+      >
+        <div className="min-w-0 flex-1">
+          <h1 className="text-base font-semibold sm:text-lg">{title}</h1>
+          {subtitle && (
+            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground sm:whitespace-nowrap">
+              {subtitle}
+            </p>
+          )}
+        </div>
+        {actions && (
+          // 좁은 화면에서는 아랫줄로 내려가되 우측 정렬을 유지한다.
+          <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1.5">{actions}</div>
+        )}
+      </div>
     </div>
   );
 }

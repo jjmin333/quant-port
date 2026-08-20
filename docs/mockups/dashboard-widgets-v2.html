@@ -1,0 +1,789 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>홈 대시보드 — 위젯·모달 선택용 목업 v2</title>
+<style>
+/* 목업 공용 스타일 — journal/targets/reports v1과 동일 */
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.97 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.93 0 0);
+  --border: oklch(0.87 0 0);
+  --brand: #2563EB;
+  --brand-muted: rgba(37, 99, 235, 0.1);
+  --profit: #DC2626;
+  --loss: #2563EB;
+  --hit: #059669;
+  --hit-muted: rgba(5, 150, 105, 0.12);
+  --miss: #B45309;
+  --warn: #D97706;
+  --warn-muted: rgba(217, 119, 6, 0.12);
+  --sample: #7C3AED;
+  --score-high: #059669;
+  --score-mid: #D97706;
+  --score-low: #DC2626;
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 16%);
+  --brand: #60A5FA;
+  --brand-muted: rgba(96, 165, 250, 0.15);
+  --profit: #F87171;
+  --loss: #60A5FA;
+  --hit: #34D399;
+  --hit-muted: rgba(52, 211, 153, 0.14);
+  --miss: #FBBF24;
+  --warn: #FBBF24;
+  --warn-muted: rgba(251, 191, 36, 0.14);
+  --sample: #A78BFA;
+  --score-high: #34D399;
+  --score-mid: #FBBF24;
+  --score-low: #F87171;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--background); color: var(--foreground);
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 12px; line-height: 1.5; padding: 24px; -webkit-font-smoothing: antialiased;
+}
+h1 { font-size: 19px; letter-spacing: -.02em; }
+h2 { font-size: 13.5px; letter-spacing: -.01em; }
+h3 { font-size: 12.5px; }
+h4 { font-size: 11px; }
+.wrap { max-width: 1320px; margin: 0 auto; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.mut { color: var(--muted-foreground); }
+.up { color: var(--profit); } .dn { color: var(--loss); }
+.hit { color: var(--hit); } .warnc { color: var(--warn); }
+.sm { font-size: 10.5px; } .xs { font-size: 9.5px; }
+.rt { text-align: right; }
+
+.topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: color-mix(in oklch, var(--background) 88%, transparent); backdrop-filter: blur(8px);
+  padding: 10px 0 12px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
+.lede { font-size: 11.5px; color: var(--muted-foreground); max-width: 84ch; line-height: 1.7; }
+.lede b { color: var(--foreground); font-weight: 600; }
+
+section { margin-top: 28px; }
+.shead { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; margin-bottom: 4px; }
+.tag { font-size: 10px; font-weight: 700; letter-spacing: .04em; padding: 2px 7px; border-radius: 5px;
+  background: var(--brand-muted); color: var(--brand); }
+.why { font-size: 11px; color: var(--muted-foreground); line-height: 1.7; margin-bottom: 10px; max-width: 92ch; }
+.why b { color: var(--foreground); font-weight: 600; }
+
+.opt { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); overflow: hidden; }
+.opt > header { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--muted) 55%, transparent); }
+.opt > header .id { font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 5px; background: var(--foreground); color: var(--card); }
+.opt > .pad { padding: 12px; background: var(--background); }
+.opt .note { padding: 8px 12px; border-top: 1px solid var(--border); font-size: 10.5px; color: var(--muted-foreground); line-height: 1.7; }
+.cols { display: grid; gap: 14px; }
+.c2 { grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+.c3 { grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
+.c4 { grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); }
+
+.card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.cardhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.cardhead h4 { font-weight: 600; }
+.badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 600; padding: 1px 6px;
+  border-radius: 5px; background: var(--muted); color: var(--muted-foreground); white-space: nowrap; }
+.badge.b-up { background: rgba(220,38,38,.12); color: var(--profit); }
+.badge.b-down { background: rgba(37,99,235,.12); color: var(--loss); }
+.badge.b-hit { background: var(--hit-muted); color: var(--hit); }
+.badge.b-warn { background: var(--warn-muted); color: var(--warn); }
+.badge.b-brand { background: var(--brand-muted); color: var(--brand); }
+.badge.b-new { background: rgba(124,58,237,.13); color: var(--sample); }
+[data-theme="dark"] .badge.b-up { background: rgba(248,113,113,.15); }
+[data-theme="dark"] .badge.b-down { background: rgba(96,165,250,.15); }
+.av { width: 22px; height: 22px; border-radius: 6px; flex: 0 0 auto; background: var(--muted); display: grid;
+  place-items: center; font-size: 9px; font-weight: 700; color: var(--muted-foreground); }
+.av.lg { width: 30px; height: 30px; font-size: 10px; border-radius: 8px; }
+.btn { font: inherit; font-size: 11px; cursor: pointer; border: 1px solid var(--border); background: var(--card);
+  color: var(--foreground); padding: 5px 11px; border-radius: 7px; }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
+.btn.ghost { border-color: transparent; color: var(--muted-foreground); }
+.btn.sm { padding: 3px 8px; font-size: 10.5px; }
+.seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--muted); }
+.seg span { font-size: 10px; padding: 2px 8px; border-radius: 6px; color: var(--muted-foreground); }
+.seg span.on { background: var(--card); color: var(--foreground); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+.pillrow { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.chip { font-size: 10px; padding: 2px 8px; border-radius: 999px; background: var(--muted); color: var(--muted-foreground); }
+.chip.on { background: var(--brand-muted); color: var(--brand); font-weight: 600; }
+
+.row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-top: 1px solid var(--border); }
+.row:first-of-type { border-top: none; }
+.row.click { cursor: pointer; }
+.row.click:hover { background: var(--accent); }
+.col-main { min-width: 0; flex: 1 1 auto; }
+.name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta { font-size: 10px; color: var(--muted-foreground); margin-top: 1px; display: flex; gap: 6px; flex-wrap: wrap; }
+.clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rank { width: 12px; text-align: right; font-size: 10.5px; color: var(--muted-foreground); flex: 0 0 auto; }
+.scorev { width: 40px; text-align: right; font-weight: 700; font-size: 12px; flex: 0 0 auto; }
+.s-high { color: var(--score-high); } .s-mid { color: var(--score-mid); } .s-low { color: var(--score-low); }
+
+.spark { width: 108px; height: 30px; flex: 0 0 auto; }
+.spark.w2 { width: 100%; height: 46px; }
+.spark.w3 { width: 100%; height: 120px; }
+.spark svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+.tiles { display: grid; gap: 10px; }
+.tile { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 11px; }
+.tile .l { font-size: 10.5px; color: var(--muted-foreground); display: flex; align-items: center; gap: 4px; }
+.tile .val { font-size: 19px; font-weight: 700; letter-spacing: -.02em; margin-top: 1px; }
+.tile .foot { font-size: 9.5px; color: var(--muted-foreground); margin-top: 2px; }
+
+.modal-shell { border: 1px solid var(--border); border-radius: 12px; background: var(--card);
+  box-shadow: 0 12px 32px rgba(0,0,0,.14); overflow: hidden; max-width: 520px; }
+[data-theme="dark"] .modal-shell { box-shadow: 0 12px 32px rgba(0,0,0,.5); }
+.modal-head { display: flex; align-items: flex-start; gap: 10px; padding: 11px 13px; border-bottom: 1px solid var(--border); }
+.modal-body { padding: 11px 13px; display: grid; gap: 12px; }
+.modal-foot { display: flex; gap: 8px; align-items: center; padding: 10px 13px; border-top: 1px solid var(--border); }
+.msec > h4 { font-size: 10.5px; font-weight: 600; color: var(--muted-foreground); margin-bottom: 5px; display: flex; align-items: center; gap: 5px; }
+.panel { border: 1px solid var(--border); border-radius: 9px; padding: 8px 9px; }
+.kv { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; padding: 1.5px 0; }
+.kv > span:first-child { color: var(--muted-foreground); }
+
+.rail { display: grid; gap: 10px; align-content: start; }
+
+table.t { width: 100%; border-collapse: collapse; font-size: 11px; }
+table.t th { font-weight: 500; color: var(--muted-foreground); text-align: right; padding: 3px 5px; font-size: 10px; }
+table.t th:first-child, table.t td:first-child { text-align: left; }
+table.t td { padding: 4px 5px; border-top: 1px solid var(--border); text-align: right; }
+table.t tr:hover td { background: var(--accent); }
+
+.pros { font-size: 10.5px; }
+.pros li { list-style: none; padding-left: 14px; position: relative; margin-top: 3px; color: var(--muted-foreground); }
+.pros li::before { position: absolute; left: 0; }
+.pros li.p::before { content: "+"; color: var(--hit); font-weight: 700; }
+.pros li.c::before { content: "−"; color: var(--miss); font-weight: 700; }
+.be { display: inline-flex; align-items: center; gap: 3px; font-size: 9.5px; font-weight: 700; padding: 1px 5px;
+  border-radius: 4px; background: rgba(124,58,237,.12); color: var(--sample); }
+.ok { display: inline-flex; align-items: center; gap: 3px; font-size: 9.5px; font-weight: 700; padding: 1px 5px;
+  border-radius: 4px; background: var(--hit-muted); color: var(--hit); }
+
+/* 5축 막대 */
+.axes { display: grid; gap: 3px; }
+.axes .a { display: grid; grid-template-columns: 52px 1fr 26px; gap: 7px; align-items: center; font-size: 10.5px; }
+.axes .a .tr { height: 5px; border-radius: 3px; background: var(--muted); position: relative; }
+.axes .a .tr i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--brand); }
+
+/* 지수 히어로 */
+.hero { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.hcard { border: 1px solid var(--border); border-radius: 11px; background: var(--card); padding: 9px 10px; cursor: pointer; }
+.hcard:hover { border-color: var(--brand); }
+.hcard .n { font-size: 10.5px; color: var(--muted-foreground); display: flex; justify-content: space-between; gap: 4px; }
+.hcard .v { font-size: 17px; font-weight: 700; letter-spacing: -.02em; margin-top: 3px; }
+.hscore { font-size: 9.5px; font-weight: 700; padding: 0 5px; border-radius: 999px; border: 1px solid var(--border); }
+
+/* 상태바 */
+.statusbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; border: 1px solid var(--border);
+  border-radius: 10px; background: var(--card); padding: 7px 11px; }
+.dot { width: 7px; height: 7px; border-radius: 999px; display: inline-block; }
+.dot.live { background: var(--hit); box-shadow: 0 0 0 3px var(--hit-muted); }
+.dot.closed { background: var(--muted-foreground); }
+
+/* 레이아웃 스케치 */
+.sk { display: grid; gap: 6px; }
+.sk .b { border: 1px dashed var(--border); border-radius: 8px; background: var(--card); padding: 8px 9px; font-size: 10.5px; color: var(--muted-foreground); }
+.sk .b.hi { border-style: solid; border-color: var(--brand); color: var(--brand); background: var(--brand-muted); font-weight: 600; }
+.sk .g2 { display: grid; grid-template-columns: 2fr 1fr; gap: 6px; }
+.sk .g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <h1>홈 대시보드 — 위젯·모달 선택용 목업 v2</h1>
+  <span class="badge b-brand">/</span>
+  <button class="btn" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme==='dark'?'light':'dark'">라이트 / 다크</button>
+  <span class="ok" style="margin-left:auto">기존 API로 가능</span>
+  <span class="be">신규 컴포넌트 필요</span>
+</div>
+
+<p class="lede">
+  지금 홈은 정보가 없는 게 아니라 <b>누르면 전부 떠난다</b>. 지수를 누르면 <span class="mono sm">/market</span>,
+  종목을 누르면 <span class="mono sm">/analysis</span>, 뉴스를 누르면 <span class="mono sm">/news/domestic</span>,
+  리포트를 누르면 <span class="mono sm">/reports/{id}</span> — 처음 온 사람이 궁금해서 하나 눌렀을 뿐인데
+  홈에서 밀려나고, 셋을 견주려면 뒤로가기를 세 번 눌러야 한다. 관심종목·보유·뉴스·리포트 화면은 이미
+  <b>모달로 훑고 마음에 들 때 넘어가는</b> 흐름인데 정작 첫 화면만 그 규칙 밖에 있다.
+  <br /><br />
+  그리고 <b>서버가 이미 주고 있는데 홈이 안 쓰는 데이터</b>가 있다 —
+  AI 시장 브리핑(<span class="mono sm">/news/{market}/briefing</span>), 지수 추세점수와 AI 한 줄(<span class="mono sm">/indices/scores</span>),
+  지수 60일 일별 종가(<span class="mono sm">/indices/{id}/daily-closes</span>), 장 개폐 캘린더(<span class="mono sm">/market-calendar/KR·US</span>),
+  예시 데이터(<span class="mono sm">/sample/*</span>). 전부 <b>비로그인에서도 열리는 공개 엔드포인트</b>다.
+</p>
+
+<!-- ══════════════════ A. 클릭 = 모달 ══════════════════ -->
+<section>
+  <div class="shead"><span class="tag">A · 클릭 규칙</span><h2>홈에서 누른 것은 홈에서 열린다 (4종)</h2></div>
+  <p class="why">
+    네 가지 중 <b>셋은 이미 앱에 있는 모달을 홈에 연결만</b> 하면 된다(추가 개발 거의 없음). 새로 만들 것은
+    <b>지수 모달 하나</b>뿐이고, 그건 아래 B 섹션에서 형태를 고른다.
+  </p>
+
+  <div class="cols c4">
+    <div class="opt">
+      <header><span class="id">A1</span><h3>종목</h3><span class="ok" style="margin-left:auto">있음</span></header>
+      <div class="pad">
+        <div class="card" style="font-size:11px">
+          <div class="row click"><span class="rank">1</span><span class="av">엔</span><span class="col-main name">엔비디아</span><span class="mono up sm">+2.14%</span><span class="scorev s-high">82<span class="xs">A</span></span></div>
+          <div class="row click"><span class="rank">2</span><span class="av">삼</span><span class="col-main name">삼성전자</span><span class="mono dn sm">−0.62%</span><span class="scorev s-mid">61<span class="xs">B</span></span></div>
+          <div class="row click" style="background:var(--accent)"><span class="rank">3</span><span class="av">현</span><span class="col-main name">현대차</span><span class="mono up sm">+1.03%</span><span class="scorev s-mid">58<span class="xs">B</span></span></div>
+        </div>
+        <p class="xs mut" style="margin-top:6px">↓ 행 클릭 시</p>
+        <div class="modal-shell" style="margin-top:4px">
+          <div class="modal-head" style="padding:8px 10px">
+            <span class="av">현</span>
+            <div class="col-main"><div class="name">현대차</div><div class="xs mut">005380 · KRX · 점수 58B</div></div>
+            <div class="rt"><div class="mono" style="font-weight:700">214,500</div><div class="mono up xs">+2,200 (+1.03%)</div></div>
+          </div>
+          <div class="modal-body" style="padding:9px 10px;gap:8px">
+            <div class="spark w2"><svg viewBox="0 0 200 46" preserveAspectRatio="none"><polyline fill="none" stroke="var(--profit)" stroke-width="1.6" points="0,34 18,30 36,33 54,25 72,28 90,20 108,24 126,15 144,19 162,12 180,14 200,8"/></svg></div>
+            <div class="xs mut">52주 레인지 · 종목 점수 5축 · 다가오는 일정 · 최근 뉴스 4건</div>
+          </div>
+          <div class="modal-foot" style="padding:8px 10px"><button class="btn primary sm" style="flex:1">종목 분석 보기 →</button><button class="btn sm">관심</button></div>
+        </div>
+      </div>
+      <p class="note"><b>StockQuickLookModal</b> 그대로. 관심종목·보유·뉴스 모달이 이미 쓰는 것과 <b>같은 화면</b>이라 배울 게 없다.</p>
+    </div>
+
+    <div class="opt">
+      <header><span class="id">A2</span><h3>지수</h3><span class="be" style="margin-left:auto">신규</span></header>
+      <div class="pad">
+        <div class="hero" style="grid-template-columns:repeat(2,1fr)">
+          <div class="hcard"><div class="n"><span>코스피</span><span class="hscore s-mid">63</span></div><div class="v mono">2,784.31</div><div class="mono up sm">+0.84%</div></div>
+          <div class="hcard" style="border-color:var(--brand)"><div class="n"><span>나스닥</span><span class="hscore s-high">71</span></div><div class="v mono">21,402.9</div><div class="mono up sm">+1.12%</div></div>
+        </div>
+        <p class="xs mut" style="margin-top:6px">↓ 카드 클릭 시 — <b>지금은 /market 페이지로 이탈</b></p>
+        <div class="modal-shell" style="margin-top:4px">
+          <div class="modal-head" style="padding:8px 10px">
+            <div class="col-main"><div class="name">나스닥 종합 <span class="badge">지수</span></div><div class="xs mut">실시간 · 05:12 갱신</div></div>
+            <div class="rt"><div class="mono" style="font-weight:700">21,402.9</div><div class="mono up xs">+1.12%</div></div>
+          </div>
+          <div class="modal-body" style="padding:9px 10px;gap:8px">
+            <div class="spark w2"><svg viewBox="0 0 200 46" preserveAspectRatio="none"><polyline fill="none" stroke="var(--profit)" stroke-width="1.6" points="0,38 20,34 40,36 60,28 80,30 100,22 120,26 140,16 160,20 180,11 200,6"/></svg></div>
+            <div class="panel" style="font-size:10.5px;line-height:1.7">
+              <b>추세 점수 71</b> · 반도체 주도로 20일선 위 안착. 변동성은 낮아졌으나 거래량이 함께 늘지는 않았다.
+            </div>
+          </div>
+          <div class="modal-foot" style="padding:8px 10px"><button class="btn primary sm" style="flex:1">전체 지수 보기 →</button></div>
+        </div>
+      </div>
+      <p class="note">앱 전체에서 <b>유일하게 모달이 없던 대상</b>. 형태는 <b>B 섹션에서 택 1</b>.</p>
+    </div>
+
+    <div class="opt">
+      <header><span class="id">A3</span><h3>뉴스</h3><span class="ok" style="margin-left:auto">있음</span></header>
+      <div class="pad">
+        <div class="card" style="padding:6px 8px">
+          <p class="clamp2" style="font-size:11px">코스피, 외국인 8일 연속 순매수에 2,780선 회복</p>
+          <p class="xs mut" style="margin-top:3px">한국경제 · 12분 전</p>
+          <div style="border-top:1px solid var(--border);margin:6px 0"></div>
+          <p class="clamp2" style="font-size:11px">엔비디아, 차세대 GPU 양산 앞당긴다</p>
+          <p class="xs mut" style="margin-top:3px">연합뉴스 · 41분 전</p>
+        </div>
+        <p class="xs mut" style="margin-top:6px">↓ 클릭 시</p>
+        <div class="modal-shell" style="margin-top:4px">
+          <div class="modal-head" style="padding:8px 10px">
+            <div class="col-main"><div class="name clamp2" style="font-size:11.5px">엔비디아, 차세대 GPU 양산 앞당긴다</div><div class="xs mut">연합뉴스 · 41분 전</div></div>
+          </div>
+          <div class="modal-body" style="padding:9px 10px;gap:8px">
+            <div class="panel xs mut" style="height:52px;display:grid;place-items:center">원문 미리보기</div>
+            <div class="pillrow"><span class="chip">나스닥 +1.1%</span><span class="chip">NVDA +2.1%</span><span class="chip">SOX +1.8%</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="note"><b>NewsArticleModal</b> + 관련 종목·지수 카드 그대로. 홈에서 뉴스 3건을 <b>연달아 훑을 수 있게</b> 된다.</p>
+    </div>
+
+    <div class="opt">
+      <header><span class="id">A4</span><h3>리포트</h3><span class="ok" style="margin-left:auto">있음</span></header>
+      <div class="pad">
+        <div class="card" style="padding:8px 9px">
+          <div class="pillrow"><span class="badge b-up">강세</span><span class="xs mut">삼성전자</span></div>
+          <p class="clamp2" style="font-size:11px;margin-top:4px">메모리 사이클 반등, 목표 92,000</p>
+          <p class="xs mut" style="margin-top:4px">홍길동 · 2시간 전</p>
+        </div>
+        <p class="xs mut" style="margin-top:6px">↓ 클릭 시</p>
+        <div class="modal-shell" style="margin-top:4px">
+          <div class="modal-head" style="padding:8px 10px">
+            <span class="av">삼</span>
+            <div class="col-main"><div class="name" style="font-size:11.5px">메모리 사이클 반등</div><div class="xs mut">홍길동 · D-84 · 조회 412</div></div>
+            <span class="badge b-up">강세</span>
+          </div>
+          <div class="modal-body" style="padding:9px 10px;gap:8px">
+            <div class="axes">
+              <div class="a"><span class="mut">밸류</span><span class="tr"><i style="width:72%"></i></span><span class="mono rt">72</span></div>
+              <div class="a"><span class="mut">모멘텀</span><span class="tr"><i style="width:58%"></i></span><span class="mono rt">58</span></div>
+            </div>
+            <div class="xs mut">목표까지 +10.0% · 손절 −29.9%</div>
+          </div>
+          <div class="modal-foot" style="padding:8px 10px"><button class="btn primary sm" style="flex:1">전문 읽기 →</button></div>
+        </div>
+      </div>
+      <p class="note"><b>ResearchQuickLookModal</b> 그대로. 이미 받아 둔 목록 데이터만 쓰므로 <b>추가 요청 0</b>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ B. 지수 모달 설계 ══════════════════ -->
+<section>
+  <div class="shead"><span class="tag">B · 택 1</span><h2>지수 모달을 어디까지 담을 것인가</h2></div>
+  <p class="why">
+    지수는 이 앱에서 <b>가장 많이 눌리지만 가장 설명이 없는 대상</b>이다. 지금 코스피 카드가 말하는 것은 값과 등락률 둘뿐이고,
+    <b>추세 점수·AI 한 줄은 이미 서버에 있는데 마우스를 올려야 보이는 <span class="mono sm">title</span> 툴팁</b>에 갇혀 있다.
+    셋 다 신규 요청은 지수 하나당 <b>모달을 열 때만</b> 나간다.
+  </p>
+
+  <div class="cols c3">
+
+    <!-- I1 -->
+    <div class="opt">
+      <header><span class="id">I1</span><h3>간결형</h3><span class="badge" style="margin-left:auto">요청 1</span></header>
+      <div class="pad">
+        <div class="modal-shell" style="max-width:none">
+          <div class="modal-head">
+            <div class="col-main"><div class="name">코스피 <span class="badge">지수</span></div><div class="xs mut">KOSPI · 실시간 · 15:31 갱신</div></div>
+            <div class="rt"><div class="mono" style="font-size:15px;font-weight:700">2,784.31</div><div class="mono up sm">+23.18 (+0.84%)</div></div>
+          </div>
+          <div class="modal-body">
+            <div class="msec">
+              <h4>최근 60거래일 <span class="mut xs">일별 종가</span></h4>
+              <div class="spark w3"><svg viewBox="0 0 300 120" preserveAspectRatio="none">
+                <polyline fill="none" stroke="var(--profit)" stroke-width="1.8" points="0,96 15,90 30,98 45,84 60,88 75,74 90,80 105,66 120,72 135,58 150,64 165,50 180,56 195,44 210,52 225,38 240,46 255,30 270,36 285,22 300,16"/>
+              </svg></div>
+              <div class="kv xs" style="margin-top:2px"><span>60일 저 2,481</span><span class="mono">고 2,801</span></div>
+            </div>
+            <div class="msec">
+              <h4>추세 점수 <span class="hscore s-mid">63 B</span></h4>
+              <div class="panel" style="font-size:11px;line-height:1.75">
+                외국인 순매수가 8거래일 이어지며 2,780선을 회복했다. 다만 상승분의 절반이 반도체 두 종목에서 나와
+                <b>폭이 좁다</b>. <span class="xs mut">· 08-16 기준 · 점수는 정보이지 매매 신호가 아닙니다</span>
+              </div>
+            </div>
+            <div class="msec">
+              <h4>이 지수를 다룬 뉴스</h4>
+              <div style="font-size:11px">
+                <div class="row click" style="padding:5px 2px"><span class="col-main clamp2">코스피, 외국인 8일 연속 순매수에 2,780선 회복</span><span class="xs mut">12분</span></div>
+                <div class="row click" style="padding:5px 2px"><span class="col-main clamp2">"코스피 3,000 간다" 증권가 목표 상향 잇따라</span><span class="xs mut">2시간</span></div>
+                <div class="row click" style="padding:5px 2px"><span class="col-main clamp2">서울 증시 마감: 기관 매도에도 상승 마감</span><span class="xs mut">4시간</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-foot"><button class="btn primary sm" style="flex:1">전체 지수 보기 →</button><button class="btn sm">관련 뉴스 더보기</button></div>
+        </div>
+      </div>
+      <p class="note">
+        <ul class="pros">
+          <li class="p">열 때 <b>요청 1개</b>(일별 종가). 점수·뉴스는 홈이 이미 받아 둔 것에서 고른다</li>
+          <li class="p">종목 모달과 높이가 비슷해 <b>같은 규칙</b>으로 읽힌다</li>
+          <li class="c">"오늘 왜 올랐나"는 알지만 <b>어제와 견줄 수는 없다</b></li>
+        </ul>
+      </p>
+    </div>
+
+    <!-- I2 -->
+    <div class="opt">
+      <header><span class="id">I2</span><h3>표준형</h3><span class="badge b-brand" style="margin-left:auto">권장</span></header>
+      <div class="pad">
+        <div class="modal-shell" style="max-width:none">
+          <div class="modal-head">
+            <div class="col-main"><div class="name">코스피 <span class="badge">지수</span></div><div class="xs mut">KOSPI · 실시간 · 15:31 갱신</div></div>
+            <div class="rt"><div class="mono" style="font-size:15px;font-weight:700">2,784.31</div><div class="mono up sm">+23.18 (+0.84%)</div></div>
+          </div>
+          <div class="modal-body">
+            <div class="msec">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+                <h4 style="margin:0">일별 종가</h4>
+                <span class="seg"><span>1개월</span><span class="on">3개월</span><span>1년</span></span>
+              </div>
+              <div class="spark w3"><svg viewBox="0 0 300 120" preserveAspectRatio="none">
+                <polyline fill="none" stroke="var(--profit)" stroke-width="1.8" points="0,96 15,90 30,98 45,84 60,88 75,74 90,80 105,66 120,72 135,58 150,64 165,50 180,56 195,44 210,52 225,38 240,46 255,30 270,36 285,22 300,16"/>
+              </svg></div>
+            </div>
+
+            <div class="msec">
+              <h4>추세 점수 <span class="hscore s-mid">63 B</span> <span class="xs mut">— 오늘</span></h4>
+              <div class="panel" style="font-size:11px;line-height:1.75">
+                외국인 순매수가 8거래일 이어지며 2,780선을 회복. 상승분의 절반이 반도체 두 종목에서 나와 <b>폭이 좁다</b>.
+              </div>
+            </div>
+
+            <div class="msec">
+              <h4>최근 일별 <span class="xs mut">종가 · 등락 · 그날의 점수</span></h4>
+              <table class="t">
+                <tr><th>날짜</th><th>종가</th><th>등락</th><th>점수</th></tr>
+                <tr><td>08-16 (금)</td><td class="mono">2,784.31</td><td class="mono up">+0.84%</td><td class="mono s-mid">63</td></tr>
+                <tr><td>08-15 (목)</td><td class="mono">2,761.13</td><td class="mono up">+0.31%</td><td class="mono s-mid">61</td></tr>
+                <tr><td>08-14 (수)</td><td class="mono">2,752.60</td><td class="mono dn">−0.44%</td><td class="mono s-mid">57</td></tr>
+                <tr><td>08-13 (화)</td><td class="mono">2,764.79</td><td class="mono up">+1.20%</td><td class="mono s-mid">59</td></tr>
+                <tr><td>08-12 (월)</td><td class="mono">2,732.03</td><td class="mono dn">−0.18%</td><td class="mono s-low">48</td></tr>
+              </table>
+            </div>
+
+            <div class="msec">
+              <h4>같은 날 다른 지수</h4>
+              <div class="pillrow">
+                <span class="chip">코스닥 <b class="up">+1.24%</b></span>
+                <span class="chip">원/달러 <b class="dn">−0.31%</b></span>
+                <span class="chip">나스닥 <b class="up">+1.12%</b></span>
+                <span class="chip">VIX <b class="dn">−4.10%</b></span>
+              </div>
+            </div>
+
+            <div class="msec">
+              <h4>이 지수를 다룬 뉴스 <span class="badge">7건</span></h4>
+              <div style="font-size:11px">
+                <div class="row click" style="padding:5px 2px"><span class="col-main clamp2">코스피, 외국인 8일 연속 순매수에 2,780선 회복</span><span class="xs mut">12분</span></div>
+                <div class="row click" style="padding:5px 2px"><span class="col-main clamp2">"코스피 3,000 간다" 증권가 목표 상향 잇따라</span><span class="xs mut">2시간</span></div>
+                <div class="row click" style="padding:5px 2px"><span class="col-main clamp2">서울 증시 마감: 기관 매도에도 상승 마감</span><span class="xs mut">4시간</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-foot"><button class="btn primary sm" style="flex:1">전체 지수 보기 →</button><button class="btn sm">관련 뉴스 더보기</button></div>
+        </div>
+      </div>
+      <p class="note">
+        <ul class="pros">
+          <li class="p"><b>일별 점수 열이 핵심</b> — "63점"이 좋은 건지는 어제 61, 그제 57을 봐야 알 수 있다. 이 값은 <span class="mono sm">daily-closes</span> 응답에 <b>이미 실려 온다</b>(추가 요청 0)</li>
+          <li class="p">지수 칩으로 <b>오늘 시장 전체의 방향</b>이 한 모달에서 읽힌다</li>
+          <li class="c">모달이 길어져 스크롤이 생긴다</li>
+        </ul>
+      </p>
+    </div>
+
+    <!-- I3 -->
+    <div class="opt">
+      <header><span class="id">I3</span><h3>심층형</h3><span class="badge b-warn" style="margin-left:auto">요청 늘어남</span></header>
+      <div class="pad">
+        <div class="modal-shell" style="max-width:none">
+          <div class="modal-head">
+            <div class="col-main"><div class="name">코스피 <span class="badge">지수</span></div><div class="xs mut">KOSPI · 실시간</div></div>
+            <div class="rt"><div class="mono" style="font-size:15px;font-weight:700">2,784.31</div><div class="mono up sm">+0.84%</div></div>
+          </div>
+          <div class="modal-body">
+            <div class="pillrow" style="margin-bottom:2px"><span class="chip on">흐름</span><span class="chip">구성 종목</span><span class="chip">뉴스</span></div>
+            <div class="spark w3"><svg viewBox="0 0 300 120" preserveAspectRatio="none">
+              <polyline fill="none" stroke="var(--profit)" stroke-width="1.8" points="0,96 30,98 60,88 90,80 120,72 150,64 180,56 210,52 240,46 270,36 300,16"/>
+            </svg></div>
+
+            <div class="msec">
+              <h4>이 지수를 움직인 종목 <span class="xs mut">거래대금 상위 · 오늘</span></h4>
+              <div style="font-size:11px">
+                <div class="row click" style="padding:5px 2px"><span class="av">삼</span><span class="col-main name">삼성전자</span><span class="mono sm">1.4조</span><span class="mono up sm" style="width:48px;text-align:right">+1.9%</span></div>
+                <div class="row click" style="padding:5px 2px"><span class="av">SK</span><span class="col-main name">SK하이닉스</span><span class="mono sm">1.1조</span><span class="mono up sm" style="width:48px;text-align:right">+3.4%</span></div>
+                <div class="row click" style="padding:5px 2px"><span class="av">현</span><span class="col-main name">현대차</span><span class="mono sm">4,120억</span><span class="mono dn sm" style="width:48px;text-align:right">−0.6%</span></div>
+              </div>
+            </div>
+
+            <div class="msec">
+              <h4>일별 종가 · 점수</h4>
+              <table class="t">
+                <tr><th>날짜</th><th>종가</th><th>등락</th><th>점수</th></tr>
+                <tr><td>08-16 (금)</td><td class="mono">2,784.31</td><td class="mono up">+0.84%</td><td class="mono s-mid">63</td></tr>
+                <tr><td>08-15 (목)</td><td class="mono">2,761.13</td><td class="mono up">+0.31%</td><td class="mono s-mid">61</td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="modal-foot"><button class="btn primary sm" style="flex:1">전체 지수 보기 →</button></div>
+        </div>
+      </div>
+      <p class="note">
+        <ul class="pros">
+          <li class="p">"코스피가 왜 올랐나"에 <b>종목 이름으로</b> 답한다 — 종목 모달로 이어지는 자연스러운 다음 클릭</li>
+          <li class="c">「구성 종목」은 <b>거래대금 랭킹으로 대신</b>하는 근사값이다. 실제 지수 기여도(시총 가중)는 서버에 없다 <span class="be">BE 필요</span></li>
+          <li class="c">원/달러·금·비트코인에는 <b>구성 종목이라는 개념이 없어</b> 탭이 비는 지수가 생긴다</li>
+        </ul>
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ C. 새 위젯 ══════════════════ -->
+<section>
+  <div class="shead"><span class="tag">C · 다중 선택</span><h2>홈에 새로 올릴 위젯</h2></div>
+  <p class="why">
+    전부 <b>이미 서버가 만들어 두고 있는데 홈이 안 쓰는 데이터</b>다. 새로 계산하거나 LLM을 부르지 않는다 —
+    브리핑·점수는 <b>배치가 만들어 저장한 것을 읽기만</b> 한다.
+  </p>
+
+  <div class="cols c2">
+
+    <!-- W1 -->
+    <div class="opt">
+      <header><span class="id">W1</span><h3>AI 시장 브리핑</h3><span class="ok" style="margin-left:auto">저장분 읽기</span></header>
+      <div class="pad">
+        <div class="card">
+          <div class="cardhead">
+            <h4>오늘의 시장 브리핑 <span class="badge b-brand">AI</span></h4>
+            <span class="seg"><span class="on">국내</span><span>해외</span></span>
+          </div>
+          <div style="padding:10px">
+            <div class="pillrow" style="margin-bottom:6px">
+              <span class="badge b-up">강세</span>
+              <span class="xs mut">외국인 순매수 8일 연속 · 오늘 기사 214건 · 속보 6건 · 15:40 생성</span>
+            </div>
+            <p style="font-size:11.5px;line-height:1.8">
+              코스피가 반도체 주도로 2,780선을 회복했다. 외국인은 8거래일 연속 순매수했고 기관은 차익 실현에 나섰다.
+              다만 상승 종목 수는 하락 종목 수보다 적어 <b>지수는 올랐지만 폭이 좁은 장</b>이었다.
+            </p>
+            <div class="cols c2" style="margin-top:9px;gap:9px">
+              <div class="panel">
+                <h4 class="xs mut" style="margin-bottom:4px">오늘의 핵심</h4>
+                <ul style="font-size:10.5px;line-height:1.8;padding-left:13px">
+                  <li>반도체 2종목이 지수 상승분의 절반</li>
+                  <li>원/달러 1,332원, 3주 만에 최저</li>
+                  <li>2차전지 섹터 3일째 약세</li>
+                </ul>
+              </div>
+              <div class="panel">
+                <h4 class="xs mut" style="margin-bottom:4px">지켜볼 것</h4>
+                <ul style="font-size:10.5px;line-height:1.8;padding-left:13px">
+                  <li>내일 새벽 미국 CPI 발표</li>
+                  <li>선물 옵션 만기 다음 주 목요일</li>
+                </ul>
+              </div>
+            </div>
+            <div class="pillrow" style="margin-top:8px">
+              <span class="xs mut">많이 언급된 종목</span>
+              <span class="chip">삼성전자 <b class="up">+1.9%</b></span>
+              <span class="chip">SK하이닉스 <b class="up">+3.4%</b></span>
+              <span class="chip">엔비디아 <b class="up">+2.1%</b></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        <span class="mono sm">/news/{market}/briefing</span> — <b>이미 뉴스 화면에만 있다</b>. 홈이야말로 하루에 한 번 여는 화면인데
+        정작 "오늘 시장이 어땠나"를 문장으로 말해 주는 자리가 없다. 생성은 배치(장중 30분·그 외 1시간)만 하므로
+        <b>방문자가 늘어도 LLM 비용은 그대로</b>다. 아직 생성 전이면 카드를 아예 안 그린다.
+      </p>
+    </div>
+
+    <!-- W2 -->
+    <div class="opt">
+      <header><span class="id">W2</span><h3>장 상태 바</h3><span class="badge b-warn" style="margin-left:auto">Toss 의존</span></header>
+      <div class="pad">
+        <div class="statusbar">
+          <span style="display:flex;align-items:center;gap:5px"><i class="dot live"></i><b style="font-size:11.5px">한국 장중</b><span class="xs mut">마감까지 1시간 12분</span></span>
+          <span style="display:flex;align-items:center;gap:5px"><i class="dot closed"></i><b style="font-size:11.5px">미국 마감</b><span class="xs mut">개장까지 8시간 40분</span></span>
+          <span class="xs mut" style="margin-left:auto">다음 휴장 · 09-16 추석</span>
+        </div>
+        <p class="xs mut" style="margin-top:8px">현재 홈은 지금이 장중인지 마감인지 <b>어디에도 적혀 있지 않다.</b> 그래서 "왜 숫자가 안 움직이지"가 버그처럼 보인다.</p>
+        <div class="statusbar" style="margin-top:10px">
+          <span style="display:flex;align-items:center;gap:5px"><i class="dot closed"></i><b style="font-size:11.5px">한국 휴장</b><span class="xs mut">광복절 · 다음 개장 08-18(월) 09:00</span></span>
+        </div>
+      </div>
+      <p class="note">
+        <span class="mono sm">/market-calendar/KR·US</span> — BE에 있으나 <b>FE가 한 번도 안 쓴 엔드포인트</b>다.
+        <b>다만 Toss 연동에 의존</b>해 토큰이 없으면 실패한다 → 실패 시 <b>바를 통째로 감춘다</b>(없는 정보를 추측해 적지 않는다).
+      </p>
+    </div>
+
+    <!-- W3 -->
+    <div class="opt">
+      <header><span class="id">W3</span><h3>오늘의 이슈 종목</h3><span class="ok" style="margin-left:auto">뉴스에서 파생</span></header>
+      <div class="pad">
+        <div class="cols c4" style="gap:8px">
+          <div class="hcard"><div class="n"><span>삼성전자</span><span class="badge b-warn">속보</span></div><div class="v mono" style="font-size:14px">78,600</div><div class="pillrow"><span class="mono up sm">+1.9%</span><span class="xs mut">기사 12건</span></div></div>
+          <div class="hcard"><div class="n"><span>SK하이닉스</span></div><div class="v mono" style="font-size:14px">241,000</div><div class="pillrow"><span class="mono up sm">+3.4%</span><span class="xs mut">기사 9건</span></div></div>
+          <div class="hcard"><div class="n"><span>엔비디아</span></div><div class="v mono" style="font-size:14px">$184.2</div><div class="pillrow"><span class="mono up sm">+2.1%</span><span class="xs mut">기사 7건</span></div></div>
+          <div class="hcard"><div class="n"><span>LG에너지솔루션</span></div><div class="v mono" style="font-size:14px">312,500</div><div class="pillrow"><span class="mono dn sm">−2.2%</span><span class="xs mut">기사 5건</span></div></div>
+        </div>
+      </div>
+      <p class="note">
+        홈이 이미 받아 오는 <b>뉴스 목록에서 계산</b>한다(<span class="mono sm">topSymbolMentions</span> — 뉴스 화면이 쓰는 함수 그대로). 서버 요청은 시세 배치 1개 추가.
+        점수 TOP·거래대금은 <b>수치가 뽑은 종목</b>이고, 이건 <b>오늘 사람들이 말하고 있는 종목</b>이라 성격이 겹치지 않는다. 클릭 = 종목 모달.
+      </p>
+    </div>
+
+    <!-- W4 -->
+    <div class="opt">
+      <header><span class="id">W4</span><h3>처음 오신 분께</h3><span class="ok" style="margin-left:auto">/sample/*</span></header>
+      <div class="pad">
+        <div class="card" style="padding:11px">
+          <div class="pillrow" style="margin-bottom:7px"><b style="font-size:12.5px">기록해 두면 이렇게 남습니다</b><span class="badge b-new">예시</span></div>
+          <div class="cols c3" style="gap:8px">
+            <div class="panel">
+              <h4 class="xs mut">스탬프</h4>
+              <p style="font-size:10.5px;line-height:1.7;margin-top:3px">예상을 남기면 만기에 <b class="hit">적중·빗나감</b>이 채점됩니다</p>
+              <div class="pillrow" style="margin-top:5px"><span class="badge b-hit">적중 3</span><span class="badge">대기 2</span></div>
+            </div>
+            <div class="panel">
+              <h4 class="xs mut">메모장</h4>
+              <p style="font-size:10.5px;line-height:1.7;margin-top:3px">쓴 날의 <b>주가가 함께 박제</b>됩니다</p>
+              <div class="pillrow" style="margin-top:5px"><span class="chip">삼성전자 <b class="up">+8.5%</b></span></div>
+            </div>
+            <div class="panel">
+              <h4 class="xs mut">목표가</h4>
+              <p style="font-size:10.5px;line-height:1.7;margin-top:3px">등록가 → 현재가 → 목표가를 <b>한 축</b>에</p>
+              <div class="pillrow" style="margin-top:5px"><span class="badge b-warn">임박 4.2%</span></div>
+            </div>
+          </div>
+          <div class="pillrow" style="margin-top:9px"><button class="btn primary sm">예시로 둘러보기</button><button class="btn sm">회원가입</button></div>
+        </div>
+      </div>
+      <p class="note">
+        비로그인 방문자에게 지금 홈은 <b>시장 정보 사이트</b>로만 보인다 — 이 앱이 무엇을 해 주는 곳인지가 첫 화면에 없다.
+        「내 투자」 5개 메뉴가 이미 쓰는 <span class="mono sm">/sample/*</span> 픽스처를 그대로 쓴다. <b>로그인 사용자에게는 안 보인다.</b>
+      </p>
+    </div>
+
+    <!-- W5 -->
+    <div class="opt">
+      <header><span class="id">W5</span><h3>지수 히어로 강화</h3><span class="ok" style="margin-left:auto">있는 값 노출</span></header>
+      <div class="pad">
+        <p class="xs mut" style="margin-bottom:5px">현재 — 값·등락률·스파크만</p>
+        <div class="hero">
+          <div class="hcard"><div class="n"><span>코스피</span><span class="hscore mut">63</span></div><div class="v mono">2,784.31</div><div class="mono up sm">+0.84%</div></div>
+          <div class="hcard"><div class="n"><span>코스닥</span><span class="hscore mut">57</span></div><div class="v mono">821.40</div><div class="mono up sm">+1.24%</div></div>
+          <div class="hcard"><div class="n"><span>원/달러</span></div><div class="v mono">1,332.1</div><div class="mono dn sm">−0.31%</div></div>
+          <div class="hcard"><div class="n"><span>나스닥</span><span class="hscore mut">71</span></div><div class="v mono">21,402.9</div><div class="mono up sm">+1.12%</div></div>
+          <div class="hcard"><div class="n"><span>S&amp;P 500</span><span class="hscore mut">68</span></div><div class="v mono">6,412.8</div><div class="mono up sm">+0.62%</div></div>
+        </div>
+        <p class="xs mut" style="margin:10px 0 5px">제안 — 점수에 <b>색</b>을 주고 <b>AI 한 줄</b>을 카드 안에 (툴팁 탈출)</p>
+        <div class="hero">
+          <div class="hcard"><div class="n"><span>코스피</span><span class="hscore s-mid">63</span></div><div class="v mono">2,784.31</div><div class="mono up sm">+0.84%</div><p class="xs mut clamp2" style="margin-top:4px;line-height:1.55">반도체 주도, 폭은 좁다</p></div>
+          <div class="hcard"><div class="n"><span>코스닥</span><span class="hscore s-mid">57</span></div><div class="v mono">821.40</div><div class="mono up sm">+1.24%</div><p class="xs mut clamp2" style="margin-top:4px;line-height:1.55">개인 수급 유입 지속</p></div>
+          <div class="hcard"><div class="n"><span>원/달러</span></div><div class="v mono">1,332.1</div><div class="mono dn sm">−0.31%</div><p class="xs mut clamp2" style="margin-top:4px;line-height:1.55">3주 만에 최저</p></div>
+          <div class="hcard"><div class="n"><span>나스닥</span><span class="hscore s-high">71</span></div><div class="v mono">21,402.9</div><div class="mono up sm">+1.12%</div><p class="xs mut clamp2" style="margin-top:4px;line-height:1.55">20일선 위 안착</p></div>
+          <div class="hcard"><div class="n"><span>S&amp;P 500</span><span class="hscore s-high">68</span></div><div class="v mono">6,412.8</div><div class="mono up sm">+0.62%</div><p class="xs mut clamp2" style="margin-top:4px;line-height:1.55">방어주 강세로 전환</p></div>
+        </div>
+      </div>
+      <p class="note">
+        <span class="mono sm">/indices/scores</span>의 <span class="mono sm">aiSummary</span>는 <b>지금도 응답에 오고 있고</b> 화면은 그걸 <span class="mono sm">title</span> 속성에만 넣는다 —
+        모바일에는 툴팁이 없어 <b>존재 자체가 안 보인다</b>. <b>추가 요청 0.</b> 카드 높이는 86px → 약 108px.
+      </p>
+    </div>
+
+    <!-- W6 -->
+    <div class="opt">
+      <header><span class="id">W6</span><h3>순위 변동 화살표</h3><span class="badge b-warn" style="margin-left:auto">요청 N개</span></header>
+      <div class="pad">
+        <div class="card">
+          <div class="cardhead"><h4>거래대금 상위</h4><span class="seg"><span class="on">국내</span><span>해외</span></span></div>
+          <div style="font-size:11px">
+            <div class="row click"><span class="rank">1</span><span class="av">삼</span><span class="col-main name">삼성전자</span><span class="badge b-hit">▲2</span><span class="mono sm">78,600</span><span class="mono up sm" style="width:48px;text-align:right">+1.9%</span></div>
+            <div class="row click"><span class="rank">2</span><span class="av">SK</span><span class="col-main name">SK하이닉스</span><span class="badge b-down">▼1</span><span class="mono sm">241,000</span><span class="mono up sm" style="width:48px;text-align:right">+3.4%</span></div>
+            <div class="row click"><span class="rank">3</span><span class="av">한</span><span class="col-main name">한화오션</span><span class="badge b-brand">NEW</span><span class="mono sm">62,300</span><span class="mono up sm" style="width:48px;text-align:right">+8.2%</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        <span class="mono sm">/rankings/history</span>는 <b>종목 하나씩만</b> 받는다 → 8행이면 요청 8개. 실시간 차트 화면은 이미 이렇게 쓰고 있지만
+        홈 첫 화면에 8요청을 더하는 건 값이 비싸다. <b>넣는다면 상위 3행만</b> 권한다.
+      </p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════════════ D. 레이아웃 ══════════════════ -->
+<section>
+  <div class="shead"><span class="tag">D · 택 1</span><h2>새 위젯을 어디에 놓을 것인가</h2></div>
+  <p class="why">
+    현재 홈은 <b>세로로 쌓인 한 줄</b>이다: 지수 5 → (점수·거래대금·뉴스 3열) → 리포트 4장 → [로그인 시 자산 블록] → 전체 지수(접힘).
+    비로그인 방문자는 이 중 <b>절반만</b> 보고, 화면 아래쪽은 계속 비어 있다.
+  </p>
+
+  <div class="cols c3">
+    <div class="opt">
+      <header><span class="id">L1</span><h3>현행 유지 + 끼워넣기</h3></header>
+      <div class="pad"><div class="sk">
+        <div class="b">장 상태 바 <span class="badge b-new">W2</span></div>
+        <div class="b hi">지수 히어로 5 (+점수·AI) <span class="badge b-new">W5</span></div>
+        <div class="b">AI 시장 브리핑 <span class="badge b-new">W1</span></div>
+        <div class="b">이슈 종목 스트립 <span class="badge b-new">W3</span></div>
+        <div class="g3"><div class="b">점수 TOP</div><div class="b">거래대금</div><div class="b">오늘의 뉴스</div></div>
+        <div class="b">최신 리포트</div>
+        <div class="b">처음 오신 분께 <span class="badge b-new">W4</span></div>
+        <div class="b">전체 지수(접힘)</div>
+      </div></div>
+      <p class="note"><ul class="pros">
+        <li class="p">기존 코드 변경 최소 — <b>레이아웃 리스크 없음</b></li>
+        <li class="c">세로가 길어져 <b>리포트·안내가 첫 화면 밖</b>으로 밀린다</li>
+      </ul></p>
+    </div>
+
+    <div class="opt">
+      <header><span class="id">L2</span><h3>본문 + 우측 레일</h3><span class="badge b-brand" style="margin-left:auto">권장</span></header>
+      <div class="pad"><div class="sk">
+        <div class="b">장 상태 바 <span class="badge b-new">W2</span></div>
+        <div class="b hi">지수 히어로 5 (+점수·AI) <span class="badge b-new">W5</span></div>
+        <div class="g2">
+          <div class="sk">
+            <div class="b">AI 시장 브리핑 <span class="badge b-new">W1</span></div>
+            <div class="b">이슈 종목 스트립 <span class="badge b-new">W3</span></div>
+            <div class="g2" style="grid-template-columns:1fr 1fr"><div class="b">점수 TOP</div><div class="b">거래대금</div></div>
+            <div class="b">최신 리포트</div>
+          </div>
+          <div class="sk">
+            <div class="b" style="min-height:150px">오늘의 뉴스</div>
+            <div class="b">처음 오신 분께 <span class="badge b-new">W4</span></div>
+            <div class="b">전체 지수(접힘)</div>
+          </div>
+        </div>
+      </div></div>
+      <p class="note"><ul class="pros">
+        <li class="p">뉴스·메모장·목표가·리포트가 <b>이미 쓰는 2단 구조</b>와 통일 — 앱 전체가 같은 문법이 된다</li>
+        <li class="p">읽는 것(뉴스·안내)과 훑는 것(수치)이 <b>좌우로 갈린다</b></li>
+        <li class="c"><span class="mono sm">&lt;lg</span>에서는 결국 L1처럼 세로로 쌓인다(모바일 순서를 따로 정해야 함)</li>
+      </ul></p>
+    </div>
+
+    <div class="opt">
+      <header><span class="id">L3</span><h3>브리핑 우선</h3></header>
+      <div class="pad"><div class="sk">
+        <div class="g2">
+          <div class="b hi" style="min-height:96px">AI 시장 브리핑 (크게) <span class="badge b-new">W1</span></div>
+          <div class="sk"><div class="b">장 상태 <span class="badge b-new">W2</span></div><div class="b" style="min-height:56px">지수 5 (작게)</div></div>
+        </div>
+        <div class="b">이슈 종목 스트립 <span class="badge b-new">W3</span></div>
+        <div class="g3"><div class="b">점수 TOP</div><div class="b">거래대금</div><div class="b">오늘의 뉴스</div></div>
+        <div class="b">최신 리포트 · 처음 오신 분께</div>
+      </div></div>
+      <p class="note"><ul class="pros">
+        <li class="p">첫 화면이 <b>숫자가 아니라 문장</b>으로 시작 — 처음 온 사람에게 가장 친절하다</li>
+        <li class="c">브리핑이 <b>아직 생성 전이면 첫 화면에 큰 구멍</b>이 생긴다(장 시작 직후)</li>
+        <li class="c">매일 오는 사용자가 제일 먼저 보고 싶은 건 대개 지수다</li>
+      </ul></p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><span class="tag">참고</span><h2>제안하지 않은 것과 그 이유</h2></div>
+  <div class="cols c2">
+    <div class="opt"><header><h3>급등·급락 TOP</h3></header><div class="pad">
+      <p style="font-size:11px;line-height:1.8">대시보드에 흔한 위젯이지만 <b>지금 만들 수 없다</b>. 서버 랭킹 API가 지원하는 종류는
+      <span class="mono sm">거래대금</span>·<span class="mono sm">거래량</span> 둘뿐이고 등락률 정렬이 없다. 전 종목을 받아 와 FE에서 정렬하는 건
+      요청 비용이 맞지 않는다. <span class="be">BE 필요</span></p>
+    </div></div>
+    <div class="opt"><header><h3>내 포트폴리오 미리보기(비로그인)</h3></header><div class="pad">
+      <p style="font-size:11px;line-height:1.8">W4가 <b>기록 기능(스탬프·메모·목표가)</b>만 예시로 보여 주고 <b>계좌·자산 금액은 안 보여 준다</b>.
+      가짜 자산 금액을 첫 화면에 크게 띄우면 실제 잔고로 오해할 여지가 있고, 「내 투자」 화면들이 이미 정한
+      <b>"버튼을 눌렀을 때만 예시를 채운다"</b>는 규칙과도 어긋난다.</p>
+    </div></div>
+  </div>
+</section>
+
+<p class="xs mut" style="margin-top:28px">
+  목업의 수치는 전부 예시입니다. 실제 화면은 앱 공용 컴포넌트(SectionCard·StockAvatar·PriceHistoryChart·StockQuickLookModal)를 씁니다.
+</p>
+
+</div>
+</body>
+</html>

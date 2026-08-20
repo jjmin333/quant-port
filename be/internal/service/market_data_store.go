@@ -16,9 +16,8 @@ import (
 )
 
 const (
-	marketPriceKeyFmt        = "market:price:v1:%s"
-	marketPriceLastKeyFmt    = "market:price:last:v1:%s"
-	marketPriceTTL           = 20 * time.Second
+	marketPriceKeyFmt = "market:price:v1:%s"
+	marketPriceTTL    = 20 * time.Second
 	marketCalendarKRKey      = "market:calendar:kr:v1"
 	marketCalendarUSKey      = "market:calendar:us:v1"
 	marketCalendarTTL        = 26 * time.Hour
@@ -45,9 +44,11 @@ type MarketDataStore struct {
 	redis         *redis.Client
 	earnings      *EarningsClient
 	dart          *DartClient
-	portfolio     *PortfolioService
+	holdings      *repository.UserHoldingsRepo
 	watchlist     *repository.WatchlistRepo
 	quoteTerminal *repository.QuoteTerminalRepo
+	// disclosures — 공시 표. 스탬프·리포트가 발행 시점 스냅샷을 굳힐 때 읽는다.
+	disclosures *repository.DisclosureRepo
 
 	mu           sync.RWMutex
 	calendars    marketCalendars
@@ -64,7 +65,7 @@ func NewMarketDataStore(
 	redisClient *redis.Client,
 	earnings *EarningsClient,
 	dart *DartClient,
-	portfolio *PortfolioService,
+	holdings *repository.UserHoldingsRepo,
 	watchlist *repository.WatchlistRepo,
 	quoteTerminal *repository.QuoteTerminalRepo,
 ) *MarketDataStore {
@@ -73,25 +74,29 @@ func NewMarketDataStore(
 		redis:         redisClient,
 		earnings:      earnings,
 		dart:          dart,
-		portfolio:     portfolio,
+		holdings:      holdings,
 		watchlist:     watchlist,
 		quoteTerminal: quoteTerminal,
 		active:        make(map[string]time.Time),
 	}
 }
 
+// Run keeps the market calendars fresh.
+//
+// 예전에는 여기서 실적 캘린더(Finnhub)와 「인사이트 데이터」(종목별 Toss 경고 +
+// 종목별 DART 공시)도 주기적으로 받았다. 그 셋은 전부 worker-filings·
+// worker-earnings로 옮겼다 — **API 프로세스가 외부를 부르는 배경 작업을 갖는 것**
+// 자체가 문제였다. 사용자 요청을 처리하는 프로세스가 남의 사이트 사정으로
+// 느려지고, 여러 인스턴스를 띄우면 같은 일을 인스턴스 수만큼 반복한다.
+//
+// 장 개장/휴장 달력만 남았다. 이건 Toss 호출 한 번이고, 시세 경로가 요청마다
+// 즉시 필요로 하는 값이라 표를 거치는 것이 오히려 느리다.
 func (s *MarketDataStore) Run(ctx context.Context) {
 	s.loadCalendarsFromRedis(ctx)
 	s.refreshCalendars(ctx)
-	s.refreshEarnings(ctx)
-	s.refreshInsightsData(ctx)
 
 	calTicker := time.NewTicker(marketCalendarPoll)
-	earningsTicker := time.NewTicker(marketEarningsPoll)
-	insightsTicker := time.NewTicker(marketInsightsDataPoll)
 	defer calTicker.Stop()
-	defer earningsTicker.Stop()
-	defer insightsTicker.Stop()
 
 	for {
 		select {
@@ -99,10 +104,6 @@ func (s *MarketDataStore) Run(ctx context.Context) {
 			return
 		case <-calTicker.C:
 			s.refreshCalendars(ctx)
-		case <-earningsTicker.C:
-			s.refreshEarnings(ctx)
-		case <-insightsTicker.C:
-			s.refreshInsightsData(ctx)
 		}
 	}
 }
@@ -194,9 +195,12 @@ func (s *MarketDataStore) AllTrackedSymbols(ctx context.Context) []string {
 		out = append(out, sym)
 	}
 
-	if s.portfolio != nil {
-		for _, sym := range s.portfolio.AllTrackedSymbols(ctx) {
-			add(sym)
+	if s.holdings != nil {
+		symbols, err := s.holdings.ListAllSymbols(ctx)
+		if err == nil {
+			for _, sym := range symbols {
+				add(sym)
+			}
 		}
 	}
 	if s.watchlist != nil {
@@ -389,25 +393,10 @@ func (s *MarketDataStore) GetPrices(ctx context.Context, symbols []string) map[s
 		if !ok || raw == "" {
 			continue
 		}
-		var cached cachedMarketPrice
-		if json.Unmarshal([]byte(raw), &cached) != nil || cached.LastPrice == "" {
-			continue
-		}
-		sym := keyToSym[keys[i]]
-		out[sym] = toss.PriceResponse{
-			Symbol:    sym,
-			LastPrice: cached.LastPrice,
-			Currency:  cached.Currency,
-		}
-	}
-
-	for _, sym := range symbols {
-		up := strings.ToUpper(strings.TrimSpace(sym))
-		if up == "" || out[up].LastPrice != "" {
-			continue
-		}
-		if p, ok := s.getLastGoodPrice(ctx, up); ok {
-			out[up] = p
+		if p, ok := parseMarketPriceRedis(raw); ok {
+			sym := keyToSym[keys[i]]
+			p.Symbol = sym
+			out[sym] = p
 		}
 	}
 
@@ -422,45 +411,58 @@ func (s *MarketDataStore) GetPrices(ctx context.Context, symbols []string) map[s
 		}
 		for sym, p := range s.quoteTerminal.GetLastPrices(ctx, missing) {
 			out[sym] = p
-			s.cacheLastGoodPrice(ctx, sym, cachedMarketPrice{
+			s.cacheMarketPrice(ctx, sym, cachedMarketPrice{
 				LastPrice: p.LastPrice,
 				Currency:  p.Currency,
-				UpdatedAt: time.Now(),
-			})
+				UpdatedAt: time.Now().UTC(),
+			}, "db")
 		}
 	}
 	return out
 }
 
-func (s *MarketDataStore) getLastGoodPrice(ctx context.Context, symbol string) (toss.PriceResponse, bool) {
-	if s.redis == nil {
-		return toss.PriceResponse{}, false
-	}
-	raw, err := s.redis.Get(ctx, fmt.Sprintf(marketPriceLastKeyFmt, symbol)).Bytes()
-	if err != nil || len(raw) == 0 {
-		return toss.PriceResponse{}, false
-	}
+func parseMarketPriceRedis(raw string) (toss.PriceResponse, bool) {
 	var cached cachedMarketPrice
-	if json.Unmarshal(raw, &cached) != nil || cached.LastPrice == "" {
-		return toss.PriceResponse{}, false
+	if at, _, ok := redisCacheGetEnvelopeFromBytes([]byte(raw), &cached); ok && cached.LastPrice != "" {
+		if at.IsZero() && !cached.UpdatedAt.IsZero() {
+			at = cached.UpdatedAt
+		}
+		_ = at
+		return toss.PriceResponse{
+			Symbol:    "",
+			LastPrice: cached.LastPrice,
+			Currency:  cached.Currency,
+		}, true
 	}
-	return toss.PriceResponse{
-		Symbol:    symbol,
-		LastPrice: cached.LastPrice,
-		Currency:  cached.Currency,
-	}, true
+	if json.Unmarshal([]byte(raw), &cached) == nil && cached.LastPrice != "" {
+		return toss.PriceResponse{
+			LastPrice: cached.LastPrice,
+			Currency:  cached.Currency,
+		}, true
+	}
+	return toss.PriceResponse{}, false
 }
 
-func (s *MarketDataStore) cacheLastGoodPrice(ctx context.Context, symbol string, cached cachedMarketPrice) {
+func redisCacheGetEnvelopeFromBytes(raw []byte, dest any) (fetchedAt time.Time, enveloped bool, ok bool) {
+	switch d := dest.(type) {
+	case *cachedMarketPrice:
+		v, at, env, ok := decodeCacheEnvelope[cachedMarketPrice](raw)
+		if ok {
+			*d = v
+			return at, env, true
+		}
+	}
+	return time.Time{}, false, false
+}
+
+func (s *MarketDataStore) cacheMarketPrice(ctx context.Context, symbol string, cached cachedMarketPrice, source string) {
 	if s.redis == nil || cached.LastPrice == "" {
 		return
 	}
-	payload, err := json.Marshal(cached)
-	if err != nil {
-		return
+	if cached.UpdatedAt.IsZero() {
+		cached.UpdatedAt = time.Now().UTC()
 	}
-	_ = s.redis.Set(ctx, fmt.Sprintf(marketPriceLastKeyFmt, symbol), payload,
-		time.Duration(model.MarketDataLastGoodCacheSec)*time.Second).Err()
+	redisCacheSetEnvelope(ctx, s.redis, fmt.Sprintf(marketPriceKeyFmt, strings.ToUpper(strings.TrimSpace(symbol))), cached, source, marketPriceTTL)
 }
 
 func (s *MarketDataStore) GetPrice(ctx context.Context, symbol string) (float64, bool) {
@@ -509,11 +511,15 @@ func (s *MarketDataStore) RefreshPrices(ctx context.Context, symbols []string) {
 		end := min(i+200, len(batch))
 		prices, err := s.toss.GetPrices(refreshCtx, batch[i:end])
 		if err != nil {
-			if isRateLimitError(err) {
+			// Prefer the server's own Retry-After / X-RateLimit-Reset over
+			// the fixed marketRateLimitBackoff — observed resets are as
+			// short as 1s, so a flat 60s wait stalls prices far longer than
+			// the bucket actually needs.
+			if wait, ok := tossRateLimitWait(err); ok {
 				s.mu.Lock()
-				s.priceBackoff = time.Now().Add(marketRateLimitBackoff)
+				s.priceBackoff = time.Now().Add(wait)
 				s.mu.Unlock()
-				log.Printf("market price poller: rate limited, backing off")
+				log.Printf("market price poller: rate limited, backing off %s", wait)
 			}
 			return
 		}
@@ -528,13 +534,7 @@ func (s *MarketDataStore) RefreshPrices(ctx context.Context, symbols []string) {
 				Currency:  p.Currency,
 				UpdatedAt: now,
 			}
-			if s.redis != nil {
-				if payload, err := json.Marshal(cached); err == nil {
-					key := fmt.Sprintf(marketPriceKeyFmt, sym)
-					_ = s.redis.Set(refreshCtx, key, payload, marketPriceTTL).Err()
-					s.cacheLastGoodPrice(refreshCtx, sym, cached)
-				}
-			}
+			s.cacheMarketPrice(refreshCtx, sym, cached, "toss")
 			if s.quoteTerminal != nil {
 				price := parseDecimal(p.LastPrice)
 				if price > 0 {
@@ -547,72 +547,6 @@ func (s *MarketDataStore) RefreshPrices(ctx context.Context, symbols []string) {
 			}
 		}
 	}
-}
-
-func (s *MarketDataStore) GetEarningsForSymbols(ctx context.Context, symbols []string) []model.BriefingEvent {
-	if s.redis == nil || len(symbols) == 0 {
-		return nil
-	}
-	raw, err := s.redis.Get(ctx, marketEarningsKey).Bytes()
-	if err != nil || len(raw) == 0 {
-		return nil
-	}
-	var all []model.BriefingEvent
-	if json.Unmarshal(raw, &all) != nil {
-		return nil
-	}
-	held := map[string]struct{}{}
-	for _, sym := range symbols {
-		held[strings.ToUpper(strings.TrimSpace(sym))] = struct{}{}
-	}
-	var out []model.BriefingEvent
-	for _, ev := range all {
-		if _, ok := held[strings.ToUpper(ev.Symbol)]; ok {
-			out = append(out, ev)
-		}
-	}
-	return out
-}
-
-func (s *MarketDataStore) EnsureEarningsForSymbols(ctx context.Context, symbols []string) []model.BriefingEvent {
-	out := s.GetEarningsForSymbols(ctx, symbols)
-	if s.earningsCacheReady(ctx) {
-		return out
-	}
-	s.refreshEarnings(ctx)
-	return s.GetEarningsForSymbols(ctx, symbols)
-}
-
-func (s *MarketDataStore) earningsCacheReady(ctx context.Context) bool {
-	if s.redis == nil {
-		return false
-	}
-	n, err := s.redis.Exists(ctx, marketEarningsKey).Result()
-	return err == nil && n > 0
-}
-
-func (s *MarketDataStore) refreshEarnings(ctx context.Context) {
-	if s.earnings == nil || !s.earnings.cfg.Enabled() {
-		return
-	}
-	refreshCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-
-	all, err := s.earnings.FetchCalendar(refreshCtx)
-	if err != nil {
-		if isRateLimitError(err) {
-			log.Printf("earnings poller: rate limited")
-		}
-		return
-	}
-	if s.redis == nil {
-		return
-	}
-	payload, err := json.Marshal(all)
-	if err != nil {
-		return
-	}
-	_ = s.redis.Set(refreshCtx, marketEarningsKey, payload, marketEarningsTTL).Err()
 }
 
 func (s *MarketDataStore) GetStockWarnings(ctx context.Context, symbol string) ([]toss.StockWarning, bool) {
@@ -632,45 +566,21 @@ func (s *MarketDataStore) GetStockWarnings(ctx context.Context, symbol string) (
 	return out, true
 }
 
-func (s *MarketDataStore) EnsureStockWarnings(ctx context.Context, symbol string) ([]toss.StockWarning, bool) {
-	sym := strings.ToUpper(strings.TrimSpace(symbol))
-	if sym == "" {
-		return nil, false
-	}
-	if warnings, ok := s.GetStockWarnings(ctx, sym); ok {
-		return warnings, true
-	}
-	s.refreshStockWarning(ctx, sym)
-	return s.GetStockWarnings(ctx, sym)
-}
-
-func (s *MarketDataStore) refreshStockWarning(ctx context.Context, symbol string) {
-	sym := strings.ToUpper(strings.TrimSpace(symbol))
-	if sym == "" || s.toss == nil || !s.toss.Enabled() {
-		return
-	}
-	refreshCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	warnings, err := s.toss.GetStockWarnings(refreshCtx, sym)
-	if err != nil {
-		return
-	}
-	if s.redis == nil {
-		return
-	}
-	payload, err := json.Marshal(warnings)
-	if err != nil {
-		return
-	}
-	key := fmt.Sprintf(marketWarningsKeyFmt, sym)
-	_ = s.redis.Set(refreshCtx, key, payload, marketWarningsTTL).Err()
-}
-
 func (s *MarketDataStore) GetTodayDisclosures(ctx context.Context, symbols []string) []model.BriefingEvent {
+	if s.disclosures != nil && len(symbols) > 0 {
+		rows, err := s.disclosures.ListForSymbolsOnDate(ctx, symbols, time.Now().In(model.KST))
+		if err == nil {
+			out := make([]model.BriefingEvent, 0, len(rows))
+			for _, row := range rows {
+				out = append(out, model.BriefingEvent{Date: "오늘", Symbol: row.Symbol, Event: row.Title})
+			}
+			return out
+		}
+	}
 	if len(symbols) == 0 {
 		return nil
 	}
-	dateKey := time.Now().Format("20060102")
+	dateKey := time.Now().In(model.KST).Format("20060102")
 	var out []model.BriefingEvent
 	for _, sym := range symbols {
 		sym = strings.TrimSpace(sym)
@@ -694,102 +604,6 @@ func (s *MarketDataStore) GetTodayDisclosures(ctx context.Context, symbols []str
 	return out
 }
 
-func (s *MarketDataStore) EnsureTodayDisclosures(ctx context.Context, symbols []string) []model.BriefingEvent {
-	dateKey := time.Now().Format("20060102")
-	for _, sym := range domesticSymbolsFromList(symbols) {
-		if s.disclosureCacheReady(ctx, sym, dateKey) {
-			continue
-		}
-		s.refreshDisclosure(ctx, sym)
-	}
-	return s.GetTodayDisclosures(ctx, symbols)
-}
-
-func (s *MarketDataStore) disclosureCacheReady(ctx context.Context, symbol, dateKey string) bool {
-	if s.redis == nil {
-		return false
-	}
-	key := fmt.Sprintf(marketDisclosuresKeyFmt, strings.TrimSpace(symbol), dateKey)
-	n, err := s.redis.Exists(ctx, key).Result()
-	return err == nil && n > 0
-}
-
-func (s *MarketDataStore) refreshDisclosure(ctx context.Context, symbol string) {
-	sym := strings.TrimSpace(symbol)
-	if sym == "" || s.dart == nil || !s.dart.cfg.Enabled() {
-		return
-	}
-	refreshCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	events, err := s.dart.TodayDisclosures(refreshCtx, []string{sym})
-	if err != nil {
-		return
-	}
-	if s.redis == nil {
-		return
-	}
-	if events == nil {
-		events = []model.BriefingEvent{}
-	}
-	payload, err := json.Marshal(events)
-	if err != nil {
-		return
-	}
-	dateKey := time.Now().Format("20060102")
-	key := fmt.Sprintf(marketDisclosuresKeyFmt, sym, dateKey)
-	_ = s.redis.Set(refreshCtx, key, payload, marketDisclosuresTTL).Err()
-}
-
-func (s *MarketDataStore) refreshInsightsData(ctx context.Context) {
-	symbols := s.AllTrackedSymbols(ctx)
-	if len(symbols) == 0 {
-		return
-	}
-
-	refreshCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
-	defer cancel()
-
-	if s.toss != nil && s.toss.Enabled() {
-		for _, sym := range symbols {
-			warnings, err := s.toss.GetStockWarnings(refreshCtx, sym)
-			if err != nil {
-				if isRateLimitError(err) {
-					break
-				}
-				continue
-			}
-			if s.redis == nil {
-				continue
-			}
-			payload, err := json.Marshal(warnings)
-			if err != nil {
-				continue
-			}
-			key := fmt.Sprintf(marketWarningsKeyFmt, strings.ToUpper(sym))
-			_ = s.redis.Set(refreshCtx, key, payload, marketWarningsTTL).Err()
-		}
-	}
-
-	if s.dart != nil && s.dart.cfg.Enabled() {
-		dateKey := time.Now().Format("20060102")
-		for _, sym := range domesticSymbolsFromList(symbols) {
-			events, err := s.dart.TodayDisclosures(refreshCtx, []string{sym})
-			if err != nil {
-				continue
-			}
-			if s.redis == nil {
-				continue
-			}
-			payload, err := json.Marshal(events)
-			if err != nil {
-				continue
-			}
-			key := fmt.Sprintf(marketDisclosuresKeyFmt, sym, dateKey)
-			_ = s.redis.Set(refreshCtx, key, payload, marketDisclosuresTTL).Err()
-		}
-	}
-}
-
 func domesticSymbolsFromList(symbols []string) []string {
 	var out []string
 	seen := map[string]struct{}{}
@@ -806,3 +620,11 @@ func domesticSymbolsFromList(symbols []string) []string {
 	}
 	return out
 }
+
+// SetDisclosures wires the 공시 표 reader.
+//
+// GetTodayDisclosures가 읽던 Redis 키는 이제 아무도 쓰지 않는다 — 종목별 DART
+// 조회를 시장 전체 일별 스윕으로 바꿨기 때문이다. 스탬프·리포트가 발행 시점에
+// 그날 공시를 스냅샷으로 굳히는 기능은 그대로 살아 있어야 하므로, 같은 이름의
+// 읽기를 표 쪽으로 돌린다.
+func (s *MarketDataStore) SetDisclosures(r *repository.DisclosureRepo) { s.disclosures = r }

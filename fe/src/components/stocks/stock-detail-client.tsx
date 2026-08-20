@@ -1,41 +1,69 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { Area, AreaChart, Tooltip, XAxis, YAxis } from "recharts";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { analysisSymbolHref } from "@/lib/analysis-tabs";
+import { useEffect, useRef, useState } from "react";
+import { ChevronLeft } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { QuoteChange, QuotePrice } from "@/components/quotes/quote-price";
 import { PriceDisplay } from "@/components/ui/price-display";
+import { ChartZoomToolbar } from "@/components/quotes/chart-zoom-toolbar";
+import { QuoteChartSlot } from "@/components/quotes/quote-chart-slot";
+import type { CandlestickChartHandle } from "@/components/quotes/candlestick-chart";
+import { QuoteChange, QuotePrice } from "@/components/quotes/quote-price";
+import { PublishCallButton } from "@/components/research/publish-call-button";
+import { StampButton } from "@/components/stamps/stamp-button";
+import { StockNewsPanel } from "@/components/stocks/stock-news-panel";
+import { StockAvatar } from "@/components/stocks/stock-avatar";
 import { useExchangeRate } from "@/hooks/use-exchange-rate";
 import { useQuoteDetail } from "@/hooks/use-quote-detail";
 import { useQuoteCandles } from "@/hooks/use-quote-candles";
-import { fetchPortfolioSummaryClient } from "@/lib/api-client";
+import { useQuotesChartPrefs } from "@/hooks/use-quotes-chart-prefs";
 import { addWatchlistClient, removeWatchlistClient, fetchWatchlistClient } from "@/lib/market-api";
-import { ACCOUNT_FEATURES_VISIBLE } from "@/lib/account-features";
-import type { UnifiedHolding } from "@/lib/portfolio-types";
+import {
+  formatChangeRate,
+  formatMarketCap,
+  formatTradingValue,
+  formatVolume,
+} from "@/lib/format";
+import type { QuoteAssetType } from "@/lib/quotes-types";
+import { quoteChangeBaseline, quoteChangeBasisLabel } from "@/lib/quotes-types";
 import { trendTextClass } from "@/lib/trend-colors";
 import { cn } from "@/lib/utils";
 
+function stockNewsMarket(assetType: QuoteAssetType, currency: "KRW" | "USD"): "domestic" | "us" {
+  if (assetType === "us" || currency === "USD") return "us";
+  return "domestic";
+}
+
 export function StockDetailClient({ symbol }: { symbol: string }) {
   const { detail, loading } = useQuoteDetail(symbol);
-  const { candles } = useQuoteCandles(symbol, "1d");
+  const { chartStyle } = useQuotesChartPrefs();
+  const { candles, loadMore, hasMore, loadingMore, loading: candlesLoading } = useQuoteCandles(
+    symbol,
+    "1d",
+    detail?.currentPrice ?? 0,
+  );
   const exchangeRate = useExchangeRate(true);
-  const [holding, setHolding] = useState<UnifiedHolding | null>(null);
+  const chartRef = useRef<CandlestickChartHandle>(null);
+  const chartAreaRef = useRef<HTMLDivElement>(null);
+  const [chartHeight, setChartHeight] = useState(360);
   const [watchlisted, setWatchlisted] = useState(false);
 
   useEffect(() => {
-    if (ACCOUNT_FEATURES_VISIBLE) {
-      fetchPortfolioSummaryClient()
-        .then((s) => setHolding(s.holdings.find((h) => h.symbol === symbol) ?? null))
-        .catch(() => setHolding(null));
-    } else {
-      setHolding(null);
-    }
     fetchWatchlistClient()
       .then((list) => setWatchlisted(list.some((i) => i.symbol === symbol)))
       .catch(() => setWatchlisted(false));
   }, [symbol]);
+
+  useEffect(() => {
+    const el = chartAreaRef.current;
+    if (!el) return;
+    const measure = () => setChartHeight(Math.max(260, el.clientHeight));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [detail]);
 
   async function toggleWatchlist() {
     try {
@@ -48,128 +76,221 @@ export function StockDetailClient({ symbol }: { symbol: string }) {
   }
 
   if (loading && !detail) {
-    return <div className="p-6 text-sm text-[var(--text-muted)]">로딩 중…</div>;
+    return (
+      <div className="flex flex-1 items-center justify-center text-sm text-[var(--text-muted)]">
+        로딩 중…
+      </div>
+    );
   }
 
   if (!detail) {
-    return <div className="p-6 text-sm text-[var(--text-muted)]">종목을 찾을 수 없습니다.</div>;
+    return (
+      <div className="flex flex-1 items-center justify-center text-sm text-[var(--text-muted)]">
+        종목을 찾을 수 없습니다.
+      </div>
+    );
+  }
+
+  const newsMarket = stockNewsMarket(detail.assetType, detail.currency);
+  const updatedLabel = detail.updatedAt
+    ? new Date(detail.updatedAt).toLocaleTimeString("ko-KR", {
+        timeZone: "Asia/Seoul",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+    : "—";
+
+  const range52 =
+    detail.week52High > detail.week52Low
+      ? ((detail.currentPrice - detail.week52Low) / (detail.week52High - detail.week52Low)) * 100
+      : 50;
+
+  const currency = detail.currency;
+
+  function StatPrice({ value }: { value: number }) {
+    if (value <= 0) return <>—</>;
+    return (
+      <PriceDisplay value={value} currency={currency} size="sm" className="text-xs font-medium" />
+    );
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-sm text-[var(--text-muted)]">{detail.symbol}</p>
-            <QuotePrice value={detail.currentPrice} currency={detail.currency} exchangeRate={exchangeRate} size="hero" />
-            <QuoteChange
-              change={detail.change}
-              changeRate={detail.changeRate}
-              currency={detail.currency}
-              exchangeRate={exchangeRate}
-              size="lg"
-            />
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--background)]">
+      <header className="shrink-0 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 sm:px-5">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Link
+                href="/market"
+                className="mr-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]"
+                aria-label="실시간 차트로 돌아가기"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Link>
+              <StockAvatar
+                symbol={detail.symbol}
+                name={detail.name}
+                currency={detail.currency}
+                assetType={detail.assetType}
+                size="md"
+              />
+              <h1 className="truncate text-base font-semibold text-[var(--text-primary)] sm:text-lg">
+                {detail.name}
+              </h1>
+              <span className="font-mono text-[10px] text-[var(--text-muted)]">{detail.symbol}</span>
+              <Badge variant="default" className="text-[10px]">
+                {detail.market}
+              </Badge>
+              {detail.isHeld && (
+                <Badge variant="info" className="text-[10px]">
+                  보유
+                </Badge>
+              )}
+              <Badge variant="profit" className="animate-pulse text-[10px]">
+                실시간
+              </Badge>
+            </div>
+            <p className="mt-0.5 pl-8 text-[10px] text-[var(--text-muted)]">{updatedLabel} 기준</p>
           </div>
-          <div className="flex gap-2">
+
+          <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+            <Link
+              href={analysisSymbolHref(symbol, "company")}
+              className="rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[11px] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+            >
+              종목 분석
+            </Link>
             <button
               type="button"
               onClick={toggleWatchlist}
-              className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--surface-elevated)]"
+              className="rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[11px] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
             >
               {watchlisted ? "관심 해제" : "관심 추가"}
             </button>
+            <StampButton
+              symbol={symbol}
+              size="md"
+              price={detail.currentPrice}
+              currency={detail.currency}
+              week52High={detail.week52High}
+              week52Low={detail.week52Low}
+            />
+            <PublishCallButton symbol={symbol} className="px-2.5 py-1.5" />
           </div>
         </div>
-      </section>
 
-      <div className={cn("grid gap-6", ACCOUNT_FEATURES_VISIBLE ? "lg:grid-cols-3" : "")}>
-        {ACCOUNT_FEATURES_VISIBLE && (
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle>{holding ? "보유 현황" : "종목 정보"}</CardTitle>
-          </CardHeader>
-          {holding ? (
-            <dl className="space-y-3 px-4 pb-4 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-[var(--text-muted)]">총 보유</dt>
-                <dd className="font-mono font-semibold">{holding.totalShares}주</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-[var(--text-muted)]">평균단가</dt>
-                <dd>
-                  <QuotePrice
-                    value={holding.avgPrice}
-                    currency={holding.currency}
-                    exchangeRate={holding.purchaseFxRate || exchangeRate}
-                    size="sm"
-                  />
-                </dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-[var(--text-muted)]">평가손익</dt>
-                <dd className={cn(trendTextClass(holding.returnRateKRW))}>
-                  {holding.currency === "USD" ? (
-                    <QuotePrice
-                      value={holding.marketValueNative - holding.purchaseAmountNative}
-                      currency="USD"
-                      exchangeRate={holding.purchaseFxRate || exchangeRate}
-                      size="sm"
-                      signed
-                    />
-                  ) : (
-                    <PriceDisplay
-                      value={holding.profitLossKRW}
-                      currency="KRW"
-                      size="sm"
-                      signed
-                    />
-                  )}
-                </dd>
-              </div>
-            </dl>
-          ) : (
-            <p className="px-4 pb-4 text-sm text-[var(--text-muted)]">보유하지 않은 종목입니다.</p>
-          )}
-        </Card>
-        )}
+        <div className="mt-2 flex flex-wrap items-end gap-x-5 gap-y-1 pl-8">
+          <QuotePrice
+            value={detail.currentPrice}
+            currency={detail.currency}
+            exchangeRate={exchangeRate}
+            size="hero"
+            className="!text-2xl sm:!text-3xl lg:!text-4xl"
+          />
+          <QuoteChange
+            change={detail.change}
+            changeRate={detail.changeRate}
+            currency={detail.currency}
+            exchangeRate={exchangeRate}
+            size="md"
+            hasBaseline={quoteChangeBaseline(detail) > 0}
+          />
+        </div>
 
-        <Card className={ACCOUNT_FEATURES_VISIBLE ? "lg:col-span-2" : ""}>
-          <CardHeader>
-            <CardTitle>일봉 차트</CardTitle>
-            <Badge variant="info">실시간</Badge>
-          </CardHeader>
-          <div className="h-64 px-2 pb-4">
-            {candles.length > 0 ? (
-              <AreaChart width={600} height={240} data={candles}>
-                <XAxis dataKey="time" tick={{ fontSize: 10, fill: "#64748B" }} />
-                <YAxis tick={{ fontSize: 10, fill: "#64748B" }} width={50} />
-                <Tooltip />
-                <Area type="monotone" dataKey="close" stroke="#3B82F6" fill="#3B82F640" />
-              </AreaChart>
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-[var(--text-muted)]">
-                차트 데이터 없음
-              </div>
-            )}
+        <dl className="mt-2.5 grid grid-cols-3 gap-x-3 gap-y-1.5 pl-8 sm:grid-cols-4 lg:grid-cols-8">
+          {[
+            { label: "시가", price: detail.open },
+            { label: "고가", price: detail.high },
+            { label: "저가", price: detail.low },
+            { label: "전일", price: detail.prevClose },
+            { label: "거래량", text: formatVolume(detail.volume) },
+            {
+              label: "거래대금",
+              text: formatTradingValue(detail.tradingValue, detail.currency, exchangeRate),
+            },
+            {
+              label: "시가총액",
+              text: formatMarketCap(detail.marketCap, detail.currency, exchangeRate),
+            },
+            ...(detail.regularClose != null && detail.regularClose > 0
+              ? [{ label: "정규장 종가", price: detail.regularClose }]
+              : []),
+            {
+              label: quoteChangeBasisLabel(detail),
+              text: formatChangeRate(detail.changeRate, quoteChangeBaseline(detail) > 0),
+            },
+          ].map((stat) => (
+            <div key={stat.label}>
+              <dt className="text-[10px] text-[var(--text-muted)]">{stat.label}</dt>
+              <dd
+                className={cn(
+                  "mt-0.5 text-xs font-medium",
+                  stat.label === "등락률"
+                    ? cn("font-sans tabular-nums", trendTextClass(detail.changeRate))
+                    : "text-[var(--text-primary)]",
+                )}
+              >
+                {"price" in stat && stat.price != null ? (
+                  <StatPrice value={stat.price} />
+                ) : (
+                  ("text" in stat ? stat.text : "—")
+                )}
+              </dd>
+            </div>
+          ))}
+        </dl>
+
+        {detail.week52High > 0 && detail.week52Low > 0 && (
+          <div className="mt-2 flex items-center gap-2 pl-8 text-[10px] text-[var(--text-muted)]">
+            <span className="shrink-0">52주</span>
+            <StatPrice value={detail.week52Low} />
+            <div className="relative h-1 min-w-[80px] flex-1 max-w-xs rounded-full bg-[var(--surface-elevated)]">
+              <div
+                className="absolute top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--text-primary)]"
+                style={{ left: `${Math.min(100, Math.max(0, range52))}%` }}
+              />
+            </div>
+            <StatPrice value={detail.week52High} />
           </div>
-        </Card>
-      </div>
+        )}
+      </header>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Link href={`/analysis?symbol=${encodeURIComponent(symbol)}`}>
-          <Card className="transition-colors hover:border-[var(--accent)]">
-            <CardTitle>종목 분석</CardTitle>
-            <p className="mt-2 text-xs text-[var(--text-muted)]">
-              펀더멘털 · 실적 · 공시 · AI 분석
-            </p>
-          </Card>
-        </Link>
-        <Link href={`/analysis?symbol=${encodeURIComponent(symbol)}#fundamentals`}>
-          <Card className="transition-colors hover:border-[var(--accent)]">
-            <CardTitle>재무제표</CardTitle>
-            <p className="mt-2 text-xs text-[var(--text-muted)]">펀더멘털 지표 바로가기</p>
-          </Card>
-        </Link>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden xl:flex-row">
+        <section className="flex min-h-[280px] min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-1.5">
+            <h2 className="text-xs font-medium text-[var(--text-secondary)]">일봉 차트</h2>
+            <ChartZoomToolbar
+              onZoomIn={() => chartRef.current?.zoomIn()}
+              onZoomOut={() => chartRef.current?.zoomOut()}
+              onReset={() => chartRef.current?.resetZoom()}
+            />
+          </div>
+          <div ref={chartAreaRef} className="min-h-0 flex-1 p-1">
+            <QuoteChartSlot
+              chartRef={chartRef}
+              candles={candles}
+              loading={candlesLoading}
+              currency={detail.currency}
+              interval="1d"
+              chartStyle={chartStyle}
+              height={chartHeight}
+              hasMore={hasMore}
+              loadingMore={loadingMore}
+              onLoadMore={loadMore}
+            />
+          </div>
+        </section>
+
+        <aside className="flex max-h-[40vh] min-h-0 shrink-0 flex-col gap-3 overflow-y-auto border-t border-[var(--border)] bg-[var(--surface)] p-3 xl:max-h-none xl:w-72 xl:border-l xl:border-t-0">
+          <StockNewsPanel
+            symbol={symbol}
+            name={detail.name}
+            market={newsMarket}
+            variant="compact"
+            className="min-h-0 flex-1"
+          />
+        </aside>
       </div>
     </div>
   );

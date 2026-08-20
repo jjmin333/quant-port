@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 
 	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/toss"
@@ -21,6 +22,11 @@ func (s *QuotesService) GetCandlesPage(
 	before string,
 ) (CandlesPage, bool) {
 	s.touchSymbol(symbol)
+	base, baseOK := paginationBaseInterval(interval)
+	before = strings.TrimSpace(before)
+	if before != "" && baseOK {
+		before = model.CanonicalPaginationCursor(before, base)
+	}
 
 	if before == "" {
 		if snap, ok := s.EnsureCandleSnapshot(ctx, symbol, interval); ok {
@@ -28,25 +34,29 @@ func (s *QuotesService) GetCandlesPage(
 			if snap.Forming != nil {
 				out = append(out, *snap.Forming)
 			}
-			return CandlesPage{Candles: out, NextBefore: snap.NextBefore}, true
+			page := CandlesPage{Candles: out, NextBefore: snap.NextBefore}
+			if baseOK {
+				page = normalizeCandlesPageCursor(page, base)
+			}
+			return page, true
 		}
 		s.triggerRawCandlesRefresh(symbol)
 		return CandlesPage{}, false
 	}
 
-	if before != "" {
-		if page, ok := s.loadHistoricalFromDB(ctx, symbol, interval, before); ok {
-			page.Candles = s.normalizeCandlesKRW(ctx, symbol, page.Candles)
-			return page, true
+	if page, ok := s.loadHistoricalFromDB(ctx, symbol, interval, before); ok {
+		if baseOK {
+			page = normalizeCandlesPageCursor(page, base)
 		}
-		// DB miss: one-time Toss backfill for unseen history, then persist (07-18 design).
-		if page, ok := s.getCandlesPageUncached(ctx, symbol, interval, before); ok {
-			page.Candles = s.normalizeCandlesKRW(ctx, symbol, page.Candles)
-			return page, true
-		}
-		return CandlesPage{}, false
+		return page, true
 	}
-
+	// DB miss: one-time Toss backfill for unseen history, then persist (07-18 design).
+	if page, ok := s.getCandlesPageUncached(ctx, symbol, interval, before); ok {
+		if baseOK {
+			page = normalizeCandlesPageCursor(page, base)
+		}
+		return page, true
+	}
 	return CandlesPage{}, false
 }
 
@@ -56,26 +66,48 @@ func (s *QuotesService) getCandlesPageUncached(
 	interval model.CandleInterval,
 	before string,
 ) (CandlesPage, bool) {
+	return s.getCandlesPageUncachedWithTarget(ctx, symbol, interval, before, 0)
+}
+
+func (s *QuotesService) getCandlesPageUncachedWithTarget(
+	ctx context.Context,
+	symbol string,
+	interval model.CandleInterval,
+	before string,
+	targetOverride int,
+) (CandlesPage, bool) {
 	baseInterval, ok := mapCandleInterval(interval)
 	if !ok {
 		return CandlesPage{}, false
 	}
 
 	targetRaw := candleFetchCount(interval)
+	if targetOverride > 0 {
+		targetRaw = targetOverride
+	}
 	if before != "" {
-		targetRaw = candlePageSize(interval)
+		if minutes := intervalMinutes(interval); minutes > 1 {
+			targetRaw = rawFetchLimitForInterval(interval, candlePageSize(interval))
+		} else {
+			targetRaw = candlePageSize(interval)
+		}
 	}
 
 	if s.TossEnabled() {
 		raw, nextBefore, err := s.fetchTossRawCandles(ctx, symbol, baseInterval, before, targetRaw)
-		if err == nil && len(raw) > 0 {
-			s.persistRawCandles(ctx, symbol, model.CandleInterval(baseInterval), raw)
-			out := raw
-			if needsCandleAggregation(interval) {
-				out = aggregateCandles(raw, interval)
-			}
-			return CandlesPage{Candles: out, NextBefore: nextBefore}, true
+		if err != nil {
+			return CandlesPage{}, false
 		}
+		if len(raw) == 0 {
+			return CandlesPage{NextBefore: nextBefore}, true
+		}
+		s.persistRawCandles(ctx, symbol, model.CandleInterval(baseInterval), raw)
+		out := raw
+		if needsCandleAggregation(interval) {
+			out = aggregateCandles(raw, interval)
+			out = trimCandlesTail(out, candleDisplayBarCount(interval))
+		}
+		return CandlesPage{Candles: out, NextBefore: nextBefore}, true
 	}
 	return CandlesPage{}, false
 }
@@ -91,29 +123,12 @@ func (s *QuotesService) fetchTossRawCandles(
 		targetCount = tossCandlePageSize
 	}
 
-	if before != "" {
-		count := min(targetCount, tossCandlePageSize)
-		page, err := s.fetchTossCandlesWithRetry(ctx, toss.GetCandlesParams{
-			Symbol:   symbol,
-			Interval: baseInterval,
-			Count:    count,
-			Before:   before,
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-		if page == nil || len(page.Candles) == 0 {
-			return nil, page.NextBefore, nil
-		}
-		return mapCandles(page.Candles, tossBaseModelInterval(baseInterval)), page.NextBefore, nil
-	}
-
 	var collected []toss.Candle
 	var nextBefore *string
-	cursor := ""
+	cursor := strings.TrimSpace(before)
 	maxPages := (targetCount + tossCandlePageSize - 1) / tossCandlePageSize
-	if maxPages > 8 {
-		maxPages = 8
+	if maxPages > 40 {
+		maxPages = 40
 	}
 
 	for pageNum := 0; pageNum < maxPages && len(collected) < targetCount; pageNum++ {
@@ -160,8 +175,8 @@ func tossBaseModelInterval(base toss.CandleInterval) model.CandleInterval {
 }
 
 func candlePageSize(interval model.CandleInterval) int {
-	if minutes := intervalMinutes(interval); minutes > 0 {
-		return min(120*minutes, tossCandlePageSize*8)
+	if minutes := intervalMinutes(interval); minutes >= 1 {
+		return candleDisplayBarCount(interval)
 	}
 	switch interval {
 	case model.Interval1w:

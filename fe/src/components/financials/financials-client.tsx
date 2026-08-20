@@ -110,7 +110,7 @@ export function FinancialsClient({ stocks }: FinancialsClientProps) {
                           className={cn(
                             "cursor-pointer border-t border-[var(--border)] transition-colors",
                             active
-                              ? "bg-[var(--accent)]/10"
+                              ? "bg-[var(--brand)]/10"
                               : "hover:bg-[var(--surface-elevated)]/60",
                           )}
                           onClick={() => setSelectedSymbol(stock.symbol)}

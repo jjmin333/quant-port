@@ -1,0 +1,571 @@
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>관심종목 — 위젯 선택용 목업 v1</title>
+<style>
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.97 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.93 0 0);
+  --border: oklch(0.87 0 0);
+  --brand: #2563EB;
+  --brand-muted: rgba(37, 99, 235, 0.1);
+  --profit: #DC2626;
+  --loss: #2563EB;
+  --score-high: #059669;
+  --score-mid: #D97706;
+  --score-low: #DC2626;
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 16%);
+  --brand: #60A5FA;
+  --brand-muted: rgba(96, 165, 250, 0.15);
+  --profit: #F87171;
+  --loss: #60A5FA;
+  --score-high: #34D399;
+  --score-mid: #FBBF24;
+  --score-low: #F87171;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 12px; line-height: 1.5; padding: 24px;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1180px; margin: 0 auto; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+.sub { color: var(--muted-foreground); font-size: 12px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.up { color: var(--profit); }
+.down { color: var(--loss); }
+.dim { color: var(--muted-foreground); }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-bottom: 16px; margin-bottom: 20px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--background); z-index: 5;
+}
+button.tgl {
+  font: inherit; cursor: pointer; border: 1px solid var(--border);
+  background: var(--card); color: var(--foreground);
+  border-radius: 8px; padding: 5px 12px;
+}
+button.tgl:hover { background: var(--accent); }
+
+.opt { margin-bottom: 30px; }
+.opt-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.tag {
+  font-size: 11px; font-weight: 700; letter-spacing: .02em;
+  background: var(--brand-muted); color: var(--brand);
+  border-radius: 6px; padding: 2px 7px; flex: none;
+}
+.tag.cur { background: var(--muted); color: var(--muted-foreground); }
+.tag.new { background: color-mix(in oklab, var(--score-high) 16%, transparent); color: var(--score-high); }
+.note { color: var(--muted-foreground); font-size: 11px; margin-top: 8px; }
+.note b { color: var(--foreground); }
+
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px; }
+.card + .card { margin-top: 8px; }
+.card-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.card-t { font-size: 12px; font-weight: 600; }
+.more { font-size: 11px; color: var(--muted-foreground); }
+
+.av { width: 26px; height: 26px; border-radius: 999px; flex: none;
+  background: var(--muted); display: grid; place-items: center;
+  font-size: 10px; font-weight: 700; color: var(--muted-foreground); }
+.av.xs { width: 18px; height: 18px; font-size: 9px; }
+.kv { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
+.kv span:first-child { color: var(--muted-foreground); font-size: 11px; }
+
+.layout { display: grid; grid-template-columns: 1fr 280px; gap: 16px; align-items: start; }
+@media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+
+/* ───────── 행 공통 ───────── */
+.row {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 10px 12px;
+}
+.row + .row { margin-top: 8px; }
+.row:hover { border-color: var(--brand); }
+.grip { color: var(--muted-foreground); flex: none; cursor: grab; letter-spacing: -2px; font-size: 13px; }
+.name { display: flex; align-items: center; gap: 8px; flex: none; width: 132px; min-width: 0; }
+.name .t { font-size: 13px; font-weight: 500; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.name .s { font-size: 10px; color: var(--muted-foreground); line-height: 1.2; }
+.px { flex: none; text-align: right; width: 104px; }
+.px .v { font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+.px .c { font-size: 11px; }
+.del { flex: none; color: var(--muted-foreground); font-size: 13px; cursor: pointer; }
+
+/* 현재: 5칸 지표 */
+.m5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; flex: 1; min-width: 0; }
+.m5 .cell { text-align: center; min-width: 0; }
+.m5 .cell .l { font-size: 10px; color: var(--muted-foreground); }
+.m5 .cell .r { font-size: 11px; font-weight: 600; }
+.m5 .cell .b { font-size: 12px; color: var(--muted-foreground); }
+
+/* 52주 레인지 바 */
+.rangebox { flex: none; width: 168px; }
+.rangebox .lbl { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted-foreground); }
+.track { position: relative; height: 6px; border-radius: 999px; margin: 3px 0 2px;
+  background: linear-gradient(90deg,
+    color-mix(in oklab, var(--loss) 30%, transparent),
+    var(--muted) 45%,
+    color-mix(in oklab, var(--profit) 30%, transparent)); }
+.track .mk { position: absolute; top: -3px; width: 2px; height: 12px; border-radius: 2px; background: var(--foreground); }
+.track .avg { position: absolute; top: -1px; width: 1px; height: 8px; background: var(--muted-foreground); opacity: .55; }
+.rangebox .pos { font-size: 10px; color: var(--muted-foreground); text-align: center; }
+
+/* 기간 3칸 (전일/전주/전월) */
+.m3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; flex: 1; min-width: 0; }
+.m3 .cell { text-align: center; }
+.m3 .cell .l { font-size: 10px; color: var(--muted-foreground); }
+.m3 .cell .r { font-size: 12px; font-weight: 600; }
+
+/* 스파크라인 */
+.spark { flex: none; width: 88px; height: 28px; opacity: .85; }
+
+/* 담은 뒤 */
+.since { flex: none; width: 90px; text-align: right; }
+.since .l { font-size: 10px; color: var(--muted-foreground); }
+.since .r { font-size: 12px; font-weight: 600; }
+.since .d { font-size: 10px; color: var(--muted-foreground); }
+
+/* 점수 배지 */
+.score { flex: none; width: 34px; height: 22px; border-radius: 6px; display: grid; place-items: center;
+  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.score.hi { background: color-mix(in oklab, var(--score-high) 14%, transparent); color: var(--score-high); }
+.score.mid { background: color-mix(in oklab, var(--score-mid) 14%, transparent); color: var(--score-mid); }
+.score.low { background: color-mix(in oklab, var(--score-low) 14%, transparent); color: var(--score-low); }
+
+/* 이벤트 점 */
+.dot { flex: none; width: 6px; height: 6px; border-radius: 999px; background: var(--brand); }
+
+/* 툴바 */
+.toolbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.chip { font-size: 11px; padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--card); color: var(--muted-foreground); cursor: pointer; }
+.chip.on { background: var(--brand-muted); color: var(--brand); border-color: color-mix(in oklab, var(--brand) 35%, transparent); }
+.tb-sep { width: 1px; height: 16px; background: var(--border); margin: 0 2px; }
+
+/* 모달 */
+.scrim { background: color-mix(in oklab, var(--foreground) 12%, transparent);
+  border-radius: 14px; padding: 22px; display: grid; place-items: center; }
+.modal { width: 100%; max-width: 460px; background: var(--card);
+  border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0,0,0,.16); }
+.modal-h { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.modal-b { padding: 14px 16px; }
+.modal-f { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
+.btn { flex: 1; text-align: center; font-size: 12px; padding: 8px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--card); cursor: pointer; }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
+.btn.danger { flex: none; width: 40px; color: var(--profit); }
+.sect { margin-top: 14px; }
+.sect > .h { font-size: 11px; font-weight: 600; color: var(--muted-foreground); margin-bottom: 6px; }
+.axes { display: grid; gap: 5px; }
+.axis { display: grid; grid-template-columns: 52px 1fr 26px; align-items: center; gap: 8px; font-size: 11px; }
+.bar { height: 5px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+.bar > i { display: block; height: 100%; border-radius: 999px; background: var(--brand); }
+.newsli { display: flex; gap: 8px; padding: 5px 0; border-top: 1px solid var(--border); }
+.newsli:first-child { border-top: 0; }
+.newsli .tx { font-size: 11px; line-height: 1.35; }
+.newsli .mt { font-size: 10px; color: var(--muted-foreground); }
+.stat4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; }
+.stat4 .l { font-size: 10px; color: var(--muted-foreground); }
+.stat4 .v { font-size: 13px; font-weight: 700; }
+
+.evli { display: flex; gap: 8px; padding: 4px 0; font-size: 11px; align-items: flex-start; }
+.evli .dt { width: 36px; flex: none; color: var(--muted-foreground); }
+.evli .nm { flex: 1; min-width: 0; }
+.evli .src { flex: none; font-size: 10px; padding: 0 5px; border-radius: 4px; background: var(--muted); color: var(--muted-foreground); }
+.evli .src.dart { background: var(--brand-muted); color: var(--brand); }
+
+.legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--muted-foreground); margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div>
+    <h1>관심종목 — 위젯 선택용 목업 v1</h1>
+    <p class="sub">모든 제안은 <b>이미 존재하는 API</b>로만 구성. 아래 각 안의 「데이터 출처」 확인.</p>
+  </div>
+  <button class="tgl" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'">라이트 / 다크</button>
+</div>
+
+<!-- ══════════════ 0. 현재 ══════════════ -->
+<section class="opt">
+  <div class="opt-head"><span class="tag cur">현재</span><h2>지금의 행</h2></div>
+  <p class="sub">5칸 지표가 전부 같은 무게. 52주 저·고가가 %로만 나와 <b>지금 가격이 레인지 어디인지</b> 알 수 없다.</p>
+  <div style="margin-top:10px">
+    <div class="row">
+      <span class="grip">⠿</span>
+      <div class="name"><div class="av">삼성</div><div style="min-width:0"><div class="t">삼성전자</div><div class="s">005930</div></div></div>
+      <div class="m5">
+        <div class="cell"><div class="l">52주 저가 <span class="up">(+41.2%)</span></div><div class="b">49,900</div></div>
+        <div class="cell"><div class="l">52주 고가 <span class="down">(-8.6%)</span></div><div class="b">77,100</div></div>
+        <div class="cell"><div class="l">전월 <span class="up">(+6.4%)</span></div><div class="b">66,200</div></div>
+        <div class="cell"><div class="l">전주 <span class="up">(+2.1%)</span></div><div class="b">69,000</div></div>
+        <div class="cell"><div class="l">전일 <span class="up">(+1.28%)</span></div><div class="b">69,600</div></div>
+      </div>
+      <div class="px"><div class="v mono">70,500</div></div>
+      <span class="del">🗑</span>
+    </div>
+    <div class="row">
+      <span class="grip">⠿</span>
+      <div class="name"><div class="av">NV</div><div style="min-width:0"><div class="t">엔비디아</div><div class="s">NVDA</div></div></div>
+      <div class="m5">
+        <div class="cell"><div class="l">52주 저가 <span class="up">(+96.3%)</span></div><div class="b">$86.62</div></div>
+        <div class="cell"><div class="l">52주 고가 <span class="down">(-3.1%)</span></div><div class="b">$175.40</div></div>
+        <div class="cell"><div class="l">전월 <span class="up">(+9.8%)</span></div><div class="b">$154.80</div></div>
+        <div class="cell"><div class="l">전주 <span class="down">(-1.4%)</span></div><div class="b">$172.40</div></div>
+        <div class="cell"><div class="l">전일 <span class="down">(-0.62%)</span></div><div class="b">$171.06</div></div>
+      </div>
+      <div class="px"><div class="v mono">$170.00</div></div>
+      <span class="del">🗑</span>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ A. 행 리디자인 ══════════════ -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">A안</span><h2>행 리디자인 — 52주 레인지 바 + 기간 3칸</h2></div>
+  <p class="sub">52주 저·고가 2칸을 <b>레인지 바 1개</b>로 합친다. 남는 폭은 전일·전주·전월 3칸이 크게 쓴다.</p>
+  <div style="margin-top:10px">
+    <div class="row">
+      <span class="grip">⠿</span>
+      <div class="name"><div class="av">삼성</div><div style="min-width:0"><div class="t">삼성전자</div><div class="s">005930</div></div></div>
+      <div class="rangebox">
+        <div class="lbl"><span>49,900</span><span>52주</span><span>77,100</span></div>
+        <div class="track"><span class="mk" style="left:75.7%"></span></div>
+        <div class="pos">레인지 상단 <b>76%</b></div>
+      </div>
+      <div class="m3">
+        <div class="cell"><div class="l">전일</div><div class="r up">+1.28%</div></div>
+        <div class="cell"><div class="l">전주</div><div class="r up">+2.14%</div></div>
+        <div class="cell"><div class="l">전월</div><div class="r up">+6.42%</div></div>
+      </div>
+      <div class="px"><div class="v mono">70,500</div><div class="c up mono">+890</div></div>
+      <span class="del">🗑</span>
+    </div>
+    <div class="row">
+      <span class="grip">⠿</span>
+      <div class="name"><div class="av">NV</div><div style="min-width:0"><div class="t">엔비디아</div><div class="s">NVDA</div></div></div>
+      <div class="rangebox">
+        <div class="lbl"><span>$86.62</span><span>52주</span><span>$175.40</span></div>
+        <div class="track"><span class="mk" style="left:94.0%"></span></div>
+        <div class="pos">레인지 상단 <b>94%</b></div>
+      </div>
+      <div class="m3">
+        <div class="cell"><div class="l">전일</div><div class="r down">-0.62%</div></div>
+        <div class="cell"><div class="l">전주</div><div class="r down">-1.39%</div></div>
+        <div class="cell"><div class="l">전월</div><div class="r up">+9.82%</div></div>
+      </div>
+      <div class="px"><div class="v mono">$170.00</div><div class="c down mono">-1.06</div></div>
+      <span class="del">🗑</span>
+    </div>
+    <div class="row">
+      <span class="grip">⠿</span>
+      <div class="name"><div class="av">한화</div><div style="min-width:0"><div class="t">한화에어로스페이스</div><div class="s">012450</div></div></div>
+      <div class="rangebox">
+        <div class="lbl"><span>231,000</span><span>52주</span><span>988,000</span></div>
+        <div class="track"><span class="mk" style="left:22.1%"></span></div>
+        <div class="pos">레인지 상단 <b>22%</b></div>
+      </div>
+      <div class="m3">
+        <div class="cell"><div class="l">전일</div><div class="r down">-3.10%</div></div>
+        <div class="cell"><div class="l">전주</div><div class="r down">-7.80%</div></div>
+        <div class="cell"><div class="l">전월</div><div class="r down">-12.40%</div></div>
+      </div>
+      <div class="px"><div class="v mono">398,500</div><div class="c down mono">-12,750</div></div>
+      <span class="del">🗑</span>
+    </div>
+  </div>
+  <p class="note"><b>데이터 출처</b> — 전부 지금 응답에 있는 <code>watchlistMetrics</code>(week52Low/High, prevClose/Week/Month). 추가 요청 0.</p>
+</section>
+
+<section class="opt">
+  <div class="opt-head"><span class="tag">B안</span><h2>행 리디자인 — 스파크라인 + 「담은 뒤」</h2></div>
+  <p class="sub">A안에 <b>30일 스파크라인</b>과 <b>담은 뒤 수익률</b>을 더한다. 관심종목의 핵심 질문 — "이거 담고 나서 어떻게 됐지?"</p>
+  <div style="margin-top:10px">
+    <div class="row">
+      <span class="grip">⠿</span>
+      <div class="name"><div class="av">삼성</div><div style="min-width:0"><div class="t">삼성전자</div><div class="s">005930</div></div></div>
+      <svg class="spark" viewBox="0 0 88 28" aria-hidden><path d="M0,22 L7,20 L14,23 L21,18 L28,19 L35,14 L42,16 L49,11 L56,13 L63,8 L70,10 L77,5 L88,4" fill="none" stroke="var(--profit)" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <div class="rangebox">
+        <div class="lbl"><span>49,900</span><span>52주</span><span>77,100</span></div>
+        <div class="track"><span class="mk" style="left:75.7%"></span></div>
+        <div class="pos">레인지 상단 <b>76%</b></div>
+      </div>
+      <div class="m3">
+        <div class="cell"><div class="l">전일</div><div class="r up">+1.28%</div></div>
+        <div class="cell"><div class="l">전주</div><div class="r up">+2.14%</div></div>
+        <div class="cell"><div class="l">전월</div><div class="r up">+6.42%</div></div>
+      </div>
+      <div class="since"><div class="l">담은 뒤</div><div class="r up">+13.7%</div><div class="d">06-02 · 62,000</div></div>
+      <div class="px"><div class="v mono">70,500</div><div class="c up mono">+890</div></div>
+      <span class="del">🗑</span>
+    </div>
+    <div class="row">
+      <span class="grip">⠿</span>
+      <div class="name"><div class="av">NV</div><div style="min-width:0"><div class="t">엔비디아</div><div class="s">NVDA</div></div></div>
+      <svg class="spark" viewBox="0 0 88 28" aria-hidden><path d="M0,18 L7,15 L14,17 L21,10 L28,12 L35,7 L42,9 L49,5 L56,8 L63,6 L70,9 L77,12 L88,11" fill="none" stroke="var(--profit)" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <div class="rangebox">
+        <div class="lbl"><span>$86.62</span><span>52주</span><span>$175.40</span></div>
+        <div class="track"><span class="mk" style="left:94.0%"></span></div>
+        <div class="pos">레인지 상단 <b>94%</b></div>
+      </div>
+      <div class="m3">
+        <div class="cell"><div class="l">전일</div><div class="r down">-0.62%</div></div>
+        <div class="cell"><div class="l">전주</div><div class="r down">-1.39%</div></div>
+        <div class="cell"><div class="l">전월</div><div class="r up">+9.82%</div></div>
+      </div>
+      <div class="since"><div class="l">담은 뒤</div><div class="r up">+41.2%</div><div class="d">03-18 · $120.4</div></div>
+      <div class="px"><div class="v mono">$170.00</div><div class="c down mono">-1.06</div></div>
+      <span class="del">🗑</span>
+    </div>
+    <div class="row">
+      <span class="grip">⠿</span>
+      <div class="name"><div class="av">한화</div><div style="min-width:0"><div class="t">한화에어로</div><div class="s">012450</div></div></div>
+      <svg class="spark" viewBox="0 0 88 28" aria-hidden><path d="M0,5 L7,7 L14,6 L21,11 L28,10 L35,14 L42,13 L49,18 L56,17 L63,20 L70,19 L77,23 L88,24" fill="none" stroke="var(--loss)" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <div class="rangebox">
+        <div class="lbl"><span>231,000</span><span>52주</span><span>988,000</span></div>
+        <div class="track"><span class="mk" style="left:22.1%"></span></div>
+        <div class="pos">레인지 상단 <b>22%</b></div>
+      </div>
+      <div class="m3">
+        <div class="cell"><div class="l">전일</div><div class="r down">-3.10%</div></div>
+        <div class="cell"><div class="l">전주</div><div class="r down">-7.80%</div></div>
+        <div class="cell"><div class="l">전월</div><div class="r down">-12.40%</div></div>
+      </div>
+      <div class="since"><div class="l">담은 뒤</div><div class="r down">-18.4%</div><div class="d">07-21 · 488,500</div></div>
+      <div class="px"><div class="v mono">398,500</div><div class="c down mono">-12,750</div></div>
+      <span class="del">🗑</span>
+    </div>
+  </div>
+  <p class="note">
+    <b>데이터 출처</b> — 스파크라인: 기존 <code>useSparklineCandles</code>(1d, 화면에 보일 때만 로드, 큐 제한 있음).
+    담은 뒤: <code>GET /watchlist</code>의 <code>addedPrice</code>·<code>createdAt</code> — <b>이미 내려오는데 FE가 버리고 있는 값</b>.
+    <br>※ 담은 뒤 값이 없는 기존 종목은 <span class="dim">—</span>로 두고, 새로 담는 것부터 채워집니다.
+  </p>
+</section>
+
+<section class="opt">
+  <div class="opt-head"><span class="tag">C안</span><h2>행 리디자인 — 점수 배지 + 이벤트 점 (풀 정보)</h2></div>
+  <p class="sub">B안에 <b>종목 점수</b>와 <b>임박 이벤트 표식</b>까지. 폭이 빡빡하니 모바일에서는 2줄로 접힙니다.</p>
+  <div style="margin-top:10px">
+    <div class="row">
+      <span class="grip">⠿</span>
+      <div class="name"><div class="av">삼성</div><div style="min-width:0"><div class="t">삼성전자</div><div class="s">005930</div></div></div>
+      <span class="score hi" title="종합 점수 71">71</span>
+      <svg class="spark" viewBox="0 0 88 28" aria-hidden><path d="M0,22 L7,20 L14,23 L21,18 L28,19 L35,14 L42,16 L49,11 L56,13 L63,8 L70,10 L77,5 L88,4" fill="none" stroke="var(--profit)" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <div class="rangebox">
+        <div class="lbl"><span>49,900</span><span>52주</span><span>77,100</span></div>
+        <div class="track"><span class="mk" style="left:75.7%"></span></div>
+        <div class="pos">레인지 상단 <b>76%</b></div>
+      </div>
+      <div class="m3">
+        <div class="cell"><div class="l">전일</div><div class="r up">+1.28%</div></div>
+        <div class="cell"><div class="l">전주</div><div class="r up">+2.14%</div></div>
+        <div class="cell"><div class="l">전월</div><div class="r up">+6.42%</div></div>
+      </div>
+      <div class="since"><div class="l">담은 뒤</div><div class="r up">+13.7%</div><div class="d">06-02 · 62,000</div></div>
+      <div class="px"><div class="v mono">70,500</div><div class="c up mono">+890</div></div>
+      <span class="dot" title="D-3 실적 발표"></span>
+      <span class="del">🗑</span>
+    </div>
+    <div class="row">
+      <span class="grip">⠿</span>
+      <div class="name"><div class="av">NV</div><div style="min-width:0"><div class="t">엔비디아</div><div class="s">NVDA</div></div></div>
+      <span class="score mid" title="종합 점수 58">58</span>
+      <svg class="spark" viewBox="0 0 88 28" aria-hidden><path d="M0,18 L7,15 L14,17 L21,10 L28,12 L35,7 L42,9 L49,5 L56,8 L63,6 L70,9 L77,12 L88,11" fill="none" stroke="var(--profit)" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <div class="rangebox">
+        <div class="lbl"><span>$86.62</span><span>52주</span><span>$175.40</span></div>
+        <div class="track"><span class="mk" style="left:94.0%"></span></div>
+        <div class="pos">레인지 상단 <b>94%</b></div>
+      </div>
+      <div class="m3">
+        <div class="cell"><div class="l">전일</div><div class="r down">-0.62%</div></div>
+        <div class="cell"><div class="l">전주</div><div class="r down">-1.39%</div></div>
+        <div class="cell"><div class="l">전월</div><div class="r up">+9.82%</div></div>
+      </div>
+      <div class="since"><div class="l">담은 뒤</div><div class="r up">+41.2%</div><div class="d">03-18 · $120.4</div></div>
+      <div class="px"><div class="v mono">$170.00</div><div class="c down mono">-1.06</div></div>
+      <span style="width:6px"></span>
+      <span class="del">🗑</span>
+    </div>
+  </div>
+  <p class="note">
+    <b>데이터 출처</b> — 점수: <code>GET /stocks/scores/batch?symbols=…</code> <b>전체 1요청</b>(보유종목 화면이 이미 쓰는 것).
+    이벤트 점: <code>GET /stocks/{sym}/earnings</code>의 <code>upcoming</code> — 종목당 1요청이라 <b>상위 12종목까지만</b>.
+  </p>
+  <div class="legend">
+    <span>· <span class="score hi" style="display:inline-grid;width:26px;height:16px;font-size:10px">71</span> 65↑ 초록</span>
+    <span>· <span class="score mid" style="display:inline-grid;width:26px;height:16px;font-size:10px">58</span> 35~65 주황</span>
+    <span>· <span class="score low" style="display:inline-grid;width:26px;height:16px;font-size:10px">22</span> 35↓ 빨강</span>
+  </div>
+</section>
+
+<!-- ══════════════ D. 툴바 ══════════════ -->
+<section class="opt">
+  <div class="opt-head"><span class="tag new">D안</span><h2>정렬 · 필터 툴바</h2></div>
+  <p class="sub">지금은 드래그 순서뿐. 「내 순서」를 기본으로 두고, 다른 정렬을 고르면 드래그 핸들이 잠깁니다(순서가 덮어써지지 않도록).</p>
+  <div class="toolbar" style="margin-top:10px">
+    <span class="chip on">내 순서</span>
+    <span class="chip">등락률</span>
+    <span class="chip">52주 위치</span>
+    <span class="chip">담은 뒤</span>
+    <span class="chip">점수</span>
+    <span class="tb-sep"></span>
+    <span class="chip on">전체 12</span>
+    <span class="chip">국내 7</span>
+    <span class="chip">미국 5</span>
+    <span class="tb-sep"></span>
+    <span class="chip">🔺 상승 8</span>
+    <span class="chip">🔻 하락 4</span>
+  </div>
+  <p class="note"><b>데이터 출처</b> — 전부 클라이언트 정렬·필터. 추가 요청 0.</p>
+</section>
+
+<!-- ══════════════ E. 퀵룩 모달 ══════════════ -->
+<section class="opt">
+  <div class="opt-head"><span class="tag new">E안</span><h2>퀵룩 모달 — 행 클릭 시</h2></div>
+  <p class="sub">지금은 행을 누르면 <code>/stocks/…</code>로 페이지를 떠납니다. 훑다가 하나 확인하고 돌아오는 흐름이 끊깁니다. 보유종목의 <code>HoldingDetailModal</code>과 같은 자리.</p>
+  <div class="scrim" style="margin-top:10px">
+    <div class="modal">
+      <div class="modal-h">
+        <div class="av">삼성</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600">삼성전자</div>
+          <div class="dim" style="font-size:11px">005930 · KOSPI</div>
+        </div>
+        <div style="text-align:right">
+          <div class="mono" style="font-size:16px;font-weight:700">70,500</div>
+          <div class="mono up" style="font-size:11px">+890 (+1.28%)</div>
+        </div>
+      </div>
+      <div class="modal-b">
+        <svg viewBox="0 0 420 76" style="width:100%;height:76px" aria-hidden>
+          <path d="M0,62 L32,56 L64,64 L96,48 L128,52 L160,38 L192,44 L224,30 L256,36 L288,20 L320,26 L352,12 L420,9" fill="none" stroke="var(--profit)" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <div class="dim" style="font-size:10px;text-align:right;margin-top:-4px">최근 40거래일 종가</div>
+
+        <div class="sect">
+          <div class="h">52주 레인지</div>
+          <div class="lbl" style="display:flex;justify-content:space-between;font-size:11px" class="dim">
+            <span class="dim mono">49,900</span><span class="dim mono">77,100</span>
+          </div>
+          <div class="track" style="height:8px"><span class="mk" style="left:75.7%;height:14px;top:-3px"></span></div>
+          <div class="dim" style="font-size:11px;text-align:center;margin-top:3px">저점 대비 <b class="up">+41.2%</b> · 고점 대비 <b class="down">-8.6%</b></div>
+        </div>
+
+        <div class="sect">
+          <div class="h">담은 뒤</div>
+          <div class="stat4">
+            <div><div class="l">담은 날</div><div class="v mono" style="font-size:12px">06-02</div></div>
+            <div><div class="l">담은 가격</div><div class="v mono" style="font-size:12px">62,000</div></div>
+            <div><div class="l">수익률</div><div class="v up">+13.7%</div></div>
+            <div><div class="l">보유 여부</div><div class="v" style="font-size:12px">미보유</div></div>
+          </div>
+        </div>
+
+        <div class="sect">
+          <div class="h">종목 점수 <span class="score hi" style="display:inline-grid;width:26px;height:16px;font-size:10px;vertical-align:-3px">71</span></div>
+          <div class="axes">
+            <div class="axis"><span class="dim">추세</span><span class="bar"><i style="width:78%"></i></span><span class="mono">78</span></div>
+            <div class="axis"><span class="dim">수익성</span><span class="bar"><i style="width:74%"></i></span><span class="mono">74</span></div>
+            <div class="axis"><span class="dim">성장</span><span class="bar"><i style="width:61%"></i></span><span class="mono">61</span></div>
+            <div class="axis"><span class="dim">가치</span><span class="bar"><i style="width:68%"></i></span><span class="mono">68</span></div>
+            <div class="axis"><span class="dim">심리·수급</span><span class="bar"><i style="width:70%"></i></span><span class="mono">70</span></div>
+          </div>
+        </div>
+
+        <div class="sect">
+          <div class="h">다가오는 일정</div>
+          <div class="evli"><span class="dt mono">08-17</span><span class="nm">2분기 실적 발표</span><span class="src">실적</span></div>
+          <div class="evli"><span class="dt mono">08-28</span><span class="nm">반기보고서 제출 예정</span><span class="src dart">DART</span></div>
+        </div>
+
+        <div class="sect">
+          <div class="h">최근 뉴스</div>
+          <div class="newsli"><div class="tx">삼성전자, HBM4 양산 라인 증설 검토<div class="mt">한국경제 · 2시간 전</div></div></div>
+          <div class="newsli"><div class="tx">외국인 8거래일 연속 순매수… 반도체 쏠림<div class="mt">연합뉴스 · 5시간 전</div></div></div>
+          <div class="newsli"><div class="tx">파운드리 수주 회복 조짐, 하반기 실적 눈높이 상향<div class="mt">머니투데이 · 어제</div></div></div>
+        </div>
+      </div>
+      <div class="modal-f">
+        <span class="btn primary">종목 분석으로 →</span>
+        <span class="btn">보유에 추가</span>
+        <span class="btn danger">🗑</span>
+      </div>
+    </div>
+  </div>
+  <p class="note">
+    <b>데이터 출처</b> — 차트 <code>useSparklineCandles</code> / 점수 <code>GET /stocks/{sym}/score</code> /
+    일정 <code>GET /stocks/{sym}/earnings</code> / 뉴스 <code>fetchStockNews</code>(국내·미국 분기).
+    모두 <b>모달을 열 때만</b> 부릅니다.
+  </p>
+</section>
+
+<!-- ══════════════ F. 레일 ══════════════ -->
+<section class="opt">
+  <div class="opt-head"><span class="tag new">F안</span><h2>우측 레일 보강</h2></div>
+  <p class="sub">지금은 <b>종목 추가 / 오늘의 관심종목 / 많이 움직인 종목 / 지수</b> 4장. 아래 3장을 추가 후보로 제안합니다.</p>
+  <div class="layout" style="margin-top:10px">
+    <div>
+      <div class="card">
+        <div class="card-h"><span class="card-t">📅 다가오는 일정</span><span class="more">상위 12종목</span></div>
+        <div class="evli"><span class="dt mono">08-17</span><span class="nm">삼성전자 <span class="dim">2분기 실적</span></span><span class="src">실적</span></div>
+        <div class="evli"><span class="dt mono">08-19</span><span class="nm">엔비디아 <span class="dim">FY26 Q2</span></span><span class="src">실적</span></div>
+        <div class="evli"><span class="dt mono">08-22</span><span class="nm">한화에어로 <span class="dim">주요사항보고서</span></span><span class="src dart">DART</span></div>
+        <div class="evli"><span class="dt mono">08-28</span><span class="nm">삼성전자 <span class="dim">반기보고서</span></span><span class="src dart">DART</span></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><span class="card-t">📈 담은 뒤 성과</span></div>
+        <div class="kv"><span>평균 수익률</span><b class="up mono">+9.4%</b></div>
+        <div class="kv"><span>플러스 / 마이너스</span><span><b class="up">8</b> / <b class="down">4</b></span></div>
+        <div class="kv"><span>최고</span><span>엔비디아 <b class="up mono">+41.2%</b></span></div>
+        <div class="kv"><span>최저</span><span>한화에어로 <b class="down mono">-18.4%</b></span></div>
+        <div class="kv"><span>평균 보유 기간</span><span class="mono">64일</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="card-h"><span class="card-t">📰 관심종목 뉴스</span><span class="more">더보기 →</span></div>
+        <div class="newsli"><div class="av xs">삼성</div><div class="tx">삼성전자, HBM4 양산 라인 증설 검토<div class="mt">한국경제 · 2시간 전</div></div></div>
+        <div class="newsli"><div class="av xs">NV</div><div class="tx">Nvidia beats on data center revenue<div class="mt">Reuters · 4h</div></div></div>
+        <div class="newsli"><div class="av xs">한화</div><div class="tx">방산 수출 모멘텀 둔화 우려<div class="mt">머니투데이 · 6시간 전</div></div></div>
+        <div class="newsli"><div class="av xs">TS</div><div class="tx">Tesla robotaxi permit filing surfaces<div class="mt">Bloomberg · 9h</div></div></div>
+      </div>
+    </div>
+  </div>
+  <p class="note">
+    <b>데이터 출처</b> — 일정: 보유종목의 <code>HoldingsScheduleCard</code>와 동일 패턴(종목당 1요청, 12개 상한).
+    뉴스: <code>HoldingsNewsCard</code> + <code>HoldingsNewsModal</code> 패턴 재사용.
+    담은 뒤 성과: <code>addedPrice</code>로 클라이언트 계산 — 추가 요청 0.
+  </p>
+</section>
+
+<p class="sub" style="margin-top:24px;padding-top:14px;border-top:1px solid var(--border)">
+  ※ 조합 가능합니다. 예: <b>A + D + E</b>(가벼움) / <b>B + D + E + F</b>(권장) / <b>C + D + E + F</b>(최대).
+</p>
+
+</div>
+</body>
+</html>

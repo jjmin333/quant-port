@@ -1,24 +1,21 @@
-import type { ApiError, ApiResponse } from "@/lib/portfolio-types";
-import { PortfolioFetchError, parseJson } from "@/lib/api-client";
-import { sessionFetch } from "@/lib/session-fetch";
-import type { AuthSession, BrokerLinkStatus } from "@/lib/auth-types";
+import { apiRequest } from "@/lib/api-client";
+import { clearFetchCache } from "@/lib/fetch-cache";
+import type { AuthSession } from "@/lib/auth-types";
 
 export { apiCredentials } from "@/lib/session-fetch";
 
-async function authFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await sessionFetch(path, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init.headers ?? {}),
+function authFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return apiRequest<T>(
+    path,
+    {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init.headers ?? {}),
+      },
     },
-  });
-  if (!res.ok) {
-    const body = await parseJson<ApiError>(res).catch(() => ({ error: res.statusText }));
-    throw new PortfolioFetchError(body.error || "Request failed", res.status);
-  }
-  const body = await parseJson<ApiResponse<T>>(res);
-  return body.data;
+    "Request failed",
+  );
 }
 
 export async function signup(
@@ -33,34 +30,22 @@ export async function signup(
 }
 
 export async function login(email: string, password: string): Promise<AuthSession> {
-  return authFetch<AuthSession>("/api/v1/auth/login", {
+  const session = await authFetch<AuthSession>("/api/v1/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
+  // 로그인 전에 받아 둔 응답 중에는 비로그인 상태의 것이 섞여 있다(관심·보유
+  // 표시가 빠진 시세 등). "누구인지"가 바뀌었으니 통째로 버린다.
+  clearFetchCache();
+  return session;
 }
 
 export async function logout(): Promise<void> {
   await authFetch<{ ok: boolean }>("/api/v1/auth/logout", { method: "POST" });
+  // 로그아웃 뒤에 이전 사용자의 응답이 남아 있으면 안 된다.
+  clearFetchCache();
 }
 
 export async function fetchMe(): Promise<AuthSession> {
   return authFetch<AuthSession>("/api/v1/auth/me");
-}
-
-export async function linkTossBroker(
-  clientId: string,
-  clientSecret: string,
-): Promise<BrokerLinkStatus> {
-  return authFetch<BrokerLinkStatus>("/api/v1/broker/toss/link", {
-    method: "POST",
-    body: JSON.stringify({ clientId, clientSecret }),
-  });
-}
-
-export async function fetchBrokerStatus(): Promise<BrokerLinkStatus> {
-  return authFetch<BrokerLinkStatus>("/api/v1/broker/toss/status");
-}
-
-export async function unlinkTossBroker(): Promise<void> {
-  await authFetch<{ ok: boolean }>("/api/v1/broker/toss/unlink", { method: "DELETE" });
 }

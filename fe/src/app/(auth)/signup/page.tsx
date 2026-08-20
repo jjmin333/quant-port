@@ -28,7 +28,7 @@ export default function SignupPage() {
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-8 shadow-xl">
       <div className="mb-8 text-center">
-        <p className="text-sm font-bold tracking-[0.18em] text-[var(--accent)]">QUANT PORT</p>
+        <p className="text-sm font-bold tracking-[0.18em] text-[var(--brand)]">QUANT PORT</p>
         <h1 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">회원가입</h1>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
           닉네임과 8자 이상 비밀번호로 계정을 만드세요.
@@ -44,7 +44,7 @@ export default function SignupPage() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
+            className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
           />
         </label>
         <label className="block">
@@ -58,7 +58,7 @@ export default function SignupPage() {
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="2~100자"
-            className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
+            className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
           />
         </label>
         <label className="block">
@@ -70,7 +70,7 @@ export default function SignupPage() {
             minLength={8}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
+            className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
           />
         </label>
 
@@ -81,7 +81,7 @@ export default function SignupPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="h-11 w-full rounded-lg bg-[var(--accent)] text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+          className="h-11 w-full rounded-lg bg-[var(--brand)] text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
         >
           {submitting ? "가입 중…" : "회원가입"}
         </button>
@@ -89,7 +89,7 @@ export default function SignupPage() {
 
       <p className="mt-6 text-center text-sm text-[var(--text-muted)]">
         이미 계정이 있으신가요?{" "}
-        <Link href="/login" className="text-[var(--accent)] hover:underline">
+        <Link href="/login" className="text-[var(--brand)] hover:underline">
           로그인
         </Link>
       </p>

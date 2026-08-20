@@ -9,6 +9,11 @@ fe/.vercel
 be/bin/
 be/tmp/
 be/.env
+be/.next/
+be/.cookies*
+# 로컬 개발용 업로드 이미지 저장소 (MEDIA_DIR 기본값)
+be/var/
+*.exe
 
 # Dependencies / tooling
 .pnp.*
@@ -30,6 +35,11 @@ coverage/
 .DS_Store
 *.pem
 *.tsbuildinfo
+
+# 임시 API 응답 덤프 (디버깅용, 루트에 쌓인다)
+/tmp-*.json
+/tmp-*.js
+/tmp-*.mjs
 
 # Logs
 npm-debug.log*

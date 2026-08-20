@@ -1,0 +1,416 @@
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>관심종목 행 정돈 + 차트 개선 — v2</title>
+<style>
+:root {
+  --background: oklch(0.97 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.93 0 0);
+  --border: oklch(0.87 0 0);
+  --brand: #2563EB;
+  --brand-muted: rgba(37, 99, 235, 0.1);
+  --profit: #DC2626;
+  --loss: #2563EB;
+  --score-high: #059669;
+  --score-mid: #D97706;
+  --score-low: #DC2626;
+  --track: oklch(0.90 0 0);
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 16%);
+  --brand: #60A5FA;
+  --brand-muted: rgba(96, 165, 250, 0.15);
+  --profit: #F87171;
+  --loss: #60A5FA;
+  --score-high: #34D399;
+  --score-mid: #FBBF24;
+  --score-low: #F87171;
+  --track: oklch(0.32 0 0);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--background); color: var(--foreground);
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 12px; line-height: 1.5; padding: 24px; -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1000px; margin: 0 auto; }
+h1 { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
+h2 { font-size: 15px; font-weight: 600; }
+.sub { color: var(--muted-foreground); font-size: 12px; }
+.mono { font-variant-numeric: tabular-nums; }
+.up { color: var(--profit); } .down { color: var(--loss); } .dim { color: var(--muted-foreground); }
+
+.topbar { display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding-bottom:16px; margin-bottom:20px; border-bottom:1px solid var(--border);
+  position:sticky; top:0; background:var(--background); z-index:5; }
+button.tgl { font:inherit; cursor:pointer; border:1px solid var(--border); background:var(--card);
+  color:var(--foreground); border-radius:8px; padding:5px 12px; }
+button.tgl:hover { background: var(--accent); }
+
+.opt { margin-bottom: 34px; }
+.opt-head { display:flex; align-items:baseline; gap:8px; margin-bottom:6px; flex-wrap:wrap; }
+.tag { font-size:11px; font-weight:700; background:var(--brand-muted); color:var(--brand);
+  border-radius:6px; padding:2px 7px; flex:none; }
+.tag.cur { background:var(--muted); color:var(--muted-foreground); }
+.tag.rec { background: color-mix(in oklab, var(--score-high) 16%, transparent); color: var(--score-high); }
+.note { color: var(--muted-foreground); font-size:11px; margin-top:8px; }
+.note b { color: var(--foreground); }
+
+/* ── 행 공통 ── */
+.list { margin-top: 10px; }
+.row { display:flex; align-items:center; gap:10px;
+  background:var(--card); border:1px solid var(--border); border-radius:12px; padding:8px 10px; }
+.row + .row { margin-top: 6px; }
+.row:hover { border-color: var(--brand); }
+.grip { color:var(--muted-foreground); flex:none; font-size:13px; letter-spacing:-2px; cursor:grab; width:12px; }
+.av { width:28px; height:28px; border-radius:999px; flex:none; background:var(--muted);
+  display:grid; place-items:center; font-size:9px; font-weight:700; color:var(--muted-foreground); }
+.nm { display:flex; align-items:center; gap:8px; flex:none; width:168px; min-width:0; }
+.nm .t { font-size:13px; font-weight:600; line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.nm .s { font-size:10px; color:var(--muted-foreground); line-height:1.2; }
+.sc { flex:none; width:30px; height:22px; border-radius:6px; display:grid; place-items:center;
+  font-size:11px; font-weight:700; }
+.sc.hi { background:color-mix(in oklab,var(--score-high) 14%,transparent); color:var(--score-high); }
+.sc.mid{ background:color-mix(in oklab,var(--score-mid) 14%,transparent);  color:var(--score-mid); }
+.sc.low{ background:color-mix(in oklab,var(--score-low) 14%,transparent);  color:var(--score-low); }
+.sc.none { color: var(--muted-foreground); font-weight:400; }
+.del { flex:none; color:var(--muted-foreground); font-size:13px; cursor:pointer; width:18px; text-align:right; }
+
+/* 헤더 줄 */
+.hdr { display:flex; align-items:center; gap:10px; padding:0 10px 6px; color:var(--muted-foreground);
+  font-size:10px; font-weight:600; letter-spacing:.02em; border-bottom:1px solid var(--border); margin-bottom:6px; }
+.hdr .grip, .hdr .del { visibility:hidden; }
+
+/* 셀 폭 (헤더와 행이 같은 값을 쓴다) */
+.c-range { flex:none; width:150px; }
+.c-p     { flex:none; width:64px; text-align:right; }
+.c-since { flex:none; width:86px; text-align:right; }
+.c-px    { flex:none; width:104px; text-align:right; }
+
+/* 레인지 바 */
+.bar { position:relative; height:6px; border-radius:999px; background:var(--track); overflow:hidden; }
+.bar > i { position:absolute; inset:0 auto 0 0; border-radius:999px; background:color-mix(in oklab,var(--brand) 45%,transparent); }
+.bar > b { position:absolute; top:-3px; width:2px; height:12px; border-radius:2px; background:var(--foreground); }
+.rangeline { display:flex; align-items:center; gap:8px; }
+.rangeline .pct { flex:none; width:30px; font-size:11px; font-weight:600; text-align:right; }
+.rangeline .track { flex:1; min-width:0; }
+
+/* A·C안 값 */
+.v { font-size:12px; font-weight:600; }
+.v.big { font-size:14px; font-weight:700; letter-spacing:-.01em; }
+.vsub { font-size:10px; color:var(--muted-foreground); line-height:1.2; }
+
+/* B안 라벨형 셀 */
+.lc { text-align:center; }
+.lc .l { display:block; font-size:10px; color:var(--muted-foreground); line-height:1.2; }
+.lc .r { display:block; font-size:12px; font-weight:600; line-height:1.3; }
+
+/* 배지형 등락 */
+.pill { display:inline-block; padding:1px 6px; border-radius:999px; font-size:11px; font-weight:700; }
+.pill.up { background:color-mix(in oklab,var(--profit) 12%,transparent); }
+.pill.down { background:color-mix(in oklab,var(--loss) 12%,transparent); }
+
+/* 차트 */
+.chartbox { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px 14px; }
+.chart-h { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:6px; }
+.chart-t { font-size:11px; font-weight:600; color:var(--muted-foreground); }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+@media (max-width: 820px) { .grid2 { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div>
+    <h1>관심종목 행 정돈 + 차트 개선 — v2</h1>
+    <p class="sub">데이터는 첨부해 주신 화면 그대로(삼성전자 274,500원 · 52주 93,000~380,000 · 상단 63%).</p>
+  </div>
+  <button class="tgl" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'">라이트 / 다크</button>
+</div>
+
+<!-- ═══════════ 현재 ═══════════ -->
+<section class="opt">
+  <div class="opt-head"><span class="tag cur">현재</span><h2>지금 무엇이 문제인가</h2></div>
+  <ul class="sub" style="padding-left:18px; line-height:1.8">
+    <li><b>「전주 +16.8…」이 잘립니다</b> — 기간 3칸에 136px를 나눠 45px씩인데 <span class="mono">+16.85%</span>는 48px가 필요합니다.</li>
+    <li><b>52주 저·고가가 <span class="mono">9.3만 / 38만</span></b> — 압축 표기라 자릿수를 다시 세어야 하고, 사이에 낀 「52주」 글자까지 셋이 서로 밀어냅니다.</li>
+    <li><b>세로선이 안 맞습니다</b> — 레인지 칸만 3줄(값·막대·상단%)이고 나머지는 2줄이라 눈이 걸릴 기준선이 없습니다.</li>
+    <li><b>같은 라벨이 행마다 반복됩니다</b> — 「전일·전주·전월·담은 뒤」가 종목 수만큼 인쇄돼 정작 숫자보다 라벨이 많습니다.</li>
+    <li><b>트랙 그라데이션(파랑→빨강)이 뜻이 없습니다</b> — 이 앱에서 파랑·빨강은 하락·상승인데 여기서는 아무 의미가 아닙니다.</li>
+  </ul>
+</section>
+
+<!-- ═══════════ A안 ═══════════ -->
+<section class="opt">
+  <div class="opt-head"><span class="tag rec">A안</span><h2>표 헤더를 세운다 — 행에서 라벨을 걷어냄</h2></div>
+  <p class="sub">라벨을 목록 맨 위 <b>한 줄</b>로 옮기면 행에는 숫자만 남습니다. 모든 칸이 1줄이 되어 높이가 62 → <b>48px</b>로 줄고, 세로로 눈금이 맞습니다. 52주 저·고가 숫자는 막대와 %가 답하므로 행에서 빼고 퀵룩 모달에 둡니다.</p>
+  <div class="list">
+    <div class="hdr">
+      <span class="grip">⠿</span>
+      <span class="nm">종목</span>
+      <span class="sc" style="text-align:center">점수</span>
+      <span class="c-range">52주 위치</span>
+      <span class="c-p">전일</span>
+      <span class="c-p">전주</span>
+      <span class="c-p">전월</span>
+      <span class="c-since">담은 뒤</span>
+      <span class="c-px">현재가</span>
+      <span class="del">×</span>
+    </div>
+
+    <div class="row">
+      <span class="grip">⠿</span>
+      <span class="nm"><span class="av">삼성</span><span style="min-width:0"><span class="t">삼성전자</span><span class="s">005930</span></span></span>
+      <span class="sc hi">77</span>
+      <span class="c-range"><span class="rangeline"><span class="track"><span class="bar"><i style="width:63%"></i><b style="left:63%"></b></span></span><span class="pct dim mono">63%</span></span></span>
+      <span class="c-p v mono up">+0.18%</span>
+      <span class="c-p v mono up">+16.85%</span>
+      <span class="c-p v mono up">+5.98%</span>
+      <span class="c-since"><span class="v mono up">+5.98%</span><span class="vsub mono">08-02</span></span>
+      <span class="c-px"><span class="v big mono">274,500</span><span class="vsub mono up">+500</span></span>
+      <span class="del">🗑</span>
+    </div>
+
+    <div class="row">
+      <span class="grip">⠿</span>
+      <span class="nm"><span class="av">NV</span><span style="min-width:0"><span class="t">엔비디아</span><span class="s">NVDA</span></span></span>
+      <span class="sc mid">58</span>
+      <span class="c-range"><span class="rangeline"><span class="track"><span class="bar"><i style="width:94%"></i><b style="left:94%"></b></span></span><span class="pct dim mono">94%</span></span></span>
+      <span class="c-p v mono down">-0.62%</span>
+      <span class="c-p v mono down">-1.39%</span>
+      <span class="c-p v mono up">+9.82%</span>
+      <span class="c-since"><span class="v mono up">+41.20%</span><span class="vsub mono">03-18</span></span>
+      <span class="c-px"><span class="v big mono">$170.00</span><span class="vsub mono down">-1.06</span></span>
+      <span class="del">🗑</span>
+    </div>
+
+    <div class="row">
+      <span class="grip">⠿</span>
+      <span class="nm"><span class="av">한화</span><span style="min-width:0"><span class="t">한화에어로스페이스</span><span class="s">012450</span></span></span>
+      <span class="sc low">22</span>
+      <span class="c-range"><span class="rangeline"><span class="track"><span class="bar"><i style="width:22%"></i><b style="left:22%"></b></span></span><span class="pct dim mono">22%</span></span></span>
+      <span class="c-p v mono down">-3.10%</span>
+      <span class="c-p v mono down">-7.80%</span>
+      <span class="c-p v mono down">-12.40%</span>
+      <span class="c-since"><span class="v mono down">-18.42%</span><span class="vsub mono">07-21</span></span>
+      <span class="c-px"><span class="v big mono">398,500</span><span class="vsub mono down">-12,750</span></span>
+      <span class="del">🗑</span>
+    </div>
+
+    <div class="row">
+      <span class="grip">⠿</span>
+      <span class="nm"><span class="av">KO</span><span style="min-width:0"><span class="t">KODEX 미국S&P500TR</span><span class="s">379800</span></span></span>
+      <span class="sc none">—</span>
+      <span class="c-range"><span class="rangeline"><span class="track"><span class="bar"><i style="width:91%"></i><b style="left:91%"></b></span></span><span class="pct dim mono">91%</span></span></span>
+      <span class="c-p v mono up">+0.61%</span>
+      <span class="c-p v mono up">+1.10%</span>
+      <span class="c-p v mono up">+3.40%</span>
+      <span class="c-since"><span class="v mono dim">—</span><span class="vsub">기록 없음</span></span>
+      <span class="c-px"><span class="v big mono">21,476</span><span class="vsub mono up">+130</span></span>
+      <span class="del">🗑</span>
+    </div>
+  </div>
+  <p class="note"><b>좁아지면</b> 헤더도 행과 같은 칸을 함께 접습니다(전월 → 전주 → 담은 뒤 → 52주 순). 모바일에서는 헤더를 숨기고 <span class="mono">종목 · 점수 · 52주 · 현재가</span>만 남습니다.</p>
+</section>
+
+<!-- ═══════════ B안 ═══════════ -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">B안</span><h2>헤더 없이 지금 구조를 다듬는다</h2></div>
+  <p class="sub">라벨을 행에 남기되 <b>모든 칸을 라벨 위·값 아래 2줄로 통일</b>하고, 52주 저·고가는 압축(9.3만)을 버리고 전체 숫자로 씁니다. 폭을 다시 나눠 <span class="mono">+16.85%</span>가 잘리지 않게 합니다.</p>
+  <div class="list">
+    <div class="row" style="padding:9px 10px">
+      <span class="grip">⠿</span>
+      <span class="nm"><span class="av">삼성</span><span style="min-width:0"><span class="t">삼성전자</span><span class="s">005930</span></span></span>
+      <span class="sc hi">77</span>
+      <span class="c-range lc">
+        <span class="l">52주 위치 <b style="color:var(--foreground)">63%</b></span>
+        <span class="track" style="display:block;margin-top:3px"><span class="bar"><i style="width:63%"></i><b style="left:63%"></b></span></span>
+        <span class="l mono" style="display:flex;justify-content:space-between;margin-top:3px"><span>93,000</span><span>380,000</span></span>
+      </span>
+      <span class="c-p lc"><span class="l">전일</span><span class="r mono up">+0.18%</span></span>
+      <span class="c-p lc"><span class="l">전주</span><span class="r mono up">+16.85%</span></span>
+      <span class="c-p lc"><span class="l">전월</span><span class="r mono up">+5.98%</span></span>
+      <span class="c-since lc"><span class="l">담은 뒤 · 08-02</span><span class="r mono up">+5.98%</span></span>
+      <span class="c-px"><span class="v big mono">274,500</span><span class="vsub mono up">+500</span></span>
+      <span class="del">🗑</span>
+    </div>
+    <div class="row" style="padding:9px 10px">
+      <span class="grip">⠿</span>
+      <span class="nm"><span class="av">한화</span><span style="min-width:0"><span class="t">한화에어로스페이스</span><span class="s">012450</span></span></span>
+      <span class="sc low">22</span>
+      <span class="c-range lc">
+        <span class="l">52주 위치 <b style="color:var(--foreground)">22%</b></span>
+        <span class="track" style="display:block;margin-top:3px"><span class="bar"><i style="width:22%"></i><b style="left:22%"></b></span></span>
+        <span class="l mono" style="display:flex;justify-content:space-between;margin-top:3px"><span>231,000</span><span>988,000</span></span>
+      </span>
+      <span class="c-p lc"><span class="l">전일</span><span class="r mono down">-3.10%</span></span>
+      <span class="c-p lc"><span class="l">전주</span><span class="r mono down">-7.80%</span></span>
+      <span class="c-p lc"><span class="l">전월</span><span class="r mono down">-12.40%</span></span>
+      <span class="c-since lc"><span class="l">담은 뒤 · 07-21</span><span class="r mono down">-18.42%</span></span>
+      <span class="c-px"><span class="v big mono">398,500</span><span class="vsub mono down">-12,750</span></span>
+      <span class="del">🗑</span>
+    </div>
+  </div>
+  <p class="note">행 높이는 지금과 같은 <b>62px</b>. 라벨이 그대로 반복되지만, 목록을 처음 보는 사람에게는 헤더를 찾아 올려다볼 필요가 없다는 장점이 있습니다.</p>
+</section>
+
+<!-- ═══════════ C안 ═══════════ -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">C안</span><h2>헤더 + 위계 — 현재가와 전일을 앞세운다</h2></div>
+  <p class="sub">A안에 <b>강약</b>을 더합니다. 매일 보는 건 현재가와 전일 등락이니 그 둘만 크게·배지로 두고, 전주·전월·담은 뒤는 한 톤 낮춥니다. 눈이 갈 곳이 정해집니다.</p>
+  <div class="list">
+    <div class="hdr">
+      <span class="grip">⠿</span>
+      <span class="nm">종목</span>
+      <span class="sc" style="text-align:center">점수</span>
+      <span class="c-range">52주 위치</span>
+      <span class="c-px">현재가 · 전일</span>
+      <span class="c-p">전주</span>
+      <span class="c-p">전월</span>
+      <span class="c-since">담은 뒤</span>
+      <span class="del">×</span>
+    </div>
+    <div class="row">
+      <span class="grip">⠿</span>
+      <span class="nm"><span class="av">삼성</span><span style="min-width:0"><span class="t">삼성전자</span><span class="s">005930</span></span></span>
+      <span class="sc hi">77</span>
+      <span class="c-range"><span class="rangeline"><span class="track"><span class="bar"><i style="width:63%"></i><b style="left:63%"></b></span></span><span class="pct dim mono">63%</span></span></span>
+      <span class="c-px"><span class="v big mono">274,500</span> <span class="pill up mono">+0.18%</span></span>
+      <span class="c-p mono dim" style="font-size:12px">+16.85%</span>
+      <span class="c-p mono dim" style="font-size:12px">+5.98%</span>
+      <span class="c-since"><span class="mono up" style="font-size:12px;font-weight:600">+5.98%</span><span class="vsub mono">08-02</span></span>
+      <span class="del">🗑</span>
+    </div>
+    <div class="row">
+      <span class="grip">⠿</span>
+      <span class="nm"><span class="av">한화</span><span style="min-width:0"><span class="t">한화에어로스페이스</span><span class="s">012450</span></span></span>
+      <span class="sc low">22</span>
+      <span class="c-range"><span class="rangeline"><span class="track"><span class="bar"><i style="width:22%"></i><b style="left:22%"></b></span></span><span class="pct dim mono">22%</span></span></span>
+      <span class="c-px"><span class="v big mono">398,500</span> <span class="pill down mono">-3.10%</span></span>
+      <span class="c-p mono dim" style="font-size:12px">-7.80%</span>
+      <span class="c-p mono dim" style="font-size:12px">-12.40%</span>
+      <span class="c-since"><span class="mono down" style="font-size:12px;font-weight:600">-18.42%</span><span class="vsub mono">07-21</span></span>
+      <span class="del">🗑</span>
+    </div>
+  </div>
+  <p class="note">⚠️ 전주·전월을 회색으로 눕히면 <b>등락 방향(빨강/파랑)을 잃습니다</b>. 대신 부호가 남고, 방향이 중요한 칸은 전일·담은 뒤라는 판단입니다.</p>
+</section>
+
+<!-- ═══════════ 차트 ═══════════ -->
+<section class="opt">
+  <div class="opt-head"><span class="tag cur">현재</span><h2>모달 차트 — 왜 읽기 어려운가</h2></div>
+  <div class="grid2" style="margin-top:10px">
+    <div class="chartbox">
+      <div class="chart-h"><span class="chart-t">최근 흐름 (지금)</span></div>
+      <svg viewBox="0 0 420 76" preserveAspectRatio="none" style="width:100%;height:76px">
+        <path d="M0,71 L11,70 L21,72 L32,69 L43,71 L54,70 L64,72 L75,70 L86,68 L97,71 L107,70 L118,69 L129,71 L140,70 L150,72 L161,69 L172,70 L183,71 L193,69 L204,70 L215,68 L226,70 L236,71 L247,69 L258,70 L269,71 L279,69 L290,70 L301,68 L312,70 L322,71 L333,69 L344,67 L355,68 L365,66 L376,64 L387,60 L398,44 L409,20 L420,2"
+          fill="none" stroke="var(--profit)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+      </svg>
+      <p class="dim" style="font-size:10px;text-align:right">최근 40거래일 종가</p>
+      <p class="note" style="margin-top:6px">
+        축이 없어 저 급등이 <b>2%인지 40%인지</b> 알 수 없습니다. 세로를 항상 최저~최고로 꽉 채우니
+        <b>어떤 종목이든 똑같이 극적으로</b> 보이고, 선이 위아래 가장자리에 닿아 잘립니다.
+      </p>
+    </div>
+
+    <div class="chartbox">
+      <div class="chart-h">
+        <span class="chart-t">1안 — 금액 축 + 여백</span>
+        <span class="mono up" style="font-size:11px;font-weight:700">+15.9%</span>
+      </div>
+      <svg viewBox="0 0 420 86" style="width:100%;height:86px">
+        <line x1="0" y1="8" x2="360" y2="8" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3"/>
+        <line x1="0" y1="78" x2="360" y2="78" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3"/>
+        <path d="M0,70 L9,69 L18,71 L27,68 L37,70 L46,69 L55,71 L64,69 L73,67 L83,70 L92,69 L101,68 L110,70 L119,69 L129,71 L138,68 L147,69 L156,70 L165,68 L175,69 L184,67 L193,69 L202,70 L211,68 L221,69 L230,70 L239,68 L248,69 L257,67 L267,69 L276,70 L285,68 L294,66 L303,67 L313,65 L322,63 L331,59 L340,44 L350,24 L360,10"
+          fill="none" stroke="var(--profit)" stroke-width="1.6"/>
+        <text x="366" y="11" font-size="9" fill="var(--muted-foreground)" font-family="ui-monospace,monospace">280,000</text>
+        <text x="366" y="81" font-size="9" fill="var(--muted-foreground)" font-family="ui-monospace,monospace">231,500</text>
+      </svg>
+      <div class="dim mono" style="font-size:10px;display:flex;justify-content:space-between">
+        <span>06-18</span><span>40거래일</span><span>08-14</span>
+      </div>
+      <p class="note" style="margin-top:6px">최고·최저 <b>금액</b>이 붙어 급등폭을 바로 읽습니다. 위아래 <b>여백</b>을 둬 선이 잘리지 않습니다.</p>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:12px">
+    <div class="chartbox">
+      <div class="chart-h">
+        <span class="chart-t">2안 — 1안 + 면적 + 기준선 <span class="tag rec" style="margin-left:4px">권장</span></span>
+        <span class="mono up" style="font-size:11px;font-weight:700">+15.9%</span>
+      </div>
+      <svg viewBox="0 0 420 86" style="width:100%;height:86px">
+        <defs>
+          <linearGradient id="fillUp" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--profit)" stop-opacity="0.20"/>
+            <stop offset="100%" stop-color="var(--profit)" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <line x1="0" y1="8" x2="360" y2="8" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3"/>
+        <line x1="0" y1="78" x2="360" y2="78" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3"/>
+        <line x1="0" y1="70" x2="360" y2="70" stroke="var(--muted-foreground)" stroke-width="0.8" stroke-dasharray="2 3" opacity="0.6"/>
+        <path d="M0,70 L9,69 L18,71 L27,68 L37,70 L46,69 L55,71 L64,69 L73,67 L83,70 L92,69 L101,68 L110,70 L119,69 L129,71 L138,68 L147,69 L156,70 L165,68 L175,69 L184,67 L193,69 L202,70 L211,68 L221,69 L230,70 L239,68 L248,69 L257,67 L267,69 L276,70 L285,68 L294,66 L303,67 L313,65 L322,63 L331,59 L340,44 L350,24 L360,10 L360,86 L0,86 Z"
+          fill="url(#fillUp)" stroke="none"/>
+        <path d="M0,70 L9,69 L18,71 L27,68 L37,70 L46,69 L55,71 L64,69 L73,67 L83,70 L92,69 L101,68 L110,70 L119,69 L129,71 L138,68 L147,69 L156,70 L165,68 L175,69 L184,67 L193,69 L202,70 L211,68 L221,69 L230,70 L239,68 L248,69 L257,67 L267,69 L276,70 L285,68 L294,66 L303,67 L313,65 L322,63 L331,59 L340,44 L350,24 L360,10"
+          fill="none" stroke="var(--profit)" stroke-width="1.6"/>
+        <circle cx="360" cy="10" r="2.6" fill="var(--profit)"/>
+        <text x="366" y="11" font-size="9" fill="var(--muted-foreground)" font-family="ui-monospace,monospace">280,000</text>
+        <text x="366" y="81" font-size="9" fill="var(--muted-foreground)" font-family="ui-monospace,monospace">231,500</text>
+      </svg>
+      <div class="dim mono" style="font-size:10px;display:flex;justify-content:space-between">
+        <span>06-18</span><span>40거래일</span><span>08-14</span>
+      </div>
+      <p class="note" style="margin-top:6px">
+        옅은 면적으로 위아래 방향이 먼저 읽히고, <b>회색 점선 = 40일 전 시작가</b>라 지금이 그 위인지
+        아래인지가 눈에 들어옵니다. 끝점에 점을 찍어 현재 위치를 고정합니다.
+      </p>
+    </div>
+
+    <div class="chartbox">
+      <div class="chart-h">
+        <span class="chart-t">보유종목 모달에도 같은 컴포넌트</span>
+        <span class="mono down" style="font-size:11px;font-weight:700">-6.2%</span>
+      </div>
+      <svg viewBox="0 0 420 86" style="width:100%;height:86px">
+        <defs>
+          <linearGradient id="fillDown" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--loss)" stop-opacity="0.20"/>
+            <stop offset="100%" stop-color="var(--loss)" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <line x1="0" y1="8" x2="360" y2="8" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3"/>
+        <line x1="0" y1="78" x2="360" y2="78" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3"/>
+        <path d="M0,22 L36,18 L72,30 L108,26 L144,40 L180,34 L216,48 L252,44 L288,58 L324,52 L360,62 L360,86 L0,86 Z" fill="url(#fillDown)"/>
+        <path d="M0,22 L36,18 L72,30 L108,26 L144,40 L180,34 L216,48 L252,44 L288,58 L324,52 L360,62" fill="none" stroke="var(--loss)" stroke-width="1.6"/>
+        <line x1="0" y1="36" x2="360" y2="36" stroke="var(--muted-foreground)" stroke-width="0.9" stroke-dasharray="3 2"/>
+        <text x="366" y="11" font-size="9" fill="var(--muted-foreground)" font-family="ui-monospace,monospace">92,400</text>
+        <text x="366" y="39" font-size="9" fill="var(--muted-foreground)" font-family="ui-monospace,monospace">평단</text>
+        <text x="366" y="81" font-size="9" fill="var(--muted-foreground)" font-family="ui-monospace,monospace">78,100</text>
+        <circle cx="360" cy="62" r="2.6" fill="var(--loss)"/>
+      </svg>
+      <div class="dim mono" style="font-size:10px;display:flex;justify-content:space-between">
+        <span>06-18</span><span>40거래일</span><span>08-14</span>
+      </div>
+      <p class="note" style="margin-top:6px">
+        보유종목 상세의 140×44 미니 스파크라인을 같은 컴포넌트로 교체합니다.
+        <b>평단 점선은 그대로 유지</b>하고 라벨만 붙습니다 — 지금은 점선이 무엇인지 화면이 말하지 않습니다.
+      </p>
+    </div>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

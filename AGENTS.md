@@ -10,15 +10,15 @@ Start: read `docs/AGENT_STATE.md`. End: update it; append one line to `docs/arch
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
-## Backend restart (Windows)
+## Backend restart (Windows) — Docker only
 
-After BE code changes, **do not use `go run ./cmd/api`** for test restarts — it compiles to a temp executable and can trigger Windows Firewall prompts.
-
-Use the build script instead:
+After BE code changes, **always restart via Docker** (Tesseract OCR included). Do **not** use `go run ./cmd/api` or host `bin/api.exe`.
 
 ```powershell
 cd be
 .\scripts\restart.ps1 -Background
 ```
 
-This runs `go build -o bin/api.exe ./cmd/api` and starts the fixed binary. Logs: `be/tmp/api.log`.
+This runs `docker compose up -d --build redis api` from the repo root, waits for `/health`, and **reports Tesseract status** from container logs. On Tesseract failure, fix/rebuild and report to the user.
+
+Logs: `docker logs -f quant-port-api`

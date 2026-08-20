@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+# 같은 브랜치에 밀어 넣으면 앞 실행을 취소한다 — 러너를 아끼고 최신 커밋 결과만 남긴다.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: be
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: be/go.mod
+          cache-dependency-path: be/go.sum
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      # 로컬(Windows)에는 gcc가 없어 -race를 못 돌린다. CI는 리눅스라 여기서
+      # 잡는다 — 레이트 리밋 버킷과 뉴스 캐시가 배경 goroutine을 쓰므로
+      # 경쟁 조건은 여기서만 걸린다.
+      - name: Test (race)
+        run: go test -race ./...
+
+      # gofmt 게이트는 일부러 넣지 않았다. 이 저장소는 gofmt를 거친 적이 없어
+      # internal·cmd 아래 466개 파일이 미준수다 (정렬에 탭이 아니라 공백을 쓴다).
+      # 켜려면 `gofmt -w ./...`를 독립 커밋으로 먼저 넣어야 하고, 진행 중인
+      # 브랜치가 크면 충돌을 부른다. 머지 이후로 미룰 것.
+      # - name: Format check
+      #   run: test -z "$(gofmt -l ./internal ./cmd)"
+
+  frontend:
+    name: Frontend (Next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fe
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: fe/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      # 차단하지 않는다 — 현재 71 errors / 11 warnings가 이미 쌓여 있어(대부분
+      # react-hooks/set-state-in-effect) 게이트로 켜면 첫 실행부터 빨갛다.
+      # 로그로 남겨 부채가 늘어나는지는 보이게 하고, 정리한 뒤 continue-on-error를
+      # 지운다. gofmt 게이트를 뺀 것과 같은 이유다.
+      - name: Lint (non-blocking)
+        run: npm run lint
+        continue-on-error: true
+
+      # 이 둘은 실제로 통과하는 것을 확인하고 게이트로 걸었다.
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # 빌드는 BE에 붙지 않는다 — 페이지가 서버 컴포넌트에서 fetch를 하더라도
+      # 실패는 잡아서 넘기도록 되어 있고, rewrite 대상은 빌드 시점에 필요 없다.
+      - name: Build
+        run: npm run build

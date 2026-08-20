@@ -14,7 +14,7 @@ type LoginRequiredPanelProps = {
 
 export function LoginRequiredPanel({
   loginNext,
-  description = "로그인 후 이용할 수 있습니다. 계좌 연동은 선택 사항입니다.",
+  description = "로그인 후 이용할 수 있습니다.",
 }: LoginRequiredPanelProps) {
   return (
     <Card className="border-amber-500/30 bg-amber-500/5 p-6">
@@ -30,7 +30,7 @@ export function LoginRequiredPanel({
           <div className="flex flex-wrap gap-2">
             <Link
               href={`/login${loginNext ? `?next=${encodeURIComponent(loginNext)}` : ""}`}
-              className="inline-flex h-9 items-center rounded-lg bg-[var(--accent)] px-4 text-sm font-semibold text-white hover:opacity-90"
+              className="inline-flex h-9 items-center rounded-lg bg-[var(--brand)] px-4 text-sm font-semibold text-white hover:opacity-90"
             >
               로그인
             </Link>

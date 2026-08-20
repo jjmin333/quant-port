@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>남은 페이지 5종 — 위젯 선택용 목업 v1</title>
+<style>
+:root {
+  --background: oklch(0.97 0 0); --foreground: oklch(0.145 0 0); --card: oklch(1 0 0);
+  --muted: oklch(0.97 0 0); --muted-foreground: oklch(0.52 0 0); --accent: oklch(0.93 0 0);
+  --border: oklch(0.87 0 0); --brand: #2563EB; --brand-muted: rgba(37,99,235,.1);
+  --profit: #DC2626; --loss: #2563EB;
+  --score-high: #15803D; --score-mid: #C2410C; --score-low: #B91C1C;
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0); --foreground: oklch(0.985 0 0); --card: oklch(0.205 0 0);
+  --muted: oklch(0.269 0 0); --muted-foreground: oklch(0.708 0 0); --accent: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 16%); --brand: #60A5FA; --brand-muted: rgba(96,165,250,.15);
+  --profit: #F87171; --loss: #60A5FA;
+  --score-high: #4ADE80; --score-mid: #FB923C; --score-low: #F87171;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--background); color: var(--foreground); padding: 24px;
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 12px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1200px; margin: 0 auto; }
+h1 { font-size: 20px; font-weight: 700; }
+h2 { font-size: 16px; font-weight: 700; }
+h3 { font-size: 13px; font-weight: 600; }
+.sub { color: var(--muted-foreground); font-size: 12px; }
+.note { color: var(--muted-foreground); font-size: 11px; margin-top: 6px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.up { color: var(--profit); } .down { color: var(--loss); }
+
+.topbar { display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding-bottom:14px; margin-bottom:18px; border-bottom:1px solid var(--border);
+  position:sticky; top:0; background:var(--background); z-index:9; }
+button.tgl { font:inherit; cursor:pointer; border:1px solid var(--border); background:var(--card);
+  color:var(--foreground); border-radius:8px; padding:5px 12px; }
+
+.page { margin-bottom: 34px; padding-top: 18px; border-top: 2px solid var(--border); }
+.page > h2 { margin-bottom: 2px; }
+.opt { margin-top: 16px; }
+.opt-head { display:flex; align-items:baseline; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+.tag { font-size:11px; font-weight:700; background:var(--brand-muted); color:var(--brand);
+  border-radius:6px; padding:2px 7px; white-space:nowrap; }
+.tag.warn { background: color-mix(in oklab, var(--profit) 12%, transparent); color: var(--profit); }
+
+.card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:10px; }
+.card-h { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+@media (max-width: 900px){ .grid2,.grid3{ grid-template-columns:1fr; } }
+
+.row { display:flex; align-items:center; gap:8px; height:34px; padding:0 6px; border-radius:6px; }
+.row + .row { border-top:1px solid color-mix(in oklab,var(--border) 60%,transparent); }
+.row:hover { background: var(--accent); }
+.nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.av { width:20px;height:20px;border-radius:999px;flex:none;background:var(--muted);
+  display:grid;place-items:center;font-size:9px;font-weight:700;color:var(--muted-foreground); }
+.sorth { display:flex; align-items:center; gap:8px; height:26px; padding:0 6px;
+  border-bottom:1px solid var(--border); color:var(--muted-foreground); font-size:11px; }
+.sorth b { color: var(--foreground); font-weight:600; }
+svg.spark { width:58px;height:20px;flex:none; }
+.pct { width:60px; text-align:right; border-radius:5px; padding:1px 4px; }
+.h3u{background:color-mix(in oklab,var(--profit) 22%,transparent);color:var(--profit)}
+.h2u{background:color-mix(in oklab,var(--profit) 13%,transparent);color:var(--profit)}
+.h1u{background:color-mix(in oklab,var(--profit) 6%,transparent);color:var(--profit)}
+.h2d{background:color-mix(in oklab,var(--loss) 13%,transparent);color:var(--loss)}
+.h3d{background:color-mix(in oklab,var(--loss) 22%,transparent);color:var(--loss)}
+.badge{border-radius:6px;padding:1px 6px;font-size:11px;font-weight:600}
+.b-high{background:color-mix(in oklab,var(--score-high) 14%,transparent);color:var(--score-high)}
+.b-mid{background:color-mix(in oklab,var(--score-mid) 14%,transparent);color:var(--score-mid)}
+.bar{height:6px;border-radius:999px;background:var(--muted);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:999px}
+.kv{display:flex;justify-content:space-between;gap:8px;padding:3px 0}
+.kv span:first-child{color:var(--muted-foreground);font-size:11px}
+.pick{margin-top:10px;padding:8px 10px;border-radius:8px;background:var(--brand-muted);
+  color:var(--brand);font-size:11px;font-weight:600}
+.thumb{width:56px;height:38px;border-radius:6px;background:var(--muted);flex:none;
+  display:grid;place-items:center;font-size:9px;color:var(--muted-foreground)}
+.chip{border:1px solid var(--border);border-radius:999px;padding:2px 8px;font-size:11px;background:var(--card)}
+.chip.on{background:var(--accent);font-weight:600}
+.gauge{position:relative;height:8px;border-radius:999px;background:var(--muted);overflow:hidden}
+.gauge i{position:absolute;top:0;bottom:0;border-radius:999px}
+.gauge b{position:absolute;top:-3px;width:2px;height:14px;background:var(--foreground)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <h1>남은 페이지 5종 — 위젯 선택용 목업</h1>
+      <p class="sub">관심종목 · 보유종목 · 뉴스 · 리포트 · 기록 3종 &nbsp;|&nbsp; 원하는 번호를 알려주세요</p>
+    </div>
+    <button class="tgl" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">라이트 / 다크</button>
+  </div>
+
+  <!-- ══════════ 관심종목 ══════════ -->
+  <section class="page">
+    <h2>1. 관심종목</h2>
+    <p class="sub">지금은 행마다 5개 지표(52주 저/고·전월·전주·전일)가 그리드로 깔려 <b>행 높이가 100px</b>입니다. 10종목이면 첫 화면에 3~4개만 보입니다.</p>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag">W-1</span><h3>표형 보기 + 정렬 헤더 (행 34px)</h3></div>
+      <div class="card">
+        <div class="sorth"><span style="width:20px"></span><b style="flex:1">종목</b><span style="width:78px;text-align:right">현재가</span><span style="width:60px;text-align:right">전일 ▾</span><span style="width:52px;text-align:right">전주</span><span style="width:52px;text-align:right">전월</span><span style="width:58px;text-align:right">52주 위치</span></div>
+        <div class="row"><span class="av">삼</span><span class="nm">삼성전자</span><span class="mono" style="width:78px;text-align:right">241,000</span><span class="pct mono h1u">+0.42%</span><span class="mono" style="width:52px;text-align:right" >+3.1%</span><span class="mono up" style="width:52px;text-align:right">+12.4%</span><span style="width:58px"><span class="bar"><i style="width:52%;background:var(--muted-foreground)"></i></span></span></div>
+        <div class="row"><span class="av">SK</span><span class="nm">SK하이닉스</span><span class="mono" style="width:78px;text-align:right">1,433,000</span><span class="pct mono h3u">+6.1%</span><span class="mono" style="width:52px;text-align:right">+8.8%</span><span class="mono up" style="width:52px;text-align:right">+21.0%</span><span style="width:58px"><span class="bar"><i style="width:88%;background:var(--muted-foreground)"></i></span></span></div>
+        <div class="row"><span class="av">N</span><span class="nm">NAVER</span><span class="mono" style="width:78px;text-align:right">210,000</span><span class="pct mono h2d">-2.4%</span><span class="mono" style="width:52px;text-align:right">-1.2%</span><span class="mono down" style="width:52px;text-align:right">-6.5%</span><span style="width:58px"><span class="bar"><i style="width:34%;background:var(--muted-foreground)"></i></span></span></div>
+      </div>
+      <p class="note">52주 위치 = 저가~고가 구간에서 현재가가 어디인지. 숫자 4개보다 막대 하나가 빠릅니다.</p>
+      <div class="pick">→ W-1 채택 / 지금(카드형) 유지 / <b>둘 다 두고 전환</b></div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag">W-2</span><h3>스파크라인 + 종합 점수 열</h3></div>
+      <div class="card">
+        <div class="row"><span class="av">삼</span><span class="nm">삼성전자</span>
+          <svg class="spark" viewBox="0 0 58 20"><path d="M0,15 L12,13 L24,16 L36,9 L48,11 L58,6" fill="none" stroke="var(--profit)" stroke-width="1.5"/></svg>
+          <span class="pct mono h1u">+0.42%</span><span class="mono b-high badge" style="width:40px;text-align:center">73 A</span></div>
+        <div class="row"><span class="av">SK</span><span class="nm">SK하이닉스</span>
+          <svg class="spark" viewBox="0 0 58 20"><path d="M0,17 L12,14 L24,12 L36,8 L48,5 L58,3" fill="none" stroke="var(--profit)" stroke-width="1.5"/></svg>
+          <span class="pct mono h3u">+6.1%</span><span class="mono b-high badge" style="width:40px;text-align:center">81 A+</span></div>
+        <div class="row"><span class="av">N</span><span class="nm">NAVER</span>
+          <svg class="spark" viewBox="0 0 58 20"><path d="M0,6 L12,9 L24,8 L36,13 L48,15 L58,16" fill="none" stroke="var(--loss)" stroke-width="1.5"/></svg>
+          <span class="pct mono h2d">-2.4%</span><span class="mono b-mid badge" style="width:40px;text-align:center">54 B</span></div>
+      </div>
+      <p class="note">
+        <span class="tag warn" style="margin-right:6px">비용</span>
+        점수는 <b>배치 API가 없어 종목당 1요청</b>입니다(확인함). 스파크라인처럼 큐로 순차 호출하고 화면에 보이는 행만 부릅니다. 관심종목이 30개면 30요청이 천천히 나갑니다.
+      </p>
+      <div class="pick">→ 스파크라인만 / 점수만 / 둘 다 / 미채택</div>
+    </div>
+  </section>
+
+  <!-- ══════════ 보유종목 ══════════ -->
+  <section class="page">
+    <h2>2. 보유종목</h2>
+    <p class="sub"><b class="up">지금 손익이 아예 안 보입니다.</b> 매입가(<code>avgPrice</code>)를 저장해두고도 화면엔 현재가·평가금액만 있습니다.</p>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag">H-1</span><h3>매입가 대비 손익 — 가장 큰 누락</h3></div>
+      <div class="grid2">
+        <div class="card">
+          <div class="card-h"><h3>표형</h3><span class="sub">종목이 많을 때</span></div>
+          <div class="sorth"><b style="flex:1">종목</b><span style="width:44px;text-align:right">수량</span><span style="width:70px;text-align:right">매입가</span><span style="width:70px;text-align:right">현재가</span><span style="width:86px;text-align:right">평가손익 ▾</span></div>
+          <div class="row"><span class="nm">삼성전자</span><span class="mono" style="width:44px;text-align:right">10</span><span class="mono" style="width:70px;text-align:right">198,000</span><span class="mono" style="width:70px;text-align:right">241,000</span>
+            <span style="width:86px;text-align:right"><b class="mono up">+430,000</b><br><span class="mono up" style="font-size:11px">+21.72%</span></span></div>
+          <div class="row" style="height:44px"><span class="nm">Apple</span><span class="mono" style="width:44px;text-align:right">5</span><span class="mono" style="width:70px;text-align:right">$212.40</span><span class="mono" style="width:70px;text-align:right">$200.00</span>
+            <span style="width:86px;text-align:right"><b class="mono down">-$62.00</b><br><span class="mono down" style="font-size:11px">-5.84%</span></span></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h3>레일 요약에도 추가</h3></div>
+          <div class="kv"><span>총 평가금액</span><b class="mono">3,817,710원</b></div>
+          <div class="kv"><span>총 매입금액</span><b class="mono">3,462,000원</b></div>
+          <div class="kv"><span>평가손익</span><b class="mono up">+355,710원 (+10.27%)</b></div>
+          <div class="kv"><span>오늘 손익</span><b class="mono down">-1,266원 (-0.03%)</b></div>
+          <p class="note">원·달러가 섞이면 환율로 원화 환산합니다. 환율을 못 받으면 합계를 보류합니다(지금 규칙 그대로).</p>
+        </div>
+      </div>
+      <div class="pick">→ H-1 채택 / 미채택 &nbsp;·&nbsp; 표형 / 카드형 / 전환</div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag">H-2</span><h3>비중 막대 + 스파크라인</h3></div>
+      <div class="card">
+        <div class="row" style="height:38px"><span class="av">삼</span><span class="nm">삼성전자</span>
+          <span style="width:110px"><span class="bar"><i style="width:63%;background:var(--brand)"></i></span></span>
+          <span class="mono" style="width:44px;text-align:right">62.9%</span>
+          <svg class="spark" viewBox="0 0 58 20"><path d="M0,15 L12,13 L24,16 L36,9 L48,11 L58,6" fill="none" stroke="var(--profit)" stroke-width="1.5"/></svg>
+          <span class="mono up" style="width:64px;text-align:right">+21.72%</span></div>
+        <div class="row" style="height:38px"><span class="av">A</span><span class="nm">Apple</span>
+          <span style="width:110px"><span class="bar"><i style="width:37%;background:var(--brand)"></i></span></span>
+          <span class="mono" style="width:44px;text-align:right">37.1%</span>
+          <svg class="spark" viewBox="0 0 58 20"><path d="M0,6 L12,9 L24,8 L36,13 L48,15 L58,16" fill="none" stroke="var(--loss)" stroke-width="1.5"/></svg>
+          <span class="mono down" style="width:64px;text-align:right">-5.84%</span></div>
+      </div>
+      <div class="pick">→ 비중 막대 / 스파크라인 / 둘 다 / 미채택</div>
+    </div>
+  </section>
+
+  <!-- ══════════ 뉴스 ══════════ -->
+  <section class="page">
+    <h2>3. 뉴스</h2>
+    <p class="sub">기사에 <code>imageUrl</code>·<code>symbols</code>·<code>keywords</code>·<code>viewCount</code>가 이미 들어 있는데 목록은 제목·출처·시각만 씁니다.</p>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag">N-1</span><h3>썸네일 + 언급 종목 배지</h3></div>
+      <div class="grid2">
+        <div class="card">
+          <div class="card-h"><h3>지금</h3></div>
+          <div style="padding:8px 4px;border-bottom:1px solid var(--border)">
+            <div>엔비디아 젠슨 황은 왜 월가서 '5000억달러' 끌어오나</div>
+            <div class="note">bostonkorea · 5분 전</div>
+          </div>
+          <div style="padding:8px 4px">
+            <div>펄어비스, 2분기 매출 1,926억원. '붉은사막' DLC…</div>
+            <div class="note">동아일보 · 15분 전</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h3>N-1 적용</h3></div>
+          <div style="display:flex;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border)">
+            <div class="thumb">이미지</div>
+            <div style="min-width:0;flex:1">
+              <div>엔비디아 젠슨 황은 왜 월가서 '5000억달러' 끌어오나</div>
+              <div class="note" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+                bostonkorea · 5분 전 · 👁 1,204
+                <span class="chip" style="font-size:10px">엔비디아</span>
+                <span class="chip" style="font-size:10px">SK하이닉스</span>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;padding:8px 4px">
+            <div class="thumb">이미지</div>
+            <div style="min-width:0;flex:1">
+              <div>펄어비스, 2분기 매출 1,926억원. '붉은사막' DLC…</div>
+              <div class="note">동아일보 · 15분 전 · 👁 402 <span class="chip" style="font-size:10px">펄어비스</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="note">썸네일이 없는 기사는 자리를 비우지 않고 한 줄로 붙습니다(빈 회색 상자를 남기지 않음).</p>
+      <div class="pick">→ 썸네일만 / 종목 배지만 / 둘 다 / 미채택</div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag">N-2</span><h3>레일: 많이 언급된 종목 · 읽은 기사 표시</h3></div>
+      <div class="grid2">
+        <div class="card">
+          <div class="card-h"><h3>많이 언급된 종목</h3><span class="sub">화면 기사에서 집계</span></div>
+          <div class="row"><span class="av">삼</span><span class="nm">삼성전자</span><span class="mono up">+0.42%</span><span class="mono" style="width:32px;text-align:right">18건</span></div>
+          <div class="row"><span class="av">SK</span><span class="nm">SK하이닉스</span><span class="mono up">+6.1%</span><span class="mono" style="width:32px;text-align:right">12건</span></div>
+          <div class="row"><span class="av">엔</span><span class="nm">엔비디아</span><span class="mono down">-0.8%</span><span class="mono" style="width:32px;text-align:right">9건</span></div>
+          <p class="note">누르면 그 종목 기사만 걸러 봅니다(키워드 필터와 같은 방식).</p>
+        </div>
+        <div class="card">
+          <div class="card-h"><h3>읽은 기사 흐리게</h3></div>
+          <div style="padding:8px 4px;border-bottom:1px solid var(--border);opacity:.45">
+            <div>[읽음] 미 달러화 강보합…미·이란 합의 낙관론에</div><div class="note">bostonkorea · 9분 전</div>
+          </div>
+          <div style="padding:8px 4px">
+            <div>바이낸스 스톡스, 美 주식 최초 이전 시 최대 12,000 USDC</div><div class="note">bostonkorea · 11분 전</div>
+          </div>
+          <p class="note">브라우저에만 저장합니다(서버 전송 없음). 같은 기사를 두 번 열지 않게 됩니다.</p>
+        </div>
+      </div>
+      <div class="pick">→ 언급 종목 / 읽음 표시 / 둘 다 / 미채택</div>
+    </div>
+  </section>
+
+  <!-- ══════════ 리포트 ══════════ -->
+  <section class="page">
+    <h2>4. 투자 리포트</h2>
+    <p class="sub">발행가·목표가·손절가·기간·알파가 다 있는데 목록에서는 숫자로만 읽힙니다.</p>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag">R-1</span><h3>목표가 게이지 — 지금 어디까지 왔나</h3></div>
+      <div class="card" style="max-width:520px">
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+          <span class="badge b-high">매수</span><b>SK하이닉스</b><span class="sub">제갈통 · 12일 남음</span>
+        </div>
+        <div class="gauge" style="margin:14px 0 6px">
+          <i style="left:0;width:64%;background:color-mix(in oklab,var(--profit) 30%,transparent)"></i>
+          <b style="left:64%"></b>
+        </div>
+        <div style="display:flex;justify-content:space-between" class="note">
+          <span>손절 1,150,000</span><span>발행 1,280,000</span>
+          <span class="up">현재 1,433,000</span><span>목표 1,560,000</span>
+        </div>
+        <div class="kv" style="margin-top:8px"><span>수익률 / 알파</span><b class="mono"><span class="up">+11.95%</span> · <span class="up">+4.20%p</span></b></div>
+      </div>
+      <p class="note">손절~목표 구간에서 현재가 위치를 한 줄로. 숫자 네 개를 따로 읽지 않아도 됩니다.</p>
+      <div class="pick">→ R-1 채택 / 미채택</div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag">R-2</span><h3>레일: 성과 분포 · 종목 필터</h3></div>
+      <div class="grid2">
+        <div class="card">
+          <div class="card-h"><h3>내 알파 분포</h3></div>
+          <div style="display:flex;align-items:flex-end;gap:3px;height:70px;padding:0 4px">
+            <span style="flex:1;background:var(--loss);opacity:.5;height:18%"></span>
+            <span style="flex:1;background:var(--loss);opacity:.6;height:32%"></span>
+            <span style="flex:1;background:var(--muted-foreground);opacity:.5;height:56%"></span>
+            <span style="flex:1;background:var(--profit);opacity:.6;height:88%"></span>
+            <span style="flex:1;background:var(--profit);opacity:.75;height:64%"></span>
+            <span style="flex:1;background:var(--profit);opacity:.9;height:28%"></span>
+          </div>
+          <div style="display:flex;justify-content:space-between" class="note"><span>-20%p</span><span>0</span><span>+20%p</span></div>
+          <p class="note">판정 완료 리포트의 알파를 구간별로. 표본 10건 미만이면 "관찰 중"으로 둡니다.</p>
+        </div>
+        <div class="card">
+          <div class="card-h"><h3>종목으로 거르기</h3></div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap">
+            <span class="chip on">전체 12</span><span class="chip">SK하이닉스 4</span>
+            <span class="chip">삼성전자 3</span><span class="chip">오라클 2</span><span class="chip">엔비디아 2</span>
+          </div>
+          <p class="note">지금은 "많이 다룬 종목"이 보기만 되고 눌러도 안 걸러집니다.</p>
+        </div>
+      </div>
+      <div class="pick">→ 알파 분포 / 종목 필터 / 둘 다 / 미채택</div>
+    </div>
+  </section>
+
+  <!-- ══════════ 기록 ══════════ -->
+  <section class="page">
+    <h2>5. 기록 — 스탬프 · 메모장 · 목표가</h2>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag">S-1</span><h3>스탬프: 찍은 순간의 차트 (추가 요청 0)</h3></div>
+      <div class="card" style="max-width:560px">
+        <div class="row" style="height:auto;padding:8px 6px;align-items:flex-start">
+          <span class="av">삼</span>
+          <span style="flex:1;min-width:0">
+            <b>삼성전자</b> <span class="badge b-high" style="font-size:10px">강세</span>
+            <div class="note">2026-07-14 · 30일 · 확신도 4</div>
+          </span>
+          <svg class="spark" style="width:92px;height:34px" viewBox="0 0 92 34">
+            <path d="M0,26 L15,22 L30,25 L46,16 L61,19 L76,10 L92,6" fill="none" stroke="var(--profit)" stroke-width="1.6"/>
+            <circle cx="0" cy="26" r="2.5" fill="var(--muted-foreground)"/>
+            <circle cx="92" cy="6" r="2.5" fill="var(--profit)"/>
+          </svg>
+          <span style="width:76px;text-align:right">
+            <b class="mono up">+16.4%</b><div class="note">알파 <span class="up">+5.1%p</span></div>
+          </span>
+        </div>
+      </div>
+      <p class="note">
+        스탬프 객체 안에 <b>찍을 당시 캔들이 이미 박제돼 있습니다</b>(<code>stamp.chart.bars</code>). 그래서 이 차트는 <b>추가 API 호출이 0</b>입니다.
+        왼쪽 점이 찍은 시점, 오른쪽 점이 현재입니다.
+      </p>
+      <div class="pick">→ S-1 채택 / 미채택</div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag">J-1</span><h3>메모장: 본문 미리보기 · 태그</h3></div>
+      <div class="grid2">
+        <div class="card">
+          <div class="card-h"><h3>지금</h3></div>
+          <div style="padding:6px 4px"><b>HBM 경쟁 정리</b><div class="note">삼성전자 · 8월 3일</div></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h3>J-1 적용</h3></div>
+          <div style="padding:6px 4px">
+            <b>HBM 경쟁 정리</b>
+            <div class="note" style="margin:3px 0">SK가 먼저 갔지만 삼성 4분기 양산이 붙으면 가격이 빠질 수 있음. 확인할 것은…</div>
+            <div style="display:flex;gap:4px"><span class="chip" style="font-size:10px">삼성전자</span><span class="chip" style="font-size:10px">#반도체</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="pick">→ J-1 채택 / 미채택</div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag">T-1</span><h3>목표가: 진행 게이지</h3></div>
+      <div class="card" style="max-width:520px">
+        <div class="row" style="height:auto;padding:8px 6px;align-items:center">
+          <span style="flex:1;min-width:0"><b>삼성전자</b><div class="note">HBM 반등 확인</div></span>
+          <span style="width:220px">
+            <span class="gauge"><i style="left:0;width:80%;background:color-mix(in oklab,var(--profit) 30%,transparent)"></i><b style="left:80%"></b></span>
+            <span style="display:flex;justify-content:space-between" class="note"><span>241,000</span><span>목표 300,000</span></span>
+          </span>
+          <span class="mono" style="width:64px;text-align:right">+24.5%</span>
+        </div>
+      </div>
+      <div class="pick">→ T-1 채택 / 미채택</div>
+    </div>
+  </section>
+
+  <p class="sub" style="margin-top:28px;padding-top:14px;border-top:1px solid var(--border)">
+    답 예시: <b>“W-1 전환, W-2 둘 다, H-1 표형, H-2 둘 다, N-1 둘 다, N-2 둘 다, R-1, R-2 종목필터, S-1, J-1, T-1”</b><br>
+    빼고 싶은 건 <b>“N-1 미채택”</b>처럼 알려주시면 됩니다.
+  </p>
+</div>
+</body>
+</html>

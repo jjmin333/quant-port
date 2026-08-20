@@ -5,15 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/enact/quant-port/be/internal/model"
+	"github.com/enact/quant-port/be/internal/stocklogo"
 	"github.com/enact/quant-port/be/internal/toss"
 )
 
 const (
-	quoteStatsCachePrefix = "quotes:stats:v2:"
+	quoteStatsCachePrefix = "quotes:stats:v3:"
 )
 
 var usEastern *time.Location
@@ -37,60 +39,22 @@ type quoteStatsCache struct {
 	Volume       int64   `json:"volume"`
 }
 
-func (s *QuotesService) usdKrwRate(ctx context.Context) float64 {
-	if s.fx != nil {
-		mid, _, ok := s.fx.MidBuy(ctx)
-		if ok {
-			return mid
-		}
-	}
-	return 0
-}
-
-func moneyToKRW(amount float64, currency model.QuoteCurrency, fx float64) float64 {
-	if currency == model.CurrencyUSD && fx > 0 {
-		return amount * fx
-	}
-	return amount
-}
-
-func (s *QuotesService) normalizeQuoteDetailKRW(d *model.QuoteDetail, fx float64) {
-	_ = d
-	_ = fx
-}
-
-func (s *QuotesService) normalizeQuoteSummaryKRW(q *model.QuoteSummary, fx float64) {
-	_ = q
-	_ = fx
-}
-
-func (s *QuotesService) normalizeOrderBookKRW(book *model.OrderBook, fx float64) {
-	_ = book
-	_ = fx
-}
-
-func (s *QuotesService) normalizeTradesKRW(trades []model.TradeTick, fx float64) {
-	_ = trades
-	_ = fx
-}
-
 func (s *QuotesService) buildQuoteDetailFromToss(ctx context.Context, symbol string) (model.QuoteDetail, error) {
-	stock, err := s.toss.GetStock(ctx, symbol)
-	if err != nil || stock == nil {
-		return model.QuoteDetail{}, fmt.Errorf("stock %s: %w", symbol, err)
+	stock, ok := s.lookupPrefetchedStock(symbol)
+	if !ok {
+		var err error
+		stock, err = s.toss.GetStock(ctx, symbol)
+		if err != nil || stock == nil {
+			return model.QuoteDetail{}, fmt.Errorf("stock %s: %w", symbol, err)
+		}
 	}
 
-	currentPrice := 0.0
-	if s.marketStore != nil {
-		if v, ok := s.marketStore.EnsurePrice(ctx, symbol); ok {
-			currentPrice = v
-		}
-	} else {
+	currentPrice := s.resolveBestLivePrice(ctx, symbol, 0, nil, nil)
+	if currentPrice <= 0 && s.toss != nil {
 		price, err := s.toss.GetPrice(ctx, symbol)
-		if err != nil || price == nil {
-			return model.QuoteDetail{}, fmt.Errorf("price %s: %w", symbol, err)
+		if err == nil && price != nil {
+			currentPrice = parseDecimal(price.LastPrice)
 		}
-		currentPrice = parseDecimal(price.LastPrice)
 	}
 	if currentPrice <= 0 {
 		return model.QuoteDetail{}, fmt.Errorf("price %s: unavailable", symbol)
@@ -98,12 +62,9 @@ func (s *QuotesService) buildQuoteDetailFromToss(ctx context.Context, symbol str
 
 	stats := s.loadQuoteStats(ctx, symbol, stock, currentPrice)
 
-	prevClose := stats.PrevClose
-	change := 0.0
-	changeRate := 0.0
-	if prevClose > 0 {
-		change = currentPrice - prevClose
-		changeRate = (change / prevClose) * 100
+	prevClose, ok := s.resolvePrevClose(ctx, symbol)
+	if !ok || prevClose <= 0 {
+		return model.QuoteDetail{}, fmt.Errorf("reference price %s: unavailable", symbol)
 	}
 
 	marketCap := stats.MarketCap
@@ -125,8 +86,6 @@ func (s *QuotesService) buildQuoteDetailFromToss(ctx context.Context, symbol str
 			Currency:     currency,
 			AssetType:    assetTypeFromMarket(stock.Market, stock.SecurityType),
 			CurrentPrice: currentPrice,
-			Change:       change,
-			ChangeRate:   changeRate,
 			Volume:       stats.Volume,
 			TradingValue: stats.TradingValue,
 		},
@@ -139,9 +98,9 @@ func (s *QuotesService) buildQuoteDetailFromToss(ctx context.Context, symbol str
 		MarketCap:  marketCap,
 		UpdatedAt:  updatedAt,
 	}
+	s.applyQuoteChange(ctx, symbol, currentPrice, prevClose, &detail)
 
-	fx := s.usdKrwRate(ctx)
-	s.normalizeQuoteDetailKRW(&detail, fx)
+	stocklogo.ApplyToQuoteSummary(&detail.QuoteSummary)
 	return detail, nil
 }
 
@@ -177,12 +136,24 @@ func (s *QuotesService) loadQuoteStats(ctx context.Context, symbol string, stock
 func (s *QuotesService) fetchQuoteStats(ctx context.Context, symbol string, stock *toss.StockInfo, currentPrice float64) quoteStatsCache {
 	stats := quoteStatsCache{}
 
-	prevClose, err := fetchPrevClose(ctx, s.toss, symbol)
-	if err == nil && prevClose > 0 {
+	prevClose, ok := s.resolvePrevClose(ctx, symbol)
+	if !ok && s.toss != nil {
+		assetType := string(s.quoteAssetType(ctx, symbol))
+		var cals marketCalendars
+		if s.marketStore != nil {
+			cals, _ = s.marketStore.EnsureCalendars(ctx)
+		}
+		var err error
+		prevClose, err = fetchPrevClose(ctx, s.toss, symbol, assetType, cals)
+		if err == nil && prevClose > 0 {
+			cacheReferencePrice(ctx, s.redis, symbol, prevClose)
+		}
+	}
+	if prevClose > 0 {
 		stats.PrevClose = prevClose
 	}
 
-	open, high, low, volume, tradingValue := fetchIntradayStats(ctx, s.toss, symbol, stock.Currency)
+	open, high, low, volume, tradingValue := s.fetchIntradayStats(ctx, symbol, stock.Currency)
 	stats.Open = open
 	stats.High = high
 	stats.Low = low
@@ -205,10 +176,11 @@ func (s *QuotesService) fetchQuoteStats(ctx context.Context, symbol string, stoc
 		stats.Low = currentPrice
 	}
 
-	weekHigh, weekLow, err := fetchWeek52Range(ctx, s.toss, symbol)
-	if err == nil {
-		stats.Week52High = weekHigh
-		stats.Week52Low = weekLow
+	if bars := s.ensureDailyBarsHistory(ctx, symbol, metricsDailyBarLimit); len(bars) > 0 {
+		if weekHigh, weekLow, ok := week52RangeFromBars(bars); ok {
+			stats.Week52High = weekHigh
+			stats.Week52Low = weekLow
+		}
 	}
 
 	if stock.SharesOutstanding != "" {
@@ -221,7 +193,12 @@ func (s *QuotesService) fetchQuoteStats(ctx context.Context, symbol string, stoc
 	return stats
 }
 
-func fetchIntradayStats(ctx context.Context, client *toss.Client, symbol string, currency toss.Currency) (
+// fetchIntradayStats computes today's open/high/low/volume/tradingValue.
+// Tries DB-stored 1m bars first — refreshRawCandles already keeps these warm
+// for every tracked symbol via its own delta fetch, so this can usually
+// avoid hitting Toss at all. Only symbols with no tracked history yet (cold
+// start) fall through to a live GetCandles(Count:480) call.
+func (s *QuotesService) fetchIntradayStats(ctx context.Context, symbol string, currency toss.Currency) (
 	open, high, low float64, volume int64, tradingValue float64,
 ) {
 	loc := kst
@@ -230,13 +207,19 @@ func fetchIntradayStats(ctx context.Context, client *toss.Client, symbol string,
 	}
 	today := startOfDay(time.Now().In(loc))
 
-	page, err := client.GetCandles(ctx, toss.GetCandlesParams{
+	if bars := s.listIntradayBarsFromDB(ctx, symbol, 480); len(bars) > 0 {
+		if o, h, l, v, tv, ok := sumIntradayBarsFrom(bars, today); ok {
+			return o, h, l, v, tv
+		}
+	}
+
+	page, err := s.toss.GetCandles(ctx, toss.GetCandlesParams{
 		Symbol:   symbol,
 		Interval: toss.CandleInterval1m,
 		Count:    480,
 	})
 	if err != nil || page == nil || len(page.Candles) == 0 {
-		return fallbackDailySessionStats(ctx, client, symbol, today)
+		return s.fallbackDailySessionStats(ctx, symbol, today)
 	}
 
 	var first bool
@@ -269,16 +252,44 @@ func fetchIntradayStats(ctx context.Context, client *toss.Client, symbol string,
 	}
 
 	if !first {
-		return fallbackDailySessionStats(ctx, client, symbol, today)
+		return s.fallbackDailySessionStats(ctx, symbol, today)
 	}
 	return open, high, low, volume, tradingValue
 }
 
-func fallbackDailySessionStats(ctx context.Context, client *toss.Client, symbol string, today time.Time) (
+// sumIntradayBarsFrom reduces DB-stored 1m bars to today's session stats.
+// ok is false when none of the bars fall on/after `today`, signaling the
+// caller should fall through to a live Toss fetch instead of reporting an
+// all-zero session.
+func sumIntradayBarsFrom(bars []model.Candle, today time.Time) (
+	open, high, low float64, volume int64, tradingValue float64, ok bool,
+) {
+	for _, c := range bars {
+		if parseQuoteCandleTime(c.Time).Before(today) {
+			continue
+		}
+		if !ok {
+			open, high, low = c.Open, c.High, c.Low
+			ok = true
+		} else {
+			if c.High > high {
+				high = c.High
+			}
+			if c.Low < low || low == 0 {
+				low = c.Low
+			}
+		}
+		volume += c.Volume
+		tradingValue += c.Close * float64(c.Volume)
+	}
+	return
+}
+
+func (s *QuotesService) fallbackDailySessionStats(ctx context.Context, symbol string, today time.Time) (
 	open, high, low float64, volume int64, tradingValue float64,
 ) {
 	adjusted := true
-	page, err := client.GetCandles(ctx, toss.GetCandlesParams{
+	page, err := s.toss.GetCandles(ctx, toss.GetCandlesParams{
 		Symbol:   symbol,
 		Interval: toss.CandleInterval1d,
 		Count:    2,
@@ -299,50 +310,6 @@ func fallbackDailySessionStats(ctx context.Context, client *toss.Client, symbol 
 	closePx := parseDecimal(c.ClosePrice)
 	tradingValue = closePx * float64(volume)
 	return open, high, low, volume, tradingValue
-}
-
-func fetchWeek52Range(ctx context.Context, client *toss.Client, symbol string) (high, low float64, err error) {
-	adjusted := true
-	var collected []toss.Candle
-	cursor := ""
-	for pages := 0; pages < 3 && len(collected) < 280; pages++ {
-		params := toss.GetCandlesParams{
-			Symbol:   symbol,
-			Interval: toss.CandleInterval1d,
-			Count:    200,
-			Adjusted: &adjusted,
-		}
-		if cursor != "" {
-			params.Before = cursor
-		}
-		page, fetchErr := client.GetCandles(ctx, params)
-		if fetchErr != nil {
-			err = fetchErr
-			break
-		}
-		if page == nil || len(page.Candles) == 0 {
-			break
-		}
-		collected = append(collected, page.Candles...)
-		if page.NextBefore == nil {
-			break
-		}
-		cursor = *page.NextBefore
-	}
-	if len(collected) == 0 {
-		return 0, 0, fmt.Errorf("no daily candles for %s", symbol)
-	}
-	for _, c := range collected {
-		h := parseDecimal(c.HighPrice)
-		l := parseDecimal(c.LowPrice)
-		if h > high {
-			high = h
-		}
-		if low == 0 || l < low {
-			low = l
-		}
-	}
-	return high, low, nil
 }
 
 func (s *QuotesService) statsFromRawCache(ctx context.Context, symbol string, stock *toss.StockInfo, currentPrice float64) (quoteStatsCache, bool) {
@@ -383,15 +350,12 @@ func (s *QuotesService) statsFromRawCache(ctx context.Context, symbol string, st
 	}
 
 	var raw1d []model.Candle
-	if s.cacheGetJSON(ctx, fmt.Sprintf(mdRaw1dKeyFmt, sym), &raw1d) && len(raw1d) >= 2 {
-		stats.PrevClose = raw1d[1].Close
-	} else if len(raw1d) == 1 {
-		stats.PrevClose = raw1d[0].Close
+	if s.cacheGetJSON(ctx, fmt.Sprintf(mdRaw1dKeyFmt, sym), &raw1d) && len(raw1d) > 0 {
+		if ref, ok := s.resolvePrevClose(ctx, sym); ok {
+			stats.PrevClose = ref
+		}
 	}
 
-	if stats.PrevClose <= 0 && len(raw1d) > 0 {
-		stats.PrevClose = raw1d[0].Close
-	}
 	if stats.Open <= 0 && stats.PrevClose > 0 {
 		stats.Open = stats.PrevClose
 	}
@@ -431,21 +395,43 @@ func startOfDay(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 }
 
+// prevCloseFromDailyCandles returns the prior session close from daily bars.
+// Bars may be ascending (DB) or descending (Toss tail) — always sort by time first.
+func prevCloseFromDailyCandles(bars []model.Candle) (float64, bool) {
+	if len(bars) == 0 {
+		return 0, false
+	}
+	sorted := append([]model.Candle(nil), bars...)
+	sort.Slice(sorted, func(i, j int) bool {
+		return parseQuoteCandleTime(sorted[i].Time).Before(parseQuoteCandleTime(sorted[j].Time))
+	})
+	if len(sorted) >= 2 {
+		return sorted[len(sorted)-2].Close, true
+	}
+	return sorted[len(sorted)-1].Close, true
+}
+
 func (s *QuotesService) enrichQuoteSummaries(ctx context.Context, items []model.QuoteSummary) {
 	if !s.TossEnabled() || len(items) == 0 {
 		return
 	}
-	fxByUSD := s.usdKrwRate(ctx)
-
 	for i := range items {
 		stock, err := s.toss.GetStock(ctx, items[i].Symbol)
 		if err != nil || stock == nil {
 			continue
 		}
 		stats := s.loadQuoteStats(ctx, items[i].Symbol, stock, items[i].CurrentPrice)
-		if stats.PrevClose > 0 && items[i].CurrentPrice > 0 {
-			items[i].Change = items[i].CurrentPrice - stats.PrevClose
-			items[i].ChangeRate = (items[i].Change / stats.PrevClose) * 100
+		prevClose := stats.PrevClose
+		if ref, ok := s.resolvePrevClose(ctx, items[i].Symbol); ok {
+			prevClose = ref
+		}
+		if items[i].CurrentPrice > 0 {
+			assetType := assetTypeFromMarket(stock.Market, stock.SecurityType)
+			session := s.marketSessionFor(ctx, items[i].Symbol)
+			regularClose := s.resolveRegularClose(ctx, items[i].Symbol, assetType, session)
+			items[i].Change, items[i].ChangeRate = computeQuoteChange(
+				items[i].CurrentPrice, prevClose, regularClose, session,
+			)
 		}
 		items[i].Volume = stats.Volume
 		items[i].TradingValue = stats.TradingValue
@@ -453,12 +439,6 @@ func (s *QuotesService) enrichQuoteSummaries(ctx context.Context, items []model.
 		items[i].Market = stock.Market
 		items[i].AssetType = assetTypeFromMarket(stock.Market, stock.SecurityType)
 		items[i].Currency = modelCurrency(stock.Currency)
-
-		fx := fxByUSD
-		if items[i].Currency != model.CurrencyUSD {
-			fx = 0
-		}
-		s.normalizeQuoteSummaryKRW(&items[i], fx)
 	}
 }
 
@@ -490,8 +470,3 @@ func roundIndexValue(v float64) float64 {
 	return v
 }
 
-func (s *QuotesService) normalizeCandlesKRW(ctx context.Context, symbol string, candles []model.Candle) []model.Candle {
-	_ = ctx
-	_ = symbol
-	return candles
-}

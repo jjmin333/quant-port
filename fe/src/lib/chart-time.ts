@@ -4,12 +4,62 @@ export function isDailyCandleInterval(interval: CandleInterval): boolean {
   return interval === "1d" || interval === "1w" || interval === "1M";
 }
 
+export function isWeeklyCandleInterval(interval: CandleInterval): boolean {
+  return interval === "1w";
+}
+
+export function isMonthlyCandleInterval(interval: CandleInterval): boolean {
+  return interval === "1M";
+}
+
+export function isDailyBarInterval(interval: CandleInterval): boolean {
+  return interval === "1d";
+}
+
 export function isIntradayInterval(interval: CandleInterval): boolean {
   return !isDailyCandleInterval(interval);
 }
 
+/** Default visible bar count per intraday interval — targets different time depths on the chart. */
+export function intradayInitialVisibleBars(interval: CandleInterval): number {
+  switch (interval) {
+    case "1m":
+      return 120;
+    case "5m":
+      return 72;
+    case "10m":
+      return 48;
+    case "30m":
+      return 32;
+    case "60m":
+      return 56;
+    default:
+      return 120;
+  }
+}
+
 function pad2(value: number): string {
   return String(value).padStart(2, "0");
+}
+
+function kstDateParts(epochSeconds: number) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  }).formatToParts(new Date(epochSeconds * 1000));
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hours: get("hour"),
+    minutes: get("minute"),
+  };
 }
 
 export type ChartVisibleSpan = {
@@ -28,17 +78,28 @@ export function formatAdaptiveChartAxisTime(
   epochSeconds: number,
   interval: CandleInterval,
   visible: ChartVisibleSpan,
+  _visibleEpochs: number[] = [],
 ): string {
-  const date = new Date(epochSeconds * 1000);
-  const y = date.getFullYear();
-  const m = pad2(date.getMonth() + 1);
-  const d = pad2(date.getDate());
-  const hh = pad2(date.getHours());
-  const mm = pad2(date.getMinutes());
+  const date = kstDateParts(epochSeconds);
+  const y = date.year;
+  const m = pad2(date.month);
+  const d = pad2(date.day);
+  const hh = pad2(date.hours);
+  const mm = pad2(date.minutes);
   const span = visible.spanSeconds;
+  void _visibleEpochs;
 
-  if (isDailyCandleInterval(interval)) {
-    if (span > 365 * 24 * 3600) return `${y}`;
+  if (isMonthlyCandleInterval(interval)) {
+    if (span > 365 * 24 * 3600 * 3) return `${y}`;
+    return `${y}-${m}`;
+  }
+  if (isWeeklyCandleInterval(interval)) {
+    if (span > 365 * 24 * 3600 * 2) return `${y}`;
+    if (span > 120 * 24 * 3600) return `${y}-${m}`;
+    return `${y}-${m}-${d}`;
+  }
+  if (isDailyBarInterval(interval)) {
+    if (span > 365 * 24 * 3600 * 3) return `${y}`;
     if (span > 45 * 24 * 3600) return `${y}-${m}`;
     return `${y}-${m}-${d}`;
   }
@@ -57,15 +118,19 @@ export function formatAdaptiveChartAxisTime(
 }
 
 export function formatChartCrosshairTime(epochSeconds: number, interval: CandleInterval): string {
-  const date = new Date(epochSeconds * 1000);
-  const y = date.getFullYear();
-  const m = pad2(date.getMonth() + 1);
-  const d = pad2(date.getDate());
+  // Must use kstDateParts, not Date's local getters: the axis labels above
+  // (formatAdaptiveChartAxisTime) already render in KST, and a viewer whose
+  // browser isn't set to KST would otherwise see the crosshair tooltip
+  // disagree with the axis by whatever offset their local zone has.
+  const date = kstDateParts(epochSeconds);
+  const y = date.year;
+  const m = pad2(date.month);
+  const d = pad2(date.day);
   if (isDailyCandleInterval(interval)) {
     return `${y}-${m}-${d}`;
   }
-  const hh = pad2(date.getHours());
-  const mm = pad2(date.getMinutes());
+  const hh = pad2(date.hours);
+  const mm = pad2(date.minutes);
   return `${y}-${m}-${d} ${hh}:${mm}`;
 }
 
@@ -135,20 +200,22 @@ function parseChartCandleDate(raw: string): string | null {
   }
   const date = new Date(raw.includes("T") || raw.includes("+") ? raw : `${raw.replace(" ", "T")}+09:00`);
   if (Number.isNaN(date.getTime())) return null;
-  const y = date.getFullYear();
-  const m = pad2(date.getMonth() + 1);
-  const d = pad2(date.getDate());
-  return `${y}-${m}-${d}`;
+  // KST calendar parts, not local getters: this instant can fall on a
+  // different calendar day once shifted through a non-KST browser timezone.
+  const parts = kstDateParts(Math.floor(date.getTime() / 1000));
+  return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}`;
 }
 
 /** Parse candle time to UTC epoch seconds (KST wall clock). */
 export function parseChartCandleEpoch(raw: string): number {
   const trimmed = raw.trim();
   if (/^\d{2}:\d{2}(:\d{2})?$/.test(trimmed)) {
-    const now = new Date();
+    // "today" must be today in KST, not the browser's local calendar day —
+    // those disagree for part of the day whenever the viewer isn't in KST.
+    const today = kstDateParts(Math.floor(Date.now() / 1000));
     const [h, m, s = "0"] = trimmed.split(":");
     const date = new Date(
-      `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}T${h}:${m}:${s}+09:00`,
+      `${today.year}-${pad2(today.month)}-${pad2(today.day)}T${h}:${m}:${s}+09:00`,
     );
     return Math.floor(date.getTime() / 1000);
   }
@@ -196,4 +263,20 @@ export function computeVisibleSpan(
   const start = timeToEpochSeconds(ohlcTimes[fromIdx]!);
   const end = timeToEpochSeconds(ohlcTimes[toIdx]!);
   return { spanSeconds: Math.max(end - start, 0) };
+}
+
+export function visibleEpochsFromChartTimes(
+  times: Array<number | string | { year: number; month: number; day: number }>,
+  from: number,
+  to: number,
+): number[] {
+  if (times.length === 0) return [];
+  const fromIdx = Math.max(0, Math.ceil(from));
+  const toIdx = Math.min(times.length - 1, Math.floor(to));
+  if (fromIdx > toIdx) return [];
+  const out: number[] = [];
+  for (let i = fromIdx; i <= toIdx; i++) {
+    out.push(timeToEpochSeconds(times[i]!));
+  }
+  return out;
 }

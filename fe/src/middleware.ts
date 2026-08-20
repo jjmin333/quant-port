@@ -1,7 +1,20 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { isAuthPage } from "@/lib/auth-routes";
-import { isHiddenAccountPath } from "@/lib/account-features";
+
+const REMOVED_ACCOUNT_PATHS = [
+  "/onboarding/link-broker",
+  "/transactions",
+  "/portfolio",
+  "/risk",
+  "/backtest",
+] as const;
+
+function isRemovedAccountPath(pathname: string): boolean {
+  return REMOVED_ACCOUNT_PATHS.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -11,7 +24,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  if (isHiddenAccountPath(pathname)) {
+  if (isRemovedAccountPath(pathname)) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 

@@ -7,14 +7,15 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
-	"os"
 	"net/url"
+	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/marketdata/apibudget"
+	"github.com/enact/quant-port/be/internal/model"
 )
 
 const dartCorpCodeCachePath = "data/cache/dart_corp_code.zip"
@@ -81,7 +82,11 @@ func (d *DartClient) TodayDisclosures(ctx context.Context, symbols []string) ([]
 		return nil, err
 	}
 
-	now := time.Now()
+	// "오늘" must be KST — DART is a Korean regulatory feed and the process's
+	// own zone is whatever the container runs as (UTC in Docker), so
+	// time.Now() without .In(KST) queries the wrong calendar day for part of
+	// every 24h cycle.
+	now := time.Now().In(model.KST)
 	bgn := now.Format("20060102")
 	var out []model.BriefingEvent
 
@@ -163,12 +168,31 @@ func (d *DartClient) ensureCorpCodes(ctx context.Context) error {
 }
 
 func (d *DartClient) fetchDisclosureList(ctx context.Context, corpCode, bgn, end string) ([]string, error) {
+	items, err := d.fetchDisclosureItems(ctx, corpCode, bgn, end, 10)
+	if err != nil {
+		return nil, err
+	}
+	titles := make([]string, 0, len(items))
+	for _, item := range items {
+		titles = append(titles, item.ReportName)
+	}
+	return titles, nil
+}
+
+type dartDisclosureItem struct {
+	ReportName string
+	Date       string // rcept_dt, YYYYMMDD
+	RceptNo    string
+}
+
+func (d *DartClient) fetchDisclosureItems(ctx context.Context, corpCode, bgn, end string, pageCount int) ([]dartDisclosureItem, error) {
 	u := fmt.Sprintf(
-		"https://opendart.fss.or.kr/api/list.json?crtfc_key=%s&corp_code=%s&bgn_de=%s&end_de=%s&page_count=10",
+		"https://opendart.fss.or.kr/api/list.json?crtfc_key=%s&corp_code=%s&bgn_de=%s&end_de=%s&page_count=%d",
 		url.QueryEscape(d.cfg.APIKey),
 		url.QueryEscape(corpCode),
 		bgn,
 		end,
+		pageCount,
 	)
 	body, err := d.fetchURL(ctx, u)
 	if err != nil {
@@ -179,7 +203,9 @@ func (d *DartClient) fetchDisclosureList(ctx context.Context, corpCode, bgn, end
 		Status  string `json:"status"`
 		Message string `json:"message"`
 		List    []struct {
-			ReportName string `json:"report_nm"`
+			ReportName  string `json:"report_nm"`
+			ReceiptDate string `json:"rcept_dt"`
+			ReceiptNo   string `json:"rcept_no"`
 		} `json:"list"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -188,13 +214,85 @@ func (d *DartClient) fetchDisclosureList(ctx context.Context, corpCode, bgn, end
 	if payload.Status != "000" && payload.Status != "" {
 		return nil, fmt.Errorf("dart list: %s", payload.Message)
 	}
-	var titles []string
+	items := make([]dartDisclosureItem, 0, len(payload.List))
 	for _, item := range payload.List {
-		if item.ReportName != "" {
-			titles = append(titles, item.ReportName)
+		if item.ReportName == "" {
+			continue
+		}
+		items = append(items, dartDisclosureItem{
+			ReportName: item.ReportName,
+			Date:       item.ReceiptDate,
+			RceptNo:    item.ReceiptNo,
+		})
+	}
+	return items, nil
+}
+
+// earningsDisclosureKeywords selects filings that carry earnings information.
+// "잠정실적"/"영업(잠정)실적" is DART's fair-disclosure preliminary-results
+// filing — the closest domestic equivalent to a US earnings release.
+var earningsDisclosureKeywords = []string{
+	"잠정실적", "영업(잠정)실적", "실적공시", "사업보고서", "분기보고서", "반기보고서",
+}
+
+// FetchEarningsDisclosures returns recent earnings-related DART filings for
+// symbol, most recent first, capped at 8. DART has no forward-looking
+// schedule API, so every event here is Kind:"filed" (already published),
+// unlike the US Finnhub calendar which is forward-looking.
+func (d *DartClient) FetchEarningsDisclosures(ctx context.Context, symbol string, days int) ([]model.EarningsCalendarEvent, error) {
+	if !d.cfg.Enabled() {
+		return nil, fmt.Errorf("dart api key not configured")
+	}
+	if err := d.ensureCorpCodes(ctx); err != nil {
+		return nil, err
+	}
+	corpCode := d.lookupCorpCode(symbol)
+	if corpCode == "" {
+		return nil, fmt.Errorf("dart: corp_code not found for %s", symbol)
+	}
+
+	nowKST := time.Now().In(model.KST)
+	end := nowKST.Format("20060102")
+	bgn := nowKST.AddDate(0, 0, -days).Format("20060102")
+	items, err := d.fetchDisclosureItems(ctx, corpCode, bgn, end, 50)
+	if err != nil {
+		return nil, err
+	}
+
+	var out []model.EarningsCalendarEvent
+	for _, item := range items {
+		if !matchesEarningsKeyword(item.ReportName) {
+			continue
+		}
+		out = append(out, model.EarningsCalendarEvent{
+			Date:   formatDartDisclosureDate(item.Date),
+			Label:  item.ReportName,
+			Source: "dart",
+			Kind:   "filed",
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Date > out[j].Date })
+	if len(out) > 8 {
+		out = out[:8]
+	}
+	return out, nil
+}
+
+func matchesEarningsKeyword(reportName string) bool {
+	for _, kw := range earningsDisclosureKeywords {
+		if strings.Contains(reportName, kw) {
+			return true
 		}
 	}
-	return titles, nil
+	return false
+}
+
+func formatDartDisclosureDate(raw string) string {
+	t, err := time.Parse("20060102", strings.TrimSpace(raw))
+	if err != nil {
+		return raw
+	}
+	return t.Format("2006-01-02")
 }
 
 func normalizeKRSymbol(symbol string) string {

@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>홈 하단 4열 — 빈 두 칸 후보 목업 v5</title>
+<style>
+:root {
+  --radius:.625rem; --background:oklch(.97 0 0); --foreground:oklch(.145 0 0); --card:oklch(1 0 0);
+  --muted:oklch(.97 0 0); --muted-foreground:oklch(.52 0 0); --accent:oklch(.93 0 0);
+  --border:oklch(.87 0 0); --brand:#2563EB; --brand-muted:rgba(37,99,235,.1);
+  --profit:#DC2626; --loss:#2563EB; --hit:#059669; --miss:#B45309; --warn:#D97706;
+  --score-high:#059669; --score-mid:#D97706; --score-low:#DC2626;
+}
+[data-theme="dark"] {
+  --background:oklch(.145 0 0); --foreground:oklch(.985 0 0); --card:oklch(.205 0 0);
+  --muted:oklch(.269 0 0); --muted-foreground:oklch(.708 0 0); --accent:oklch(.269 0 0);
+  --border:oklch(1 0 0/16%); --brand:#60A5FA; --brand-muted:rgba(96,165,250,.15);
+  --profit:#F87171; --loss:#60A5FA; --hit:#34D399; --miss:#FBBF24; --warn:#FBBF24;
+  --score-high:#34D399; --score-mid:#FBBF24; --score-low:#F87171;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--background);color:var(--foreground);font-size:12px;line-height:1.5;padding:24px;
+ font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+h1{font-size:19px;letter-spacing:-.02em} h2{font-size:13.5px} h3{font-size:12.5px}
+.wrap{max-width:1400px;margin:0 auto}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
+.mut{color:var(--muted-foreground)} .up{color:var(--profit)} .dn{color:var(--loss)}
+.sm{font-size:10.5px} .xs{font-size:9.5px}
+.topbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:0 0 12px;margin-bottom:8px;border-bottom:1px solid var(--border)}
+.lede{font-size:11.5px;color:var(--muted-foreground);max-width:88ch;line-height:1.75}
+.lede b{color:var(--foreground);font-weight:600}
+section{margin-top:24px}
+.shead{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:8px}
+.tag{font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:5px;background:var(--brand-muted);color:var(--brand)}
+.g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.opt{border:1px solid var(--border);border-radius:var(--radius);background:var(--card);overflow:hidden;display:flex;flex-direction:column}
+.opt>header{display:flex;align-items:center;gap:7px;padding:8px 10px;border-bottom:1px solid var(--border);background:color-mix(in oklch,var(--muted) 55%,transparent)}
+.opt>header .id{font-size:9.5px;font-weight:800;padding:2px 5px;border-radius:5px;background:var(--foreground);color:var(--card)}
+.opt>.pad{padding:10px;flex:1}
+.opt .note{padding:8px 10px;border-top:1px solid var(--border);font-size:10px;color:var(--muted-foreground);line-height:1.7}
+.cardhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.cardhead h4{font-size:11px;font-weight:600}
+.row{display:flex;align-items:center;gap:7px;height:30px;padding:0 3px;border-radius:6px;cursor:pointer;font-size:11px}
+.row:hover{background:var(--accent)}
+.rank{width:11px;text-align:right;font-size:10px;color:var(--muted-foreground);flex:0 0 auto}
+.av{width:18px;height:18px;border-radius:5px;flex:0 0 auto;background:var(--muted);display:grid;place-items:center;font-size:8px;font-weight:700;color:var(--muted-foreground)}
+.nm{min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badge{display:inline-flex;align-items:center;font-size:9px;font-weight:700;padding:1px 5px;border-radius:5px;background:var(--muted);color:var(--muted-foreground);white-space:nowrap}
+.badge.b-hot{background:rgba(220,38,38,.14);color:var(--profit)}
+.badge.b-brand{background:var(--brand-muted);color:var(--brand)}
+.chip{font-size:10px;padding:3px 8px;border-radius:999px;background:var(--muted);color:var(--muted-foreground);cursor:pointer;white-space:nowrap}
+.chip:hover{background:var(--accent)}
+.chip b{color:var(--foreground)}
+.bar{height:5px;border-radius:3px;background:var(--muted);position:relative;overflow:hidden;display:flex}
+.bar i{display:block;height:100%}
+.pros li{list-style:none;padding-left:13px;position:relative;margin-top:2px}
+.pros li::before{position:absolute;left:0}
+.pros li.p::before{content:"+";color:var(--hit);font-weight:700}
+.pros li.c::before{content:"−";color:var(--miss);font-weight:700}
+.cost{font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:auto;white-space:nowrap}
+.cost.free{background:rgba(5,150,105,.14);color:var(--hit)}
+.cost.one{background:var(--brand-muted);color:var(--brand)}
+.cost.many{background:rgba(217,119,6,.16);color:var(--warn)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <h1>홈 하단 4열 — 빈 두 칸 후보</h1>
+  <button onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'"
+   style="font:inherit;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--foreground);padding:5px 11px;border-radius:7px">라이트 / 다크</button>
+</div>
+
+<p class="lede">
+  하단 4열은 <b>[점수 TOP] [거래대금] [ ? ] [ ? ]</b>이 됩니다. 앞의 둘은 <b>둘 다 "지금의 수치"</b>라
+  같은 성격의 카드를 더 붙이면 네 칸이 한 가지 이야기만 하게 됩니다. 그래서 후보를 성격이 다른 넷으로 뽑았습니다 —
+  <b>여론</b>(무엇을 말하고 있나) · <b>미래</b>(무엇이 다가오나) · <b>주제</b>(오늘의 화제) · <b>의견</b>(사람들의 판단).
+  우측 배지는 <b>홈에 추가로 나가는 요청 수</b>입니다.
+</p>
+
+<section>
+  <div class="shead"><span class="tag">택 2</span><h2>후보 카드</h2></div>
+
+  <div class="g4">
+
+    <!-- C1 -->
+    <div class="opt">
+      <header><span class="id">C1</span><h3>오늘의 이슈 종목</h3><span class="cost one">+1</span></header>
+      <div class="pad">
+        <div class="cardhead"><h4>오늘의 이슈 종목</h4><span class="xs mut">기사 기준</span></div>
+        <div class="row"><span class="rank">1</span><span class="av">삼</span><span class="nm">삼성전자</span><span class="badge b-hot">속보</span><span class="mono up sm">+2.4%</span><span class="xs mut" style="width:26px;text-align:right">12건</span></div>
+        <div class="row"><span class="rank">2</span><span class="av">SK</span><span class="nm">SK하이닉스</span><span class="mono up sm">+3.4%</span><span class="xs mut" style="width:26px;text-align:right">9건</span></div>
+        <div class="row"><span class="rank">3</span><span class="av">엔</span><span class="nm">엔비디아</span><span class="mono dn sm">−0.3%</span><span class="xs mut" style="width:26px;text-align:right">7건</span></div>
+        <div class="row"><span class="rank">4</span><span class="av">현</span><span class="nm">현대차</span><span class="mono up sm">+1.0%</span><span class="xs mut" style="width:26px;text-align:right">5건</span></div>
+        <div class="row"><span class="rank">5</span><span class="av">LG</span><span class="nm">LG에너지솔루션</span><span class="mono dn sm">−2.2%</span><span class="xs mut" style="width:26px;text-align:right">4건</span></div>
+        <div class="row"><span class="rank">6</span><span class="av">카</span><span class="nm">카카오</span><span class="mono dn sm">−1.1%</span><span class="xs mut" style="width:26px;text-align:right">3건</span></div>
+      </div>
+      <p class="note"><ul class="pros">
+        <li class="p">점수·거래대금이 <b>수치가 뽑은 종목</b>이면 이건 <b>오늘 사람들이 말하는 종목</b>이다</li>
+        <li class="p">이미 받아 둔 기사 목록에서 집계(뉴스 화면의 함수 그대로), 시세 배치만 1요청</li>
+        <li class="c">기사가 적은 새벽에는 순위가 <b>2~3건 차이로</b> 흔들린다</li>
+      </ul></p>
+    </div>
+
+    <!-- C2 -->
+    <div class="opt">
+      <header><span class="id">C2</span><h3>다가오는 일정</h3><span class="cost many">+8</span></header>
+      <div class="pad">
+        <div class="cardhead"><h4>다가오는 일정</h4><span class="xs mut">캘린더 →</span></div>
+        <div class="row"><span class="mono xs mut" style="width:30px">D-2</span><span class="nm">삼성전자 <span class="xs mut">실적 발표</span></span></div>
+        <div class="row"><span class="mono xs mut" style="width:30px">D-4</span><span class="nm">SK하이닉스 <span class="xs mut">주주총회</span></span></div>
+        <div class="row"><span class="mono xs mut" style="width:30px">D-9</span><span class="nm">엔비디아 <span class="xs mut">실적 발표</span></span></div>
+        <div class="row"><span class="mono xs mut" style="width:30px">D-11</span><span class="nm">현대차 <span class="xs mut">분기보고서</span></span></div>
+        <div class="row"><span class="mono xs mut" style="width:30px">D-15</span><span class="nm">카카오 <span class="xs mut">실적 발표</span></span></div>
+      </div>
+      <p class="note"><ul class="pros">
+        <li class="p">네 칸 중 <b>유일하게 앞을 본다</b> — 나머지는 전부 지금·과거다</li>
+        <li class="p">참고 사진의 「주요 일정」 패널에 해당. 뉴스 화면 훅을 그대로 쓴다</li>
+        <li class="c"><b>배치 API가 없어 종목당 1요청</b>(상한 8) — 홈 첫 화면 요청이 가장 많이 는다</li>
+        <li class="c">FOMC·CPI 같은 <b>매크로 일정은 소스가 없다</b> — 종목 실적·공시만 나온다</li>
+      </ul></p>
+    </div>
+
+    <!-- C3 -->
+    <div class="opt">
+      <header><span class="id">C3</span><h3>오늘의 키워드</h3><span class="cost free">+0</span></header>
+      <div class="pad">
+        <div class="cardhead"><h4>오늘의 키워드</h4><span class="xs mut">최근 100건</span></div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px">
+          <span class="chip"><b>반도체</b> 24</span><span class="chip"><b>외국인</b> 18</span>
+          <span class="chip"><b>실적</b> 15</span><span class="chip"><b>금리</b> 12</span>
+          <span class="chip"><b>환율</b> 11</span><span class="chip"><b>2차전지</b> 9</span>
+          <span class="chip"><b>공매도</b> 7</span><span class="chip"><b>배당</b> 6</span>
+          <span class="chip"><b>FOMC</b> 5</span><span class="chip"><b>AI</b> 5</span>
+        </div>
+        <div style="margin-top:9px;border-top:1px solid var(--border);padding-top:7px">
+          <div class="xs mut" style="margin-bottom:4px">속보 6건</div>
+          <div class="row" style="height:auto;padding:3px"><span class="badge b-hot">속보</span><span class="nm" style="white-space:normal">코스피 7,000선 첫 돌파</span></div>
+        </div>
+      </div>
+      <p class="note"><ul class="pros">
+        <li class="p"><b>추가 요청 0</b> — 홈이 이미 받는 기사 목록에서 전부 계산한다</li>
+        <li class="p">누르면 해당 키워드로 <b>뉴스를 좁혀</b> 들어간다</li>
+        <li class="c">종목이 아니라 <b>단어</b>라 다음 행동으로 이어지는 힘이 약하다</li>
+      </ul></p>
+    </div>
+
+    <!-- C4 -->
+    <div class="opt">
+      <header><span class="id">C4</span><h3>리포트 의견 분포</h3><span class="cost one">+1</span></header>
+      <div class="pad">
+        <div class="cardhead"><h4>리포트 의견</h4><span class="xs mut">최근 30건</span></div>
+        <div class="bar" style="margin-bottom:3px">
+          <i style="width:58%;background:var(--profit)"></i><i style="width:24%;background:var(--muted-foreground);opacity:.5"></i><i style="width:18%;background:var(--loss)"></i>
+        </div>
+        <div style="display:flex;justify-content:space-between" class="xs mut">
+          <span class="up">강세 17</span><span>중립 7</span><span class="dn">약세 5</span>
+        </div>
+        <div style="margin-top:9px;border-top:1px solid var(--border);padding-top:6px">
+          <div class="xs mut" style="margin-bottom:3px">많이 다룬 종목</div>
+          <div class="row"><span class="av">삼</span><span class="nm">삼성전자</span><span class="xs up">강세 4</span><span class="xs dn">약세 1</span></div>
+          <div class="row"><span class="av">엔</span><span class="nm">엔비디아</span><span class="xs up">강세 3</span><span class="xs dn">약세 0</span></div>
+          <div class="row"><span class="av">카</span><span class="nm">카카오</span><span class="xs up">강세 0</span><span class="xs dn">약세 2</span></div>
+        </div>
+      </div>
+      <p class="note"><ul class="pros">
+        <li class="p">네 칸 중 유일하게 <b>사람의 판단</b>을 보여준다(나머지는 기계가 센 값)</li>
+        <li class="p">바로 아래 리포트 카드로 <b>자연스럽게 이어진다</b></li>
+        <li class="c">리포트가 아직 적어 <b>표본이 작다</b> — 「강세 17」이 몇 사람인지가 안 보인다</li>
+      </ul></p>
+    </div>
+
+  </div>
+</section>
+
+<section>
+  <div class="shead"><span class="tag">참고</span><h2>확정된 나머지 배치</h2></div>
+  <div style="border:1px dashed var(--border);border-radius:10px;padding:12px;display:grid;gap:7px;font-size:10.5px;color:var(--muted-foreground)">
+    <div style="border:1px solid var(--brand);color:var(--brand);background:var(--brand-muted);border-radius:8px;padding:8px;font-weight:600">지수 스트립 (전폭 · S1 자동 흐름 · 클릭 = 지수 모달)</div>
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:7px">
+      <div style="border:1px dashed var(--border);border-radius:8px;padding:8px">AI 시장 브리핑</div>
+      <div style="border:1px dashed var(--border);border-radius:8px;padding:8px">오늘의 뉴스</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px">
+      <div style="border:1px dashed var(--border);border-radius:8px;padding:8px">점수 TOP</div>
+      <div style="border:1px dashed var(--border);border-radius:8px;padding:8px">거래대금</div>
+      <div style="border:1px solid var(--warn);color:var(--warn);border-radius:8px;padding:8px;font-weight:600">?</div>
+      <div style="border:1px solid var(--warn);color:var(--warn);border-radius:8px;padding:8px;font-weight:600">?</div>
+    </div>
+    <div style="border:1px dashed var(--border);border-radius:8px;padding:8px">최신 투자 리포트 (R2 가로형)</div>
+    <div style="border:1px dashed var(--border);border-radius:8px;padding:8px;text-decoration:line-through;opacity:.5">전체 지수 (접힘) — 제거</div>
+  </div>
+</section>
+
+<p class="xs mut" style="margin-top:24px">수치는 예시입니다. C1·C3는 홈이 이미 받는 기사 목록에서, C4는 리포트 목록에서 계산합니다.</p>
+
+</div>
+</body>
+</html>

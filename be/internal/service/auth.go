@@ -28,12 +28,11 @@ var (
 )
 
 type AuthService struct {
-	users     *repository.UserRepo
-	refresh   *repository.RefreshTokenRepo
-	broker    *repository.BrokerCredentialsRepo
-	jwtSecret []byte
-	accessTTL time.Duration
-	refreshTTL time.Duration
+	users        *repository.UserRepo
+	refresh      *repository.RefreshTokenRepo
+	jwtSecret    []byte
+	accessTTL    time.Duration
+	refreshTTL   time.Duration
 	cookieSecure bool
 }
 
@@ -41,7 +40,6 @@ func NewAuthService(
 	cfg config.AuthConfig,
 	users *repository.UserRepo,
 	refresh *repository.RefreshTokenRepo,
-	broker *repository.BrokerCredentialsRepo,
 ) (*AuthService, error) {
 	if strings.TrimSpace(cfg.JWTSecret) == "" {
 		return nil, fmt.Errorf("JWT_SECRET is required")
@@ -49,7 +47,6 @@ func NewAuthService(
 	return &AuthService{
 		users:        users,
 		refresh:      refresh,
-		broker:       broker,
 		jwtSecret:    []byte(cfg.JWTSecret),
 		accessTTL:    time.Duration(cfg.AccessTokenMinutes) * time.Minute,
 		refreshTTL:   time.Duration(cfg.RefreshTokenDays) * 24 * time.Hour,
@@ -96,12 +93,10 @@ func (s *AuthService) Signup(ctx context.Context, email, password, displayName s
 		return nil, nil, err
 	}
 
-	linked, _, _, _ := s.broker.IsLinked(ctx, user.ID, "toss")
 	return &model.AuthSession{
-		User:         user.Public(),
-		AccessToken:  pair.AccessToken,
-		ExpiresIn:    pair.ExpiresIn,
-		BrokerLinked: linked,
+		User:        user.Public(),
+		AccessToken: pair.AccessToken,
+		ExpiresIn:   pair.ExpiresIn,
 	}, pair, nil
 }
 
@@ -120,12 +115,10 @@ func (s *AuthService) Login(ctx context.Context, email, password, userAgent stri
 		return nil, nil, err
 	}
 
-	linked, _, _, _ := s.broker.IsLinked(ctx, user.ID, "toss")
 	return &model.AuthSession{
-		User:         user.Public(),
-		AccessToken:  pair.AccessToken,
-		ExpiresIn:    pair.ExpiresIn,
-		BrokerLinked: linked,
+		User:        user.Public(),
+		AccessToken: pair.AccessToken,
+		ExpiresIn:   pair.ExpiresIn,
 	}, pair, nil
 }
 
@@ -147,12 +140,10 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken, userAgent strin
 		return nil, nil, err
 	}
 
-	linked, _, _, _ := s.broker.IsLinked(ctx, user.ID, "toss")
 	return &model.AuthSession{
-		User:         user.Public(),
-		AccessToken:  pair.AccessToken,
-		ExpiresIn:    pair.ExpiresIn,
-		BrokerLinked: linked,
+		User:        user.Public(),
+		AccessToken: pair.AccessToken,
+		ExpiresIn:   pair.ExpiresIn,
 	}, pair, nil
 }
 
@@ -171,11 +162,9 @@ func (s *AuthService) Me(ctx context.Context, userID int64) (*model.AuthSession,
 	if err != nil {
 		return nil, err
 	}
-	linked, _, _, _ := s.broker.IsLinked(ctx, userID, "toss")
 	return &model.AuthSession{
-		User:         user.Public(),
-		ExpiresIn:    int(s.accessTTL.Seconds()),
-		BrokerLinked: linked,
+		User:      user.Public(),
+		ExpiresIn: int(s.accessTTL.Seconds()),
 	}, nil
 }
 
@@ -202,7 +191,7 @@ func (s *AuthService) ParseAccessToken(token string) (int64, string, error) {
 
 func (s *AuthService) AccessCookieName() string  { return "qp_access" }
 func (s *AuthService) RefreshCookieName() string { return "qp_refresh" }
-func (s *AuthService) CookieSecure() bool { return s.cookieSecure }
+func (s *AuthService) CookieSecure() bool        { return s.cookieSecure }
 
 func (s *AuthService) RefreshMaxAge() int {
 	return int(s.refreshTTL.Seconds())

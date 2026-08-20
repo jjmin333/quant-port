@@ -6,6 +6,42 @@ import (
 	"github.com/enact/quant-port/be/internal/model"
 )
 
+func TestSearchRelevanceScore_qqqRelatedTickers(t *testing.T) {
+	qqq := model.Stock{Symbol: "QQQ", EnglishName: "Invesco QQQ Trust", AssetType: model.AssetETF}
+	tqqq := model.Stock{Symbol: "TQQQ", EnglishName: "ProShares UltraPro QQQ", AssetType: model.AssetETF}
+	qld := model.Stock{Symbol: "QLD", EnglishName: "ProShares Ultra QQQ", AssetType: model.AssetETF}
+	qqqm := model.Stock{Symbol: "QQQM", EnglishName: "Invesco NASDAQ 100 ETF", AssetType: model.AssetETF}
+
+	if got := searchRelevanceScore("qqq", qqq, true); got < 10000 {
+		t.Fatalf("QQQ exact: got %d", got)
+	}
+	if got := searchRelevanceScore("qqq", qqqm, true); got < 5000 {
+		t.Fatalf("QQQM prefix: got %d", got)
+	}
+	if got := searchRelevanceScore("qqq", tqqq, true); got < 1200 {
+		t.Fatalf("TQQQ contains: got %d", got)
+	}
+	if got := searchRelevanceScore("qqq", qld, true); got < 3500 {
+		t.Fatalf("QLD english word: got %d", got)
+	}
+}
+
+func TestRankSearchResults_qqqOrdersExactBeforeContains(t *testing.T) {
+	items := []model.Stock{
+		{Symbol: "TQQQ", EnglishName: "ProShares UltraPro QQQ", AssetType: model.AssetETF},
+		{Symbol: "QQQM", EnglishName: "Invesco NASDAQ 100 ETF", AssetType: model.AssetETF},
+		{Symbol: "QQQ", EnglishName: "Invesco QQQ Trust", AssetType: model.AssetETF},
+		{Symbol: "QLD", EnglishName: "ProShares Ultra QQQ", AssetType: model.AssetETF},
+	}
+	ranked := rankSearchResults(items, "qqq", true)
+	if len(ranked) < 4 {
+		t.Fatalf("expected 4 results, got %d", len(ranked))
+	}
+	if ranked[0].Symbol != "QQQ" {
+		t.Fatalf("expected QQQ first, got %s", ranked[0].Symbol)
+	}
+}
+
 func TestSearchRelevanceScore_armSkipsPharmaSubstring(t *testing.T) {
 	pharma := model.Stock{
 		Symbol:      "123456",
@@ -25,6 +61,18 @@ func TestSearchRelevanceScore_armSkipsPharmaSubstring(t *testing.T) {
 	}
 	if got := searchRelevanceScore("arm", arm, true); got < 5000 {
 		t.Fatalf("expected high score for ARM ticker, got %d", got)
+	}
+}
+
+func TestSearchRelevanceScore_shortLatinMatchesDomesticEnglishPrefix(t *testing.T) {
+	skHynix := model.Stock{
+		Symbol:      "000660",
+		Name:        "SK하이닉스",
+		EnglishName: "SK hynix Inc.",
+		AssetType:   model.AssetDomestic,
+	}
+	if got := searchRelevanceScore("sk", skHynix, true); got < 3000 {
+		t.Fatalf("expected SK english prefix match for domestic, got %d", got)
 	}
 }
 
@@ -49,6 +97,22 @@ func TestSearchRelevanceScore_koreanNameMatch(t *testing.T) {
 	}
 	if got := searchRelevanceScore("오라클", oracle, false); got < 4000 {
 		t.Fatalf("expected korean name match, got %d", got)
+	}
+}
+
+func TestRankSearchResults_skHynixCommonStockBeforeDerivatives(t *testing.T) {
+	items := []model.Stock{
+		{Symbol: "0192L0", Name: "RISE SK하이닉스단일종목레버리지", AssetType: model.AssetETF, SecurityType: "ETF"},
+		{Symbol: "000660", Name: "SK하이닉스", EnglishName: "SK hynix Inc.", AssetType: model.AssetDomestic, SecurityType: "STOCK"},
+		{Symbol: "SKHY", Name: "SK하이닉스(ADR)", AssetType: model.AssetUS, SecurityType: "STOCK"},
+		{Symbol: "520101", Name: "미래에셋 레버리지 SK하이닉스 단일종목ETN", AssetType: model.AssetETF, SecurityType: "ETN"},
+	}
+	ranked := rankSearchResults(items, "sk하이닉스", false)
+	if len(ranked) < 4 {
+		t.Fatalf("expected 4 results, got %d", len(ranked))
+	}
+	if ranked[0].Symbol != "000660" {
+		t.Fatalf("expected 000660 first, got %s", ranked[0].Symbol)
 	}
 }
 

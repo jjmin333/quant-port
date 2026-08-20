@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { ExternalLink, X } from "lucide-react";
 import type { NewsArticle } from "@/lib/news-types";
+import { newsArticleLink } from "@/lib/news-types";
 import { formatRelativeTime } from "@/lib/format-news";
 import { canUseIframePreview, embedPolicyLabel } from "@/lib/news-embed";
 import {
@@ -10,20 +12,19 @@ import {
   NewsPreviewZoomViewport,
   useNewsPreviewZoom,
 } from "@/components/news/news-preview-zoom";
+import { NewsKeywordBadges } from "@/components/news/news-keyword-badges";
+import { NewsBreakingBadge } from "@/components/news/news-breaking-badge";
+import { isArticleBreakingNews } from "@/lib/news-breaking";
 import { cn } from "@/lib/utils";
 
 type NewsArticleModalProps = {
   article: NewsArticle | null;
   onClose: () => void;
+  /** 관련 종목·같은 이슈·액션 블록 (NewsArticleContext) */
+  context?: React.ReactNode;
 };
 
-export function NewsArticleModal({ article, onClose }: NewsArticleModalProps) {
-  const previewZoom = useNewsPreviewZoom();
-
-  useEffect(() => {
-    previewZoom.reset();
-  }, [article?.id, previewZoom.reset]);
-
+export function NewsArticleModal({ article, onClose, context }: NewsArticleModalProps) {
   useEffect(() => {
     if (!article) {
       return;
@@ -33,27 +34,53 @@ export function NewsArticleModal({ article, onClose }: NewsArticleModalProps) {
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
         onClose();
       }
     };
-    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
 
     return () => {
       document.body.style.overflow = prev;
-      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keydown", onKeyDown, true);
     };
   }, [article, onClose]);
 
-  if (!article) {
+  if (!article || typeof document === "undefined") {
     return null;
   }
 
-  const hasUrl = Boolean(article.url && article.url !== "#");
-  const showIframe = hasUrl && canUseIframePreview(article.embedPolicy);
+  return createPortal(
+    <NewsArticleModalFrame
+      key={article.id}
+      article={article}
+      onClose={onClose}
+      context={context}
+    />,
+    document.body,
+  );
+}
+
+function NewsArticleModalFrame({
+  article,
+  onClose,
+  context,
+}: {
+  article: NewsArticle;
+  onClose: () => void;
+  context?: React.ReactNode;
+}) {
+  const previewZoom = useNewsPreviewZoom();
+
+  const link = newsArticleLink(article);
+  const hasUrl = Boolean(link);
+  const showIframe = hasUrl && article.previewMode === "iframe" && canUseIframePreview(article.embedPolicy);
   const previewLabel = embedPolicyLabel(article.embedPolicy, article.publisher.name);
+  const isBreaking = isArticleBreakingNews(article);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center p-0 sm:items-center sm:p-4">
       <button
         type="button"
         aria-label="닫기"
@@ -78,6 +105,7 @@ export function NewsArticleModal({ article, onClose }: NewsArticleModalProps) {
               >
                 {article.publisher.name}
               </span>
+              {isBreaking && <NewsBreakingBadge className="text-[11px]" />}
               <span
                 className={cn(
                   "text-[11px] font-medium",
@@ -90,7 +118,9 @@ export function NewsArticleModal({ article, onClose }: NewsArticleModalProps) {
               >
                 {previewLabel}
               </span>
-              {article.tags.map((tag) => (
+              {article.tags
+                .filter((tag) => tag !== "속보")
+                .map((tag) => (
                 <span key={tag} className="text-[11px] font-medium text-[var(--text-muted)]">
                   {tag}
                 </span>
@@ -108,18 +138,8 @@ export function NewsArticleModal({ article, onClose }: NewsArticleModalProps) {
             {article.summary && (
               <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{article.summary}</p>
             )}
-            {article.symbols && article.symbols.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {article.symbols.map((symbol) => (
-                  <span
-                    key={symbol}
-                    className="rounded bg-[var(--surface)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-muted)]"
-                  >
-                    {symbol}
-                  </span>
-                ))}
-              </div>
-            )}
+            {/* 종목 코드 나열은 옆 「관련 종목」 패널이 이름·시세와 함께 보여준다. */}
+            <NewsKeywordBadges keywords={article.keywords} max={8} />
           </div>
 
           <button
@@ -132,7 +152,8 @@ export function NewsArticleModal({ article, onClose }: NewsArticleModalProps) {
           </button>
         </header>
 
-        <div className="relative flex min-h-0 flex-1 flex-col bg-[var(--background)]">
+        <div className="flex min-h-0 flex-1 bg-[var(--background)]">
+        <div className="relative flex min-h-0 flex-1 flex-col">
           {showIframe ? (
             <>
               <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2 sm:px-5">
@@ -143,7 +164,7 @@ export function NewsArticleModal({ article, onClose }: NewsArticleModalProps) {
                 <NewsPreviewZoomViewport zoom={previewZoom.zoom} className="h-full">
                   <iframe
                     title={article.headline}
-                    src={article.url}
+                    src={link}
                     className="h-full min-h-[120vh] w-full border-0 bg-white"
                     sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
                     referrerPolicy="no-referrer-when-downgrade"
@@ -160,13 +181,26 @@ export function NewsArticleModal({ article, onClose }: NewsArticleModalProps) {
           )}
         </div>
 
+          {/*
+           * 관련 종목·같은 이슈·액션은 본문 옆 세로 칸에 둔다. 본문 아래에 쌓으면
+           * iframe이 화면을 다 쓰는 이 모달에서는 스크롤을 끝까지 내려야 보인다.
+           * `lg` 미만에서는 폭이 없어 숨긴다 — 리더/헤드라인 모달은 본문이 흐르는
+           * 구조라 아래에 붙일 수 있지만, 여기는 그럴 수 없다.
+           */}
+          {context && (
+            <aside className="hidden w-[264px] shrink-0 overflow-y-auto border-l border-[var(--border)] p-3 lg:block">
+              {context}
+            </aside>
+          )}
+        </div>
+
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border)] px-4 py-3 sm:px-5">
           <span className="text-[11px] text-[var(--text-muted)]">
             수집: {article.source.name}
           </span>
           {hasUrl && (
             <a
-              href={article.url}
+              href={link}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--background)]"

@@ -22,11 +22,15 @@ const (
 var htmlTagRe = regexp.MustCompile(`<[^>]*>`)
 
 type RawNewsItem struct {
-	Title       string
-	Description string
-	Link        string
-	PublishedAt time.Time
-	SourceID    string
+	Title         string
+	Description   string
+	Link          string
+	OriginalLink  string
+	PublishedAt   time.Time
+	SourceID      string
+	RelatedSymbol string
+	FeedSymbols   []string
+	PublisherName string
 }
 
 type NaverNewsClient struct {
@@ -97,10 +101,11 @@ func (c *NaverNewsClient) Search(ctx context.Context, query string, display int)
 
 	var payload struct {
 		Items []struct {
-			Title       string `json:"title"`
-			Description string `json:"description"`
-			Link        string `json:"link"`
-			PubDate     string `json:"pubDate"`
+			Title        string `json:"title"`
+			Description  string `json:"description"`
+			Link         string `json:"link"`
+			OriginalLink string `json:"originallink"`
+			PubDate      string `json:"pubDate"`
 		} `json:"items"`
 	}
 	if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {
@@ -116,12 +121,14 @@ func (c *NaverNewsClient) Search(ctx context.Context, query string, display int)
 		if link == "" {
 			continue
 		}
+		originalLink := strings.TrimSpace(item.OriginalLink)
 		out = append(out, RawNewsItem{
-			Title:       stripHTML(item.Title),
-			Description: stripHTML(item.Description),
-			Link:        link,
-			PublishedAt: ParseNewsPubDate(item.PubDate),
-			SourceID:    "naver",
+			Title:        stripHTML(item.Title),
+			Description:  stripHTML(item.Description),
+			Link:         link,
+			OriginalLink: originalLink,
+			PublishedAt:  ParseNewsPubDate(item.PubDate),
+			SourceID:     "naver",
 		})
 	}
 	return out, nil

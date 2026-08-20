@@ -7,11 +7,12 @@ import (
 	"github.com/enact/quant-port/be/internal/marketdata"
 	"github.com/enact/quant-port/be/internal/marketdata/calendar"
 	"github.com/enact/quant-port/be/internal/model"
+	"github.com/enact/quant-port/be/internal/toss"
 )
 
 func dataKindForIndex(indexID string) model.IndexDataKind {
 	switch indexID {
-	case "nq100", "sox", "btc", "gold":
+	case "usd-krw", "nq100", "sox", "btc", "gold":
 		return model.IndexDataKindLive
 	default:
 		return model.IndexDataKindEOD
@@ -20,7 +21,7 @@ func dataKindForIndex(indexID string) model.IndexDataKind {
 
 func eodScheduleForIndex(indexID string) calendar.ScheduleID {
 	switch indexID {
-	case "kospi", "kosdaq", "usd-krw":
+	case "kospi", "kosdaq":
 		return calendar.ScheduleKRX
 	default:
 		return calendar.ScheduleUS
@@ -66,14 +67,55 @@ func (st *MarketIndexStore) enrichIndicesForAPI(ctx context.Context, indices []m
 	return out
 }
 
+func (st *MarketIndexStore) krSessionOpen(now time.Time) bool {
+	var kr *toss.KrMarketCalendarResponse
+	if st.marketStore != nil {
+		if cals, ok := st.marketStore.EnsureCalendars(context.Background()); ok {
+			kr = cals.kr
+		}
+	}
+	return calendar.ShouldPoll(calendar.ScheduleKRX, now, kr, nil)
+}
+
 func (st *MarketIndexStore) finalizeIndexMeta(ctx context.Context, entry indexCatalogEntry, idx model.MarketIndex) model.MarketIndex {
-	idx.DataKind = dataKindForIndex(entry.id)
 	if idx.Value <= 0 {
+		idx.DataKind = dataKindForIndex(entry.id)
 		return idx
 	}
 
+	now := time.Now()
+	if entry.id == "usd-krw" {
+		idx.DataKind = model.IndexDataKindLive
+		if st.fx != nil {
+			if snap, ok := st.fx.Get(ctx); ok && !snap.UpdatedAt.IsZero() {
+				idx.UpdatedAt = snap.UpdatedAt.UTC().Format(time.RFC3339)
+				return idx
+			}
+		}
+		if t := st.lastRefreshAt(ctx, entry.id); !t.IsZero() {
+			idx.UpdatedAt = t.UTC().Format(time.RFC3339)
+		} else if idx.UpdatedAt == "" {
+			idx.UpdatedAt = now.UTC().Format(time.RFC3339)
+		}
+		return idx
+	}
+	if entry.id == "kospi" || entry.id == "kosdaq" {
+		if st.krSessionOpen(now) {
+			idx.DataKind = model.IndexDataKindLive
+			if t := st.lastRefreshAt(ctx, entry.id); !t.IsZero() {
+				idx.UpdatedAt = t.UTC().Format(time.RFC3339)
+			} else if idx.UpdatedAt != "" {
+				// keep batch refresh time
+			} else {
+				idx.UpdatedAt = now.UTC().Format(time.RFC3339)
+			}
+			return idx
+		}
+	}
+
+	idx.DataKind = dataKindForIndex(entry.id)
 	if idx.DataKind == model.IndexDataKindEOD {
-		closeAt := calendar.LastSessionCloseAt(eodScheduleForIndex(entry.id), time.Now())
+		closeAt := calendar.LastSessionCloseAt(eodScheduleForIndex(entry.id), now)
 		idx.UpdatedAt = closeAt.Format(time.RFC3339)
 		return idx
 	}
@@ -82,7 +124,7 @@ func (st *MarketIndexStore) finalizeIndexMeta(ctx context.Context, entry indexCa
 		if t := st.lastRefreshAt(ctx, entry.id); !t.IsZero() {
 			idx.UpdatedAt = t.UTC().Format(time.RFC3339)
 		} else {
-			idx.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+			idx.UpdatedAt = now.UTC().Format(time.RFC3339)
 		}
 	}
 	return idx

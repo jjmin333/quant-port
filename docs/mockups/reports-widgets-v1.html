@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>투자 리포트 — 위젯 선택용 목업 v1</title>
+<style>
+/* 목업 공용 스타일 — journal/targets/reports v1 */
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.97 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.93 0 0);
+  --border: oklch(0.87 0 0);
+  --brand: #2563EB;
+  --brand-muted: rgba(37, 99, 235, 0.1);
+  --profit: #DC2626;
+  --loss: #2563EB;
+  --hit: #059669;
+  --hit-muted: rgba(5, 150, 105, 0.12);
+  --miss: #B45309;
+  --warn: #D97706;
+  --warn-muted: rgba(217, 119, 6, 0.12);
+  --sample: #7C3AED;
+  --heat0: oklch(0.93 0 0);
+  --heat1: rgba(37, 99, 235, 0.20);
+  --heat2: rgba(37, 99, 235, 0.42);
+  --heat3: rgba(37, 99, 235, 0.66);
+  --heat4: rgba(37, 99, 235, 0.9);
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 16%);
+  --brand: #60A5FA;
+  --brand-muted: rgba(96, 165, 250, 0.15);
+  --profit: #F87171;
+  --loss: #60A5FA;
+  --hit: #34D399;
+  --hit-muted: rgba(52, 211, 153, 0.14);
+  --miss: #FBBF24;
+  --warn: #FBBF24;
+  --warn-muted: rgba(251, 191, 36, 0.14);
+  --sample: #A78BFA;
+  --heat0: oklch(0.269 0 0);
+  --heat1: rgba(96, 165, 250, 0.2);
+  --heat2: rgba(96, 165, 250, 0.4);
+  --heat3: rgba(96, 165, 250, 0.62);
+  --heat4: rgba(96, 165, 250, 0.88);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--background); color: var(--foreground);
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 12px; line-height: 1.5; padding: 24px; -webkit-font-smoothing: antialiased;
+}
+h1 { font-size: 19px; letter-spacing: -.02em; }
+h2 { font-size: 13.5px; letter-spacing: -.01em; }
+h3 { font-size: 12.5px; }
+h4 { font-size: 11px; }
+.wrap { max-width: 1280px; margin: 0 auto; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.mut { color: var(--muted-foreground); }
+.up { color: var(--profit); } .dn { color: var(--loss); }
+.hit { color: var(--hit); } .warnc { color: var(--warn); }
+.sm { font-size: 10.5px; } .xs { font-size: 9.5px; }
+
+.topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: color-mix(in oklch, var(--background) 88%, transparent); backdrop-filter: blur(8px);
+  padding: 10px 0 12px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
+.lede { font-size: 11.5px; color: var(--muted-foreground); max-width: 76ch; line-height: 1.65; }
+
+/* 섹션 */
+section { margin-top: 26px; }
+.shead { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; margin-bottom: 4px; }
+.tag { font-size: 10px; font-weight: 700; letter-spacing: .04em; padding: 2px 7px; border-radius: 5px;
+  background: var(--brand-muted); color: var(--brand); }
+.why { font-size: 11px; color: var(--muted-foreground); line-height: 1.7; margin-bottom: 10px; max-width: 86ch; }
+.why b { color: var(--foreground); font-weight: 600; }
+
+/* 옵션 카드 */
+.opt { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); overflow: hidden; }
+.opt > header { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--muted) 55%, transparent); }
+.opt > header .id { font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 5px; background: var(--foreground); color: var(--card); }
+.opt > .pad { padding: 12px; }
+.opt .note { padding: 8px 12px; border-top: 1px solid var(--border); font-size: 10.5px; color: var(--muted-foreground); line-height: 1.65; }
+.cols { display: grid; gap: 14px; }
+.c2 { grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); }
+.c3 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.c4 { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+
+/* 공용 프리미티브 */
+.card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 600; padding: 1px 6px;
+  border-radius: 5px; background: var(--muted); color: var(--muted-foreground); white-space: nowrap; }
+.badge.b-up { background: rgba(220,38,38,.12); color: var(--profit); }
+.badge.b-down { background: rgba(37,99,235,.12); color: var(--loss); }
+.badge.b-hit { background: var(--hit-muted); color: var(--hit); }
+.badge.b-warn { background: var(--warn-muted); color: var(--warn); }
+.badge.b-brand { background: var(--brand-muted); color: var(--brand); }
+[data-theme="dark"] .badge.b-up { background: rgba(248,113,113,.15); }
+[data-theme="dark"] .badge.b-down { background: rgba(96,165,250,.15); }
+.av { width: 22px; height: 22px; border-radius: 6px; flex: 0 0 auto; background: var(--muted); display: grid;
+  place-items: center; font-size: 9px; font-weight: 700; color: var(--muted-foreground); }
+.av.lg { width: 30px; height: 30px; font-size: 10px; border-radius: 8px; }
+.btn { font: inherit; font-size: 11px; cursor: pointer; border: 1px solid var(--border); background: var(--card);
+  color: var(--foreground); padding: 5px 11px; border-radius: 7px; }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
+.btn.ghost { border-color: transparent; color: var(--muted-foreground); }
+.btn.on { border-color: var(--brand); background: var(--brand-muted); color: var(--brand); font-weight: 600; }
+.btn.sm { padding: 3px 8px; font-size: 10.5px; }
+.field { width: 100%; font: inherit; font-size: 11.5px; padding: 6px 9px; border: 1px solid var(--border);
+  border-radius: 7px; background: var(--card); color: var(--foreground); }
+.pillrow { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.chip { font-size: 10px; padding: 2px 8px; border-radius: 999px; background: var(--muted); color: var(--muted-foreground); }
+.chip.on { background: var(--brand-muted); color: var(--brand); font-weight: 600; }
+
+/* 행 */
+.row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--border); }
+.row:first-of-type { border-top: none; }
+.row:hover { background: var(--accent); }
+.col-main { min-width: 0; flex: 1 1 auto; }
+.name { font-size: 12.5px; font-weight: 600; }
+.meta { font-size: 10.5px; color: var(--muted-foreground); margin-top: 1px; display: flex; gap: 7px; flex-wrap: wrap; }
+.clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* 목표가 게이지 */
+.tg { flex: 0 0 168px; }
+.tg .bar { position: relative; height: 6px; border-radius: 3px; background: var(--muted); margin: 5px 0 4px; }
+.tg .bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: var(--brand); opacity: .75; }
+.tg .bar b { position: absolute; top: -4px; width: 2px; height: 14px; background: var(--foreground); opacity: .7; }
+.tg .bar s { position: absolute; top: -3px; width: 8px; height: 12px; text-decoration: none;
+  border-right: 2px dashed var(--profit); }
+.tg .bar u { position: absolute; top: -3px; width: 2px; height: 12px; background: var(--loss); text-decoration: none; }
+.tg .k { display: flex; justify-content: space-between; font-size: 9.5px; color: var(--muted-foreground); }
+
+/* 스파크 */
+.spark { width: 108px; height: 30px; flex: 0 0 auto; }
+.spark.w2 { width: 150px; height: 38px; }
+.spark svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+/* 타일 */
+.tiles { display: grid; gap: 10px; }
+.tile { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
+.tile.click { cursor: pointer; } .tile.click:hover { border-color: var(--brand); }
+.tile .l { font-size: 10.5px; color: var(--muted-foreground); display: flex; align-items: center; gap: 4px; }
+.tile .val { font-size: 20px; font-weight: 700; letter-spacing: -.02em; margin-top: 1px; }
+.tile .foot { font-size: 9.5px; color: var(--muted-foreground); margin-top: 2px; }
+
+/* 모달 */
+.modal-shell { border: 1px solid var(--border); border-radius: 12px; background: var(--card);
+  box-shadow: 0 12px 32px rgba(0,0,0,.14); overflow: hidden; }
+[data-theme="dark"] .modal-shell { box-shadow: 0 12px 32px rgba(0,0,0,.5); }
+.modal-head { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.modal-body { padding: 12px 14px; display: grid; gap: 10px; }
+.modal-foot { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--border); }
+.panel { border: 1px solid var(--border); border-radius: 9px; padding: 9px 10px; }
+.panel > h4 { font-size: 10.5px; font-weight: 600; color: var(--muted-foreground); margin-bottom: 6px; }
+.kv { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; padding: 1.5px 0; }
+.kv > span:first-child { color: var(--muted-foreground); }
+
+/* 레일 카드 */
+.rail { display: grid; gap: 10px; align-content: start; }
+.sc { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); padding: 10px 11px; }
+.sc > h4 { font-size: 11px; font-weight: 600; margin-bottom: 7px; display: flex; justify-content: space-between; align-items: center; }
+
+/* 히트맵 */
+.heat { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 10px); gap: 2.5px; }
+.heat i { width: 10px; height: 10px; border-radius: 2px; background: var(--heat0); display: block; }
+.heat i.l1 { background: var(--heat1); } .heat i.l2 { background: var(--heat2); }
+.heat i.l3 { background: var(--heat3); } .heat i.l4 { background: var(--heat4); }
+
+table.t { width: 100%; border-collapse: collapse; font-size: 11px; }
+table.t th { font-weight: 500; color: var(--muted-foreground); text-align: right; padding: 4px 6px; font-size: 10px; }
+table.t th:first-child, table.t td:first-child { text-align: left; }
+table.t td { padding: 5px 6px; border-top: 1px solid var(--border); text-align: right; }
+table.t tr:hover td { background: var(--accent); }
+
+.pros { font-size: 10.5px; }
+.pros li { list-style: none; padding-left: 14px; position: relative; margin-top: 3px; color: var(--muted-foreground); }
+.pros li::before { position: absolute; left: 0; }
+.pros li.p::before { content: "+"; color: var(--hit); font-weight: 700; }
+.pros li.c::before { content: "−"; color: var(--miss); font-weight: 700; }
+.be { display: inline-flex; align-items: center; gap: 3px; font-size: 9.5px; font-weight: 700; padding: 1px 5px;
+  border-radius: 4px; background: rgba(124,58,237,.12); color: var(--sample); }
+</style>
+<style>
+  .rcard { border: 1px solid var(--border); border-radius: 11px; background: var(--card); padding: 13px 14px; display: grid; gap: 8px; }
+  .rcard:hover { border-color: var(--brand); }
+  .rtitle { font-size: 14px; font-weight: 650; letter-spacing: -.01em; line-height: 1.35; }
+  .rmeta { display: flex; flex-wrap: wrap; gap: 10px; font-size: 10.5px; color: var(--muted-foreground); }
+  .hz { height: 5px; border-radius: 3px; background: var(--muted); position: relative; }
+  .hz i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--brand); opacity: .75; }
+
+  /* 목표/손절 진행 축 */
+  .rax { position: relative; height: 7px; border-radius: 4px; background: var(--muted); margin: 15px 0 5px; }
+  .rax .fill { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
+  .rax .base { position: absolute; top: -5px; width: 2px; height: 17px; background: var(--muted-foreground); }
+  .rax .now { position: absolute; top: -6px; width: 3px; height: 19px; border-radius: 2px; background: var(--foreground); }
+  .rax .tgt { position: absolute; top: -7px; bottom: -7px; border-right: 2px dashed var(--profit); }
+  .rax .stp { position: absolute; top: -7px; bottom: -7px; border-right: 2px dashed var(--loss); }
+  .rax em { position: absolute; top: -16px; font-size: 9px; font-style: normal; color: var(--muted-foreground); transform: translateX(-50%); white-space: nowrap; }
+
+  .radar { width: 92px; height: 92px; flex: 0 0 auto; }
+  .axbars { display: grid; gap: 3px; }
+  .axbars .b { display: grid; grid-template-columns: 44px 1fr 26px; gap: 6px; align-items: center; font-size: 10px; }
+  .axbars .b .tr { height: 5px; border-radius: 3px; background: var(--muted); }
+  .axbars .b .tr i { display: block; height: 100%; border-radius: 3px; background: var(--brand); }
+
+  .wide { display: grid; grid-template-columns: 176px 1fr; gap: 13px; }
+  .tl { display: grid; gap: 5px; }
+  .tl .e { display: grid; grid-template-columns: 42px 1fr auto; gap: 7px; align-items: center; font-size: 10.5px; }
+  .tl .e .tr { height: 5px; border-radius: 3px; background: var(--muted); position: relative; }
+  .tl .e .tr i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--brand); opacity: .7; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <h1>투자 리포트 — 위젯 선택용 목업 v1</h1>
+  <span class="badge b-brand">/reports</span>
+  <button class="btn" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme==='dark'?'light':'dark'">라이트 / 다크</button>
+</div>
+
+<p class="lede">
+  이 화면의 가장 큰 낭비: <b>발행 시점 캔들·5축 점수·목표가 확률이 이미 서버에서 내려오는데 목록이 하나도 안 쓴다.</b>
+  <span class="mono sm">call.chart.bars</span>, <span class="mono sm">evidence.breakdown</span>, <span class="mono sm">expectedValue</span>,
+  <span class="mono sm">toTargetPct/toStopPct</span>가 전부 이미 응답에 들어 있다 — 즉 <b>추가 API 요청 없이</b> 아래 대부분을 그릴 수 있다.
+  (작성자 순위표는 후보에 없다 — <span class="mono sm">RESEARCH_CALL_DESIGN §15-1</span>)
+</p>
+
+<!-- ══════════ 카드 ══════════ -->
+<section>
+  <div class="shead"><span class="tag">카드</span><h2>리포트 한 장을 어떻게 보여줄 것인가 (택 1)</h2></div>
+  <p class="why">
+    현재 카드: 종목칩 · 제목 · 발췌 2줄 · 메타 6종 · 기간 진행바 · 알파/수익률. <b>시각 요소가 0</b>이라
+    「지금 목표에 얼마나 근접했나」가 텍스트를 읽어야만 나온다.
+  </p>
+
+  <div class="cols c2">
+
+    <!-- R1 -->
+    <div class="opt">
+      <header><span class="id">R1</span><h3>현행 + 발행시점 차트 · 목표 축</h3><span class="badge" style="margin-left:auto">추가 요청 0</span></header>
+      <div class="pad" style="display:grid;gap:10px">
+        <div class="rcard">
+          <div class="pillrow">
+            <span class="av" style="width:18px;height:18px;font-size:8px">SK</span>
+            <span class="sm" style="font-weight:600">SK하이닉스</span>
+            <span class="badge b-up">매수</span><span class="badge">검증 중</span><span class="badge b-warn">역발상</span>
+            <span class="badge b-brand" style="margin-left:auto">D-12</span>
+          </div>
+          <div class="rtitle">HBM 단가 협상력은 아직 꺾이지 않았다</div>
+          <p class="sm mut clamp2">경쟁사 수율 이슈가 최소 두 분기 더 이어질 것으로 본다. 발행 시점 컨센서스는 이미 하향 반영이 끝난 상태이고…</p>
+          <span style="display:block;height:56px"><svg viewBox="0 0 380 56" preserveAspectRatio="none" style="width:100%;height:100%">
+            <line x1="0" y1="9" x2="380" y2="9" stroke="var(--profit)" stroke-width="1.2" stroke-dasharray="5 3"/>
+            <line x1="0" y1="49" x2="380" y2="49" stroke="var(--loss)" stroke-width="1.2" stroke-dasharray="5 3"/>
+            <polyline fill="none" stroke="var(--muted-foreground)" stroke-width="1.3" opacity=".5" points="0,40 30,38 60,41 90,36 120,37"/>
+            <polyline fill="none" stroke="var(--foreground)" stroke-width="1.6" points="120,37 155,33 190,35 225,27 260,29 295,21 330,23 380,17"/>
+            <circle cx="120" cy="37" r="3" fill="var(--brand)"/>
+          </svg></span>
+          <div class="xs mut" style="margin-top:-3px">● 발행 · <span style="color:var(--profit)">┈ 목표 260,000</span> · <span style="color:var(--loss)">┈ 손절 185,000</span></div>
+          <div class="rax">
+            <em style="left:8%">발행 195,000</em><em style="left:82%">목표 260,000</em>
+            <div class="fill" style="left:8%;width:18%;background:var(--brand);opacity:.75"></div>
+            <div class="stp" style="left:2%"></div><div class="base" style="left:8%"></div>
+            <div class="now" style="left:26%"></div><div class="tgt" style="left:82%"></div>
+          </div>
+          <div class="rmeta">
+            <span>정민호</span><span>08-04 발행</span><span>⏱ 6분</span><span>👁 1,284</span><span>♡ 42</span><span>💬 11</span><span>평가 4.2</span>
+          </div>
+          <div class="pillrow" style="border-top:1px solid var(--border);padding-top:8px">
+            <span class="xs mut">발행시 점수 <b class="mono">71</b></span>
+            <span class="xs mut">현재 <b class="mono up">+8.7%</b></span>
+            <span class="xs mut">알파 <b class="mono up" style="font-size:13px">+5.2%p</b></span>
+            <span class="xs mut" style="margin-left:auto">기간 진행 <b class="mono">62%</b></span>
+          </div>
+        </div>
+      </div>
+      <div class="note">회색선 = 발행 전, 검은선 = 발행 후. <b>점 하나로 「내가 여기서 샀다」</b>가 보인다. 목표·손절 파선은 <span class="mono">targetPrice/stopPrice</span>, 축은 <span class="mono">toTargetPct/toStopPct</span>로 그린다.</div>
+    </div>
+
+    <!-- R2 -->
+    <div class="opt">
+      <header><span class="id">R2</span><h3>가로형 (차트 좌 · 글 우)</h3></header>
+      <div class="pad" style="display:grid;gap:10px">
+        <div class="rcard">
+          <div class="wide">
+            <div>
+              <span style="display:block;height:74px"><svg viewBox="0 0 176 74" preserveAspectRatio="none" style="width:100%;height:100%">
+                <line x1="0" y1="10" x2="176" y2="10" stroke="var(--profit)" stroke-width="1.2" stroke-dasharray="4 3"/>
+                <line x1="0" y1="64" x2="176" y2="64" stroke="var(--loss)" stroke-width="1.2" stroke-dasharray="4 3"/>
+                <polyline fill="none" stroke="var(--muted-foreground)" stroke-width="1.3" opacity=".5" points="0,52 14,50 28,53 42,47 56,49"/>
+                <polyline fill="none" stroke="var(--foreground)" stroke-width="1.7" points="56,49 72,44 88,46 104,36 120,38 136,28 152,30 176,23"/>
+                <circle cx="56" cy="49" r="3.2" fill="var(--brand)"/>
+              </svg></span>
+              <div class="axbars" style="margin-top:8px">
+                <div class="b"><span class="mut">기술</span><span class="tr"><i style="width:78%"></i></span><span class="mono">78</span></div>
+                <div class="b"><span class="mut">퀄리티</span><span class="tr"><i style="width:64%"></i></span><span class="mono">64</span></div>
+                <div class="b"><span class="mut">성장</span><span class="tr"><i style="width:82%"></i></span><span class="mono">82</span></div>
+                <div class="b"><span class="mut">밸류</span><span class="tr"><i style="width:41%"></i></span><span class="mono">41</span></div>
+                <div class="b"><span class="mut">심리</span><span class="tr"><i style="width:69%"></i></span><span class="mono">69</span></div>
+              </div>
+              <div class="xs mut" style="margin-top:4px">발행 시점 5축 (박제)</div>
+            </div>
+            <div style="display:grid;gap:7px;align-content:start">
+              <div class="pillrow">
+                <span class="av" style="width:18px;height:18px;font-size:8px">SK</span><span class="sm" style="font-weight:600">SK하이닉스</span>
+                <span class="badge b-up">매수</span><span class="badge">검증 중</span><span class="badge b-warn">역발상</span>
+              </div>
+              <div class="rtitle">HBM 단가 협상력은 아직 꺾이지 않았다</div>
+              <p class="sm mut clamp2">경쟁사 수율 이슈가 최소 두 분기 더 이어질 것으로 본다. 발행 시점 컨센서스는 이미 하향 반영이 끝난…</p>
+              <div class="rmeta"><span>정민호</span><span>08-04</span><span>⏱ 6분</span><span>👁 1,284</span><span>♡ 42</span><span>💬 11</span></div>
+              <div class="rax">
+                <em style="left:8%">발행</em><em style="left:82%">목표</em>
+                <div class="fill" style="left:8%;width:18%;background:var(--brand);opacity:.75"></div>
+                <div class="stp" style="left:2%"></div><div class="base" style="left:8%"></div>
+                <div class="now" style="left:26%"></div><div class="tgt" style="left:82%"></div>
+              </div>
+              <div class="pillrow">
+                <span class="xs mut">수익률 <b class="mono up">+8.7%</b></span>
+                <span class="xs mut">알파 <b class="mono up" style="font-size:13px">+5.2%p</b></span>
+                <span class="xs mut">기대값 <b class="mono">+3.1%</b></span>
+                <span class="badge b-brand" style="margin-left:auto">D-12</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">한 장에 근거(차트·5축)와 주장(제목·발췌)이 나란히 선다. 초광폭 2단 그리드는 포기하고 <b>세로 1단</b>으로 간다.</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════ 위젯 ══════════ -->
+<section>
+  <div class="shead"><span class="tag">위젯</span><h2>추가 컴포넌트 후보 (복수 선택)</h2></div>
+
+  <div class="cols c2">
+
+    <!-- R-A -->
+    <div class="opt">
+      <header><span class="id">R-A</span><h3>리포트 퀵룩 모달</h3></header>
+      <div class="pad">
+        <div class="modal-shell">
+          <div class="modal-head">
+            <span class="av lg">SK</span>
+            <div class="col-main">
+              <b style="font-size:13px">HBM 단가 협상력은 아직 꺾이지 않았다</b>
+              <div class="meta"><span>정민호</span><span>08-04 발행</span><span class="badge b-up">매수</span><span class="badge b-warn">역발상</span></div>
+            </div>
+            <span class="mut">✕</span>
+          </div>
+          <div class="modal-body">
+            <div class="cols c2" style="gap:9px">
+              <div class="panel">
+                <h4>발행 시점 박제</h4>
+                <div class="kv"><span>기준가</span><b class="mono">195,000</b></div>
+                <div class="kv"><span>목표 / 손절</span><b class="mono"><span class="up">260,000</span> / <span class="dn">185,000</span></b></div>
+                <div class="kv"><span>종합점수</span><b class="mono">71 (B+) <span class="xs mut">피어 상위 18%</span></b></div>
+                <div class="kv"><span>PER / PBR</span><b class="mono">14.2 / 1.8</b></div>
+                <div class="kv"><span>52주 위치</span><b class="mono">76%</b></div>
+              </div>
+              <div class="panel">
+                <h4>확률 · 기대값</h4>
+                <div class="kv"><span>목표 도달 확률</span><b class="mono">34% <span class="xs mut">과거 90일 창 118회 중 40회</span></b></div>
+                <div class="kv"><span>손익비</span><b class="mono">2.07 : 1</b></div>
+                <div class="kv"><span>기대값 <span class="xs mut">작성자 확신</span></span><b class="mono up">+6.8%</b></div>
+                <div class="kv"><span>기대값 <span class="xs mut">실제 적중률</span></span><b class="mono">+1.2%</b></div>
+                <div class="xs mut" style="margin-top:4px">두 기대값의 차이가 이 작성자의 낙관 정도다</div>
+              </div>
+            </div>
+            <span style="display:block;height:60px"><svg viewBox="0 0 400 60" preserveAspectRatio="none" style="width:100%;height:100%">
+              <line x1="0" y1="9" x2="400" y2="9" stroke="var(--profit)" stroke-width="1.2" stroke-dasharray="5 3"/>
+              <line x1="0" y1="52" x2="400" y2="52" stroke="var(--loss)" stroke-width="1.2" stroke-dasharray="5 3"/>
+              <polyline fill="none" stroke="var(--muted-foreground)" stroke-width="1.3" opacity=".5" points="0,43 32,41 64,44 96,38 128,40"/>
+              <polyline fill="none" stroke="var(--foreground)" stroke-width="1.7" points="128,40 165,35 202,37 239,28 276,30 313,22 350,24 400,18"/>
+              <circle cx="128" cy="40" r="3.4" fill="var(--brand)"/>
+            </svg></span>
+            <div class="panel"><h4>발행 시점 뉴스 <span class="xs mut">그날 서버가 기록한 것</span></h4>
+              <div class="xs mut">· 마이크론 실적 서프라이즈, HBM 수요 견조 <span>08-04</span></div>
+              <div class="xs mut">· 반도체 지수 3일 연속 하락 <span>08-03</span></div>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn sm">♡ 42</button><button class="btn sm">🔖</button>
+            <span class="xs mut">D-12 · 기간 진행 62%</span>
+            <button class="btn sm primary" style="margin-left:auto">전문 읽기 →</button>
+          </div>
+        </div>
+      </div>
+      <div class="note">지금은 <b>카드를 누르면 곧장 페이지 이동</b>이다. 여러 리포트를 비교하려면 뒤로가기를 반복해야 한다. 모달로 근거만 훑고 마음에 들 때 전문으로 넘어간다 — 관심·보유·뉴스가 이미 이 흐름.</div>
+    </div>
+
+    <!-- R-B -->
+    <div class="opt">
+      <header><span class="id">R-B</span><h3>내 성적표 모달</h3></header>
+      <div class="pad">
+        <div class="modal-shell">
+          <div class="modal-head"><b style="font-size:13px">내 리포트 성적표</b><span class="mut" style="margin-left:auto">✕</span></div>
+          <div class="modal-body">
+            <div class="pillrow"><span class="chip on">방향별</span><span class="chip">기간별</span><span class="chip">종목별</span><span class="chip">역발상</span><span class="chip">신뢰도</span></div>
+            <div class="tiles" style="grid-template-columns:repeat(4,1fr)">
+              <div class="tile"><div class="l">발행</div><div class="val mono">23</div><div class="foot">검증 중 7 · 14종목</div></div>
+              <div class="tile"><div class="l">적중률</div><div class="val mono">56%</div><div class="foot">9/16 판정</div></div>
+              <div class="tile"><div class="l">평균 알파</div><div class="val mono up">+3.4%p</div><div class="foot">벤치마크 대비</div></div>
+              <div class="tile"><div class="l">철회율</div><div class="val mono">8.7%</div><div class="foot">2건 — 통계에 남음</div></div>
+            </div>
+            <div class="panel">
+              <h4>방향별</h4>
+              <table class="t">
+                <tr><th>의견</th><th>발행</th><th>판정</th><th>적중</th><th>적중률</th><th>평균 알파</th></tr>
+                <tr><td><span class="badge b-up">매수</span></td><td class="mono">15</td><td class="mono">11</td><td class="mono">7</td><td class="mono">64%</td><td class="mono up">+5.1%p</td></tr>
+                <tr><td><span class="badge b-down">매도</span></td><td class="mono">5</td><td class="mono">3</td><td class="mono">1</td><td class="mono">33%</td><td class="mono dn">−2.8%p</td></tr>
+                <tr><td><span class="badge">관망</span></td><td class="mono">3</td><td class="mono">2</td><td class="mono">1</td><td class="mono">50%</td><td class="mono">+0.4%p</td></tr>
+              </table>
+              <div class="xs mut" style="margin-top:6px">매도 표본 3건 — <b>표본 10건 미만은 적중률을 성적으로 읽지 않는다</b></div>
+            </div>
+            <div class="panel">
+              <h4>확신도 보정 <span class="xs mut">내가 90%라고 쓴 리포트는 실제로 몇 % 맞았나</span></h4>
+              <div class="axbars">
+                <div class="b"><span class="mut">확신 90%</span><span class="tr"><i style="width:50%;background:var(--miss)"></i></span><span class="mono">50%</span></div>
+                <div class="b"><span class="mut">확신 70%</span><span class="tr"><i style="width:67%"></i></span><span class="mono">67%</span></div>
+                <div class="b"><span class="mut">확신 50%</span><span class="tr"><i style="width:57%;background:var(--hit)"></i></span><span class="mono">57%</span></div>
+              </div>
+              <div class="xs mut" style="margin-top:5px">확신이 높을수록 오히려 덜 맞는다 → 확신도를 낮춰 쓰는 게 성적에 유리</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">레일의 4타일(<span class="mono">summary</span>)은 그대로 두고 <b>클릭 시 이 모달</b>. 스탬프 성적표 모달과 같은 구조 — 집계는 이미 받아둔 <span class="mono">allCalls</span>에서 계산하므로 서버 재요청 0. <span class="mono">calibration</span> 필드가 이미 있는데 화면에서 안 쓰고 있다.</div>
+    </div>
+
+    <!-- R-C -->
+    <div class="opt">
+      <header><span class="id">R-C</span><h3>필터 확장 · 밀집 테이블 뷰</h3></header>
+      <div class="pad" style="display:grid;gap:10px">
+        <div class="pillrow">
+          <input class="field" style="max-width:180px" placeholder="종목·제목 검색" />
+          <span class="chip on">전체</span><span class="chip">검증 중 7</span><span class="chip">판정 완료 16</span><span class="chip">역발상 4</span>
+          <span class="chip">내 관심종목</span><span class="chip">내 보유종목</span>
+          <span class="pillrow" style="margin-left:auto"><span class="xs mut">보기</span><span class="chip on">카드</span><span class="chip">표</span></span>
+        </div>
+        <div class="card" style="padding:2px 8px 6px">
+          <table class="t">
+            <tr><th>종목</th><th style="text-align:left">제목</th><th>의견</th><th>발행</th><th>D-</th><th>진행</th><th>수익률</th><th>알파</th></tr>
+            <tr><td class="pillrow"><span class="av" style="width:16px;height:16px;font-size:7px">SK</span>SK하이닉스</td><td style="text-align:left" class="clamp2">HBM 단가 협상력은 아직…</td><td><span class="badge b-up">매수</span></td><td class="mono">08-04</td><td class="mono warnc">12</td><td><span class="hz" style="width:52px;display:inline-block"><i style="width:62%"></i></span></td><td class="mono up">+8.7%</td><td class="mono up">+5.2%p</td></tr>
+            <tr><td class="pillrow"><span class="av" style="width:16px;height:16px;font-size:7px">현</span>현대차</td><td style="text-align:left" class="clamp2">관세 우려는 이미 가격에 있다</td><td><span class="badge b-up">매수</span></td><td class="mono">07-22</td><td class="mono hit">완료</td><td><span class="hz" style="width:52px;display:inline-block"><i style="width:100%;background:var(--hit)"></i></span></td><td class="mono up">+14.1%</td><td class="mono up">+9.8%p</td></tr>
+            <tr><td class="pillrow"><span class="av" style="width:16px;height:16px;font-size:7px">TS</span>Tesla</td><td style="text-align:left" class="clamp2">FSD 매출 인식은 한 분기 더 밀린다</td><td><span class="badge b-down">매도</span></td><td class="mono">07-15</td><td class="mono">완료</td><td><span class="hz" style="width:52px;display:inline-block"><i style="width:100%;background:var(--miss)"></i></span></td><td class="mono dn">−3.2%</td><td class="mono dn">−6.4%p</td></tr>
+            <tr><td class="pillrow"><span class="av" style="width:16px;height:16px;font-size:7px">LG</span>LG엔솔</td><td style="text-align:left" class="clamp2">재고 사이클 저점은 4분기</td><td><span class="badge">관망</span></td><td class="mono">08-09</td><td class="mono">47</td><td><span class="hz" style="width:52px;display:inline-block"><i style="width:18%"></i></span></td><td class="mono">+0.9%</td><td class="mono">+0.2%p</td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="note">현재 필터는 의견 4종 · 역발상 · 정렬 3종뿐. <b>종목 검색이 없어서</b> 특정 종목 리포트를 찾으려면 레일의 「많이 다룬 종목」 6칸에 걸리기를 바라야 한다. 표 뷰는 리포트가 쌓였을 때 비교용.</div>
+    </div>
+
+    <!-- R-D -->
+    <div class="opt">
+      <header><span class="id">R-D</span><h3>레일 · 판정 임박 타임라인</h3></header>
+      <div class="pad">
+        <div class="rail" style="max-width:290px">
+          <div class="sc">
+            <h4>곧 판정됩니다 <span class="badge b-warn">3</span></h4>
+            <div class="tl">
+              <div class="e"><span class="mut">D-3</span><span class="tr"><i style="width:94%"></i></span><span class="mono up">+8.7%</span></div>
+              <div class="e"><span class="mut">D-12</span><span class="tr"><i style="width:62%"></i></span><span class="mono up">+2.1%</span></div>
+              <div class="e"><span class="mut">D-24</span><span class="tr"><i style="width:41%"></i></span><span class="mono dn">−4.3%</span></div>
+            </div>
+            <div class="xs mut" style="margin-top:6px">막대 = 기간 진행. 만기 종가로 알파가 확정된다</div>
+          </div>
+          <div class="sc">
+            <h4>목표가에 근접한 리포트</h4>
+            <div class="kv"><span class="clamp2" style="max-width:150px">HBM 단가 협상력은…</span><span class="badge b-warn">목표 −3.1%</span></div>
+            <div class="kv"><span class="clamp2" style="max-width:150px">관세 우려는 이미…</span><span class="badge b-down">손절 +2.4%</span></div>
+          </div>
+          <div class="sc">
+            <h4>내 종목이 걸린 리포트 <span class="xs mut">보유·관심</span></h4>
+            <div class="kv"><span class="pillrow"><span class="av" style="width:16px;height:16px;font-size:7px">삼</span>삼성전자</span><span class="xs"><b class="mono">4</b>건 <span class="up">매수3</span>/<span class="dn">매도1</span></span></div>
+            <div class="kv"><span class="pillrow"><span class="av" style="width:16px;height:16px;font-size:7px">SK</span>SK하이닉스</span><span class="xs"><b class="mono">3</b>건 <span class="up">매수3</span></span></div>
+            <div class="kv"><span class="pillrow"><span class="av" style="width:16px;height:16px;font-size:7px">TS</span>Tesla</span><span class="xs"><b class="mono">2</b>건 <span class="dn">매도2</span></span></div>
+          </div>
+          <div class="sc">
+            <h4>커뮤니티 의견 분포 <span class="xs mut">공개 리포트 전체</span></h4>
+            <div class="axbars">
+              <div class="b"><span class="up">매수</span><span class="tr"><i style="width:64%;background:var(--profit)"></i></span><span class="mono">64%</span></div>
+              <div class="b"><span class="dn">매도</span><span class="tr"><i style="width:21%;background:var(--loss)"></i></span><span class="mono">21%</span></div>
+              <div class="b"><span class="mut">관망</span><span class="tr"><i style="width:15%;background:var(--muted-foreground)"></i></span><span class="mono">15%</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">현재 레일: 성적표 · 많이 다룬 종목 · 많이 본 리포트 · 안내. <b>「내 종목이 걸린 리포트」</b>가 이 화면을 내 얘기로 만든다 — 남의 글 목록을 매일 볼 이유는 그것뿐이다.</div>
+    </div>
+
+  </div>
+</section>
+
+<p class="lede" style="margin-top:26px">※ 숫자·종목·작성자는 전부 예시.</p>
+
+</div>
+</body>
+</html>

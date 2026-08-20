@@ -115,6 +115,35 @@ func ComputeStoredFundamentals(current, prior model.FinancialSnapshot, sharesOve
 	return out
 }
 
+// ApplyPeriodRatios fills a FinancialHistoryPeriod's flow/balance-sheet
+// fields and per-period margins/ratios from its own snapshot — independent
+// per period, unlike ComputeStoredFundamentals which compares current vs.
+// prior year. Shared by the KR (DART) and US (EDGAR) history builders.
+func ApplyPeriodRatios(p *model.FinancialHistoryPeriod, snap model.FinancialSnapshot) {
+	p.Revenue = snap.Revenue
+	p.OperatingIncome = snap.OperatingIncome
+	p.NetIncome = snap.NetIncome
+	p.EPSBasic = snap.EPSBasic
+	p.TotalAssets = snap.TotalAssets
+	p.TotalLiabilities = snap.TotalLiabilities
+	p.TotalEquity = snap.TotalEquity
+	p.CurrentAssets = snap.CurrentAssets
+	p.CurrentLiabilities = snap.CurrentLiabilities
+
+	if snap.Revenue != nil && snap.OperatingIncome != nil && *snap.Revenue != 0 {
+		p.OperatingMargin = pctRatio(float64(*snap.OperatingIncome), float64(*snap.Revenue))
+	}
+	if snap.Revenue != nil && snap.NetIncome != nil && *snap.Revenue != 0 {
+		p.NetProfitMargin = pctRatio(float64(*snap.NetIncome), float64(*snap.Revenue))
+	}
+	if snap.TotalEquity != nil && snap.TotalLiabilities != nil && *snap.TotalEquity != 0 {
+		p.DebtRatio = pctRatio(float64(*snap.TotalLiabilities), float64(*snap.TotalEquity))
+	}
+	if snap.CurrentAssets != nil && snap.CurrentLiabilities != nil && *snap.CurrentLiabilities != 0 {
+		p.CurrentRatio = ratioValue(float64(*snap.CurrentAssets), float64(*snap.CurrentLiabilities))
+	}
+}
+
 func ComputeValuationMetrics(price *float64, current model.FinancialSnapshot, shares *int64) ValuationMetrics {
 	out := ValuationMetrics{}
 	if price == nil {

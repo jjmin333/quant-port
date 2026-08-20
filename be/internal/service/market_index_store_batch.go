@@ -392,7 +392,10 @@ func (st *MarketIndexStore) GroupMeta() map[string]model.IndexGroupMeta {
 }
 
 func (st *MarketIndexStore) eodKey(groupID indexBatchID, now time.Time) string {
-	return fmt.Sprintf(indexEODKeyFmt, groupID, now.Format("20060102"))
+	// KST calendar day, not now's own zone (process-local, UTC in Docker) — a
+	// "ran today" marker keyed by the wrong day boundary can let the EOD
+	// persist fire twice in one KST trading day or skip one.
+	return fmt.Sprintf(indexEODKeyFmt, groupID, now.In(model.KST).Format("20060102"))
 }
 
 func (st *MarketIndexStore) eodDone(ctx context.Context, groupID indexBatchID, now time.Time) bool {

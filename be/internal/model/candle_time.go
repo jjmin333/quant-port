@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 var KST = time.FixedZone("KST", 9*3600)
 
@@ -26,6 +29,17 @@ func ParseCandleTime(raw string) time.Time {
 		}
 	}
 	return time.Time{}
+}
+
+// IsDailyOrCoarser reports whether an interval's bars are date-keyed rather
+// than timestamped. Those are the ones a SQL DATE(bar_time) is taken of, so
+// their stored wall clock must be KST midnight regardless of process timezone.
+func IsDailyOrCoarser(interval CandleInterval) bool {
+	switch interval {
+	case Interval1d, Interval1w, Interval1M:
+		return true
+	}
+	return false
 }
 
 // FormatCandleTime returns a canonical stored/display time for the interval.
@@ -60,4 +74,36 @@ func BeforeCursorRFC3339(raw string) string {
 		return raw
 	}
 	return t.In(KST).Format("2006-01-02T15:04:05+09:00")
+}
+
+// CanonicalPaginationCursor returns RFC3339 KST cursor for API/Toss pagination.
+// Daily/week/month buckets normalize to midnight KST; intraday keeps minute resolution.
+func CanonicalPaginationCursor(raw string, base CandleInterval) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	t := BeforeCursorTime(raw)
+	if t.IsZero() {
+		return BeforeCursorRFC3339(raw)
+	}
+	switch base {
+	case Interval1d, Interval1w, Interval1M:
+		t = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, KST)
+	default:
+		t = t.In(KST)
+	}
+	return t.Format("2006-01-02T15:04:05+09:00")
+}
+
+// CanonicalPaginationCursorPtr normalizes a nullable pagination cursor.
+func CanonicalPaginationCursorPtr(raw *string, base CandleInterval) *string {
+	if raw == nil {
+		return nil
+	}
+	c := CanonicalPaginationCursor(*raw, base)
+	if c == "" {
+		return nil
+	}
+	return &c
 }

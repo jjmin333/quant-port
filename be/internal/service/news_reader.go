@@ -17,26 +17,45 @@ import (
 
 	"github.com/enact/quant-port/be/internal/marketdata"
 	"github.com/enact/quant-port/be/internal/model"
+	"github.com/enact/quant-port/be/internal/repository"
 )
 
 const (
-	usReaderCachePrefix = "news:reader:v1:"
-	usReaderCacheTTL    = time.Hour
+	readerCachePrefix   = "news:reader:v1:"
+	readerKoCachePrefix = "news:reader:ko:v1:"
+	readerCacheTTL      = time.Hour
+	readerKoCacheTTL    = 24 * time.Hour
 )
+
+type ReaderExtractOptions struct {
+	Market    string
+	ArticleID string
+}
 
 type NewsReaderService struct {
 	httpClient *http.Client
 	redis      *redis.Client
+	papago     *marketdata.PapagoClient
+	transRepo  *repository.NewsReaderTranslationRepo
+	newsRepo   *repository.NewsRepo
 }
 
-func NewNewsReaderService(redisClient *redis.Client) *NewsReaderService {
+func NewNewsReaderService(
+	redisClient *redis.Client,
+	papago *marketdata.PapagoClient,
+	transRepo *repository.NewsReaderTranslationRepo,
+	newsRepo *repository.NewsRepo,
+) *NewsReaderService {
 	return &NewsReaderService{
 		httpClient: &http.Client{Timeout: 20 * time.Second},
 		redis:      redisClient,
+		papago:     papago,
+		transRepo:  transRepo,
+		newsRepo:   newsRepo,
 	}
 }
 
-func (s *NewsReaderService) Extract(ctx context.Context, rawURL string) (*model.NewsReaderContent, error) {
+func (s *NewsReaderService) Extract(ctx context.Context, rawURL string, opts ReaderExtractOptions) (*model.NewsReaderContent, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
 		return nil, fmt.Errorf("url is required")
@@ -45,6 +64,38 @@ func (s *NewsReaderService) Extract(ctx context.Context, rawURL string) (*model.
 		return nil, err
 	}
 
+	market := strings.ToLower(strings.TrimSpace(opts.Market))
+	if market == "" {
+		market = "domestic"
+	}
+
+	if market == "us" {
+		if cached, err := s.loadKoCache(ctx, rawURL); err == nil && cached != nil {
+			return cached, nil
+		}
+		if stored, err := s.loadStoredTranslation(ctx, rawURL); err == nil && stored != nil {
+			s.saveKoCache(ctx, rawURL, stored)
+			return stored, nil
+		}
+	}
+
+	base, err := s.extractEnglish(ctx, rawURL)
+	if err != nil {
+		return nil, err
+	}
+	if market != "us" {
+		return base, nil
+	}
+
+	translated, err := s.translateUSReader(ctx, rawURL, opts.ArticleID, base)
+	if err != nil {
+		return base, nil
+	}
+	s.saveKoCache(ctx, rawURL, translated)
+	return translated, nil
+}
+
+func (s *NewsReaderService) extractEnglish(ctx context.Context, rawURL string) (*model.NewsReaderContent, error) {
 	if s.redis != nil {
 		if cached, err := s.redis.Get(ctx, readerCacheKey(rawURL)).Bytes(); err == nil && len(cached) > 0 {
 			var out model.NewsReaderContent
@@ -96,6 +147,7 @@ func (s *NewsReaderService) Extract(ctx context.Context, rawURL string) (*model.
 		Byline:      strings.TrimSpace(article.Byline),
 		Excerpt:     strings.TrimSpace(article.Excerpt),
 		SiteName:    strings.TrimSpace(article.SiteName),
+		ImageURL:    strings.TrimSpace(article.Image),
 		TextContent: strings.TrimSpace(article.TextContent),
 		ContentHTML: strings.TrimSpace(article.Content),
 		FetchedAt:   time.Now(),
@@ -109,10 +161,222 @@ func (s *NewsReaderService) Extract(ctx context.Context, rawURL string) (*model.
 
 	if s.redis != nil {
 		if payload, err := json.Marshal(out); err == nil {
-			_ = s.redis.Set(ctx, readerCacheKey(rawURL), payload, usReaderCacheTTL).Err()
+			_ = s.redis.Set(ctx, readerCacheKey(rawURL), payload, readerCacheTTL).Err()
 		}
 	}
 	return out, nil
+}
+
+func (s *NewsReaderService) translateUSReader(
+	ctx context.Context,
+	rawURL, articleID string,
+	base *model.NewsReaderContent,
+) (*model.NewsReaderContent, error) {
+	if base == nil {
+		return nil, fmt.Errorf("empty reader content")
+	}
+	if s.papago == nil || !s.papago.Enabled() {
+		return nil, fmt.Errorf("papago not configured")
+	}
+	if s.transRepo == nil {
+		return nil, fmt.Errorf("translation repo not configured")
+	}
+
+	html := readerHTMLForTranslation(base)
+	if html == "" {
+		return nil, fmt.Errorf("no html to translate")
+	}
+
+	translatedHTML, err := s.papago.TranslateWebsiteENToKO(ctx, html)
+	if err != nil {
+		return nil, err
+	}
+
+	titleKo := s.resolveReaderTitleKo(ctx, articleID, base.Title)
+	if titleKo == "" {
+		titleKo = base.Title
+	}
+	excerptKo := s.resolveReaderExcerptKo(ctx, articleID, base.Excerpt)
+
+	urlHash := newsURLHash(rawURL)
+	rec := repository.NewsReaderTranslationRecord{
+		URLHash:           urlHash,
+		ArticleID:         strings.TrimSpace(articleID),
+		Market:            "us",
+		TitleKo:           titleKo,
+		ExcerptKo:         excerptKo,
+		ContentHTMLKo:     translatedHTML,
+		TextContentKo:     stripHTMLToText(translatedHTML),
+		SourceContentHash: hashString(html),
+	}
+	if err := s.transRepo.Upsert(ctx, rec); err != nil {
+		return nil, err
+	}
+
+	out := *base
+	out.Title = titleKo
+	out.Excerpt = excerptKo
+	out.ContentHTML = translatedHTML
+	if text := strings.TrimSpace(rec.TextContentKo); text != "" {
+		out.TextContent = text
+	}
+	out.OriginalTitle = base.Title
+	out.OriginalExcerpt = base.Excerpt
+	out.Translated = true
+	return &out, nil
+}
+
+func (s *NewsReaderService) resolveReaderTitleKo(ctx context.Context, articleID, fallback string) string {
+	articleID = strings.TrimSpace(articleID)
+	if articleID != "" && s.newsRepo != nil {
+		if rec, err := s.newsRepo.GetByID(ctx, articleID); err == nil {
+			if ko := strings.TrimSpace(rec.HeadlineKo); ko != "" {
+				return ko
+			}
+		}
+	}
+	if s.papago != nil && s.papago.Enabled() && strings.TrimSpace(fallback) != "" {
+		if ko, err := s.papago.TranslateENToKO(ctx, fallback); err == nil {
+			return strings.TrimSpace(ko)
+		}
+	}
+	return strings.TrimSpace(fallback)
+}
+
+func (s *NewsReaderService) resolveReaderExcerptKo(ctx context.Context, articleID, fallback string) string {
+	articleID = strings.TrimSpace(articleID)
+	if articleID != "" && s.newsRepo != nil {
+		if rec, err := s.newsRepo.GetByID(ctx, articleID); err == nil {
+			if ko := strings.TrimSpace(rec.SummaryKo); ko != "" {
+				return ko
+			}
+		}
+	}
+	return strings.TrimSpace(fallback)
+}
+
+func (s *NewsReaderService) loadStoredTranslation(ctx context.Context, rawURL string) (*model.NewsReaderContent, error) {
+	if s.transRepo == nil {
+		return nil, fmt.Errorf("translation repo not configured")
+	}
+	rec, err := s.transRepo.GetByURLHash(ctx, newsURLHash(rawURL))
+	if err != nil {
+		return nil, err
+	}
+	base, err := s.extractEnglish(ctx, rawURL)
+	if err != nil {
+		base = &model.NewsReaderContent{
+			URL:       rawURL,
+			FetchedAt: time.Now(),
+		}
+	}
+	out := *base
+	out.Title = rec.TitleKo
+	out.Excerpt = rec.ExcerptKo
+	out.ContentHTML = rec.ContentHTMLKo
+	if text := strings.TrimSpace(rec.TextContentKo); text != "" {
+		out.TextContent = text
+	} else if text := stripHTMLToText(rec.ContentHTMLKo); text != "" {
+		out.TextContent = text
+	}
+	out.OriginalTitle = base.Title
+	out.OriginalExcerpt = base.Excerpt
+	out.Translated = true
+	return &out, nil
+}
+
+func (s *NewsReaderService) loadKoCache(ctx context.Context, rawURL string) (*model.NewsReaderContent, error) {
+	if s.redis == nil {
+		return nil, fmt.Errorf("redis unavailable")
+	}
+	cached, err := s.redis.Get(ctx, readerKoCacheKey(rawURL)).Bytes()
+	if err != nil || len(cached) == 0 {
+		return nil, err
+	}
+	var out model.NewsReaderContent
+	if err := json.Unmarshal(cached, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (s *NewsReaderService) saveKoCache(ctx context.Context, rawURL string, content *model.NewsReaderContent) {
+	if s.redis == nil || content == nil {
+		return
+	}
+	payload, err := json.Marshal(content)
+	if err != nil {
+		return
+	}
+	_ = s.redis.Set(ctx, readerKoCacheKey(rawURL), payload, readerKoCacheTTL).Err()
+}
+
+func readerHTMLForTranslation(base *model.NewsReaderContent) string {
+	if base == nil {
+		return ""
+	}
+	if html := strings.TrimSpace(base.ContentHTML); html != "" {
+		return html
+	}
+	text := strings.TrimSpace(base.TextContent)
+	if text == "" {
+		return ""
+	}
+	paras := strings.Split(text, "\n\n")
+	var b strings.Builder
+	b.WriteString("<article>")
+	if title := strings.TrimSpace(base.Title); title != "" {
+		b.WriteString("<h1>")
+		b.WriteString(htmlEscape(title))
+		b.WriteString("</h1>")
+	}
+	for _, p := range paras {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		b.WriteString("<p>")
+		b.WriteString(htmlEscape(p))
+		b.WriteString("</p>")
+	}
+	b.WriteString("</article>")
+	return b.String()
+}
+
+func htmlEscape(s string) string {
+	replacer := strings.NewReplacer(
+		"&", "&amp;",
+		"<", "&lt;",
+		">", "&gt;",
+		`"`, "&quot;",
+		"'", "&#39;",
+	)
+	return replacer.Replace(s)
+}
+
+func stripHTMLToText(html string) string {
+	html = strings.TrimSpace(html)
+	if html == "" {
+		return ""
+	}
+	var b strings.Builder
+	inTag := false
+	for _, r := range html {
+		switch {
+		case r == '<':
+			inTag = true
+		case r == '>':
+			inTag = false
+		case !inTag:
+			b.WriteRune(r)
+		}
+	}
+	return strings.Join(strings.Fields(b.String()), " ")
+}
+
+func hashString(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])
 }
 
 func validateReaderURL(rawURL string) error {
@@ -142,5 +406,10 @@ func isKoreanNewsURL(rawURL string) bool {
 
 func readerCacheKey(rawURL string) string {
 	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(rawURL))))
-	return usReaderCachePrefix + hex.EncodeToString(sum[:16])
+	return readerCachePrefix + hex.EncodeToString(sum[:16])
+}
+
+func readerKoCacheKey(rawURL string) string {
+	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(rawURL))))
+	return readerKoCachePrefix + hex.EncodeToString(sum[:16])
 }

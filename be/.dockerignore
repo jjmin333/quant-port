@@ -1,0 +1,6 @@
+bin/
+tmp/
+.env
+.git
+**/*_test.go
+**/.DS_Store

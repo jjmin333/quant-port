@@ -1,0 +1,639 @@
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>국내주식·해외주식 뉴스 — 위젯 선택용 목업 v1</title>
+<style>
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.97 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.93 0 0);
+  --border: oklch(0.87 0 0);
+  --brand: #2563EB;
+  --brand-muted: rgba(37, 99, 235, 0.1);
+  --profit: #DC2626;
+  --loss: #2563EB;
+  --score-high: #059669;
+  --score-mid: #D97706;
+  --score-low: #DC2626;
+  --hot: #E11D48;
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 16%);
+  --brand: #60A5FA;
+  --brand-muted: rgba(96, 165, 250, 0.15);
+  --profit: #F87171;
+  --loss: #60A5FA;
+  --score-high: #34D399;
+  --score-mid: #FBBF24;
+  --score-low: #F87171;
+  --hot: #FB7185;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 12px; line-height: 1.5; padding: 24px;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1180px; margin: 0 auto; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+h3 { font-size: 13px; font-weight: 600; margin: 26px 0 10px; padding-top: 18px; border-top: 2px solid var(--border); }
+.sub { color: var(--muted-foreground); font-size: 12px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.up { color: var(--profit); }
+.down { color: var(--loss); }
+.dim { color: var(--muted-foreground); }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-bottom: 16px; margin-bottom: 20px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--background); z-index: 5;
+}
+button.tgl {
+  font: inherit; cursor: pointer; border: 1px solid var(--border);
+  background: var(--card); color: var(--foreground);
+  border-radius: 8px; padding: 5px 12px;
+}
+button.tgl:hover { background: var(--accent); }
+
+.opt { margin-bottom: 26px; }
+.opt-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.tag {
+  font-size: 11px; font-weight: 700; letter-spacing: .02em;
+  background: var(--brand-muted); color: var(--brand);
+  border-radius: 6px; padding: 2px 7px; flex: none;
+}
+.tag.cur { background: var(--muted); color: var(--muted-foreground); }
+.tag.new { background: color-mix(in oklab, var(--score-high) 16%, transparent); color: var(--score-high); }
+.tag.us  { background: color-mix(in oklab, var(--score-mid) 18%, transparent); color: var(--score-mid); }
+.note { color: var(--muted-foreground); font-size: 11px; margin-top: 8px; }
+.note b { color: var(--foreground); }
+
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px; }
+.card + .card { margin-top: 8px; }
+.card-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.card-t { font-size: 12px; font-weight: 600; }
+.more { font-size: 11px; color: var(--muted-foreground); }
+.layout { display: grid; grid-template-columns: 1fr 280px; gap: 16px; align-items: start; }
+@media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+
+.chip { font-size: 11px; padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--card); color: var(--muted-foreground); cursor: pointer; }
+.chip.on { background: var(--brand); color: #fff; border-color: var(--brand); }
+.chip.soft.on { background: var(--brand-muted); color: var(--brand); border-color: color-mix(in oklab, var(--brand) 35%, transparent); }
+.pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.badge { font-size: 9px; font-weight: 700; border-radius: 5px; padding: 1px 5px; border: 1px solid var(--border); color: var(--muted-foreground); }
+.badge.pub { background: var(--muted); }
+.badge.brk { background: color-mix(in oklab, var(--hot) 15%, transparent); color: var(--hot); border-color: transparent; }
+.badge.tr  { background: color-mix(in oklab, var(--brand) 14%, transparent); color: var(--brand); border-color: transparent; }
+.badge.kw  { background: transparent; }
+
+/* ── 뉴스 행 (현재) ── */
+.nrow { display: grid; grid-template-columns: 80px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); align-items: center; }
+.nrow:last-child { border-bottom: 0; }
+.thumb { width: 80px; height: 60px; border-radius: 8px; background: linear-gradient(135deg, var(--muted), var(--accent)); flex: none; display: grid; place-items: center; color: var(--muted-foreground); font-size: 10px; }
+.nmeta { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; overflow: hidden; }
+.nmeta .t { margin-left: auto; font-size: 10px; color: var(--muted-foreground); flex: none; }
+.ntitle { font-size: 13px; font-weight: 700; line-height: 1.35; margin-top: 3px; }
+.nsum { font-size: 11px; color: var(--muted-foreground); line-height: 1.4; margin-top: 2px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* 종목 칩 (C1) */
+.symchip { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; padding: 1px 6px;
+  border-radius: 999px; border: 1px solid var(--border); background: var(--card); cursor: pointer; }
+.symchip:hover { border-color: var(--brand); }
+.symchip .pc { font-variant-numeric: tabular-nums; font-weight: 700; }
+
+/* 시간 그룹 헤더 (C2) */
+.tgroup { display: flex; align-items: center; gap: 8px; margin: 14px 0 2px; }
+.tgroup .lb { font-size: 11px; font-weight: 700; color: var(--muted-foreground); flex: none; }
+.tgroup .ln { flex: 1; height: 1px; background: var(--border); }
+.tgroup .ct { font-size: 10px; color: var(--muted-foreground); flex: none; }
+
+/* ── A1 이슈 종목 스트립 ── */
+.issue-strip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+@media (max-width: 760px) { .issue-strip { grid-template-columns: repeat(3, 1fr); } }
+.issue {
+  border: 1px solid var(--border); border-radius: 10px; padding: 7px 8px; background: var(--card);
+  cursor: pointer; min-width: 0;
+}
+.issue:hover { border-color: var(--brand); }
+.issue .nm { font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.issue .pc { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 1px; }
+.issue .ct { font-size: 10px; color: var(--muted-foreground); display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.heat { height: 3px; border-radius: 999px; background: var(--muted); margin-top: 5px; overflow: hidden; }
+.heat > i { display: block; height: 100%; background: var(--hot); border-radius: 999px; }
+
+/* ── A2 뉴스 흐름 타임라인 ── */
+.flow { display: flex; align-items: flex-end; gap: 3px; height: 54px; }
+.flow .b { flex: 1; background: color-mix(in oklab, var(--brand) 45%, transparent); border-radius: 3px 3px 0 0; min-height: 2px; position: relative; cursor: pointer; }
+.flow .b.brk { background: var(--hot); }
+.flow .b.now { background: var(--brand); }
+.flow .b:hover { outline: 1px solid var(--brand); }
+.flow-x { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted-foreground); margin-top: 4px; }
+
+/* ── A3 시장 온도 ── */
+.a3grid { display: grid; grid-template-columns: 1fr 300px; gap: 14px; align-items: center; }
+@media (max-width: 760px) { .a3grid { grid-template-columns: 1fr; } }
+.temp { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center; min-width: 0; }
+.temp .l { font-size: 10px; color: var(--muted-foreground); }
+.temp .v { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.temp .d { font-size: 10px; color: var(--muted-foreground); }
+
+/* ── 브리핑 카드 ── */
+.brief { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: var(--card); }
+.brief .hd { font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.brief .bd { font-size: 11px; color: var(--muted-foreground); line-height: 1.55; margin-top: 6px;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.brief ul { margin: 8px 0 0 14px; font-size: 11px; line-height: 1.6; }
+
+/* ── 티커 ── */
+.ticker { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 10px; background: var(--card); }
+.ticker .tx { flex: 1; min-width: 0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── 모달 ── */
+.scrim { background: color-mix(in oklab, var(--foreground) 12%, transparent);
+  border-radius: 14px; padding: 20px; display: grid; place-items: center; }
+.modal { width: 100%; max-width: 780px; background: var(--card);
+  border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0,0,0,.16); }
+.modal.sm { max-width: 460px; }
+.modal-h { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.modal-b { padding: 14px; }
+.modal-2 { display: grid; grid-template-columns: 1fr 246px; gap: 14px; }
+@media (max-width: 760px) { .modal-2 { grid-template-columns: 1fr; } }
+.modal-f { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); }
+.btn { text-align: center; font-size: 12px; padding: 7px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--card); cursor: pointer; flex: 1; }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
+.artbody { font-size: 12px; line-height: 1.7; color: var(--muted-foreground); }
+.artbody p + p { margin-top: 8px; }
+
+.sect { margin-top: 12px; }
+.sect > .h { font-size: 11px; font-weight: 600; color: var(--muted-foreground); margin-bottom: 6px; }
+.kv { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; font-size: 11px; }
+.kv span:first-child { color: var(--muted-foreground); }
+.axes { display: grid; gap: 5px; }
+.axis { display: grid; grid-template-columns: 46px 1fr 24px; align-items: center; gap: 8px; font-size: 11px; }
+.bar { height: 5px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+.bar > i { display: block; height: 100%; border-radius: 999px; background: var(--brand); }
+.score { width: 34px; height: 22px; border-radius: 6px; display: grid; place-items: center;
+  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; flex: none; }
+.score.hi { background: color-mix(in oklab, var(--score-high) 14%, transparent); color: var(--score-high); }
+.score.mid { background: color-mix(in oklab, var(--score-mid) 14%, transparent); color: var(--score-mid); }
+
+.cluster { display: flex; gap: 8px; padding: 6px 0; border-top: 1px solid var(--border); }
+.cluster:first-child { border-top: 0; }
+.cluster .tx { font-size: 11px; line-height: 1.4; }
+.cluster .mt { font-size: 10px; color: var(--muted-foreground); margin-top: 2px; }
+
+.evli { display: flex; gap: 8px; padding: 5px 0; font-size: 11px; align-items: flex-start; border-top: 1px solid var(--border); }
+.evli:first-child { border-top: 0; }
+.evli .dt { width: 46px; flex: none; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.evli .nm { flex: 1; min-width: 0; }
+.evli .src { flex: none; font-size: 10px; padding: 0 5px; border-radius: 4px; background: var(--muted); color: var(--muted-foreground); }
+.evli .src.macro { background: color-mix(in oklab, var(--score-mid) 16%, transparent); color: var(--score-mid); }
+.evli .src.earn { background: var(--brand-muted); color: var(--brand); }
+
+.railrow { display: flex; align-items: center; gap: 8px; padding: 4px 1px; font-size: 11px; border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent); }
+.railrow:last-child { border-bottom: 0; }
+.railrow .n { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.railrow .v { font-variant-numeric: tabular-nums; flex: none; }
+
+.srcbar { display: grid; grid-template-columns: 62px 1fr 26px; align-items: center; gap: 6px; font-size: 11px; padding: 2px 0; }
+.pick { display: flex; gap: 6px; align-items: center; margin-top: 10px; padding: 8px 10px; border: 1px dashed var(--border); border-radius: 10px; font-size: 11px; color: var(--muted-foreground); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div>
+    <h1>국내주식 · 해외주식 뉴스 — 위젯 선택용 목업 <span class="dim" style="font-size:13px;font-weight:400">v1</span></h1>
+    <p class="sub">영역별로 <b>현재</b>와 <b>안</b>을 나란히 둡니다. 원하는 안의 <b>기호(A1·B2…)</b>만 골라 주세요. 여러 개 동시 선택 가능합니다.</p>
+  </div>
+  <button class="tgl" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme==='dark'?'light':'dark'">🌗 테마</button>
+</div>
+
+<div class="pick">
+  <span>🏷️</span>
+  <span><b style="color:var(--foreground)">범례</b> — <span class="tag cur">현재</span> 지금 화면 &nbsp; <span class="tag">안</span> 제안 &nbsp; <span class="tag new">신규 데이터</span> 새 집계·API 필요 &nbsp; <span class="tag us">해외 전용</span></span>
+</div>
+
+
+<!-- ═══════════════ A. 본문 상단 ═══════════════ -->
+<h3>A. 본문 상단 — 필터 pill 위 영역</h3>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag cur">현재</span><h2>속보 티커 + AI 시장 브리핑</h2></div>
+  <p class="sub">브리핑은 기사 6건의 요약문을 이어 붙인 규칙 기반 텍스트입니다. 세로 공간을 많이 쓰는 데 비해 "지금 무엇이 뜨거운가"는 알려주지 않습니다.</p>
+  <div style="margin-top:8px">
+    <div class="ticker">
+      <span class="badge brk">전체 최신</span>
+      <span class="tx">[속보] 코스피 장중 2,780선 회복… 외국인 6거래일 만에 순매수</span>
+      <span class="dim" style="flex:none">12분 전</span>
+    </div>
+    <div class="brief" style="margin-top:8px">
+      <div class="hd">🤖 KOSPI LAB AI 시장 브리핑 <span class="dim" style="font-weight:400">2026. 8. 14. (금) 15:20</span></div>
+      <div class="bd">외국인이 6거래일 만에 순매수로 돌아서며 코스피가 2,780선을 회복했다. 반도체 업종이 지수 상승을 주도했고 SK하이닉스는 HBM4 양산 일정 발표 이후 4% 넘게 올랐다. 다만 원·달러 환율이 1,390원대에서 좀처럼 내려오지 않아 수급 개선이 이어질지는…</div>
+      <ul>
+        <li>SK하이닉스, HBM4 내년 1분기 양산 확정</li>
+        <li>외국인 순매수 6거래일 만에 전환</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">A1</span><span class="tag new">집계</span><h2>「오늘의 이슈 종목」 스트립</h2></div>
+  <p class="sub">오늘 기사에서 <b>가장 많이 언급된 종목</b>을 언급 건수 + <b>실시간 등락률</b>과 함께. 뉴스와 시세가 처음으로 한 화면에서 만납니다. 카드를 누르면 그 종목 기사만 남습니다.</p>
+  <div style="margin-top:8px" class="issue-strip">
+    <div class="issue"><div class="nm">SK하이닉스</div><div class="pc up">+4.21%</div><div class="ct">🗞️ 14건 <span class="badge brk" style="padding:0 4px">속보</span></div><div class="heat"><i style="width:100%"></i></div></div>
+    <div class="issue"><div class="nm">삼성전자</div><div class="pc up">+1.02%</div><div class="ct">🗞️ 11건</div><div class="heat"><i style="width:79%"></i></div></div>
+    <div class="issue"><div class="nm">한화에어로스페이스</div><div class="pc down">−2.35%</div><div class="ct">🗞️ 8건</div><div class="heat"><i style="width:57%"></i></div></div>
+    <div class="issue"><div class="nm">현대차</div><div class="pc up">+0.44%</div><div class="ct">🗞️ 6건</div><div class="heat"><i style="width:43%"></i></div></div>
+    <div class="issue"><div class="nm">알테오젠</div><div class="pc up">+7.80%</div><div class="ct">🗞️ 5건</div><div class="heat"><i style="width:36%"></i></div></div>
+    <div class="issue"><div class="nm">카카오</div><div class="pc down">−1.11%</div><div class="ct">🗞️ 4건</div><div class="heat"><i style="width:29%"></i></div></div>
+  </div>
+  <p class="note"><b>데이터</b> — 기사의 <code>symbols</code>·본문 종목명을 화면에 이미 받은 기사에서 세고, 시세는 기존 <code>/quotes/batch</code> 한 번으로 붙입니다. 새 BE 없이 가능. <b>해외</b>는 NVDA·TSLA 등 티커로 동일하게.</p>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">A2</span><h2>「뉴스 흐름」 24시간 타임라인</h2></div>
+  <p class="sub">시간대별 기사량 막대. 어느 시각에 이슈가 터졌는지가 한눈에 보이고, 막대를 누르면 그 구간 기사만 남습니다. 빨간 막대는 속보가 포함된 시간대.</p>
+  <div class="card" style="margin-top:8px">
+    <div class="card-h"><span class="card-t">뉴스 흐름 · 최근 24시간</span><span class="more">총 168건 · 속보 7건</span></div>
+    <div class="flow">
+      <div class="b" style="height:18%"></div><div class="b" style="height:12%"></div><div class="b" style="height:9%"></div>
+      <div class="b" style="height:14%"></div><div class="b" style="height:26%"></div><div class="b" style="height:38%"></div>
+      <div class="b brk" style="height:72%"></div><div class="b" style="height:55%"></div><div class="b" style="height:44%"></div>
+      <div class="b" style="height:49%"></div><div class="b brk" style="height:88%"></div><div class="b" style="height:61%"></div>
+      <div class="b" style="height:47%"></div><div class="b" style="height:52%"></div><div class="b" style="height:66%"></div>
+      <div class="b" style="height:41%"></div><div class="b" style="height:35%"></div><div class="b" style="height:29%"></div>
+      <div class="b" style="height:33%"></div><div class="b" style="height:40%"></div><div class="b" style="height:58%"></div>
+      <div class="b brk" style="height:76%"></div><div class="b now" style="height:100%"></div><div class="b now" style="height:31%"></div>
+    </div>
+    <div class="flow-x"><span>어제 15시</span><span>21시</span><span>03시</span><span>09시</span><span>지금 15시</span></div>
+  </div>
+  <p class="note"><b>데이터</b> — 이미 받은 기사의 <code>publishedAt</code>만으로 계산. 추가 요청 0.</p>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">A3</span><h2>브리핑 축소 + 「시장 온도」 4지표</h2></div>
+  <p class="sub">브리핑을 2줄로 줄이고 남은 폭에 오늘의 숫자를 세웁니다. A1·A2보다 자리를 훨씬 덜 씁니다.</p>
+  <div class="card" style="margin-top:8px">
+    <div class="a3grid">
+      <div>
+        <div class="hd" style="font-size:12px;font-weight:700">🤖 AI 시장 브리핑</div>
+        <div class="bd" style="-webkit-line-clamp:2;font-size:11px;color:var(--muted-foreground);line-height:1.55;margin-top:4px;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden">외국인이 6거래일 만에 순매수로 돌아서며 코스피가 2,780선을 회복했다. 반도체 업종이 지수 상승을 주도했고 SK하이닉스는 HBM4 양산 일정 발표 이후 4% 넘게 올랐다.</div>
+      </div>
+      <div class="temp">
+        <div><div class="l">오늘 기사</div><div class="v">168</div><div class="d">평소 +23%</div></div>
+        <div><div class="l">속보</div><div class="v" style="color:var(--hot)">7</div><div class="d">최근 24h</div></div>
+        <div><div class="l">코스피</div><div class="v up">+0.83%</div><div class="d">2,781.4</div></div>
+        <div><div class="l">환율</div><div class="v down">−0.21%</div><div class="d">1,391.2</div></div>
+      </div>
+    </div>
+  </div>
+  <p class="note">「평소 대비」는 기준 데이터가 없어 <b>첫 배포에는 빼고</b> 「오늘 168건」만 둡니다.</p>
+</div>
+
+
+<!-- ═══════════════ B. 필터 줄 ═══════════════ -->
+<h3>B. 필터 줄</h3>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag cur">현재</span><h2>고정 pill 7개</h2></div>
+  <p class="sub">종목 pill이 <b>코드에 박혀</b> 있습니다(국내: 삼성전자·SK하이닉스·현대차 / 해외: NVDA·AAPL·MSFT). 오늘 뉴스가 어떻든, 내가 무슨 종목을 갖고 있든 항상 같은 6개.</p>
+  <div class="pills" style="margin-top:8px">
+    <span class="chip on">전체</span><span class="chip">속보</span><span class="chip">코스피</span><span class="chip">코스닥</span>
+    <span class="chip">삼성전자</span><span class="chip">SK하이닉스</span><span class="chip">현대차</span>
+  </div>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">B1</span><h2>「내 종목」 + 오늘 언급 상위로 동적 교체</h2></div>
+  <p class="sub">고정 종목 3개를 걷어내고 <b>내 보유·관심 종목</b> pill과 <b>오늘 실제로 많이 언급된</b> 종목을 넣습니다. pill이 매일 달라집니다.</p>
+  <div class="pills" style="margin-top:8px">
+    <span class="chip on">전체</span><span class="chip">속보</span>
+    <span class="chip" style="border-color:color-mix(in oklab,var(--brand) 40%,transparent);color:var(--brand)">⭐ 내 종목 <span class="mono">32</span></span>
+    <span class="chip">코스피</span><span class="chip">코스닥</span>
+    <span class="chip">SK하이닉스 <span class="mono dim">14</span></span>
+    <span class="chip">삼성전자 <span class="mono dim">11</span></span>
+    <span class="chip">한화에어로 <span class="mono dim">8</span></span>
+  </div>
+  <p class="note"><b>「내 종목」</b> = 보유(<code>filter=held</code>) ∪ 관심(<code>/watchlist</code>) 종목이 언급된 기사. 로그인 안 했으면 pill을 숨깁니다.</p>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">B2</span><h2>2단 필터 — 지수/종목 줄 + 보조 줄</h2></div>
+  <p class="sub">첫 줄은 그대로, 아래에 <b>기사 성격</b> 토글을 답니다. 지금은 출처·정렬이 우상단 드롭다운에 숨어 있어 잘 안 쓰입니다.</p>
+  <div style="margin-top:8px">
+    <div class="pills">
+      <span class="chip on">전체</span><span class="chip">속보</span><span class="chip">코스피</span><span class="chip">코스닥</span>
+      <span class="chip">삼성전자</span><span class="chip">SK하이닉스</span><span class="chip">현대차</span>
+    </div>
+    <div class="pills" style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--border)">
+      <span class="chip soft on">🕐 최신순</span><span class="chip soft">🔥 인기순</span>
+      <span style="width:1px;height:16px;background:var(--border);align-self:center"></span>
+      <span class="chip soft">📷 사진 있는 기사</span><span class="chip soft">🇰🇷 번역 완료</span><span class="chip soft">📰 출처: 전체</span>
+    </div>
+  </div>
+  <p class="note">「번역 완료」는 <b>해외 전용</b>(<code>headlineKo</code> 유무). 국내에서는 그 자리에 「단독·독점」을 둡니다.</p>
+</div>
+
+
+<!-- ═══════════════ C. 뉴스 행 ═══════════════ -->
+<h3>C. 뉴스 목록 행</h3>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag cur">현재</span><h2>썸네일 + 출처·키워드 + 제목 2줄 + 요약 2줄</h2></div>
+  <div class="card" style="margin-top:8px">
+    <div class="nrow">
+      <div class="thumb">이미지</div>
+      <div style="min-width:0">
+        <div class="nmeta"><span class="badge pub">한국경제</span><span class="badge brk">속보</span><span class="badge kw">#반도체</span><span class="badge kw">#HBM</span><span class="t">12분 전</span></div>
+        <div class="ntitle">SK하이닉스, HBM4 내년 1분기 양산… "엔비디아 물량 이미 확보"</div>
+        <div class="nsum">SK하이닉스가 차세대 고대역폭메모리 HBM4의 양산 시점을 내년 1분기로 확정했다고 14일 밝혔다. 회사 측은 주요 고객사 물량이 이미 확보된 상태라고 설명했다.</div>
+      </div>
+    </div>
+    <div class="nrow">
+      <div class="thumb">이미지</div>
+      <div style="min-width:0">
+        <div class="nmeta"><span class="badge pub">연합뉴스</span><span class="badge kw">#외국인</span><span class="t">38분 전</span></div>
+        <div class="ntitle">외국인 6거래일 만에 순매수 전환… 코스피 2,780선 회복</div>
+        <div class="nsum">외국인 투자자가 유가증권시장에서 6거래일 만에 순매수로 돌아섰다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">C1</span><h2>관련 종목 칩 + 등락률 인라인</h2></div>
+  <p class="sub">기사에 걸린 종목을 <b>현재 등락률과 함께</b> 제목 아래에. 「이 뉴스에 시장이 어떻게 반응했나」를 기사에서 바로 봅니다. 칩을 누르면 종목 상세로.</p>
+  <div class="card" style="margin-top:8px">
+    <div class="nrow">
+      <div class="thumb">이미지</div>
+      <div style="min-width:0">
+        <div class="nmeta"><span class="badge pub">한국경제</span><span class="badge brk">속보</span><span class="t">12분 전</span></div>
+        <div class="ntitle">SK하이닉스, HBM4 내년 1분기 양산… "엔비디아 물량 이미 확보"</div>
+        <div class="nsum">SK하이닉스가 차세대 고대역폭메모리 HBM4의 양산 시점을 내년 1분기로 확정했다고 14일 밝혔다.</div>
+        <div style="display:flex;gap:4px;margin-top:5px;flex-wrap:wrap">
+          <span class="symchip">SK하이닉스 <span class="pc up">+4.21%</span></span>
+          <span class="symchip">삼성전자 <span class="pc up">+1.02%</span></span>
+          <span class="badge kw">#HBM</span><span class="badge kw">#반도체</span>
+        </div>
+      </div>
+    </div>
+    <div class="nrow">
+      <div class="thumb">이미지</div>
+      <div style="min-width:0">
+        <div class="nmeta"><span class="badge pub">연합뉴스</span><span class="t">38분 전</span></div>
+        <div class="ntitle">외국인 6거래일 만에 순매수 전환… 코스피 2,780선 회복</div>
+        <div class="nsum">외국인 투자자가 유가증권시장에서 6거래일 만에 순매수로 돌아섰다.</div>
+        <div style="display:flex;gap:4px;margin-top:5px;flex-wrap:wrap">
+          <span class="symchip">KOSPI <span class="pc up">+0.83%</span></span>
+          <span class="badge kw">#외국인</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="note"><b>주의</b> — 종목이 안 걸린 기사가 많으면 행 높이가 들쭉날쭉해집니다. 칩이 없을 땐 <b>키워드 배지를 그 줄로 내려</b> 높이를 맞춥니다(위 두 번째 행). 시세는 A1과 <b>같은 배치 요청 하나를 공유</b>합니다.</p>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">C2</span><h2>시간 구분선</h2></div>
+  <p class="sub">지금은 168건이 한 덩어리로 흘러 "어디까지 봤는지"를 잃습니다. 시간대로 끊어 줍니다.</p>
+  <div class="card" style="margin-top:8px">
+    <div class="tgroup"><span class="lb">지금 · 1시간 내</span><span class="ln"></span><span class="ct">9건</span></div>
+    <div class="nrow" style="grid-template-columns:80px 1fr">
+      <div class="thumb">이미지</div>
+      <div style="min-width:0"><div class="nmeta"><span class="badge pub">한국경제</span><span class="badge brk">속보</span><span class="t">12분 전</span></div>
+      <div class="ntitle">SK하이닉스, HBM4 내년 1분기 양산 확정</div></div>
+    </div>
+    <div class="tgroup"><span class="lb">오늘 오전</span><span class="ln"></span><span class="ct">47건</span></div>
+    <div class="nrow" style="grid-template-columns:80px 1fr">
+      <div class="thumb">이미지</div>
+      <div style="min-width:0"><div class="nmeta"><span class="badge pub">서울경제</span><span class="t">오전 9:41</span></div>
+      <div class="ntitle">장 초반 반도체 강세… 코스피 0.6% 상승 출발</div></div>
+    </div>
+    <div class="tgroup"><span class="lb">어제</span><span class="ln"></span><span class="ct">88건</span></div>
+  </div>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">C3</span><h2>「촘촘히 보기」 토글</h2></div>
+  <p class="sub">썸네일·요약을 접고 제목만 남깁니다. 한 화면에 6건 → <b>18건</b>. 훑을 때와 읽을 때를 나눕니다.</p>
+  <div class="card" style="margin-top:8px">
+    <div class="card-h"><span class="card-t">국내 뉴스</span><span><span class="chip soft" style="font-size:10px">☰ 촘촘히</span> <span class="chip soft on" style="font-size:10px">▤ 카드</span></span></div>
+    <div style="border-top:1px solid var(--border)">
+      <div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">
+        <span class="badge brk">속보</span><span class="badge pub">한국경제</span>
+        <span style="flex:1;min-width:0;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">SK하이닉스, HBM4 내년 1분기 양산… "엔비디아 물량 이미 확보"</span>
+        <span class="symchip" style="flex:none">하이닉스 <span class="pc up">+4.2%</span></span>
+        <span class="dim mono" style="flex:none;font-size:10px">15:08</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">
+        <span class="badge pub">연합뉴스</span>
+        <span style="flex:1;min-width:0;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">외국인 6거래일 만에 순매수 전환… 코스피 2,780선 회복</span>
+        <span class="symchip" style="flex:none">KOSPI <span class="pc up">+0.8%</span></span>
+        <span class="dim mono" style="flex:none;font-size:10px">14:42</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">
+        <span class="badge pub">머니투데이</span>
+        <span style="flex:1;min-width:0;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">한화에어로, 폴란드 2차 계약 지연 우려에 약세</span>
+        <span class="symchip" style="flex:none">한화에어로 <span class="pc down">−2.4%</span></span>
+        <span class="dim mono" style="flex:none;font-size:10px">14:20</span>
+      </div>
+    </div>
+  </div>
+  <p class="note">선택은 <code>localStorage</code>에 남겨 다음에 열 때도 유지합니다.</p>
+</div>
+
+
+<!-- ═══════════════ D. 기사 모달 ═══════════════ -->
+<h3>D. 기사 모달</h3>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag cur">현재</span><h2>본문 리더 단일 컬럼</h2></div>
+  <p class="sub">본문만 보여 주고 끝납니다. "그래서 이 종목 지금 얼마인데?"를 알려면 모달을 닫고 다른 화면으로 가야 합니다.</p>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">D1</span><h2>본문 우측 「관련 종목」 패널</h2></div>
+  <p class="sub">기사를 읽는 동안 그 종목의 시세·40일 차트·점수·다음 일정을 옆에. 차트는 관심종목 퀵룩에서 쓰는 <code>PriceHistoryChart</code>를 <b>그대로 재사용</b>합니다.</p>
+  <div class="scrim" style="margin-top:8px">
+    <div class="modal">
+      <div class="modal-h">
+        <span class="badge pub">한국경제</span><span class="badge brk">속보</span>
+        <span style="flex:1;font-size:12px;font-weight:700;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">SK하이닉스, HBM4 내년 1분기 양산… "엔비디아 물량 이미 확보"</span>
+        <span class="dim">✕</span>
+      </div>
+      <div class="modal-b">
+        <div class="modal-2">
+          <div class="artbody">
+            <p>SK하이닉스가 차세대 고대역폭메모리(HBM4)의 양산 시점을 내년 1분기로 확정했다고 14일 밝혔다. 회사 측은 주요 고객사 물량이 이미 확보된 상태라고 설명했다.</p>
+            <p>업계에서는 엔비디아의 차세대 GPU 출시 일정과 맞물려 HBM4 공급 경쟁이 본격화될 것으로 보고 있다. 삼성전자 역시 하반기 중 양산 계획을 발표할 것으로 알려졌다.</p>
+            <p class="dim" style="font-size:11px">…</p>
+          </div>
+          <div>
+            <div class="card" style="padding:9px">
+              <div class="card-h" style="margin-bottom:6px"><span class="card-t">SK하이닉스 <span class="dim mono" style="font-weight:400">000660</span></span><span class="score hi">78</span></div>
+              <div style="display:flex;align-items:baseline;gap:6px">
+                <span style="font-size:18px;font-weight:700" class="mono">248,500</span>
+                <span class="up mono" style="font-size:12px;font-weight:600">+4.21%</span>
+              </div>
+              <svg viewBox="0 0 220 56" preserveAspectRatio="none" style="width:100%;height:52px;margin-top:6px">
+                <path d="M0,44 L18,41 L36,45 L54,38 L72,40 L90,33 L108,36 L126,28 L144,31 L162,22 L180,25 L198,14 L220,6"
+                      fill="none" stroke="var(--brand)" stroke-width="1.6"/>
+                <path d="M0,44 L18,41 L36,45 L54,38 L72,40 L90,33 L108,36 L126,28 L144,31 L162,22 L180,25 L198,14 L220,6 L220,56 L0,56 Z"
+                      fill="var(--brand-muted)"/>
+              </svg>
+              <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted-foreground)">
+                <span>종가 40개</span><span class="up">+18.4%</span>
+              </div>
+            </div>
+            <div class="card" style="padding:9px">
+              <div class="card-t" style="margin-bottom:5px">52주 위치</div>
+              <div class="bar" style="height:6px"><i style="width:86%"></i></div>
+              <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted-foreground);margin-top:3px"><span>132,000</span><span>상단 86%</span><span>259,000</span></div>
+            </div>
+            <div class="card" style="padding:9px">
+              <div class="card-t" style="margin-bottom:5px">다가오는 일정</div>
+              <div class="evli"><span class="dt">08-28</span><span class="nm">반기보고서</span><span class="src earn">DART</span></div>
+              <div class="evli"><span class="dt">10-24</span><span class="nm">3분기 실적</span><span class="src earn">실적</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-f">
+        <span class="btn">⭐ 관심 추가</span><span class="btn">🖋️ 메모</span><span class="btn">🔖 스탬프</span><span class="btn primary">원문 열기 ↗</span>
+      </div>
+    </div>
+  </div>
+  <p class="note">종목이 <b>여러 개</b> 걸린 기사는 패널 상단에 종목 탭을 둡니다. 종목이 <b>없으면</b> 패널을 생략하고 본문을 전폭으로.</p>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">D2</span><h2>「같은 이슈 기사 N건」 묶음</h2></div>
+  <p class="sub">같은 사건을 여러 매체가 쓴 기사를 모달 하단에 모읍니다. 해외 뉴스는 이미 <code>dedupeNewsArticles</code>로 중복을 <b>버리고</b> 있는데, 버리는 대신 <b>접어서</b> 보여 주는 쪽이 낫습니다.</p>
+  <div class="card" style="margin-top:8px;max-width:560px">
+    <div class="card-h"><span class="card-t">같은 이슈 기사 5건</span><span class="more">매체별 논조 비교</span></div>
+    <div class="cluster"><span class="badge pub">연합뉴스</span><div style="min-width:0"><div class="tx">SK하이닉스 "HBM4 1분기 양산"… 고객 물량 확보</div><div class="mt">14분 전</div></div></div>
+    <div class="cluster"><span class="badge pub">매일경제</span><div style="min-width:0"><div class="tx">HBM4 조기 양산 승부수… 삼성과 격차 벌리나</div><div class="mt">22분 전</div></div></div>
+    <div class="cluster"><span class="badge pub">서울경제</span><div style="min-width:0"><div class="tx">"공급과잉 우려도"… HBM4 양산 발표에 엇갈린 시선</div><div class="mt">31분 전</div></div></div>
+  </div>
+  <p class="note"><b>비용</b> — 클러스터링은 제목 유사도(정규화 + 토큰 자카드)로 FE에서. 정확도가 완벽하진 않아 <b>"관련 있어 보이는 기사"</b>로 표기합니다.</p>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">D3</span><h2>액션 바만 추가 (가장 가벼움)</h2></div>
+  <p class="sub">D1의 패널 없이 하단 버튼만. 기사에서 바로 <b>관심 추가 · 메모 · 스탬프 · 리포트 쓰기</b>로 이어집니다.</p>
+  <div class="card" style="margin-top:8px;max-width:560px;padding:0">
+    <div class="modal-f" style="border-top:0"><span class="btn">⭐ 관심 추가</span><span class="btn">🖋️ 메모</span><span class="btn">🔖 스탬프</span><span class="btn">📝 리포트</span><span class="btn primary">원문 ↗</span></div>
+  </div>
+</div>
+
+
+<!-- ═══════════════ E. 우측 레일 ═══════════════ -->
+<h3>E. 우측 레일 (280px)</h3>
+
+<div class="layout">
+  <div>
+    <div class="opt">
+      <div class="opt-head"><span class="tag cur">현재</span><h2>지수 흐름 / 오늘의 키워드 / 많이 본 뉴스 / 최신 리포트</h2></div>
+      <p class="sub">네 카드 모두 "지금·과거"를 봅니다. <b>앞으로</b>를 보는 카드가 하나도 없습니다 — 실적 발표, FOMC, CPI 같은 예정 일정이 뉴스 화면에 전혀 없습니다.</p>
+      <p class="note" style="margin-top:10px">오른쪽에 <b>E1~E4</b>를 실제 레일 폭(280px)으로 그렸습니다. 넣을 카드와 <b>순서</b>를 골라 주세요.<br>레일이 길어지면 스크롤이 생기니 <b>3~5장</b>을 권합니다.</p>
+    </div>
+  </div>
+  <div>
+    <div class="opt" style="margin-bottom:14px">
+      <div class="opt-head"><span class="tag">E1</span><span class="tag new">신규</span></div>
+      <div class="card">
+        <div class="card-h"><span class="card-t">다가오는 일정</span><span class="more">캘린더 ›</span></div>
+        <div class="evli"><span class="dt">D-1</span><span class="nm">한국은행 금통위</span><span class="src macro">매크로</span></div>
+        <div class="evli"><span class="dt">D-3</span><span class="nm">SK하이닉스 반기보고서</span><span class="src earn">DART</span></div>
+        <div class="evli"><span class="dt">D-6</span><span class="nm">미 8월 CPI 발표</span><span class="src macro">매크로</span></div>
+        <div class="evli"><span class="dt">D-9</span><span class="nm">삼성전자 3분기 잠정</span><span class="src earn">실적</span></div>
+        <div class="evli"><span class="dt">D-12</span><span class="nm">9월 선물옵션 만기</span><span class="src">수급</span></div>
+      </div>
+      <p class="note">보유·관심 종목 실적은 <code>useUpcomingEvents</code>(기존), 휴장·만기는 <code>/market-calendar/KR|US</code>(기존). <b>매크로 지표 일정만 새로</b> 필요합니다 — 없으면 실적+휴장만으로 시작.</p>
+    </div>
+
+    <div class="opt" style="margin-bottom:14px">
+      <div class="opt-head"><span class="tag">E2</span></div>
+      <div class="card">
+        <div class="card-h"><span class="card-t">내 종목 뉴스</span><span class="more">32건</span></div>
+        <div class="railrow"><span class="badge brk">속보</span><span class="n">SK하이닉스 HBM4 양산 확정</span><span class="v up">+4.2%</span></div>
+        <div class="railrow"><span class="badge pub">보유</span><span class="n">삼성전자 파운드리 수주 확대</span><span class="v up">+1.0%</span></div>
+        <div class="railrow"><span class="badge pub">관심</span><span class="n">알테오젠 기술수출 계약 공시</span><span class="v up">+7.8%</span></div>
+        <div class="railrow"><span class="badge pub">보유</span><span class="n">한화에어로 폴란드 계약 지연</span><span class="v down">−2.4%</span></div>
+        <div class="railrow"><span class="badge pub">관심</span><span class="n">카카오 자회사 매각설</span><span class="v down">−1.1%</span></div>
+      </div>
+      <p class="note">B1의 「내 종목」 pill과 <b>같은 집계를 공유</b>합니다. 둘 다 고르면 요청이 늘지 않습니다.</p>
+    </div>
+
+    <div class="opt" style="margin-bottom:14px">
+      <div class="opt-head"><span class="tag">E3</span></div>
+      <div class="card">
+        <div class="card-h"><span class="card-t">출처 분포</span><span class="more">오늘 168건</span></div>
+        <div class="srcbar"><span class="dim">연합뉴스</span><span class="bar"><i style="width:100%"></i></span><span class="mono">41</span></div>
+        <div class="srcbar"><span class="dim">한국경제</span><span class="bar"><i style="width:78%"></i></span><span class="mono">32</span></div>
+        <div class="srcbar"><span class="dim">매일경제</span><span class="bar"><i style="width:66%"></i></span><span class="mono">27</span></div>
+        <div class="srcbar"><span class="dim">머니투데이</span><span class="bar"><i style="width:44%"></i></span><span class="mono">18</span></div>
+        <div class="srcbar"><span class="dim">서울경제</span><span class="bar"><i style="width:34%"></i></span><span class="mono">14</span></div>
+      </div>
+      <p class="note">막대를 누르면 그 매체 기사만. 지금은 우상단 드롭다운에 묻혀 있는 기능입니다.</p>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag">E4</span><span class="tag us">해외 전용</span></div>
+      <div class="card">
+        <div class="card-h"><span class="card-t">매크로 지표</span><span class="more">마켓 레이더 ›</span></div>
+        <div class="railrow"><span class="n">미 10년물</span><span class="v mono">4.18%</span><span class="v up" style="width:52px;text-align:right">+0.04</span></div>
+        <div class="railrow"><span class="n">달러인덱스</span><span class="v mono">103.2</span><span class="v down" style="width:52px;text-align:right">−0.31%</span></div>
+        <div class="railrow"><span class="n">WTI</span><span class="v mono">68.4</span><span class="v up" style="width:52px;text-align:right">+1.22%</span></div>
+        <div class="railrow"><span class="n">금</span><span class="v mono">2,481</span><span class="v up" style="width:52px;text-align:right">+0.44%</span></div>
+        <div class="railrow"><span class="n">비트코인</span><span class="v mono">61,240</span><span class="v down" style="width:52px;text-align:right">−2.10%</span></div>
+      </div>
+      <p class="note"><code>/market-indicators/prices</code>(기존)로 붙습니다. 국내 페이지의 「지수 흐름」과 성격이 겹쳐 <b>해외에만</b>.</p>
+    </div>
+  </div>
+</div>
+
+
+<h3>추천 조합</h3>
+<div class="card">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div>
+      <div class="opt-head"><span class="tag new">추천</span><h2 style="font-size:13px">가성비 조합</h2></div>
+      <p class="sub"><b>A1 · B1 · C1 · D1 · E1 · E2</b><br>
+      새 BE 없이 「뉴스 ↔ 시세 ↔ 내 종목」을 잇습니다. 뉴스 화면이 읽는 곳에서 <b>판단하는 곳</b>이 됩니다.</p>
+    </div>
+    <div>
+      <div class="opt-head"><span class="tag">가벼움</span><h2 style="font-size:13px">최소 조합</h2></div>
+      <p class="sub"><b>A3 · C2 · D3 · E1</b><br>
+      레이아웃을 크게 바꾸지 않고 가시성만 손봅니다.</p>
+    </div>
+  </div>
+  <p class="note" style="margin-top:12px"><b>공통</b> — 국내·해외는 <code>NewsClient</code> 하나를 공유하므로 고른 안은 <b>양쪽에 함께</b> 적용됩니다(E4처럼 표시한 것만 예외). 다르게 하고 싶은 항목이 있으면 알려 주세요.</p>
+</div>
+
+<p class="sub" style="margin:22px 0 40px">고르실 때 — <b>「A1, B1, C1, D1, E1+E2 순서로」</b> 처럼 기호만 적어 주셔도 됩니다. 빼고 싶은 현재 요소(예: AI 브리핑 카드 제거)가 있으면 함께 알려 주세요.</p>
+
+</div>
+</body>
+</html>

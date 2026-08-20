@@ -1,14 +1,4 @@
-import type {
-  ApiError,
-  ApiResponse,
-  PortfolioDiagnostics,
-  PortfolioSummary,
-} from "@/lib/portfolio-types";
-import type {
-  DashboardInsights,
-  HistoryRange,
-  PortfolioHistory,
-} from "@/lib/insights-types";
+import type { ApiError, ApiResponse } from "@/lib/api-types";
 import { apiCredentials, sessionFetch } from "@/lib/session-fetch";
 
 const DEFAULT_API_URL = "http://localhost:8080";
@@ -68,118 +58,44 @@ export async function parseJson<T>(res: Response): Promise<T> {
   }
 }
 
-export async function fetchPortfolioSummary(): Promise<PortfolioSummary> {
+/**
+ * Throws a PortfolioFetchError carrying the server's error message when the
+ * response is not ok. Every API wrapper repeated this block verbatim.
+ */
+export async function ensureOk(res: Response, fallbackMessage: string): Promise<void> {
+  if (res.ok) return;
+  const body = await parseJson<ApiError>(res).catch(() => ({ error: res.statusText }));
+  throw new PortfolioFetchError(body.error || fallbackMessage, res.status);
+}
+
+/** Session-authenticated request that unwraps `{ data }`. Browser/polling path. */
+export async function apiRequest<T>(
+  path: string,
+  init?: RequestInit,
+  fallbackMessage = "API request failed",
+): Promise<T> {
+  const res = await sessionFetch(path, mergeFetchInit({ cache: "no-store", ...init }));
+  await ensureOk(res, fallbackMessage);
+  const body = await parseJson<ApiResponse<T>>(res);
+  return body.data;
+}
+
+/**
+ * Server Component request that forwards the request cookies. Caching is left
+ * to the caller — some routes are no-store, others are revalidated.
+ */
+export async function serverApiRequest<T>(
+  path: string,
+  init: RequestInit,
+  fallbackMessage = "API request failed",
+): Promise<T> {
   const cookieHeader = await getServerCookieHeader();
-  const res = await fetch(`${getApiBaseUrl()}/api/v1/portfolio/summary`, mergeFetchInit({
-    cache: "no-store",
-    headers: cookieHeader,
+  const res = await fetch(`${getApiBaseUrl()}${path}`, mergeFetchInit({
+    ...init,
+    headers: { ...cookieHeader, ...(init.headers ?? {}) },
   }));
-
-  if (!res.ok) {
-    const body = await parseJson<ApiError>(res).catch(() => ({ error: res.statusText }));
-    throw new PortfolioFetchError(body.error || "Failed to load portfolio", res.status);
-  }
-
-  const body = await parseJson<ApiResponse<PortfolioSummary>>(res);
+  await ensureOk(res, fallbackMessage);
+  const body = await parseJson<ApiResponse<T>>(res);
   return body.data;
 }
 
-/** Client-side fetch for polling (no cache). */
-export async function fetchPortfolioSummaryClient(): Promise<PortfolioSummary> {
-  const res = await sessionFetch("/api/v1/portfolio/summary", mergeFetchInit({
-    cache: "no-store",
-  }));
-
-  if (!res.ok) {
-    const body = await parseJson<ApiError>(res).catch(() => ({ error: res.statusText }));
-    throw new PortfolioFetchError(body.error || "Failed to load portfolio", res.status);
-  }
-
-  const body = await parseJson<ApiResponse<PortfolioSummary>>(res);
-  return body.data;
-}
-
-/** Client-side live quotes (prices + FX, 5s). */
-export async function fetchPortfolioLiveClient(): Promise<PortfolioSummary> {
-  const res = await sessionFetch("/api/v1/portfolio/live", mergeFetchInit({
-    cache: "no-store",
-  }));
-
-  if (!res.ok) {
-    const body = await parseJson<ApiError>(res).catch(() => ({ error: res.statusText }));
-    throw new PortfolioFetchError(body.error || "Failed to load live portfolio", res.status);
-  }
-
-  const body = await parseJson<ApiResponse<PortfolioSummary>>(res);
-  return body.data;
-}
-
-export async function fetchPortfolioDiagnostics(): Promise<PortfolioDiagnostics> {
-  const res = await sessionFetch("/api/v1/portfolio/diagnostics", mergeFetchInit({
-    cache: "no-store",
-  }));
-  const body = await parseJson<ApiResponse<PortfolioDiagnostics>>(res);
-  return body.data;
-}
-
-export async function fetchPortfolioHistory(
-  range: HistoryRange = "1m",
-): Promise<PortfolioHistory> {
-  const cookieHeader = await getServerCookieHeader();
-  const res = await fetch(`${getApiBaseUrl()}/api/v1/portfolio/history?range=${range}`, mergeFetchInit({
-    cache: "no-store",
-    headers: cookieHeader,
-  }));
-
-  if (!res.ok) {
-    const body = await parseJson<ApiError>(res).catch(() => ({ error: res.statusText }));
-    throw new PortfolioFetchError(body.error || "Failed to load asset history", res.status);
-  }
-
-  const body = await parseJson<ApiResponse<PortfolioHistory>>(res);
-  return body.data;
-}
-
-export async function fetchPortfolioHistoryClient(
-  range: HistoryRange = "1m",
-): Promise<PortfolioHistory> {
-  return fetchPortfolioHistory(range);
-}
-
-export async function fetchDashboardInsights(): Promise<DashboardInsights> {
-  const cookieHeader = await getServerCookieHeader();
-  const res = await fetch(`${getApiBaseUrl()}/api/v1/insights/dashboard`, mergeFetchInit({
-    next: { revalidate: 300 },
-    headers: cookieHeader,
-  }));
-
-  if (!res.ok) {
-    const body = await parseJson<ApiError>(res).catch(() => ({ error: res.statusText }));
-    throw new PortfolioFetchError(body.error || "Failed to load insights", res.status);
-  }
-
-  const body = await parseJson<ApiResponse<DashboardInsights>>(res);
-  const data = body.data;
-  return {
-    ...data,
-    risks: data.risks ?? [],
-  };
-}
-
-export async function fetchDashboardInsightsClient(): Promise<DashboardInsights> {
-  const res = await sessionFetch("/api/v1/insights/dashboard", mergeFetchInit({
-    cache: "no-store",
-  }));
-
-  if (!res.ok) {
-    const body = await parseJson<ApiError>(res).catch(() => ({ error: res.statusText }));
-    throw new PortfolioFetchError(body.error || "Failed to load insights", res.status);
-  }
-
-  const body = await parseJson<ApiResponse<DashboardInsights>>(res);
-  const data = body.data;
-  return {
-    ...data,
-    risks: data.risks ?? [],
-  };
-}

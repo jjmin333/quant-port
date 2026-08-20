@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 
 export default function MainLayout({
@@ -5,5 +6,9 @@ export default function MainLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <AppShell>{children}</AppShell>;
+  return (
+    <Suspense fallback={null}>
+      <AppShell>{children}</AppShell>
+    </Suspense>
+  );
 }

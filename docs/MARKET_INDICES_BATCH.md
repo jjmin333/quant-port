@@ -10,7 +10,7 @@
 
 | 항목 | 이전 | 이후 |
 |------|------|------|
-| FRED 갱신 | index별 15분, 1 series = 1 budget Record | **batch 1회 = 5 series, 1 budget Record** |
+| FRED 갱신 | index별 15분, 1 series = 1 budget Record | **batch 1회 = 6 series, 1 budget Record** |
 | FRED 간격 | 15분 | **3분** (일 5,000 cap 이내) |
 | HTTP read | memory → Redis → MySQL (변경 없음) | 동일 |
 | warm-up | 없음 | **기동 시 전 batch 1회** (최대 90s timeout) |
@@ -22,7 +22,7 @@
 |----------|--------|---------|--------------|---------|
 | `toss:kr` | Toss | kospi, kosdaq | 1분 | ✅ (통합장 마감 후) |
 | `toss:fx` | Toss | usd-krw | 1분 | — |
-| `fred:us` | FRED | nasdaq, nasdaq100, sp500, dow, vix | **3분** | ✅ (미국 애프터마켓 종료 후) |
+| `fred:us` | FRED | nasdaq, nasdaq100, sp500, dow, vix, us10y | **3분** | ✅ (미국 애프터마켓 종료 후) |
 | `finnhub:us` | Finnhub | nq100, sox | 5분 (apibudget와 동일) | — |
 | `upbit:crypto` | Upbit | btc | 2분 | — |
 | `goldprice:spot` | goldprice.dev | gold | 90분 | — |
@@ -32,7 +32,7 @@ Poller 주기: **1분** (`marketIndexPollInterval`). batch `minInterval` 미경�
 ## FRED quota (3분 간격)
 
 - Budget Record: 최대 **480회/일** (24×60÷3)
-- HTTP: batch당 5 series ≈ **2,400 req/일** (FRED 일 5,000 cap 이내)
+- HTTP: batch당 6 series ≈ **2,880 req/일** (FRED 일 5,000 cap 이내)
 - `apibudget.Check` → batch 전체 1× `Record` (`fred.go` `QuoteBatch`)
 
 ## EOD persist
