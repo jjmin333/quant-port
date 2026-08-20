@@ -29,7 +29,7 @@ export default function LoginPage() {
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-8 shadow-xl">
       <div className="mb-8 text-center">
-        <p className="text-sm font-bold tracking-[0.18em] text-[var(--accent)]">QUANT PORT</p>
+        <p className="text-sm font-bold tracking-[0.18em] text-[var(--brand)]">QUANT PORT</p>
         <h1 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">로그인</h1>
         <p className="mt-1 text-sm text-[var(--text-muted)]">통합 자산 관리 계정으로 접속하세요.</p>
       </div>
@@ -43,7 +43,7 @@ export default function LoginPage() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
+            className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
           />
         </label>
         <label className="block">
@@ -55,7 +55,7 @@ export default function LoginPage() {
             minLength={8}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
+            className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
           />
         </label>
 
@@ -66,7 +66,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="h-11 w-full rounded-lg bg-[var(--accent)] text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+          className="h-11 w-full rounded-lg bg-[var(--brand)] text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
         >
           {submitting ? "로그인 중…" : "로그인"}
         </button>
@@ -74,7 +74,7 @@ export default function LoginPage() {
 
       <p className="mt-6 text-center text-sm text-[var(--text-muted)]">
         계정이 없으신가요?{" "}
-        <Link href="/signup" className="text-[var(--accent)] hover:underline">
+        <Link href="/signup" className="text-[var(--brand)] hover:underline">
           회원가입
         </Link>
       </p>

@@ -28,7 +28,7 @@ func TestBatchMinIntervalForFREDIndices(t *testing.T) {
 	t.Parallel()
 
 	want := 3 * time.Minute
-	for _, id := range []string{"nasdaq", "nasdaq100", "sp500", "dow", "vix"} {
+	for _, id := range []string{"nasdaq", "nasdaq100", "sp500", "dow", "vix", "us10y"} {
 		if got := batchMinIntervalForIndex(id); got != want {
 			t.Fatalf("batchMinIntervalForIndex(%q) = %s, want %s", id, got, want)
 		}
@@ -39,14 +39,14 @@ func TestDataKindForIndex(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]model.IndexDataKind{
-		"kospi":     model.IndexDataKindEOD,
-		"kosdaq":    model.IndexDataKindEOD,
-		"usd-krw":   model.IndexDataKindEOD,
-		"sp500":     model.IndexDataKindEOD,
-		"nq100":     model.IndexDataKindLive,
-		"sox":       model.IndexDataKindLive,
-		"btc":       model.IndexDataKindLive,
-		"gold":      model.IndexDataKindLive,
+		"kospi":   model.IndexDataKindEOD,
+		"kosdaq":  model.IndexDataKindEOD,
+		"usd-krw": model.IndexDataKindLive,
+		"sp500":   model.IndexDataKindEOD,
+		"nq100":   model.IndexDataKindLive,
+		"sox":     model.IndexDataKindLive,
+		"btc":     model.IndexDataKindLive,
+		"gold":    model.IndexDataKindLive,
 	}
 	for id, want := range cases {
 		if got := dataKindForIndex(id); got != want {
@@ -79,5 +79,20 @@ func TestShouldRefreshBatchRespectsInterval(t *testing.T) {
 
 	if !st.shouldRefreshBatch(ctx, batch) {
 		t.Fatal("expected refresh after min interval")
+	}
+}
+
+func TestCatalogIDsCoveredByBatches(t *testing.T) {
+	t.Parallel()
+	inBatch := map[string]bool{}
+	for _, batch := range indexBatches {
+		for _, id := range batch.indexIDs {
+			inBatch[id] = true
+		}
+	}
+	for _, entry := range marketIndexCatalog {
+		if !inBatch[entry.id] {
+			t.Fatalf("catalog id %q is not in any index batch", entry.id)
+		}
 	}
 }

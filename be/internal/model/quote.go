@@ -55,32 +55,36 @@ type IndexGroupMeta struct {
 }
 
 type QuoteSummary struct {
-	Symbol         string         `json:"symbol"`
-	Name           string         `json:"name"`
-	Market         string         `json:"market"`
-	Currency       QuoteCurrency  `json:"currency"`
-	AssetType      QuoteAssetType `json:"assetType"`
-	CurrentPrice   float64        `json:"currentPrice"`
-	Change         float64        `json:"change"`
-	ChangeRate     float64        `json:"changeRate"`
-	Volume         int64          `json:"volume"`
-	TradingValue   float64        `json:"tradingValue"`
-	IsWatchlisted  bool           `json:"isWatchlisted"`
-	IsHeld         bool           `json:"isHeld"`
+	Symbol           string            `json:"symbol"`
+	Name             string            `json:"name"`
+	Market           string            `json:"market"`
+	Currency         QuoteCurrency     `json:"currency"`
+	AssetType        QuoteAssetType    `json:"assetType"`
+	LogoURL          string            `json:"logoUrl,omitempty"`
+	CurrentPrice     float64           `json:"currentPrice"`
+	Change           float64           `json:"change"`
+	ChangeRate       float64           `json:"changeRate"`
+	Volume           int64             `json:"volume"`
+	TradingValue     float64           `json:"tradingValue"`
+	IsWatchlisted    bool              `json:"isWatchlisted"`
+	IsHeld           bool              `json:"isHeld"`
+	WatchlistMetrics *WatchlistMetrics `json:"watchlistMetrics,omitempty"`
 }
 
 type QuoteDetail struct {
 	QuoteSummary
-	Open        float64  `json:"open"`
-	High        float64  `json:"high"`
-	Low         float64  `json:"low"`
-	PrevClose   float64  `json:"prevClose"`
-	Week52High  float64  `json:"week52High"`
-	Week52Low   float64  `json:"week52Low"`
-	MarketCap   float64  `json:"marketCap"`
-	PER         *float64 `json:"per"`
-	PBR         *float64 `json:"pbr"`
-	UpdatedAt   string   `json:"updatedAt"`
+	Open          float64  `json:"open"`
+	High          float64  `json:"high"`
+	Low           float64  `json:"low"`
+	PrevClose     float64  `json:"prevClose"`
+	RegularClose  float64  `json:"regularClose,omitempty"`
+	MarketSession string   `json:"marketSession,omitempty"`
+	Week52High    float64  `json:"week52High"`
+	Week52Low     float64  `json:"week52Low"`
+	MarketCap     float64  `json:"marketCap"`
+	PER           *float64 `json:"per"`
+	PBR           *float64 `json:"pbr"`
+	UpdatedAt     string   `json:"updatedAt"`
 }
 
 type OrderBookLevel struct {

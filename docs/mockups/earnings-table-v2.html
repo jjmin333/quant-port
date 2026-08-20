@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>실적 일정 — 정렬 테이블 · 달력 · 레일 선택용 목업 v2</title>
+<style>
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.97 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.93 0 0);
+  --border: oklch(0.87 0 0);
+  --profit: #DC2626;
+  --loss: #2563EB;
+  --sample: #7C3AED;
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --border: oklch(0.34 0 0);
+  --sample: #A78BFA;
+}
+* { box-sizing: border-box; }
+body { margin:0; padding:24px; background:var(--background); color:var(--foreground);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",sans-serif; font-size:13px; }
+.wrap { max-width:1320px; margin:0 auto; }
+h1 { font-size:20px; margin:0 0 4px; }
+h2 { font-size:15px; margin:38px 0 6px; padding-top:18px; border-top:2px solid var(--border); }
+h3 { font-size:12.5px; margin:18px 0 8px; }
+.lede { color:var(--muted-foreground); margin:0 0 10px; font-size:12px; line-height:1.6; }
+.opt { display:inline-block; font-size:11px; font-weight:700; background:var(--foreground); color:var(--background);
+  padding:2px 7px; border-radius:999px; margin-right:6px; }
+.card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:12px; }
+.mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-variant-numeric:tabular-nums; }
+.up { color:var(--profit); font-weight:700; }
+.down { color:var(--loss); font-weight:700; }
+.mut { color:var(--muted-foreground); }
+.logo { width:20px;height:20px;border-radius:5px;background:var(--accent);display:inline-flex;
+  align-items:center;justify-content:center;font-size:8px;font-weight:700;flex:0 0 auto; }
+table { width:100%; border-collapse:collapse; font-size:12px; }
+th { text-align:right; font-weight:500; color:var(--muted-foreground); font-size:11px;
+  border-bottom:1px solid var(--border); padding:6px 8px; white-space:nowrap; cursor:pointer; user-select:none; }
+th.l { text-align:left; }
+th:hover { color:var(--foreground); }
+th .ar { opacity:.35; margin-left:2px; }
+th.on { color:var(--foreground); font-weight:700; }
+th.on .ar { opacity:1; }
+td { padding:7px 8px; border-bottom:1px solid color-mix(in srgb,var(--border) 55%,transparent); text-align:right; white-space:nowrap; }
+td.l { text-align:left; }
+tbody tr:hover { background:color-mix(in srgb,var(--muted) 60%,transparent); }
+.note { font-size:11px; color:var(--muted-foreground); margin-top:10px; padding-top:8px; border-top:1px solid var(--border); line-height:1.6; }
+.themebtn { position:fixed; top:12px; right:12px; z-index:9; font-size:11px; padding:6px 12px;
+  border:1px solid var(--border); background:var(--card); color:var(--foreground); border-radius:999px; cursor:pointer; }
+.real { font-size:10px; color:#059669; font-weight:700; }
+.pair { font-size:11px; }
+.pair b { font-weight:700; }
+.grid2 { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:12px; align-items:start; }
+.railcard { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:10px; }
+.railcard h4 { margin:0 0 6px; font-size:12px; }
+.rr { display:flex; align-items:center; gap:6px; padding:4px 0; font-size:11.5px; }
+.rr .g { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* 달력 안 */
+.calA td, .calB td, .calC td { border:0; }
+.dcell { height:44px; border-radius:6px; display:flex; flex-direction:column; align-items:center;
+  justify-content:center; gap:1px; font-size:10px; border:1px solid transparent; cursor:pointer; }
+.bar { height:3px; border-radius:2px; }
+.striplike { display:flex; gap:4px; overflow-x:auto; padding-bottom:4px; }
+.sday { min-width:74px; border:1px solid var(--border); border-radius:8px; padding:6px; cursor:pointer; }
+.sday.on { border-color:var(--foreground); box-shadow:0 0 0 1px var(--foreground); }
+</style>
+</head>
+<body>
+<button class="themebtn" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">라이트 / 다크</button>
+<div class="wrap">
+
+<h1>실적 일정 — 정렬 테이블 · 달력 · 레일 목업 v2</h1>
+<p class="lede">
+  <span class="real">숫자는 전부 우리 DB 실측값</span>(2026-08-06 국내 발표분). 커버리지도 확인했습니다 —
+  <b>시가총액</b>은 <code>stocks.shares_outstanding</code> × 종가로 <b>100%</b> 계산되고,
+  <b>매출 서프라이즈</b>는 국내 93% · 해외 95%에서 나옵니다. investing.com에 있지만 <b>우리가 못 채우는 열</b>은
+  <b>시간외거래</b>와 <b>EPS 개정</b> 둘입니다(소스에 없음) — 빈 열로 두지 않고 아예 뺐습니다.
+</p>
+
+<!-- ══════════════════════════════════════════ -->
+<h2>T. 정렬 가능한 테이블 <span class="mut" style="font-weight:400">— 칩 대신 글자, 컬럼 클릭 정렬</span></h2>
+<p class="lede">
+  지금 화면은 한 행이 2줄짜리 카드라 **세로로만** 훑을 수 있고, 「영업이익 큰 순」·「서프라이즈 순」으로
+  줄을 세울 수 없습니다. 표로 바꾸면 열이 곧 정렬 기준이 됩니다.
+</p>
+
+<h3><span class="opt">T1</span> 국내 — 영업이익 기준 (헤더 클릭 = 정렬)</h3>
+<div class="card">
+  <table>
+    <thead>
+      <tr>
+        <th class="l">회사 <span class="ar">↕</span></th>
+        <th>발표일 <span class="ar">↕</span></th>
+        <th>영업이익 <span class="mut">실적/예측</span> <span class="ar">↕</span></th>
+        <th class="on">영업이익 서프라이즈 <span class="ar">▼</span></th>
+        <th>매출 <span class="mut">실적</span> <span class="ar">↕</span></th>
+        <th>매출 서프라이즈 <span class="ar">↕</span></th>
+        <th>시가총액 <span class="ar">↕</span></th>
+        <th>발표 후 주가 <span class="ar">↕</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="l"><span style="display:inline-flex;align-items:center;gap:6px"><span class="logo">한국</span>한국금융지주 <span class="mut mono" style="font-size:10px">2Q·연결</span></span></td>
+        <td class="mono mut">08/06</td>
+        <td class="mono pair"><b>1조 3,442억</b> <span class="mut">/ 1조 519억</span></td>
+        <td class="mono up">+27.8%</td>
+        <td class="mono">13조 5,538억</td>
+        <td class="mono mut">—</td>
+        <td class="mono">10.59조</td>
+        <td class="mono down">−7.3%</td>
+      </tr>
+      <tr>
+        <td class="l"><span style="display:inline-flex;align-items:center;gap:6px"><span class="logo">카카</span>카카오 <span class="mut mono" style="font-size:10px">2Q·연결</span></span></td>
+        <td class="mono mut">08/06</td>
+        <td class="mono pair"><b>2,770억</b> <span class="mut">/ 2,263억</span></td>
+        <td class="mono up">+22.4%</td>
+        <td class="mono">2조 985억</td>
+        <td class="mono up">+2.4%</td>
+        <td class="mono">17.67조</td>
+        <td class="mono up">+1.8%</td>
+      </tr>
+      <tr>
+        <td class="l"><span style="display:inline-flex;align-items:center;gap:6px"><span class="logo">LG유</span>LG유플러스 <span class="mut mono" style="font-size:10px">2Q·연결</span></span></td>
+        <td class="mono mut">08/06</td>
+        <td class="mono pair"><b>3,445억</b> <span class="mut">/ 3,103억</span></td>
+        <td class="mono up">+11.0%</td>
+        <td class="mono">3조 6,949억</td>
+        <td class="mono down">−5.2%</td>
+        <td class="mono">6.37조</td>
+        <td class="mono mut" style="font-size:10px">집계 중</td>
+      </tr>
+      <tr>
+        <td class="l"><span style="display:inline-flex;align-items:center;gap:6px"><span class="logo">KT&</span>KT&G <span class="mut mono" style="font-size:10px">2Q·연결</span></span></td>
+        <td class="mono mut">08/06</td>
+        <td class="mono pair"><b>4,145억</b> <span class="mut">/ 3,967억</span></td>
+        <td class="mono up">+4.5%</td>
+        <td class="mono">1조 7,016억</td>
+        <td class="mono up">+1.8%</td>
+        <td class="mono">19.47조</td>
+        <td class="mono up">+0.9%</td>
+      </tr>
+      <tr>
+        <td class="l"><span style="display:inline-flex;align-items:center;gap:6px"><span class="logo">LIG</span>LIG디펜스앤에어로 <span class="mut mono" style="font-size:10px">2Q·연결</span></span></td>
+        <td class="mono mut">08/06</td>
+        <td class="mono pair"><b>1,057억</b> <span class="mut">/ 1,105억</span></td>
+        <td class="mono down">−4.3%</td>
+        <td class="mono">1조 1,101억</td>
+        <td class="mono down">−4.7%</td>
+        <td class="mono">16.15조</td>
+        <td class="mono down">−2.1%</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="note">
+    <b>「실적/예측」을 한 칸에 둡니다</b> — 두 열로 쪼개면 눈이 좌우로 왕복해야 하고, 붙여 두면
+    「1조 3,442억 / 1조 519억」이 한 번에 읽힙니다(investing.com도 같은 방식).
+    <b>연결/개별은 회사명 옆 작은 글자</b>로 — 배지로 만들면 다시 칩이 됩니다.
+    <span class="mut">「집계 중」은 발표 직후 거래일 종가가 아직 없다는 뜻이고, 0%와 다릅니다.</span>
+  </p>
+</div>
+
+<h3><span class="opt">T2</span> 해외 — EPS 기준 (같은 표, 열만 시장에 맞게)</h3>
+<div class="card">
+  <table>
+    <thead>
+      <tr>
+        <th class="l">회사 <span class="ar">↕</span></th>
+        <th>발표 <span class="ar">↕</span></th>
+        <th>시간 <span class="ar">↕</span></th>
+        <th>EPS <span class="mut">실적/예측</span> <span class="ar">↕</span></th>
+        <th class="on">EPS 서프라이즈 <span class="ar">▼</span></th>
+        <th>매출 <span class="mut">실적</span> <span class="ar">↕</span></th>
+        <th>매출 서프라이즈 <span class="ar">↕</span></th>
+        <th>시가총액 <span class="ar">↕</span></th>
+        <th>발표 후 주가 <span class="ar">↕</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td class="l"><span style="display:inline-flex;align-items:center;gap:6px"><span class="logo">ATNI</span>ATN 인터내셔널</span></td>
+        <td class="mono mut">08/05</td><td class="mut">장후</td>
+        <td class="mono pair"><b>$10.98</b> <span class="mut">/ $0.17</span></td>
+        <td class="mono up">+6232%</td><td class="mono">$182M</td><td class="mono up">+1.2%</td>
+        <td class="mono">$0.42B</td><td class="mono up">+3.1%</td></tr>
+      <tr><td class="l"><span style="display:inline-flex;align-items:center;gap:6px"><span class="logo">HHH</span>하워드 휴즈 홀딩스</span></td>
+        <td class="mono mut">08/06</td><td class="mut">장전</td>
+        <td class="mono pair"><b>$4.24</b> <span class="mut">/ $0.49</span></td>
+        <td class="mono up">+757%</td><td class="mono">$1.1B</td><td class="mono up">+8.4%</td>
+        <td class="mono">$4.1B</td><td class="mono down">−1.2%</td></tr>
+      <tr><td class="l"><span style="display:inline-flex;align-items:center;gap:6px"><span class="logo">ABBV</span>애브비</span></td>
+        <td class="mono mut">07/31</td><td class="mut">장전</td>
+        <td class="mono pair"><b>$3.65</b> <span class="mut">/ $3.68</span></td>
+        <td class="mono down">−0.7%</td><td class="mono">$16.99B</td><td class="mono down">−0.6%</td>
+        <td class="mono">$332B</td><td class="mono up">+2.2%</td></tr>
+    </tbody>
+  </table>
+  <p class="note">
+    같은 표 구조에 <b>지표만 시장에 맞게</b> 바뀝니다 — 국내는 영업이익, 해외는 EPS + <b>시간</b>(장전/장후) 열.
+    메뉴를 나눈 덕에 한 표에 두 기준이 섞이지 않습니다.
+  </p>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<h2>C. 달력 UI — 세 안 <span class="mut" style="font-weight:400">(지금 것이 눈에 안 띈다는 지적)</span></h2>
+<p class="lede">
+  지금은 <b>중립 회색 농도</b>만 써서 격자가 밋밋합니다. 색을 쓸 자리가 좁은 게 원인이었습니다 —
+  빨강·파랑은 상승·하락, 보라는 추정이라 이미 뜻이 있습니다. 세 방향을 준비했습니다.
+</p>
+
+<h3><span class="opt">C1</span> 막대형 — 칸 안에 <b>건수 막대</b>를 그린다 (색 대신 길이)</h3>
+<div class="card" style="max-width:460px">
+  <table class="calA"><tbody>
+    <tr>
+      <td><div class="dcell" style="background:var(--muted)"><span>3</span><span class="mono" style="font-weight:700">11</span><div class="bar" style="width:60%;background:var(--foreground)"></div></div></td>
+      <td><div class="dcell" style="background:var(--muted)"><span>4</span><span class="mono" style="font-weight:700">17</span><div class="bar" style="width:75%;background:var(--foreground)"></div></div></td>
+      <td><div class="dcell" style="background:var(--muted)"><span>5</span><span class="mono" style="font-weight:700">22</span><div class="bar" style="width:88%;background:var(--foreground)"></div></div></td>
+      <td><div class="dcell" style="background:var(--muted);border-color:var(--foreground)"><span>6</span><span class="mono" style="font-weight:700">24</span><div class="bar" style="width:100%;background:var(--foreground)"></div></div></td>
+      <td><div class="dcell" style="background:var(--muted)"><span>7</span><span class="mono" style="font-weight:700">33</span><div class="bar" style="width:100%;background:var(--foreground)"></div></div></td>
+    </tr>
+  </tbody></table>
+  <p class="note">건수를 <b>길이</b>로 말해 색을 안 씁니다. 가장 안전하지만 가장 밋밋할 수도 있습니다.</p>
+</div>
+
+<h3><span class="opt">C2</span> 성과형 — 칸 색이 그날의 <b>상회 비율</b>을 말한다 <span class="mut">(권장)</span></h3>
+<div class="card" style="max-width:460px">
+  <table class="calB"><tbody>
+    <tr>
+      <td><div class="dcell" style="background:color-mix(in srgb,var(--profit) 14%,transparent)"><span>3</span><span class="mono" style="font-weight:700">11</span><span class="up" style="font-size:9px">55%</span></div></td>
+      <td><div class="dcell" style="background:color-mix(in srgb,var(--profit) 26%,transparent)"><span>4</span><span class="mono" style="font-weight:700">17</span><span class="up" style="font-size:9px">71%</span></div></td>
+      <td><div class="dcell" style="background:color-mix(in srgb,var(--loss) 18%,transparent)"><span>5</span><span class="mono" style="font-weight:700">22</span><span class="down" style="font-size:9px">38%</span></div></td>
+      <td><div class="dcell" style="background:color-mix(in srgb,var(--profit) 10%,transparent);border-color:var(--foreground)"><span>6</span><span class="mono" style="font-weight:700">24</span><span class="up" style="font-size:9px">55%</span></div></td>
+      <td><div class="dcell" style="background:color-mix(in srgb,var(--profit) 30%,transparent)"><span>7</span><span class="mono" style="font-weight:700">33</span><span class="up" style="font-size:9px">76%</span></div></td>
+    </tr>
+  </tbody></table>
+  <p class="note">
+    <b>색이 실제 정보를 나릅니다</b> — 빨강이 짙을수록 그날 상회가 많았다는 뜻이고, 이 앱의
+    빨강=상승 규칙과 방향이 같습니다. 「어느 날이 좋았나」가 달력에서 바로 보입니다.
+    발표 전 날짜는 비교할 게 없어 <b>회색 + 건수만</b>입니다.
+  </p>
+</div>
+
+<h3><span class="opt">C3</span> 스트립형 — 달력을 접고 <b>가로 날짜 띠</b>로 (표가 주인공)</h3>
+<div class="card">
+  <div class="striplike">
+    <div class="sday"><div class="mut" style="font-size:10px">월 3</div><div class="mono" style="font-weight:700">11건</div><div class="up" style="font-size:10px">55%</div></div>
+    <div class="sday"><div class="mut" style="font-size:10px">화 4</div><div class="mono" style="font-weight:700">17건</div><div class="up" style="font-size:10px">71%</div></div>
+    <div class="sday"><div class="mut" style="font-size:10px">수 5</div><div class="mono" style="font-weight:700">22건</div><div class="down" style="font-size:10px">38%</div></div>
+    <div class="sday on"><div class="mut" style="font-size:10px">목 6</div><div class="mono" style="font-weight:700">24건</div><div class="up" style="font-size:10px">55%</div></div>
+    <div class="sday"><div class="mut" style="font-size:10px">금 7</div><div class="mono" style="font-weight:700">33건</div><div class="up" style="font-size:10px">76%</div></div>
+    <div class="sday"><div class="mut" style="font-size:10px">월 10</div><div class="mono" style="font-weight:700">7건</div><div class="up" style="font-size:10px">57%</div></div>
+    <div class="sday"><div class="mut" style="font-size:10px">화 11</div><div class="mono" style="font-weight:700">24건</div><div class="down" style="font-size:10px">46%</div></div>
+  </div>
+  <p class="note">
+    격자를 버리고 <b>거래일만</b> 가로로 흘립니다. 세로 공간을 크게 아껴 <b>표가 화면의 주인공</b>이 되고,
+    빈 주말 칸이 사라집니다. 대신 「이 달 전체 지형」은 약해집니다(월 단위 조망이 필요하면 C2).
+  </p>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<h2>R. 우측 레일 교체 후보 <span class="mut" style="font-weight:400">(상회/하회 TOP을 무엇으로 바꿀까)</span></h2>
+<p class="lede">
+  상회/하회 TOP은 <b>「서프라이즈」 탭이 이미 더 길게</b> 보여줍니다 — 레일에서 6줄만 반복하는 셈이라
+  자리값을 못 합니다. 아래는 <b>표에 없는 것</b>만 골랐습니다.
+</p>
+<div class="grid2">
+  <div></div>
+  <div style="display:flex;flex-direction:column;gap:10px">
+
+    <div class="railcard">
+      <h4>R1. 이번 주 대형 발표 <span class="mut" style="font-weight:400;font-size:10px">시가총액 순</span></h4>
+      <div class="rr"><span class="logo">삼성</span><span class="g">삼성전자</span><span class="mono mut">D-3</span><span class="mono">452조</span></div>
+      <div class="rr"><span class="logo">KT&</span><span class="g">KT&G</span><span class="mono mut">D-1</span><span class="mono">19.5조</span></div>
+      <div class="rr"><span class="logo">카카</span><span class="g">카카오</span><span class="mono mut">오늘</span><span class="mono">17.7조</span></div>
+      <p class="note" style="margin-top:6px">「무엇이 큰 발표인가」 — 표는 날짜순이라 이걸 못 말합니다. <b>시가총액 100% 계산 가능.</b></p>
+    </div>
+
+    <div class="railcard">
+      <h4>R2. 기대와 주가가 엇갈린 발표 <span class="mut" style="font-weight:400;font-size:10px">최근 30일</span></h4>
+      <div class="rr"><span class="logo">한국</span><span class="g">한국금융지주</span><span class="up mono">+27.8%</span><span class="down mono">−7.3%</span></div>
+      <div class="rr"><span class="logo">엘앤</span><span class="g">엘앤에프</span><span class="down mono">−58.2%</span><span class="up mono">+7.3%</span></div>
+      <p class="note" style="margin-top:6px">우리만 있는 신호입니다 — 숫자와 시장이 다르게 말한 경우.</p>
+    </div>
+
+    <div class="railcard">
+      <h4>R3. 꾸준히 기대를 넘는 기업 <span class="mut" style="font-weight:400;font-size:10px">최근 8분기</span></h4>
+      <div class="rr"><span class="logo">삼성</span><span class="g">삼성전자</span><span class="mono up" style="font-weight:700">7/8</span><span class="mono mut">중위 +9.1%</span></div>
+      <div class="rr"><span class="logo">현대</span><span class="g">현대해상</span><span class="mono up" style="font-weight:700">6/8</span><span class="mono mut">중위 +12.4%</span></div>
+      <p class="note" style="margin-top:6px">한 번은 우연, 8분기 중 7번은 습관 — 다음 분기를 볼 때 쓰는 정보입니다.</p>
+    </div>
+
+    <div class="railcard">
+      <h4>R4. 이번 분기 진행률</h4>
+      <div style="font-size:11px" class="mut">2026 2Q · 국내</div>
+      <div style="display:flex;align-items:baseline;gap:6px;margin:2px 0">
+        <span style="font-size:19px;font-weight:700">1,240</span><span class="mut" style="font-size:11px">/ 약 2,100곳 발표</span>
+      </div>
+      <div style="height:6px;background:var(--muted);border-radius:3px;overflow:hidden"><div style="width:59%;height:100%;background:var(--foreground)"></div></div>
+      <div class="rr" style="padding-top:6px"><span class="g mut">누적 상회율</span><span class="up mono" style="font-weight:700">58%</span></div>
+      <p class="note" style="margin-top:6px">「시즌이 어디쯤인가」 — 남은 발표가 많은지 끝물인지.</p>
+    </div>
+
+    <div class="railcard">
+      <h4>R5. 내 종목 다음 발표 <span class="mut" style="font-weight:400;font-size:10px">(현행 유지)</span></h4>
+      <div class="rr"><span class="logo">삼성</span><span class="g">삼성전자</span><span style="font-size:10px;color:var(--sample)">추정</span><span class="mono mut">10/14</span></div>
+      <p class="note" style="margin-top:6px">이 카드는 그대로 두는 것을 권합니다 — 유일하게 「나」에 대한 칸입니다.</p>
+    </div>
+
+  </div>
+</div>
+
+<p class="note" style="margin-top:30px">
+  <b>못 넣는 것</b>: 시간외거래·EPS 개정(소스 없음), 애널리스트 목표주가(FnGuide 유료),
+  섹터별 집계(<code>stocks</code>에 섹터 컬럼 없음 — AGENT_STATE TODO).
+  <b>현재가 열</b>은 넣을 수 있지만 행마다 실시간 시세가 필요해 표가 무거워집니다(배치 시세 1회로 가능 — 원하시면 포함).
+</p>
+
+</div>
+</body>
+</html>

@@ -162,6 +162,127 @@ func isAnnualFact(item XBRLFact) bool {
 	return false
 }
 
+// xbrlPeriodKey identifies one reported fiscal period across concepts.
+// FY is display-only (see recentReportPeriods) — matching uses FP+End only,
+// since SEC's own `fy` tag is not reliable enough to match on (see below).
+type xbrlPeriodKey struct {
+	FY  int
+	FP  string
+	End string
+}
+
+// recentReportPeriods returns up to limit distinct (FP,End) periods from
+// 10-Q/10-K/20-F/40-F filings, most recent End first. Used to drive the
+// quarterly 실적 tab and financial-history modal for US symbols — only real
+// SEC-reported periods, no derived/synthesized quarters.
+//
+// Deliberately dedupes on (FP,End) and NOT `fy`: the same physical quarter
+// is often reported under two different `fy` tags — once in its own filing,
+// again as a prior-year comparative column in the next year's filing — with
+// identical End/values but a different fy. Keying on fy too would silently
+// produce duplicate periods (observed live for AAPL: 2024-09-28 appearing as
+// both "FY2024 Q4" and "FY2025 Q4"). FY on the returned key is display-only,
+// taken from whichever occurrence is encountered first.
+func recentReportPeriods(items []XBRLFact, limit int) []xbrlPeriodKey {
+	type dedupKey struct{ FP, End string }
+	seen := make(map[dedupKey]bool)
+	var keys []xbrlPeriodKey
+	for _, item := range items {
+		if !isReportPeriod(item) {
+			continue
+		}
+		fp := strings.ToUpper(strings.TrimSpace(item.FP))
+		dk := dedupKey{FP: fp, End: item.End}
+		if seen[dk] {
+			continue
+		}
+		seen[dk] = true
+		keys = append(keys, xbrlPeriodKey{FY: item.FY, FP: fp, End: item.End})
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i].End > keys[j].End })
+	if len(keys) > limit {
+		keys = keys[:limit]
+	}
+	return keys
+}
+
+// isReportPeriod accepts only standalone-quarter or full-year durations.
+// SEC XBRL 10-Qs commonly tag BOTH a ~3-month standalone fact and a
+// cumulative YTD fact (e.g. "six months ended") under the same FY/FP/End —
+// without this duration check, Q2/Q3 would pick up 6-/9-month cumulative
+// totals and look like implausible quarter-over-quarter revenue spikes.
+func isReportPeriod(item XBRLFact) bool {
+	fp := strings.ToUpper(strings.TrimSpace(item.FP))
+	form := strings.ToUpper(strings.TrimSpace(item.Form))
+	if item.End == "" || fp == "" {
+		return false
+	}
+	switch form {
+	case "10-Q", "10-K", "20-F", "40-F":
+	default:
+		return false
+	}
+	switch fp {
+	case "Q1", "Q2", "Q3":
+		return isStandaloneQuarterDuration(item)
+	case "Q4", "FY":
+		return true
+	}
+	return false
+}
+
+// isStandaloneQuarterDuration reports whether item covers roughly one
+// quarter (60-100 days), as opposed to a cumulative year-to-date span.
+func isStandaloneQuarterDuration(item XBRLFact) bool {
+	if item.Start == "" || item.End == "" {
+		return false
+	}
+	start, err1 := time.Parse("2006-01-02", item.Start)
+	end, err2 := time.Parse("2006-01-02", item.End)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	days := end.Sub(start).Hours() / 24
+	return days >= 60 && days <= 100
+}
+
+// pickFactForPeriod finds the fact matching key within items (a different
+// concept's fact list than the one recentReportPeriods was built from). For
+// Q1-Q3 it additionally requires a standalone-quarter duration, so a
+// concept that only has a cumulative YTD fact for that End date is treated
+// as missing rather than silently substituting the wrong span.
+func pickFactForPeriod(items []XBRLFact, key xbrlPeriodKey) *XBRLFact {
+	for _, item := range items {
+		// Match on End+FP only — not FY, which the same physical period can
+		// carry inconsistently across filings (see recentReportPeriods).
+		if item.End != key.End || !strings.EqualFold(strings.TrimSpace(item.FP), key.FP) {
+			continue
+		}
+		switch key.FP {
+		case "Q1", "Q2", "Q3":
+			if !isStandaloneQuarterDuration(item) {
+				continue
+			}
+		}
+		return cloneFact(item)
+	}
+	return nil
+}
+
+// pickInstantFactForPeriod finds a point-in-time (balance sheet) fact whose
+// End date matches key.End. Unlike pickFactForPeriod, no duration check is
+// applied — instant facts (Assets, StockholdersEquity, ...) have no
+// standalone-vs-cumulative distinction to make; the balance simply is what
+// it is as of that date.
+func pickInstantFactForPeriod(items []XBRLFact, key xbrlPeriodKey) *XBRLFact {
+	for _, item := range items {
+		if item.End == key.End {
+			return cloneFact(item)
+		}
+	}
+	return nil
+}
+
 func pickLatestByEnd(items []XBRLFact) *XBRLFact {
 	if len(items) == 0 {
 		return nil

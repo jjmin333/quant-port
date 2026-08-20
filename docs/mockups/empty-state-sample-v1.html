@@ -1,0 +1,588 @@
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>빈 화면 · 샘플 데이터 — 선택용 목업 v1</title>
+<style>
+:root {
+  --radius:.625rem;
+  --background:oklch(.97 0 0); --foreground:oklch(.145 0 0);
+  --card:oklch(1 0 0); --muted:oklch(.97 0 0); --muted-foreground:oklch(.52 0 0);
+  --accent:oklch(.93 0 0); --border:oklch(.87 0 0);
+  --brand:#2563EB; --brand-muted:rgba(37,99,235,.1);
+  --profit:#DC2626; --loss:#2563EB;
+  --sample:#7C3AED; --sample-muted:rgba(124,58,237,.10); --sample-border:rgba(124,58,237,.35);
+  --warn:#D97706; --warn-muted:rgba(217,119,6,.12);
+  --hit:#059669;
+}
+[data-theme="dark"] {
+  --background:oklch(.145 0 0); --foreground:oklch(.985 0 0);
+  --card:oklch(.205 0 0); --muted:oklch(.269 0 0); --muted-foreground:oklch(.708 0 0);
+  --accent:oklch(.269 0 0); --border:oklch(1 0 0 / 16%);
+  --brand:#60A5FA; --brand-muted:rgba(96,165,250,.15);
+  --profit:#F87171; --loss:#60A5FA;
+  --sample:#A78BFA; --sample-muted:rgba(167,139,250,.14); --sample-border:rgba(167,139,250,.4);
+  --warn:#FBBF24; --warn-muted:rgba(251,191,36,.14);
+  --hit:#34D399;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--background);color:var(--foreground);
+  font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  font-size:12px;line-height:1.5;padding:24px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:20px;font-weight:700;letter-spacing:-.01em}
+h2{font-size:15px;font-weight:600}
+h3{font-size:12px;font-weight:600}
+.sub{color:var(--muted-foreground);font-size:12px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
+.up{color:var(--profit)}.down{color:var(--loss)}.dim{color:var(--muted-foreground)}
+code{font-family:ui-monospace,monospace;background:var(--muted);padding:1px 4px;border-radius:3px;font-size:11px}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding-bottom:16px;margin-bottom:20px;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:var(--background);z-index:20}
+button.tgl{font:inherit;cursor:pointer;border:1px solid var(--border);background:var(--card);
+  color:var(--foreground);padding:6px 12px;border-radius:8px}
+.opt{margin:32px 0 0;padding-top:20px;border-top:2px solid var(--border)}
+.opt-head{display:flex;align-items:baseline;gap:10px;margin-bottom:4px;flex-wrap:wrap}
+.tag{display:inline-block;font-size:11px;font-weight:700;background:var(--brand);color:#fff;
+  padding:2px 8px;border-radius:999px}
+.note{color:var(--muted-foreground);font-size:11px;margin:6px 0 14px;max-width:940px}
+.note b{color:var(--foreground);font-weight:600}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.cols{display:grid;gap:14px}
+.c2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.c3{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+
+/* 앱 셸 */
+.shell{border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--background)}
+.pagehead{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border);background:var(--card)}
+.pagehead .t{font-size:15px;font-weight:600}
+.pagehead .s{font-size:11px;color:var(--muted-foreground);margin-top:2px}
+.pagehead .actions{margin-left:auto;display:flex;gap:6px;flex-shrink:0;align-items:center}
+.body{padding:14px;display:grid;gap:12px}
+
+.btn{font:inherit;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--card);
+  color:var(--foreground);padding:5px 11px;border-radius:7px;display:inline-flex;align-items:center;gap:5px}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+.btn.sample{border-color:var(--sample-border);background:var(--sample-muted);color:var(--sample);font-weight:600}
+.btn.ghost{border-color:transparent;color:var(--muted-foreground)}
+.btn.on{border-color:var(--sample);background:var(--sample);color:#fff}
+
+.badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;
+  padding:1px 6px;border-radius:5px;background:var(--muted);color:var(--muted-foreground);white-space:nowrap}
+.badge.s{background:var(--sample-muted);color:var(--sample)}
+.badge.up{background:rgba(220,38,38,.12);color:var(--profit)}
+.badge.hit{background:rgba(5,150,105,.12);color:var(--hit)}
+[data-theme="dark"] .badge.up{background:rgba(248,113,113,.15)}
+[data-theme="dark"] .badge.hit{background:rgba(52,211,153,.15)}
+
+.av{width:22px;height:22px;border-radius:6px;flex:0 0 auto;background:var(--muted);
+  display:grid;place-items:center;font-size:9px;font-weight:700;color:var(--muted-foreground)}
+
+/* 샘플 띠 */
+.ribbon{display:flex;align-items:center;gap:8px;padding:8px 11px;border-radius:8px;
+  border:1px solid var(--sample-border);background:var(--sample-muted);font-size:11px;color:var(--sample)}
+.ribbon b{font-weight:700}
+.ribbon .sp{margin-left:auto;display:flex;gap:6px}
+
+/* 샘플 워터마크 컨테이너 */
+.sampled{position:relative;border:1px dashed var(--sample-border);border-radius:var(--radius);overflow:hidden}
+.sampled::before{content:"예시 데이터";position:absolute;right:8px;top:6px;z-index:2;
+  font-size:9.5px;font-weight:700;color:var(--sample);background:var(--sample-muted);
+  border:1px solid var(--sample-border);border-radius:5px;padding:1px 6px}
+
+/* 빈 상태 */
+.empty{text-align:center;padding:26px 16px}
+.empty .ico{width:38px;height:38px;border-radius:50%;background:var(--muted);margin:0 auto 10px;
+  display:grid;place-items:center;font-size:17px}
+.empty h4{font-size:13px;font-weight:600;margin-bottom:4px}
+.empty p{font-size:11.5px;color:var(--muted-foreground);max-width:420px;margin:0 auto}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:560px;margin:14px auto 0;text-align:left}
+.step{border:1px solid var(--border);border-radius:8px;padding:9px 10px;background:var(--card)}
+.step .n{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;
+  background:var(--brand);color:#fff;font-size:9px;font-weight:700;margin-bottom:5px}
+.step .h{font-size:11px;font-weight:600;margin-bottom:2px}
+.step .d{font-size:10.5px;color:var(--muted-foreground);line-height:1.45}
+.empty .cta{margin-top:14px;display:flex;gap:7px;justify-content:center;flex-wrap:wrap}
+
+/* 타일 */
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+.tile{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px}
+.tile .l{font-size:10.5px;color:var(--muted-foreground)}
+.tile .v{font-size:19px;font-weight:700;letter-spacing:-.02em;margin-top:2px}
+.tile .f{font-size:10px;color:var(--muted-foreground);margin-top:2px}
+.ring{width:48px;height:48px;border-radius:50%;position:relative;flex:0 0 auto;
+  background:conic-gradient(var(--hit) 0 62%,var(--muted) 62% 100%)}
+.ring.zero{background:var(--muted)}
+.ring::after{content:"";position:absolute;inset:6px;border-radius:50%;background:var(--card)}
+.ring span{position:absolute;inset:0;display:grid;place-items:center;z-index:1;font-size:12px;font-weight:700}
+
+/* 행 */
+.row{display:flex;align-items:center;gap:9px;padding:8px 12px;border-top:1px solid var(--border)}
+.row:first-child{border-top:none}
+.seal{width:40px;height:40px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;
+  border:1.5px dashed currentColor;text-align:center;line-height:1.05;font-size:8.5px;font-weight:800;
+  transform:rotate(-9deg);opacity:.85}
+.seal small{display:block;font-size:7.5px;font-weight:600;opacity:.8}
+.seal.hit{color:var(--hit)}.seal.due{color:var(--warn);border-style:solid}
+.seal.pend{color:var(--muted-foreground);border-style:dotted}
+
+/* 문구 표 */
+table.copy{width:100%;border-collapse:collapse;font-size:11.5px}
+table.copy th{text-align:left;font-weight:600;color:var(--muted-foreground);font-size:10.5px;
+  padding:6px 8px;border-bottom:1px solid var(--border)}
+table.copy td{padding:8px;border-bottom:1px solid var(--border);vertical-align:top}
+table.copy td.menu{white-space:nowrap;font-weight:600;width:110px}
+table.copy td.before{color:var(--muted-foreground);width:38%}
+table.copy td.after{color:var(--foreground)}
+.strike{text-decoration:line-through;opacity:.6}
+
+/* 모달 */
+.modal{border:1px solid var(--border);border-radius:12px;background:var(--card);
+  box-shadow:0 12px 32px rgba(0,0,0,.14);overflow:hidden;max-width:520px}
+[data-theme="dark"] .modal{box-shadow:0 12px 32px rgba(0,0,0,.5)}
+.modal .mh{padding:12px 14px;border-bottom:1px solid var(--border)}
+.modal .mb{padding:12px 14px;display:grid;gap:10px}
+.modal .mf{padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:7px;align-items:center}
+
+.pros{font-size:10.5px;margin-top:10px;padding-top:8px;border-top:1px solid var(--border)}
+.pros li{list-style:none;padding-left:13px;position:relative;margin-top:2px;color:var(--muted-foreground)}
+.pros li::before{position:absolute;left:0;font-weight:700}
+.pros li.p::before{content:"+";color:var(--hit)}
+.pros li.c::before{content:"−";color:var(--warn)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div>
+    <h1>빈 화면 · 샘플 데이터 — 선택용 목업 v1</h1>
+    <p class="sub">대상: <b>내 투자</b> 5개 메뉴 (내 포트폴리오 · 관심 종목 · 스탬프 · 메모장 · 목표가 관리)</p>
+  </div>
+  <button class="tgl" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">🌗 라이트/다크</button>
+</div>
+
+<!-- ===================================================== 0. 지금 상태 -->
+<section class="opt" style="border-top:none;padding-top:0">
+  <div class="opt-head"><span class="tag" style="background:var(--muted-foreground)">현재</span><h2>지금 무엇이 문제인가</h2></div>
+  <p class="note">
+    첨부하신 화면입니다. 카드 <b>여덟 개가 전부 "없습니다"</b>를 말하고 있고, 이 메뉴가 무엇을 해주는 곳인지는
+    제목 아래 한 줄이 전부입니다. 게다가 화면이 답해야 할 상태가 <b>세 가지</b>인데 지금은 취급이 제각각입니다 —
+    ① 비로그인 ② 로그인했지만 0건(첨부 화면) ③ 데이터 있음. 특히 <b>스탬프만 <code>AuthRequiredShell</code> 밖에 있어</b>
+    비로그인 시 "스탬프를 불러오지 못했습니다"라는 에러가 뜹니다.
+  </p>
+  <div class="shell" style="max-width:660px">
+    <div class="pagehead">
+      <div><div class="t">스탬프</div><div class="s">지금 이 순간의 판단과 예상 주가를 그대로 저장하고, 기간이 지난 뒤 채점합니다</div></div>
+    </div>
+    <div class="body">
+      <div class="tiles">
+        <div class="tile"><div style="display:flex;gap:10px;align-items:center">
+          <div class="ring zero"><span>—</span></div>
+          <div><div class="l">적중률</div><div class="f">판정 0건 중 0건 적중</div></div>
+        </div></div>
+        <div class="tile"><div class="l">평균 알파</div><div class="v">—</div><div class="f">판정된 스탬프가 쌓이면 계산됩니다</div></div>
+        <div class="tile"><div class="l">개봉 대기</div><div class="v">0건</div><div class="f">검증이 끝난 스탬프가 없습니다</div></div>
+        <div class="tile"><div class="l">스탬프</div><div class="v">0건</div><div class="f">0개 종목 · 마지막 —</div></div>
+      </div>
+      <div class="card"><div class="empty" style="padding:20px">
+        <div class="ico">🔖</div>
+        <p>아직 찍은 스탬프가 없습니다. 종목 화면의 도장 버튼으로 지금 이 순간의 예상 주가를 저장해보세요.</p>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================== A. 진입 방식 -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">A</span><h2>샘플을 어떻게 보여줄까 — 진입 방식</h2></div>
+  <p class="note">
+    <code>PageHeader</code>에 이미 <code>actions</code> 슬롯이 있고 주석에 "페이지 단위 동작은 본문이 아니라
+    여기에 넣는다(UI_SPEC §7)"라고 적혀 있습니다. 말씀하신 <b>우측 상단이 정확히 그 자리</b>라 셋 다 버튼 위치는 같고,
+    <b>누른 뒤에 무슨 일이 일어나는지</b>가 다릅니다.
+  </p>
+
+  <div class="cols c3">
+
+    <div>
+      <h3 style="margin-bottom:7px">A-1. 화면을 그대로 샘플로 채운다 <span class="badge s">추천</span></h3>
+      <div class="shell">
+        <div class="pagehead">
+          <div><div class="t">스탬프</div><div class="s">예상 주가를 적어두고 기간이 지나면 채점합니다</div></div>
+          <div class="actions"><button class="btn on">👁 샘플 끄기</button></div>
+        </div>
+        <div class="body">
+          <div class="ribbon">
+            <span>👁</span>
+            <span><b>예시 데이터를 보고 있습니다</b> — 내 기록이 아닙니다</span>
+            <span class="sp"><button class="btn" style="padding:3px 8px;font-size:10px">끄기</button></span>
+          </div>
+          <div class="sampled">
+            <div class="tiles" style="padding:9px">
+              <div class="tile"><div style="display:flex;gap:9px;align-items:center">
+                <div class="ring"><span>62%</span></div>
+                <div><div class="l">적중률</div><div class="f">판정 34건 중 21건</div></div>
+              </div></div>
+              <div class="tile"><div class="l">평균 알파</div><div class="v up">+2.4%</div><div class="f">벤치 +1.4%</div></div>
+              <div class="tile"><div class="l">개봉 대기</div><div class="v" style="color:var(--warn)">5건</div><div class="f">가장 오래된 것 12일</div></div>
+              <div class="tile"><div class="l">스탬프</div><div class="v">48<span class="dim" style="font-size:12px;font-weight:500">건</span></div><div class="f">19개 종목</div></div>
+            </div>
+            <div style="border-top:1px solid var(--border)">
+              <div class="row">
+                <span class="seal hit">적중<small>오차 0.9%</small></span>
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;gap:5px;align-items:center"><span class="av">삼성</span><b style="font-size:11.5px">삼성전자</b><span class="badge up">강세</span></div>
+                  <div class="dim mono" style="font-size:10px">74,200 → 81,300 <span class="up">+9.6%</span> · 목표 82,000</div>
+                </div>
+              </div>
+              <div class="row">
+                <span class="seal due">개봉<small>오늘</small></span>
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;gap:5px;align-items:center"><span class="av">NV</span><b style="font-size:11.5px">NVIDIA</b><span class="badge up">강세</span></div>
+                  <div class="dim mono" style="font-size:10px">$178.20 → $171.40 <span class="down">-3.8%</span> · 목표 $210</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="pros">
+        <li class="p">배운 것이 <b>그대로 전이된다</b> — 진짜 화면이라 위치·용어가 같다</li>
+        <li class="p">레일 카드·모달까지 전부 채워져 기능 전체가 보인다</li>
+        <li class="p">구현이 가장 단순하다 (데이터만 갈아끼움)</li>
+        <li class="c">내 데이터로 착각할 위험 → 띠·점선·배지로 막아야 한다</li>
+      </ul>
+    </div>
+
+    <div>
+      <h3 style="margin-bottom:7px">A-2. 모달로 미리보기</h3>
+      <div class="shell">
+        <div class="pagehead">
+          <div><div class="t">스탬프</div><div class="s">예상 주가를 적어두고 기간이 지나면 채점합니다</div></div>
+          <div class="actions"><button class="btn sample">👁 예시 보기</button></div>
+        </div>
+        <div class="body" style="padding:10px">
+          <div class="modal">
+            <div class="mh">
+              <b style="font-size:13px">스탬프는 이렇게 쌓입니다</b>
+              <div class="dim" style="font-size:10.5px;margin-top:2px">아래는 설명을 위한 예시입니다</div>
+            </div>
+            <div class="mb">
+              <div class="sampled" style="border-style:solid">
+                <div class="row" style="padding:7px 10px">
+                  <span class="seal hit" style="width:34px;height:34px;font-size:7.5px">적중<small>0.9%</small></span>
+                  <div style="flex:1;min-width:0">
+                    <b style="font-size:11px">삼성전자</b>
+                    <div class="dim mono" style="font-size:10px">74,200 → 81,300 · 목표 82,000</div>
+                  </div>
+                </div>
+              </div>
+              <div class="dim" style="font-size:10.5px">① 종목 화면에서 예상 주가와 기간을 적어 도장을 찍고 ② 기간이 지나면 적중·빗나감이 자동으로 매겨지며 ③ 적중률과 목표가 오차가 성적표에 쌓입니다.</div>
+            </div>
+            <div class="mf"><button class="btn ghost">닫기</button><button class="btn primary" style="margin-left:auto">종목 찾아보기 →</button></div>
+          </div>
+        </div>
+      </div>
+      <ul class="pros">
+        <li class="p">내 데이터와 섞일 위험이 <b>0</b></li>
+        <li class="p">설명 문장을 옆에 붙이기 좋다</li>
+        <li class="c">모달은 좁아 레일·성적표까지 못 보여준다 — 화면의 절반만 전달</li>
+        <li class="c">화면마다 축소판을 따로 만들어야 한다(유지보수 2벌)</li>
+      </ul>
+    </div>
+
+    <div>
+      <h3 style="margin-bottom:7px">A-3. 빈 상태 카드 안에서만</h3>
+      <div class="shell">
+        <div class="pagehead">
+          <div><div class="t">스탬프</div><div class="s">예상 주가를 적어두고 기간이 지나면 채점합니다</div></div>
+        </div>
+        <div class="body">
+          <div class="card"><div class="empty">
+            <div class="ico">🔖</div>
+            <h4>아직 찍은 스탬프가 없습니다</h4>
+            <p>종목 화면의 도장 버튼으로 예상 주가와 검증 기간을 적어두면, 기간이 지난 뒤 적중 여부가 자동으로 매겨집니다.</p>
+            <div class="cta">
+              <button class="btn sample">👁 예시로 둘러보기</button>
+              <button class="btn primary">종목 찾아보기 →</button>
+            </div>
+          </div></div>
+        </div>
+      </div>
+      <ul class="pros">
+        <li class="p">헤더가 깨끗하다 — 데이터 있는 사람에게는 아예 안 보인다</li>
+        <li class="c">이미 데이터가 조금 있는 사람은 <b>영영 못 본다</b> (스탬프 1건만 있어도 사라짐)</li>
+        <li class="c">첨부 화면처럼 타일·레일은 여전히 "0건"인 채로 남는다</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================== B. 샘플 표시 -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">B</span><h2>"이건 예시다"를 어떻게 알릴까 <span class="dim" style="font-size:12px;font-weight:400">— A-1 선택 시</span></h2></div>
+  <p class="note">
+    남의 포트폴리오를 내 것으로 착각하는 것이 이 방식의 유일한 위험입니다. 뉴스 화면에서 이미 쓰는 원칙
+    (<code>news-login-gate.tsx</code>: 흐림 처리 대신 진짜로 동작시키되 <b>예시임을 분명히 적는다</b>)을 그대로 잇습니다.
+  </p>
+  <div class="cols c3">
+    <div>
+      <h3 style="margin-bottom:7px">B-1. 상단 띠만</h3>
+      <div class="ribbon"><span>👁</span><span><b>예시 데이터를 보고 있습니다</b> — 내 기록이 아닙니다</span>
+        <span class="sp"><button class="btn" style="padding:3px 8px;font-size:10px">끄기</button></span></div>
+      <div class="card" style="margin-top:8px">
+        <div class="row"><span class="av">삼성</span><div style="flex:1"><b style="font-size:11.5px">삼성전자</b>
+          <div class="dim mono" style="font-size:10px">74,200 → 81,300 <span class="up">+9.6%</span></div></div></div>
+      </div>
+      <ul class="pros"><li class="p">가장 조용하다</li><li class="c">스크롤을 내리면 띠가 사라져 아래쪽에서 잊힌다</li></ul>
+    </div>
+    <div>
+      <h3 style="margin-bottom:7px">B-2. 카드마다 점선 + 배지</h3>
+      <div class="sampled">
+        <div class="row"><span class="av">삼성</span><div style="flex:1"><b style="font-size:11.5px">삼성전자</b>
+          <div class="dim mono" style="font-size:10px">74,200 → 81,300 <span class="up">+9.6%</span></div></div></div>
+      </div>
+      <div class="sampled" style="margin-top:8px">
+        <div style="padding:9px"><div class="l dim" style="font-size:10.5px">적중률</div>
+          <div style="font-size:17px;font-weight:700">62%</div></div>
+      </div>
+      <ul class="pros"><li class="p">어디를 봐도 예시임이 보인다</li><li class="c">점선·배지가 많아지면 화면이 시끄럽다</li></ul>
+    </div>
+    <div>
+      <h3 style="margin-bottom:7px">B-3. 띠 + 점선 둘 다 <span class="badge s">추천</span></h3>
+      <div class="ribbon"><span>👁</span><span><b>예시 데이터를 보고 있습니다</b></span>
+        <span class="sp"><button class="btn" style="padding:3px 8px;font-size:10px">끄기</button></span></div>
+      <div class="sampled" style="margin-top:8px">
+        <div class="row"><span class="av">삼성</span><div style="flex:1"><b style="font-size:11.5px">삼성전자</b>
+          <div class="dim mono" style="font-size:10px">74,200 → 81,300 <span class="up">+9.6%</span></div></div></div>
+      </div>
+      <ul class="pros">
+        <li class="p">첫 진입에는 띠가, 스크롤 뒤에는 점선이 맡는다</li>
+        <li class="p">보라색은 이 앱에서 <b>상승·하락 어느 쪽도 아닌 색</b>이라 시세와 안 헷갈린다</li>
+        <li class="c">요소가 둘</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================== C. 버튼 노출 -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">C</span><h2>버튼을 언제 보여줄까</h2></div>
+  <div class="cols c3">
+    <div class="card" style="padding:11px">
+      <h3>C-1. 0건일 때만</h3>
+      <p class="note" style="margin:6px 0 0">데이터가 하나라도 생기면 사라진다. 헤더가 가장 깨끗하지만, <b>스탬프 1건짜리 사용자</b>는 나머지 기능을 영영 못 본다.</p>
+    </div>
+    <div class="card" style="padding:11px">
+      <h3>C-2. 항상</h3>
+      <p class="note" style="margin:6px 0 0">언제든 되돌아와 볼 수 있다. 다만 데이터가 가득 찬 사용자의 헤더에도 계속 남아 자리를 먹는다.</p>
+    </div>
+    <div class="card" style="padding:11px;border-color:var(--sample-border)">
+      <h3>C-3. 0건이면 강조, 있으면 약하게 <span class="badge s">추천</span></h3>
+      <div style="display:flex;gap:7px;margin:8px 0 6px;align-items:center">
+        <button class="btn sample">👁 예시로 둘러보기</button>
+        <span class="dim" style="font-size:10px">0건</span>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center">
+        <button class="btn ghost">👁 예시</button>
+        <span class="dim" style="font-size:10px">데이터 있음</span>
+      </div>
+      <p class="note" style="margin:8px 0 0">필요한 사람에게는 눈에 띄고, 필요 없어진 사람에게는 물러난다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================== D. 빈 상태 -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">D</span><h2>빈 상태 자체를 다시 쓴다</h2></div>
+  <p class="note">
+    샘플 버튼과 별개로, 첨부 화면의 <b>"없습니다" 여덟 번</b>을 줄여야 합니다. 타일·레일이 0을 반복하는 대신
+    <b>한 장의 안내 카드</b>가 화면을 대신 채우고, 타일은 그 아래에서 접힙니다.
+  </p>
+  <div class="cols c2">
+    <div>
+      <h3 style="margin-bottom:7px">D-1. 안내 카드 + 3단계 + 두 버튼 <span class="badge s">추천</span></h3>
+      <div class="shell">
+        <div class="pagehead">
+          <div><div class="t">스탬프</div><div class="s">예상 주가를 적어두고 기간이 지나면 채점합니다</div></div>
+          <div class="actions"><button class="btn sample">👁 예시로 둘러보기</button></div>
+        </div>
+        <div class="body">
+          <div class="card"><div class="empty">
+            <div class="ico">🔖</div>
+            <h4>지금 생각을 적어두면, 나중에 맞았는지 알려줍니다</h4>
+            <p>종목을 볼 때마다 "오를 것 같다"는 생각은 들지만 그게 맞았는지는 잘 남지 않습니다. 스탬프는 그 순간을 예상 주가와 함께 봉인해 두었다가 기간이 지나면 대신 채점해 줍니다.</p>
+            <div class="steps">
+              <div class="step"><div class="n">1</div><div class="h">도장을 찍는다</div>
+                <div class="d">종목 화면에서 예상 주가와 검증 기간(이번 장 종료 · 1주 · 1개월 …)을 적습니다</div></div>
+              <div class="step"><div class="n">2</div><div class="h">그대로 봉인된다</div>
+                <div class="d">그때의 시세·점수·뉴스가 함께 저장되고 이후 수정할 수 없습니다</div></div>
+              <div class="step"><div class="n">3</div><div class="h">기간이 지나면 채점</div>
+                <div class="d">적중·빗나감과 목표가 오차, 벤치마크 대비 알파가 성적표에 쌓입니다</div></div>
+            </div>
+            <div class="cta">
+              <button class="btn primary">종목 찾아보기 →</button>
+              <button class="btn sample">👁 예시로 둘러보기</button>
+            </div>
+          </div></div>
+          <div class="dim" style="font-size:10.5px;text-align:center">성적 요약과 레일 카드는 첫 스탬프를 찍으면 나타납니다</div>
+        </div>
+      </div>
+      <ul class="pros">
+        <li class="p">"없습니다" 8번 → <b>0번</b>. 0으로 채운 타일을 아예 안 그린다</li>
+        <li class="p">3단계가 스탬프의 전체 흐름을 문장으로 설명한다</li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="margin-bottom:7px">D-2. 현행 유지 + 버튼만 추가</h3>
+      <div class="shell">
+        <div class="pagehead">
+          <div><div class="t">스탬프</div><div class="s">예상 주가를 적어두고 기간이 지나면 채점합니다</div></div>
+          <div class="actions"><button class="btn sample">👁 예시로 둘러보기</button></div>
+        </div>
+        <div class="body">
+          <div class="tiles">
+            <div class="tile"><div class="l">적중률</div><div class="v">—</div><div class="f">판정 0건</div></div>
+            <div class="tile"><div class="l">평균 알파</div><div class="v">—</div><div class="f">—</div></div>
+            <div class="tile"><div class="l">개봉 대기</div><div class="v">0건</div><div class="f">—</div></div>
+            <div class="tile"><div class="l">스탬프</div><div class="v">0건</div><div class="f">0개 종목</div></div>
+          </div>
+          <div class="card"><div class="empty" style="padding:18px">
+            <div class="ico">🔖</div>
+            <p>아직 찍은 스탬프가 없습니다.</p>
+          </div></div>
+        </div>
+      </div>
+      <ul class="pros">
+        <li class="p">변경 폭이 가장 작다</li>
+        <li class="c">첨부하신 화면의 "0건 벽"이 그대로 남는다</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================== E. 문구 -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">E</span><h2>메뉴 한 줄 설명 보완</h2></div>
+  <p class="note">
+    지금 다섯 중 넷이 <b>기능 나열</b>입니다(<code>손익 · 구성 · 매매 이력</code>). 목적 문장인 건 스탬프뿐이고,
+    그래서 그걸 예시로 드신 것 같습니다. <b>"무엇을 해주는 곳인가"</b>를 한 문장으로 바꾼 안입니다.
+  </p>
+  <div class="card" style="overflow-x:auto">
+    <table class="copy">
+      <tr><th>메뉴</th><th>지금</th><th>제안</th></tr>
+      <tr>
+        <td class="menu">내 포트폴리오</td>
+        <td class="before"><span class="strike">손익 · 구성 · 매매 이력</span></td>
+        <td class="after">보유 종목의 손익과 비중을 한 곳에 모으고, 매매 이력으로 자산이 어떻게 움직여 왔는지 되짚습니다</td>
+      </tr>
+      <tr>
+        <td class="menu">관심 종목</td>
+        <td class="before"><span class="strike">점수 · 52주 위치 · 기간 등락 · 담은 뒤 성과 · 실시간 시세</span></td>
+        <td class="after">사고 싶은 종목을 담아두고, <b>담은 뒤로 얼마나 움직였는지</b>를 점수·52주 위치와 함께 지켜봅니다</td>
+      </tr>
+      <tr>
+        <td class="menu">스탬프</td>
+        <td class="before">지금 이 순간의 판단과 예상 주가를 그대로 저장하고, 기간이 지난 뒤 채점합니다</td>
+        <td class="after">지금 생각한 예상 주가를 그 순간의 시세·뉴스와 함께 봉인하고, 기간이 지나면 맞았는지 채점합니다</td>
+      </tr>
+      <tr>
+        <td class="menu">메모장</td>
+        <td class="before"><span class="strike">종목에 연동해 남기는 투자 메모</span></td>
+        <td class="after">왜 샀는지·무엇을 지켜볼지를 종목에 붙여 적어두고, 그 종목을 다시 볼 때 꺼내 봅니다</td>
+      </tr>
+      <tr>
+        <td class="menu">목표가 관리</td>
+        <td class="before"><span class="strike">종목별 목표가 · 현재가 대비 남은 거리</span></td>
+        <td class="after">팔거나 살 가격을 미리 정해두고, 현재가가 거기까지 얼마나 남았는지 한눈에 봅니다</td>
+      </tr>
+    </table>
+  </div>
+  <p class="note" style="margin-top:10px">
+    ※ 관심 종목의 기존 문구는 <b>다섯 항목 나열</b>이라 좁은 화면에서 두 줄로 접힙니다. 제안 문구는 한 문장이라
+    같은 폭에서 더 짧습니다.
+  </p>
+</section>
+
+<!-- ===================================================== F. 비로그인 -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">F</span><h2>비로그인은 어떻게 할까</h2></div>
+  <p class="note">
+    지금은 네 화면이 <code>AuthRequiredShell</code>로 <b>로그인 패널만</b> 띄우고, <b>스탬프는 그 밖에 있어</b>
+    "불러오지 못했습니다" 에러가 뜹니다. 우선 스탬프를 같은 껍데기 안에 넣어 셋을 맞춰야 합니다.
+  </p>
+  <div class="cols c2">
+    <div>
+      <h3 style="margin-bottom:7px">F-1. 로그인 패널 + 샘플 버튼 <span class="badge s">추천</span></h3>
+      <div class="shell">
+        <div class="pagehead">
+          <div><div class="t">스탬프</div><div class="s">예상 주가를 적어두고 기간이 지나면 채점합니다</div></div>
+          <div class="actions"><button class="btn sample">👁 예시로 둘러보기</button></div>
+        </div>
+        <div class="body">
+          <div class="card" style="border-color:rgba(217,119,6,.3);background:var(--warn-muted);padding:14px">
+            <b style="font-size:12.5px">로그인 후 이용할 수 있는 기능입니다</b>
+            <p class="dim" style="font-size:11px;margin-top:4px">스탬프는 내 계정에 저장됩니다. 어떤 화면인지 먼저 보고 싶다면 오른쪽 위 <b>예시로 둘러보기</b>를 눌러보세요.</p>
+            <div style="display:flex;gap:6px;margin-top:9px"><button class="btn primary">로그인</button><button class="btn">회원가입</button></div>
+          </div>
+        </div>
+      </div>
+      <ul class="pros"><li class="p">막지 않고 <b>먼저 보여준 뒤</b> 권한다 — 뉴스 화면에서 쓴 원칙과 같다</li></ul>
+    </div>
+    <div>
+      <h3 style="margin-bottom:7px">F-2. 비로그인은 바로 샘플 화면</h3>
+      <div class="shell">
+        <div class="pagehead">
+          <div><div class="t">스탬프</div><div class="s">예상 주가를 적어두고 기간이 지나면 채점합니다</div></div>
+          <div class="actions"><button class="btn primary">로그인하고 시작</button></div>
+        </div>
+        <div class="body">
+          <div class="ribbon"><span>👁</span><span><b>예시 데이터입니다</b> — 로그인하면 내 기록이 쌓입니다</span>
+            <span class="sp"><button class="btn primary" style="padding:3px 8px;font-size:10px">로그인</button></span></div>
+          <div class="sampled">
+            <div class="row"><span class="seal hit">적중<small>0.9%</small></span>
+              <div style="flex:1"><b style="font-size:11.5px">삼성전자</b>
+                <div class="dim mono" style="font-size:10px">74,200 → 81,300 <span class="up">+9.6%</span></div></div></div>
+          </div>
+        </div>
+      </div>
+      <ul class="pros">
+        <li class="p">클릭 없이 바로 기능이 보인다</li>
+        <li class="c">로그인 안 한 걸 모르고 "내 데이터가 왜 이러지?"가 될 수 있다</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================== G. 샘플 데이터 -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">G</span><h2>샘플 데이터는 어디서 오나</h2></div>
+  <div class="cols c2">
+    <div class="card" style="padding:11px;border-color:var(--sample-border)">
+      <h3>G-1. FE 고정 상수 <span class="badge s">추천</span></h3>
+      <p class="note" style="margin:6px 0 0">
+        <code>lib/sample-data/*.ts</code>에 메뉴별로 한 벌씩 박아 둔다. 서버 요청 0회, 오프라인에서도 뜨고,
+        <b>매번 같은 화면</b>이라 설명 문장이 데이터와 어긋나지 않는다. 가격은 실제 종목명을 쓰되 값은
+        고정이므로 "예시"임이 분명하다.
+      </p>
+    </div>
+    <div class="card" style="padding:11px">
+      <h3>G-2. 실시간 시세를 섞는다</h3>
+      <p class="note" style="margin:6px 0 0">
+        종목은 고정하되 현재가만 실시간으로 채운다. 더 진짜 같지만 <b>요청이 늘고</b>, 장 마감·휴장일에 값이
+        비면 예시 화면이 깨진다. 무엇보다 "적중률 62%" 같은 숫자는 어차피 지어낸 값이라 절반만 진짜가 된다.
+      </p>
+    </div>
+  </div>
+  <p class="note" style="margin-top:12px">
+    샘플 한 벌의 분량은 메뉴마다 <b>3~6행 + 요약 숫자</b>면 충분합니다 — 화면의 모든 상태(적중·빗나감·검증 중,
+    수익·손실)가 한 번씩 나오도록 고르는 것이 개수보다 중요합니다.
+  </p>
+</section>
+
+</div>
+</body>
+</html>

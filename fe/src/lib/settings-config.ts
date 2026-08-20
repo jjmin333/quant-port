@@ -1,31 +1,26 @@
 import type { ColorMode } from "@/lib/preferences";
-import { isTradeSettingsVisible } from "@/lib/account-features";
 
 export const COLOR_MODE_OPTIONS: Array<{
   value: ColorMode;
   label: string;
   preview: { bg: string; surface: string; accent: string };
 }> = [
+  // 미리보기 색은 globals.css의 실제 토큰 값과 같아야 한다. 여기만 낡으면
+  // 설정 화면의 카드와 실제 화면 색이 어긋난다.
   {
     value: "light",
     label: "라이트",
-    preview: { bg: "#F1F5F9", surface: "#FFFFFF", accent: "#2563EB" },
+    preview: { bg: "#FFFFFF", surface: "#FFFFFF", accent: "#2563EB" },
   },
   {
     value: "dark",
     label: "다크",
-    preview: { bg: "#000000", surface: "#0A0A0A", accent: "#60A5FA" },
-  },
-  {
-    value: "midnight",
-    label: "미드나잇",
-    preview: { bg: "#0B0F17", surface: "#111827", accent: "#3B82F6" },
+    preview: { bg: "#252525", surface: "#343434", accent: "#60A5FA" },
   },
 ];
 
 export const SETTINGS_NAV = [
   { id: "general", label: "일반" },
-  ...(isTradeSettingsVisible() ? [{ id: "trade" as const, label: "거래" }] : []),
   { id: "notification", label: "알림" },
   { id: "community", label: "커뮤니티" },
   { id: "shortcuts", label: "단축키" },

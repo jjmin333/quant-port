@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>홈 지수 스트립 — 가로 배열 선택용 목업 v4</title>
+<style>
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.97 0 0); --foreground: oklch(0.145 0 0); --card: oklch(1 0 0);
+  --muted: oklch(0.97 0 0); --muted-foreground: oklch(0.52 0 0); --accent: oklch(0.93 0 0);
+  --border: oklch(0.87 0 0); --brand: #2563EB; --brand-muted: rgba(37,99,235,.1);
+  --profit: #DC2626; --loss: #2563EB; --hit: #059669; --hit-muted: rgba(5,150,105,.12);
+  --miss: #B45309; --warn: #D97706; --sample: #7C3AED;
+  --score-high: #059669; --score-mid: #D97706; --score-low: #DC2626;
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0); --foreground: oklch(0.985 0 0); --card: oklch(0.205 0 0);
+  --muted: oklch(0.269 0 0); --muted-foreground: oklch(0.708 0 0); --accent: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 16%); --brand: #60A5FA; --brand-muted: rgba(96,165,250,.15);
+  --profit: #F87171; --loss: #60A5FA; --hit: #34D399; --hit-muted: rgba(52,211,153,.14);
+  --miss: #FBBF24; --warn: #FBBF24; --sample: #A78BFA;
+  --score-high: #34D399; --score-mid: #FBBF24; --score-low: #F87171;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--background); color: var(--foreground); font-size: 12px; line-height: 1.5;
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  padding: 24px; -webkit-font-smoothing: antialiased; }
+h1 { font-size: 19px; letter-spacing: -.02em; } h2 { font-size: 13.5px; } h3 { font-size: 12.5px; }
+.wrap { max-width: 1400px; margin: 0 auto; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.mut { color: var(--muted-foreground); } .up { color: var(--profit); } .dn { color: var(--loss); }
+.sm { font-size: 10.5px; } .xs { font-size: 9.5px; }
+.topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: color-mix(in oklch, var(--background) 88%, transparent); backdrop-filter: blur(8px);
+  padding: 10px 0 12px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
+.lede { font-size: 11.5px; color: var(--muted-foreground); max-width: 88ch; line-height: 1.75; }
+.lede b { color: var(--foreground); font-weight: 600; }
+section { margin-top: 26px; }
+.shead { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; margin-bottom: 4px; }
+.tag { font-size: 10px; font-weight: 700; letter-spacing: .04em; padding: 2px 7px; border-radius: 5px;
+  background: var(--brand-muted); color: var(--brand); }
+.why { font-size: 11px; color: var(--muted-foreground); line-height: 1.7; margin-bottom: 10px; max-width: 94ch; }
+.why b { color: var(--foreground); font-weight: 600; }
+.opt { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); overflow: hidden; margin-top: 14px; }
+.opt > header { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--muted) 55%, transparent); }
+.opt > header .id { font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 5px; background: var(--foreground); color: var(--card); }
+.opt > .pad { padding: 12px; background: var(--background); }
+.opt .note { padding: 8px 12px; border-top: 1px solid var(--border); font-size: 10.5px; color: var(--muted-foreground); line-height: 1.75; }
+.pros li { list-style: none; padding-left: 14px; position: relative; margin-top: 3px; }
+.pros li::before { position: absolute; left: 0; }
+.pros li.p::before { content: "+"; color: var(--hit); font-weight: 700; }
+.pros li.c::before { content: "−"; color: var(--miss); font-weight: 700; }
+.badge { display: inline-flex; align-items: center; font-size: 9.5px; font-weight: 700; padding: 1px 5px;
+  border-radius: 999px; border: 1px solid var(--border); white-space: nowrap; }
+.s-high { color: var(--score-high); border-color: color-mix(in srgb, var(--score-high) 40%, transparent); }
+.s-mid { color: var(--score-mid); border-color: color-mix(in srgb, var(--score-mid) 40%, transparent); }
+.s-low { color: var(--score-low); border-color: color-mix(in srgb, var(--score-low) 40%, transparent); }
+.dot { width: 6px; height: 6px; border-radius: 999px; display: inline-block; }
+.dot.live { background: var(--hit); box-shadow: 0 0 0 3px var(--hit-muted); }
+.dot.closed { background: var(--muted-foreground); }
+
+/* 스트립 공통 */
+.striphead { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 7px; }
+.striphead .st { display: flex; align-items: center; gap: 5px; font-size: 11px; }
+.cell { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--card); cursor: pointer; min-width: 0; }
+.cell:hover { border-color: var(--brand); }
+.cell .txt { min-width: 0; flex: 1 1 auto; }
+.cell .nm { display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--muted-foreground); }
+.cell .nm b { font-weight: 500; color: var(--foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell .v { font-size: 14px; font-weight: 700; letter-spacing: -.02em; margin-top: 1px; }
+.cell .c { font-size: 10.5px; }
+.spk { width: 52px; height: 30px; flex: 0 0 auto; }
+.spk.w { width: 64px; height: 34px; }
+.spk svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.nospk { width: 52px; flex: 0 0 auto; display: grid; place-items: center; font-size: 9px; color: var(--muted-foreground); }
+
+.scroller { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; }
+.scroller > .cell { flex: 0 0 200px; }
+.fade { position: relative; }
+.fade::after { content: ""; position: absolute; right: 0; top: 0; bottom: 6px; width: 40px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--background)); }
+
+.grid6 { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 8px; }
+
+/* 얇은 티커 */
+.ticker { display: flex; align-items: stretch; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--card); overflow-x: auto; }
+.ticker .t { display: flex; align-items: center; gap: 7px; padding: 8px 14px; border-right: 1px solid var(--border);
+  white-space: nowrap; cursor: pointer; }
+.ticker .t:last-child { border-right: none; }
+.ticker .t:hover { background: var(--accent); }
+.ticker .t .n { font-size: 10.5px; color: var(--muted-foreground); }
+.ticker .t .v { font-size: 12.5px; font-weight: 700; }
+.ticker .t .c { font-size: 10.5px; font-weight: 600; }
+.tspk { width: 34px; height: 16px; } .tspk svg { width: 100%; height: 100%; display: block; }
+
+.sk { display: grid; gap: 6px; }
+.sk .b { border: 1px dashed var(--border); border-radius: 8px; background: var(--card); padding: 8px 9px;
+  font-size: 10.5px; color: var(--muted-foreground); }
+.sk .b.hi { border-style: solid; border-color: var(--brand); color: var(--brand); background: var(--brand-muted); font-weight: 600; }
+.sk .g2 { display: grid; grid-template-columns: 2fr 1fr; gap: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <h1>홈 지수 스트립 — 가로 배열 선택용 목업 v4</h1>
+  <button onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'"
+    style="font:inherit;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--foreground);padding:5px 11px;border-radius:7px">라이트 / 다크</button>
+</div>
+
+<p class="lede">
+  값은 <b>08-16 실제 응답</b>입니다. 만들기 전에 걸린 제약 셋을 목업에 그대로 반영했습니다 —
+  ① <b>스파크라인이 12종 중 9종에만</b> 있습니다(원/달러·나스닥100 선물·필라델피아 반도체는 빈 배열). 모든 칸에 그래프를 깔면 <b>세 칸이 빕니다.</b>
+  ② <b>점수도 9종만</b> 있습니다(금·비트코인·원/달러 없음).
+  ③ 참고 사진의 「소비지표 부진」·「긴축 우려 완화」 같은 <b>코멘트 배지는 우리에게 없습니다</b> — 우리 <span class="mono sm">aiSummary</span>는
+  "KOSPI — 최근 5거래일 +11.5%, 20일선 위, RSI 52.4(neutral)" 형태의 서술문이라 잘라 쓰면 어색합니다.
+  그 자리에는 <b>점수+등급 배지</b>를 두고, 서술문은 <b>모달 안</b>에서 온전히 읽게 합니다.
+  전부 <b>클릭 = 지수 모달</b>이고, 그림·점수는 이미 받아 둔 값이라 <b>추가 요청 0</b>입니다.
+</p>
+
+<!-- ══════════ S1 ══════════ -->
+<section>
+  <div class="shead"><span class="tag">S1</span><h2>가로 1줄 · 스크롤</h2></div>
+  <p class="why">셀 하나에 스파크라인 + 이름 + 점수 + 값 + 등락. 12종이 <b>한 줄</b>에 있고 넘치는 만큼만 옆으로 민다. 1440px에서 약 7칸이 보인다.</p>
+
+  <div class="opt">
+    <header><span class="id">S1</span><h3>스파크라인 + 점수, 가로 스크롤</h3></header>
+    <div class="pad">
+      <div class="striphead">
+        <span class="st"><i class="dot closed"></i>국내 장 닫힘</span>
+        <span class="st"><i class="dot closed"></i>해외 장 닫힘</span>
+        <span class="xs mut" style="margin-left:auto">18:02 기준 · 옆으로 밀어 12종 전체</span>
+      </div>
+      <div class="fade"><div class="scroller">
+        <div class="cell">
+          <span class="spk"><svg viewBox="0 0 52 30" preserveAspectRatio="none"><polyline fill="none" stroke="var(--profit)" stroke-width="1.6" vector-effect="non-scaling-stroke" points="0,24 7,22 14,25 21,18 28,20 35,12 42,15 52,4"/></svg></span>
+          <span class="txt"><span class="nm"><b>KOSPI</b><span class="badge s-mid">60 B+</span></span>
+            <span class="v mono">6,977.94</span><span class="c mono up"> +2.42%</span></span>
+        </div>
+        <div class="cell">
+          <span class="spk"><svg viewBox="0 0 52 30" preserveAspectRatio="none"><polyline fill="none" stroke="var(--profit)" stroke-width="1.6" vector-effect="non-scaling-stroke" points="0,20 7,22 14,18 21,19 28,15 35,17 42,13 52,11"/></svg></span>
+          <span class="txt"><span class="nm"><b>KOSDAQ</b><span class="badge s-mid">62 B+</span></span>
+            <span class="v mono">864.65</span><span class="c mono up"> +0.38%</span></span>
+        </div>
+        <!-- 스파크라인 없는 칸: 빈 상자를 두지 않고 값을 크게 -->
+        <div class="cell">
+          <span class="txt"><span class="nm"><b>USD/KRW</b><span class="xs mut">실시간</span></span>
+            <span class="v mono" style="font-size:16px">1,420.60</span><span class="c mono mut"> 0.00%</span></span>
+        </div>
+        <div class="cell">
+          <span class="spk"><svg viewBox="0 0 52 30" preserveAspectRatio="none"><polyline fill="none" stroke="var(--loss)" stroke-width="1.6" vector-effect="non-scaling-stroke" points="0,8 7,11 14,9 21,14 28,12 35,17 42,15 52,20"/></svg></span>
+          <span class="txt"><span class="nm"><b>나스닥</b><span class="badge s-mid">61 B+</span></span>
+            <span class="v mono">26,729.16</span><span class="c mono dn"> −0.28%</span></span>
+        </div>
+        <div class="cell">
+          <span class="spk"><svg viewBox="0 0 52 30" preserveAspectRatio="none"><polyline fill="none" stroke="var(--loss)" stroke-width="1.6" vector-effect="non-scaling-stroke" points="0,10 7,9 14,13 21,11 28,15 35,14 42,18 52,17"/></svg></span>
+          <span class="txt"><span class="nm"><b>S&amp;P 500</b><span class="badge s-mid">62 B+</span></span>
+            <span class="v mono">7,785.76</span><span class="c mono dn"> −0.17%</span></span>
+        </div>
+        <div class="cell">
+          <span class="spk"><svg viewBox="0 0 52 30" preserveAspectRatio="none"><polyline fill="none" stroke="var(--loss)" stroke-width="1.6" vector-effect="non-scaling-stroke" points="0,9 7,12 14,10 21,15 28,13 35,16 42,19 52,18"/></svg></span>
+          <span class="txt"><span class="nm"><b>다우존스</b><span class="badge s-mid">59 B</span></span>
+            <span class="v mono">53,732.41</span><span class="c mono dn"> −0.20%</span></span>
+        </div>
+        <div class="cell">
+          <span class="spk"><svg viewBox="0 0 52 30" preserveAspectRatio="none"><polyline fill="none" stroke="var(--profit)" stroke-width="1.6" vector-effect="non-scaling-stroke" points="0,18 7,16 14,20 21,15 28,17 35,13 42,16 52,12"/></svg></span>
+          <span class="txt"><span class="nm"><b>VIX</b><span class="badge s-mid">48 C+</span></span>
+            <span class="v mono">14.63</span><span class="c mono up"> +0.55%</span></span>
+        </div>
+        <div class="cell">
+          <span class="txt"><span class="nm"><b>필라델피아 반도체</b><span class="badge s-mid">57 B</span></span>
+            <span class="v mono" style="font-size:16px">549.26</span><span class="c mono dn"> −0.27%</span></span>
+        </div>
+        <div class="cell">
+          <span class="spk"><svg viewBox="0 0 52 30" preserveAspectRatio="none"><polyline fill="none" stroke="var(--loss)" stroke-width="1.6" vector-effect="non-scaling-stroke" points="0,12 7,14 14,11 21,16 28,15 35,18 42,16 52,19"/></svg></span>
+          <span class="txt"><span class="nm"><b>비트코인</b></span>
+            <span class="v mono">89,198,000</span><span class="c mono dn"> −0.05%</span></span>
+        </div>
+      </div></div>
+    </div>
+    <p class="note"><ul class="pros">
+      <li class="p"><b>한 줄</b>이라 두 번째 사진의 결을 그대로 지키면서 그래프까지 들어간다</li>
+      <li class="p">셀 폭이 넉넉해 「필라델피아 반도체」 같은 <b>긴 이름이 안 잘린다</b></li>
+      <li class="c"><b>7칸만 보이고 5칸은 밀어야</b> 나온다 — "한눈에"가 절반만 지켜진다</li>
+      <li class="c">가로 스크롤은 트랙패드가 아니면 잘 안 쓰인다(스크롤바가 필요하다)</li>
+    </ul></p>
+  </div>
+</section>
+
+<!-- ══════════ S2 ══════════ -->
+<section>
+  <div class="shead"><span class="tag">S2</span><h2>가로 2줄 · 6×2</h2></div>
+  <p class="why">같은 셀을 <b>6칸씩 두 줄</b>로. 12종 전부가 <b>스크롤 없이</b> 보인다.</p>
+
+  <div class="opt">
+    <header><span class="id">S2</span><h3>12종 전부 · 스크롤 없음</h3><span class="badge" style="margin-left:auto;border-color:var(--brand);color:var(--brand)">권장</span></header>
+    <div class="pad">
+      <div class="striphead">
+        <span class="st"><i class="dot closed"></i>국내 장 닫힘</span>
+        <span class="st"><i class="dot closed"></i>해외 장 닫힘</span>
+        <span class="xs mut" style="margin-left:auto">18:02 기준</span>
+      </div>
+      <div class="grid6" style="margin-bottom:8px">
+        <div class="cell"><span class="spk"><svg viewBox="0 0 52 30" preserveAspectRatio="none"><polyline fill="none" stroke="var(--profit)" stroke-width="1.6" vector-effect="non-scaling-stroke" points="0,24 7,22 14,25 21,18 28,20 35,12 42,15 52,4"/></svg></span>
+          <span class="txt"><span class="nm"><b>KOSPI</b><span class="badge s-mid">60</span></span><span class="v mono">6,977.94</span><span class="c mono up"> +2.42%</span></span></div>
+        <div class="cell"><span class="spk"><svg viewBox="0 0 52 30" preserveAspectRatio="none"><polyline fill="none" stroke="var(--profit)" stroke-width="1.6" vector-effect="non-scaling-stroke" points="0,20 7,22 14,18 21,19 28,15 35,17 42,13 52,11"/></svg></span>
+          <span class="txt"><span class="nm"><b>KOSDAQ</b><span class="badge s-mid">62</span></span><span class="v mono">864.65</span><span class="c mono up"> +0.38%</span></span></div>
+        <div class="cell"><span class="txt"><span class="nm"><b>USD/KRW</b></span><span class="v mono" style="font-size:16px">1,420.60</span><span class="c mono mut"> 0.00%</span></span></div>
+        <div class="cell"><span class="spk"><svg viewBox="0 0 52 30" preserveAspectRatio="none"><polyline fill="none" stroke="var(--loss)" stroke-width="1.6" vector-effect="non-scaling-stroke" points="0,8 7,11 14,9 21,14 28,12 35,17 42,15 52,20"/></svg></span>
+          <span class="txt"><span class="nm"><b>나스닥</b><span class="badge s-mid">61</span></span><span class="v mono">26,729.16</span><span class="c mono dn"> −0.28%</span></span></div>
+        <div class="cell"><span class="spk"><svg viewBox="0 0 52 30" preserveAspectRatio="none"><polyline fill="none" stroke="var(--loss)" stroke-width="1.6" vector-effect="non-scaling-stroke" points="0,10 7,9 14,13 21,11 28,15 35,14 42,18 52,17"/></svg></span>
+          <span class="txt"><span class="nm"><b>S&amp;P 500</b><span class="badge s-mid">62</span></span><span class="v mono">7,785.76</span><span class="c mono dn"> −0.17%</span></span></div>
+        <div class="cell"><span class="spk"><svg viewBox="0 0 52 30" preserveAspectRatio="none"><polyline fill="none" stroke="var(--loss)" stroke-width="1.6" vector-effect="non-scaling-stroke" points="0,9 7,12 14,10 21,15 28,13 35,16 42,19 52,18"/></svg></span>
+          <span class="txt"><span class="nm"><b>다우존스</b><span class="badge s-mid">59</span></span><span class="v mono">53,732.41</span><span class="c mono dn"> −0.20%</span></span></div>
+      </div>
+      <div class="grid6">
+        <div class="cell"><span class="spk"><svg viewBox="0 0 52 30" preserveAspectRatio="none"><polyline fill="none" stroke="var(--loss)" stroke-width="1.6" vector-effect="non-scaling-stroke" points="0,11 7,10 14,14 21,12 28,16 35,15 42,18 52,17"/></svg></span>
+          <span class="txt"><span class="nm"><b>나스닥 100</b><span class="badge s-mid">60</span></span><span class="v mono">30,046.14</span><span class="c mono dn"> −0.13%</span></span></div>
+        <div class="cell"><span class="txt"><span class="nm"><b>나스닥100 선물</b><span class="badge s-mid">60</span></span><span class="v mono" style="font-size:16px">731.01</span><span class="c mono dn"> −0.14%</span></span></div>
+        <div class="cell"><span class="txt"><span class="nm"><b>필라델피아 반도체</b><span class="badge s-mid">57</span></span><span class="v mono" style="font-size:16px">549.26</span><span class="c mono dn"> −0.27%</span></span></div>
+        <div class="cell"><span class="spk"><svg viewBox="0 0 52 30" preserveAspectRatio="none"><polyline fill="none" stroke="var(--profit)" stroke-width="1.6" vector-effect="non-scaling-stroke" points="0,18 7,16 14,20 21,15 28,17 35,13 42,16 52,12"/></svg></span>
+          <span class="txt"><span class="nm"><b>VIX</b><span class="badge s-mid">48</span></span><span class="v mono">14.63</span><span class="c mono up"> +0.55%</span></span></div>
+        <div class="cell"><span class="spk"><svg viewBox="0 0 52 30" preserveAspectRatio="none"><polyline fill="none" stroke="var(--loss)" stroke-width="1.6" vector-effect="non-scaling-stroke" points="0,12 7,14 14,11 21,16 28,15 35,18 42,16 52,19"/></svg></span>
+          <span class="txt"><span class="nm"><b>비트코인</b></span><span class="v mono">89,198,000</span><span class="c mono dn"> −0.05%</span></span></div>
+        <div class="cell"><span class="spk"><svg viewBox="0 0 52 30" preserveAspectRatio="none"><polyline fill="none" stroke="var(--muted-foreground)" stroke-width="1.6" vector-effect="non-scaling-stroke" points="0,16 7,15 14,17 21,15 28,16 35,14 42,16 52,15"/></svg></span>
+          <span class="txt"><span class="nm"><b>금</b></span><span class="v mono">4,376.82</span><span class="c mono mut"> 0.00%</span></span></div>
+      </div>
+    </div>
+    <p class="note"><ul class="pros">
+      <li class="p"><b>12종 전부가 스크롤 없이</b> 보인다 — 「전체 지수」 접힘 섹션이 사실상 필요 없어진다</li>
+      <li class="p">첫 번째 사진의 밀도와 두 번째 사진의 가로 결을 <b>둘 다</b> 지킨다</li>
+      <li class="c">세로 <b>약 108px</b>을 쓴다(현재 히어로 5카드는 86px)</li>
+      <li class="c">1024px 미만에서는 3열 × 4줄로 접힌다</li>
+    </ul></p>
+  </div>
+</section>
+
+<!-- ══════════ S3 ══════════ -->
+<section>
+  <div class="shead"><span class="tag">S3</span><h2>얇은 티커 1줄</h2></div>
+  <p class="why">두 번째 사진 그대로. 이름 + 값 + 등락 + <b>점수 배지</b>만, 미니 스파크는 선택.</p>
+
+  <div class="opt">
+    <header><span class="id">S3</span><h3>가장 얇음 · 38px</h3></header>
+    <div class="pad">
+      <div class="ticker">
+        <span class="t"><span class="n">KOSPI</span><span class="v mono">6,978</span><span class="c mono up">+2.42% ▲</span><span class="badge s-mid">60</span></span>
+        <span class="t"><span class="n">KOSDAQ</span><span class="v mono">864.65</span><span class="c mono up">+0.38% ▲</span><span class="badge s-mid">62</span></span>
+        <span class="t"><span class="n">원/달러</span><span class="v mono">1,420.6</span><span class="c mono mut">0.00%</span></span>
+        <span class="t"><span class="n">나스닥</span><span class="v mono">26,729</span><span class="c mono dn">−0.28% ▼</span><span class="badge s-mid">61</span></span>
+        <span class="t"><span class="n">S&amp;P 500</span><span class="v mono">7,786</span><span class="c mono dn">−0.17% ▼</span><span class="badge s-mid">62</span></span>
+        <span class="t"><span class="n">다우존스</span><span class="v mono">53,732</span><span class="c mono dn">−0.20% ▼</span><span class="badge s-mid">59</span></span>
+        <span class="t"><span class="n">VIX</span><span class="v mono">14.63</span><span class="c mono up">+0.55% ▲</span><span class="badge s-mid">48</span></span>
+        <span class="t"><span class="n">반도체</span><span class="v mono">549.26</span><span class="c mono dn">−0.27% ▼</span><span class="badge s-mid">57</span></span>
+        <span class="t"><span class="n">비트코인</span><span class="v mono">89,198,000</span><span class="c mono dn">−0.05% ▼</span></span>
+      </div>
+      <p class="xs mut" style="margin-top:7px">미니 스파크를 넣으면 ↓ (있는 9종만, 없는 칸은 그냥 비운다)</p>
+      <div class="ticker" style="margin-top:4px">
+        <span class="t"><span class="tspk"><svg viewBox="0 0 34 16" preserveAspectRatio="none"><polyline fill="none" stroke="var(--profit)" stroke-width="1.4" vector-effect="non-scaling-stroke" points="0,13 8,11 16,12 24,7 34,2"/></svg></span><span class="n">KOSPI</span><span class="v mono">6,978</span><span class="c mono up">+2.42%</span><span class="badge s-mid">60</span></span>
+        <span class="t"><span class="tspk"><svg viewBox="0 0 34 16" preserveAspectRatio="none"><polyline fill="none" stroke="var(--profit)" stroke-width="1.4" vector-effect="non-scaling-stroke" points="0,11 8,12 16,9 24,10 34,6"/></svg></span><span class="n">KOSDAQ</span><span class="v mono">864.65</span><span class="c mono up">+0.38%</span><span class="badge s-mid">62</span></span>
+        <span class="t"><span class="n">원/달러</span><span class="v mono">1,420.6</span><span class="c mono mut">0.00%</span></span>
+        <span class="t"><span class="tspk"><svg viewBox="0 0 34 16" preserveAspectRatio="none"><polyline fill="none" stroke="var(--loss)" stroke-width="1.4" vector-effect="non-scaling-stroke" points="0,4 8,6 16,5 24,9 34,11"/></svg></span><span class="n">나스닥</span><span class="v mono">26,729</span><span class="c mono dn">−0.28%</span><span class="badge s-mid">61</span></span>
+        <span class="t"><span class="tspk"><svg viewBox="0 0 34 16" preserveAspectRatio="none"><polyline fill="none" stroke="var(--loss)" stroke-width="1.4" vector-effect="non-scaling-stroke" points="0,5 8,4 16,7 24,8 34,9"/></svg></span><span class="n">S&amp;P 500</span><span class="v mono">7,786</span><span class="c mono dn">−0.17%</span><span class="badge s-mid">62</span></span>
+        <span class="t"><span class="tspk"><svg viewBox="0 0 34 16" preserveAspectRatio="none"><polyline fill="none" stroke="var(--loss)" stroke-width="1.4" vector-effect="non-scaling-stroke" points="0,5 8,7 16,6 24,9 34,10"/></svg></span><span class="n">다우존스</span><span class="v mono">53,732</span><span class="c mono dn">−0.20%</span><span class="badge s-mid">59</span></span>
+      </div>
+    </div>
+    <p class="note"><ul class="pros">
+      <li class="p">세로를 <b>거의 안 쓴다</b>(38px) — 브리핑과 본문이 첫 화면에 넉넉히 들어온다</li>
+      <li class="c">그래프가 <b>34px</b>짜리라 흐름이 아니라 장식에 가깝다</li>
+      <li class="c">1440px에 9칸까지, 나머지는 역시 <b>가로 스크롤</b></li>
+    </ul></p>
+  </div>
+</section>
+
+<!-- ══════════ 레이아웃 영향 ══════════ -->
+<section>
+  <div class="shead"><span class="tag">함께 결정</span><h2>지수가 가로로 나가면 브리핑 자리가 바뀝니다</h2></div>
+  <p class="why">
+    지금 배치(L3)는 <b>좌측 브리핑 · 우측 세로 지수 5종</b>입니다. 지수가 전폭 가로 스트립이 되면 <b>우측 레일이 비어</b>
+    그 자리를 무엇으로 채울지 함께 정해야 합니다.
+  </p>
+  <div style="display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr))">
+    <div class="opt" style="margin:0">
+      <header><span class="id">P1</span><h3>브리핑 전폭</h3><span class="badge" style="margin-left:auto;border-color:var(--brand);color:var(--brand)">권장</span></header>
+      <div class="pad"><div class="sk">
+        <div class="b hi">지수 스트립 (전폭)</div>
+        <div class="b">AI 시장 브리핑 (전폭 · 핵심/지켜볼 것이 2단으로 펼쳐짐)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+          <div class="b">점수 TOP</div><div class="b">거래대금</div><div class="b">오늘의 뉴스</div></div>
+        <div class="b">최신 투자 리포트 (R2)</div>
+      </div></div>
+      <p class="note">가장 단순하고, 브리핑 문단이 넓어져 <b>읽기 편해진다</b>. 대신 첫 화면에서 브리핑이 차지하는 높이가 커진다.</p>
+    </div>
+    <div class="opt" style="margin:0">
+      <header><span class="id">P2</span><h3>브리핑 + 뉴스 2단</h3></header>
+      <div class="pad"><div class="sk">
+        <div class="b hi">지수 스트립 (전폭)</div>
+        <div class="g2"><div class="b" style="min-height:74px">AI 시장 브리핑</div><div class="b" style="min-height:74px">오늘의 뉴스</div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><div class="b">점수 TOP</div><div class="b">거래대금</div></div>
+        <div class="b">최신 투자 리포트 (R2)</div>
+      </div></div>
+      <p class="note">읽는 것(브리핑·뉴스)이 위, 훑는 것(점수·거래대금)이 아래로 <b>성격이 갈린다</b>. 대신 뉴스가 위로 올라와 리포트가 더 아래로 밀린다.</p>
+    </div>
+  </div>
+</section>
+
+<p class="xs mut" style="margin-top:26px">값은 2026-08-16 실제 API 응답입니다. 스파크라인 모양만 예시입니다.</p>
+
+</div>
+</body>
+</html>

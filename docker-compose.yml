@@ -1,3 +1,15 @@
+# 리소스 리밋 — 한 컨테이너가 호스트를 잠식하지 못하게 한다.
+#
+# 값은 실측 사용량 기준으로 넉넉히 잡았다(워커 peak 14MB → 256M, 18배).
+# 좁게 잡으면 OOM kill이 배치를 조용히 죽이는 쪽이 더 위험하다.
+x-worker-deploy: &worker-deploy
+  resources:
+    limits:
+      cpus: "0.50"
+      memory: 256M
+    reservations:
+      memory: 32M
+
 services:
   redis:
     image: redis:7-alpine
@@ -5,6 +17,25 @@ services:
     restart: unless-stopped
     ports:
       - "6379:6379"
+    # 상한이 없으면(maxmemory 0 + noeviction, 기본값) Redis는 계속 자라다가
+    # 호스트를 OOM으로 몰거나, 메모리가 차는 순간 **쓰기가 전부 에러**가 된다.
+    # AGENT_STATE가 "기동 시 Redis 필수"로 못박고 있어 파급이 크다.
+    #
+    # 정책이 volatile-lru인 이유: TTL이 걸린 키만 버린다. 실측으로 TTL 없는 키는
+    # `md:rev:<symbol>` 2,204개(각 56B, 합계 약 123KB)뿐인데, 이건 캐시 무효화용
+    # INCR 카운터라 사라지면 리비전이 되감겨 낡은 캐시가 새 것으로 보인다.
+    # allkeys-lru는 이걸 버릴 수 있고, volatile-lru는 정확히 이것만 보호한다.
+    # 나머지(23,719키 중 21,515개)는 전부 TTL이 있어 축출 대상으로 충분하다.
+    #
+    # 기본 1gb는 현재 사용량 338MB·피크 482MB의 2배 이상이라 **지금은 아무것도
+    # 축출되지 않는다** — 상한을 두는 것이 목적이지 캐시를 줄이는 게 아니다.
+    # 클라우드에서는 인스턴스 RAM의 60~70%로 REDIS_MAXMEMORY를 넘겨 조절한다.
+    command:
+      - redis-server
+      - --maxmemory
+      - ${REDIS_MAXMEMORY:-1gb}
+      - --maxmemory-policy
+      - volatile-lru
     volumes:
       - quant_port_redis_data:/data
     healthcheck:
@@ -12,6 +43,437 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1536M
+        reservations:
+          memory: 128M
+
+  # BE API + Tesseract OCR — 로컬·클라우드 공통 이미지
+  api:
+    build:
+      context: ./be
+      dockerfile: Dockerfile
+    container_name: quant-port-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./be/.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      IMPORT_TEMP_DIR: /var/lib/quant-port/import
+      MEDIA_DIR: /var/lib/quant-port/media
+      MYSQL_DSN: ${MYSQL_DSN:-quantport:quantport@tcp(host.docker.internal:3306)/quantport?parseTime=true&charset=utf8mb4&loc=Asia%2FSeoul}
+      # 관리자 「배치 관리」에서 고친 시간표가 리포 파일과 한 벌이 되게.
+      BATCH_SCHEDULE_PATH: /app/docs/BATCH_SCHEDULE.md
+    volumes:
+      # 사용자 업로드 이미지(리포트 본문 등)는 **영구 보관**이라 named volume이어야
+      # 한다 — writable layer에 두면 재기동(recreate)마다 지워진다.
+      - quant_port_media:/var/lib/quant-port/media
+      - ./be/docs/BATCH_SCHEDULE.md:/app/docs/BATCH_SCHEDULE.md
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+    # import temp: 컨테이너 writable layer (디스크). job 완료 시 코드에서 RemoveAll.
+    # tmpfs 미사용 — RAM 점유·256MB 상한 OOM 리스크 회피 (스크린샷 10장 peak ~수십 MB).
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          memory: 128M
+
+  # ---- 배치 워커 --------------------------------------------------------
+  # 잡별로 별도 컨테이너로 분리: 한 배치가 멈추거나 자원을 과점해도 API나
+  # 다른 배치에 영향을 주지 않는다. 이미지는 api와 동일(멀티스테이지 빌드에서
+  # 워커 바이너리도 함께 만들어짐), command로 실행할 바이너리만 바꾼다.
+  # 자세한 배경은 docs/AGENT_STATE.md "배치 잡을 독립 워커 프로세스로 분리" 참조.
+
+  worker-close-domestic:
+    build:
+      context: ./be
+      dockerfile: Dockerfile
+    container_name: quant-port-worker-close-domestic
+    command: ["./worker-close-domestic"]
+    restart: unless-stopped
+    env_file:
+      - ./be/.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      MYSQL_DSN: ${MYSQL_DSN:-quantport:quantport@tcp(host.docker.internal:3306)/quantport?parseTime=true&charset=utf8mb4&loc=Asia%2FSeoul}
+      # 워커는 잡을 하나씩 순차로 돌린다(배치 코드에 동시성 풀이 없다). 그런데
+      # repository.NewMySQL의 기본값은 API 기준인 50이라, 이 컨테이너 8개가
+      # 그대로 뜨면 워커만으로 최대 400 커넥션을 연다 — MySQL 기본
+      # max_connections는 151이다. 재배포처럼 9개 프로세스가 동시에 기동하는
+      # 순간 커넥션이 고갈돼 전부 기동에 실패한다.
+      #
+      # 8이면 트랜잭션 하나(커넥션 1개 점유)에 여유를 더한 값이고,
+      # 8×8=64 + API 50 = 114로 기본 한도 안에 들어온다.
+      MYSQL_MAX_OPEN_CONNS: "8"
+      MYSQL_MAX_IDLE_CONNS: "2"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+      # 마이그레이터는 api 하나뿐이다. 워커는 api가 healthy가 된 뒤에야 뜬다 —
+      # /health가 응답한다는 것은 server.New()가 EnsureSchema를 끝냈다는 뜻이다.
+      # (워커 쪽 코드도 repository.VerifySchema로 스키마를 기다리므로, 기동
+      # 순서를 보장하기 어려운 환경에서도 안전하다.)
+      api:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    deploy: *worker-deploy
+
+  worker-close-overseas:
+    build:
+      context: ./be
+      dockerfile: Dockerfile
+    container_name: quant-port-worker-close-overseas
+    command: ["./worker-close-overseas"]
+    restart: unless-stopped
+    env_file:
+      - ./be/.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      MYSQL_DSN: ${MYSQL_DSN:-quantport:quantport@tcp(host.docker.internal:3306)/quantport?parseTime=true&charset=utf8mb4&loc=Asia%2FSeoul}
+      # 워커는 잡을 하나씩 순차로 돌린다(배치 코드에 동시성 풀이 없다). 그런데
+      # repository.NewMySQL의 기본값은 API 기준인 50이라, 이 컨테이너 8개가
+      # 그대로 뜨면 워커만으로 최대 400 커넥션을 연다 — MySQL 기본
+      # max_connections는 151이다. 재배포처럼 9개 프로세스가 동시에 기동하는
+      # 순간 커넥션이 고갈돼 전부 기동에 실패한다.
+      #
+      # 8이면 트랜잭션 하나(커넥션 1개 점유)에 여유를 더한 값이고,
+      # 8×8=64 + API 50 = 114로 기본 한도 안에 들어온다.
+      MYSQL_MAX_OPEN_CONNS: "8"
+      MYSQL_MAX_IDLE_CONNS: "2"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+      # 마이그레이터는 api 하나뿐이다. 워커는 api가 healthy가 된 뒤에야 뜬다 —
+      # /health가 응답한다는 것은 server.New()가 EnsureSchema를 끝냈다는 뜻이다.
+      # (워커 쪽 코드도 repository.VerifySchema로 스키마를 기다리므로, 기동
+      # 순서를 보장하기 어려운 환경에서도 안전하다.)
+      api:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    deploy: *worker-deploy
+
+  worker-scores:
+    build:
+      context: ./be
+      dockerfile: Dockerfile
+    container_name: quant-port-worker-scores
+    command: ["./worker-scores"]
+    restart: unless-stopped
+    env_file:
+      - ./be/.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      MYSQL_DSN: ${MYSQL_DSN:-quantport:quantport@tcp(host.docker.internal:3306)/quantport?parseTime=true&charset=utf8mb4&loc=Asia%2FSeoul}
+      # 워커는 잡을 하나씩 순차로 돌린다(배치 코드에 동시성 풀이 없다). 그런데
+      # repository.NewMySQL의 기본값은 API 기준인 50이라, 이 컨테이너 8개가
+      # 그대로 뜨면 워커만으로 최대 400 커넥션을 연다 — MySQL 기본
+      # max_connections는 151이다. 재배포처럼 9개 프로세스가 동시에 기동하는
+      # 순간 커넥션이 고갈돼 전부 기동에 실패한다.
+      #
+      # 8이면 트랜잭션 하나(커넥션 1개 점유)에 여유를 더한 값이고,
+      # 8×8=64 + API 50 = 114로 기본 한도 안에 들어온다.
+      MYSQL_MAX_OPEN_CONNS: "8"
+      MYSQL_MAX_IDLE_CONNS: "2"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+      # 마이그레이터는 api 하나뿐이다. 워커는 api가 healthy가 된 뒤에야 뜬다 —
+      # /health가 응답한다는 것은 server.New()가 EnsureSchema를 끝냈다는 뜻이다.
+      # (워커 쪽 코드도 repository.VerifySchema로 스키마를 기다리므로, 기동
+      # 순서를 보장하기 어려운 환경에서도 안전하다.)
+      api:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    deploy: *worker-deploy
+
+  worker-index:
+    build:
+      context: ./be
+      dockerfile: Dockerfile
+    container_name: quant-port-worker-index
+    command: ["./worker-index"]
+    restart: unless-stopped
+    env_file:
+      - ./be/.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      MYSQL_DSN: ${MYSQL_DSN:-quantport:quantport@tcp(host.docker.internal:3306)/quantport?parseTime=true&charset=utf8mb4&loc=Asia%2FSeoul}
+      # 워커는 잡을 하나씩 순차로 돌린다(배치 코드에 동시성 풀이 없다). 그런데
+      # repository.NewMySQL의 기본값은 API 기준인 50이라, 이 컨테이너 8개가
+      # 그대로 뜨면 워커만으로 최대 400 커넥션을 연다 — MySQL 기본
+      # max_connections는 151이다. 재배포처럼 9개 프로세스가 동시에 기동하는
+      # 순간 커넥션이 고갈돼 전부 기동에 실패한다.
+      #
+      # 8이면 트랜잭션 하나(커넥션 1개 점유)에 여유를 더한 값이고,
+      # 8×8=64 + API 50 = 114로 기본 한도 안에 들어온다.
+      MYSQL_MAX_OPEN_CONNS: "8"
+      MYSQL_MAX_IDLE_CONNS: "2"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+      # 마이그레이터는 api 하나뿐이다. 워커는 api가 healthy가 된 뒤에야 뜬다 —
+      # /health가 응답한다는 것은 server.New()가 EnsureSchema를 끝냈다는 뜻이다.
+      # (워커 쪽 코드도 repository.VerifySchema로 스키마를 기다리므로, 기동
+      # 순서를 보장하기 어려운 환경에서도 안전하다.)
+      api:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    deploy: *worker-deploy
+
+  worker-fetch:
+    build:
+      context: ./be
+      dockerfile: Dockerfile
+    container_name: quant-port-worker-fetch
+    command: ["./worker-fetch"]
+    restart: unless-stopped
+    env_file:
+      - ./be/.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      MYSQL_DSN: ${MYSQL_DSN:-quantport:quantport@tcp(host.docker.internal:3306)/quantport?parseTime=true&charset=utf8mb4&loc=Asia%2FSeoul}
+      # 워커는 잡을 하나씩 순차로 돌린다(배치 코드에 동시성 풀이 없다). 그런데
+      # repository.NewMySQL의 기본값은 API 기준인 50이라, 이 컨테이너 8개가
+      # 그대로 뜨면 워커만으로 최대 400 커넥션을 연다 — MySQL 기본
+      # max_connections는 151이다. 재배포처럼 9개 프로세스가 동시에 기동하는
+      # 순간 커넥션이 고갈돼 전부 기동에 실패한다.
+      #
+      # 8이면 트랜잭션 하나(커넥션 1개 점유)에 여유를 더한 값이고,
+      # 8×8=64 + API 50 = 114로 기본 한도 안에 들어온다.
+      MYSQL_MAX_OPEN_CONNS: "8"
+      MYSQL_MAX_IDLE_CONNS: "2"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+      # 마이그레이터는 api 하나뿐이다. 워커는 api가 healthy가 된 뒤에야 뜬다 —
+      # /health가 응답한다는 것은 server.New()가 EnsureSchema를 끝냈다는 뜻이다.
+      # (워커 쪽 코드도 repository.VerifySchema로 스키마를 기다리므로, 기동
+      # 순서를 보장하기 어려운 환경에서도 안전하다.)
+      api:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    deploy: *worker-deploy
+
+  # 리서치 콜 판정 — 저장된 종가만 읽는 DB 전용 잡이라 외부 한도를 쓰지 않는다.
+  # 다만 순서가 중요해서 종가 워커들보다 뒤(07:00 KST)에 돈다.
+  worker-research:
+    build:
+      context: ./be
+      dockerfile: Dockerfile
+    container_name: quant-port-worker-research
+    command: ["./worker-research"]
+    restart: unless-stopped
+    env_file:
+      - ./be/.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      MYSQL_DSN: ${MYSQL_DSN:-quantport:quantport@tcp(host.docker.internal:3306)/quantport?parseTime=true&charset=utf8mb4&loc=Asia%2FSeoul}
+      # 워커는 잡을 하나씩 순차로 돌린다(배치 코드에 동시성 풀이 없다). 그런데
+      # repository.NewMySQL의 기본값은 API 기준인 50이라, 이 컨테이너 8개가
+      # 그대로 뜨면 워커만으로 최대 400 커넥션을 연다 — MySQL 기본
+      # max_connections는 151이다. 재배포처럼 9개 프로세스가 동시에 기동하는
+      # 순간 커넥션이 고갈돼 전부 기동에 실패한다.
+      #
+      # 8이면 트랜잭션 하나(커넥션 1개 점유)에 여유를 더한 값이고,
+      # 8×8=64 + API 50 = 114로 기본 한도 안에 들어온다.
+      MYSQL_MAX_OPEN_CONNS: "8"
+      MYSQL_MAX_IDLE_CONNS: "2"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+      # 마이그레이터는 api 하나뿐이다. 워커는 api가 healthy가 된 뒤에야 뜬다 —
+      # /health가 응답한다는 것은 server.New()가 EnsureSchema를 끝냈다는 뜻이다.
+      # (워커 쪽 코드도 repository.VerifySchema로 스키마를 기다리므로, 기동
+      # 순서를 보장하기 어려운 환경에서도 안전하다.)
+      api:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    deploy: *worker-deploy
+
+  # 실적 발표 적재 (FnGuide 국내 시즌 10–20시/2h · 비시즌 18:30 · Finnhub 해외 06:00 KST).
+  # 남의 사이트를 두 곳 부르는 유일한 워커라, 느려지거나 429를 받는 동안
+  # api 컨테이너가 함께 멈추지 않도록 분리해 둔다.
+  worker-earnings:
+    build:
+      context: ./be
+      dockerfile: Dockerfile
+    container_name: quant-port-worker-earnings
+    command: ["./worker-earnings"]
+    restart: unless-stopped
+    env_file:
+      - ./be/.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      MYSQL_DSN: ${MYSQL_DSN:-quantport:quantport@tcp(host.docker.internal:3306)/quantport?parseTime=true&charset=utf8mb4&loc=Asia%2FSeoul}
+      # 워커는 잡을 하나씩 순차로 돌린다(배치 코드에 동시성 풀이 없다). 그런데
+      # repository.NewMySQL의 기본값은 API 기준인 50이라, 이 컨테이너 8개가
+      # 그대로 뜨면 워커만으로 최대 400 커넥션을 연다 — MySQL 기본
+      # max_connections는 151이다. 재배포처럼 9개 프로세스가 동시에 기동하는
+      # 순간 커넥션이 고갈돼 전부 기동에 실패한다.
+      #
+      # 8이면 트랜잭션 하나(커넥션 1개 점유)에 여유를 더한 값이고,
+      # 8×8=64 + API 50 = 114로 기본 한도 안에 들어온다.
+      MYSQL_MAX_OPEN_CONNS: "8"
+      MYSQL_MAX_IDLE_CONNS: "2"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+      # 마이그레이터는 api 하나뿐이다. 워커는 api가 healthy가 된 뒤에야 뜬다 —
+      # /health가 응답한다는 것은 server.New()가 EnsureSchema를 끝냈다는 뜻이다.
+      # (워커 쪽 코드도 repository.VerifySchema로 스키마를 기다리므로, 기동
+      # 순서를 보장하기 어려운 환경에서도 안전하다.)
+      api:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    deploy: *worker-deploy
+
+  # 공시 기반 적재 — 내부자 거래(DART 소유보고 · SEC Form 4).
+  # 해외 07:00 · 국내 20:00 KST. 시각을 실적 배치(06:00 · 18:30)와 벌려 둔 것은
+  # 같은 시각에 두 워커가 네트워크·DB를 두고 겹치지 않게 하기 위해서다.
+  worker-filings:
+    build:
+      context: ./be
+      dockerfile: Dockerfile
+    container_name: quant-port-worker-filings
+    command: ["./worker-filings"]
+    restart: unless-stopped
+    env_file:
+      - ./be/.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      MYSQL_DSN: ${MYSQL_DSN:-quantport:quantport@tcp(host.docker.internal:3306)/quantport?parseTime=true&charset=utf8mb4&loc=Asia%2FSeoul}
+      # 워커는 잡을 하나씩 순차로 돌린다(배치 코드에 동시성 풀이 없다). 그런데
+      # repository.NewMySQL의 기본값은 API 기준인 50이라, 이 컨테이너 8개가
+      # 그대로 뜨면 워커만으로 최대 400 커넥션을 연다 — MySQL 기본
+      # max_connections는 151이다. 재배포처럼 9개 프로세스가 동시에 기동하는
+      # 순간 커넥션이 고갈돼 전부 기동에 실패한다.
+      #
+      # 8이면 트랜잭션 하나(커넥션 1개 점유)에 여유를 더한 값이고,
+      # 8×8=64 + API 50 = 114로 기본 한도 안에 들어온다.
+      MYSQL_MAX_OPEN_CONNS: "8"
+      MYSQL_MAX_IDLE_CONNS: "2"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+      # 마이그레이터는 api 하나뿐이다. 워커는 api가 healthy가 된 뒤에야 뜬다 —
+      # /health가 응답한다는 것은 server.New()가 EnsureSchema를 끝냈다는 뜻이다.
+      # (워커 쪽 코드도 repository.VerifySchema로 스키마를 기다리므로, 기동
+      # 순서를 보장하기 어려운 환경에서도 안전하다.)
+      api:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    deploy: *worker-deploy
+
+  # ---- 배포 토폴로지 (프로파일 prod) ------------------------------------
+  # 기본 `docker compose up -d`와 be/scripts/restart.ps1은 이 둘을 띄우지 않는다.
+  # 평소 개발은 `npm run dev`로 FE를 돌리는 흐름 그대로다.
+  #
+  #   docker compose --profile prod up -d --build
+  #
+  # 이 구성이 필요한 이유는 성능이 아니라 보안이다 — Next의 rewrite가 클라이언트
+  # X-Forwarded-For를 그대로 BE에 넘겨 IP 레이트 리밋이 우회됐다(실측: XFF 회전
+  # 150 동시 요청 중 150건 통과). nginx가 XFF를 자신이 관찰한 주소로 덮어써서
+  # 그 구멍을 닫는다. 자세한 내용은 deploy/nginx/nginx.conf 머리말.
+
+  fe:
+    build:
+      context: ./fe
+      dockerfile: Dockerfile
+    container_name: quant-port-fe
+    profiles: ["prod"]
+    restart: unless-stopped
+    environment:
+      # 서버 컴포넌트(SSR)가 BE를 직접 부를 때 쓰는 주소. 브라우저는 이 값을
+      # 쓰지 않는다 — getApiBaseUrl()이 브라우저에서 ""를 반환해 nginx와 같은
+      # 오리진으로 나간다.
+      NEXT_PUBLIC_API_URL: http://api:8080
+    depends_on:
+      api:
+        condition: service_healthy
+    expose:
+      - "3000"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          memory: 64M
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: quant-port-nginx
+    profiles: ["prod"]
+    restart: unless-stopped
+    ports:
+      # 로컬에서 80은 다른 것이 쓰고 있을 수 있어 8088로 뺀다.
+      # 실제 배포에서는 80:80 / 443:443으로 바꾼다.
+      - "8088:80"
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # 공통 프록시 헤더. location마다 include 해야 한다 — proxy_set_header는
+      # 상속이 replace라, location이 자기 것을 선언하면 상위 것이 사라진다.
+      - ./deploy/nginx/proxy_headers.conf:/etc/nginx/proxy_headers.conf:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      fe:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 128M
+        reservations:
+          memory: 32M
 
 volumes:
   quant_port_redis_data:
+  quant_port_media:

@@ -19,7 +19,11 @@ export type NewsPublisherId =
   | "kbs"
   | "sbs"
   | "mbn"
+  | "the-fact"
+  | "kmaeil"
+  | "newspim"
   | "cnbc"
+  | "financial-juice"
   | "reuters"
   | "bloomberg"
   | "unknown";
@@ -32,28 +36,32 @@ export type NewsPublisher = {
 };
 
 export const NEWS_PUBLISHERS: NewsPublisher[] = [
-  { id: "maeil", name: "매일경제", market: "domestic", badgeClass: "bg-rose-500/15 text-rose-300 border-rose-500/25" },
-  { id: "hankyung", name: "한국경제", market: "domestic", badgeClass: "bg-orange-500/15 text-orange-300 border-orange-500/25" },
-  { id: "sedaily", name: "서울경제", market: "domestic", badgeClass: "bg-amber-500/15 text-amber-300 border-amber-500/25" },
-  { id: "yonhap", name: "연합뉴스", market: "domestic", badgeClass: "bg-sky-500/15 text-sky-400 border-sky-500/25" },
-  { id: "financial-news", name: "파이낸셜뉴스", market: "domestic", badgeClass: "bg-blue-500/15 text-blue-400 border-blue-500/25" },
-  { id: "etnews", name: "전자신문", market: "domestic", badgeClass: "bg-indigo-500/15 text-indigo-300 border-indigo-500/25" },
-  { id: "mt", name: "머니투데이", market: "domestic", badgeClass: "bg-cyan-500/15 text-cyan-300 border-cyan-500/25" },
-  { id: "naver-news", name: "네이버뉴스", market: "domestic", badgeClass: "bg-green-500/15 text-green-400 border-green-500/25" },
-  { id: "bizwatch", name: "비즈워치", market: "domestic", badgeClass: "bg-teal-500/15 text-teal-300 border-teal-500/25" },
-  { id: "newsis", name: "뉴시스", market: "domestic", badgeClass: "bg-lime-500/15 text-lime-300 border-lime-500/25" },
-  { id: "herald", name: "헤럴드경제", market: "domestic", badgeClass: "bg-pink-500/15 text-pink-300 border-pink-500/25" },
-  { id: "chosun", name: "조선일보", market: "domestic", badgeClass: "bg-red-500/15 text-red-300 border-red-500/25" },
-  { id: "joongang", name: "중앙일보", market: "domestic", badgeClass: "bg-slate-500/15 text-slate-300 border-slate-500/25" },
-  { id: "donga", name: "동아일보", market: "domestic", badgeClass: "bg-stone-500/15 text-stone-300 border-stone-500/25" },
-  { id: "hani", name: "한겨레", market: "domestic", badgeClass: "bg-emerald-500/15 text-emerald-300 border-emerald-500/25" },
-  { id: "kbs", name: "KBS", market: "domestic", badgeClass: "bg-blue-600/15 text-blue-300 border-blue-600/25" },
-  { id: "sbs", name: "SBS", market: "domestic", badgeClass: "bg-violet-500/15 text-violet-300 border-violet-500/25" },
-  { id: "mbn", name: "MBN", market: "domestic", badgeClass: "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/25" },
-  { id: "cnbc", name: "CNBC", market: "us", badgeClass: "bg-yellow-500/15 text-yellow-300 border-yellow-500/25" },
-  { id: "reuters", name: "로이터", market: "us", badgeClass: "bg-orange-500/15 text-orange-400 border-orange-500/25" },
-  { id: "bloomberg", name: "블룸버그", market: "us", badgeClass: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25" },
-  { id: "unknown", name: "기타", market: "domestic", badgeClass: "bg-zinc-500/15 text-zinc-300 border-zinc-500/25" },
+  { id: "maeil", name: "매일경제", market: "domestic", badgeClass: "news-badge news-badge--rose" },
+  { id: "hankyung", name: "한국경제", market: "domestic", badgeClass: "news-badge news-badge--orange" },
+  { id: "sedaily", name: "서울경제", market: "domestic", badgeClass: "news-badge news-badge--amber" },
+  { id: "yonhap", name: "연합뉴스", market: "domestic", badgeClass: "news-badge news-badge--sky" },
+  { id: "financial-news", name: "파이낸셜뉴스", market: "domestic", badgeClass: "news-badge news-badge--blue" },
+  { id: "etnews", name: "전자신문", market: "domestic", badgeClass: "news-badge news-badge--indigo" },
+  { id: "mt", name: "머니투데이", market: "domestic", badgeClass: "news-badge news-badge--cyan" },
+  { id: "naver-news", name: "네이버뉴스", market: "domestic", badgeClass: "news-badge news-badge--green" },
+  { id: "bizwatch", name: "비즈워치", market: "domestic", badgeClass: "news-badge news-badge--teal" },
+  { id: "newsis", name: "뉴시스", market: "domestic", badgeClass: "news-badge news-badge--lime" },
+  { id: "herald", name: "헤럴드경제", market: "domestic", badgeClass: "news-badge news-badge--pink" },
+  { id: "chosun", name: "조선일보", market: "domestic", badgeClass: "news-badge news-badge--red" },
+  { id: "joongang", name: "중앙일보", market: "domestic", badgeClass: "news-badge news-badge--slate" },
+  { id: "donga", name: "동아일보", market: "domestic", badgeClass: "news-badge news-badge--stone" },
+  { id: "hani", name: "한겨레", market: "domestic", badgeClass: "news-badge news-badge--emerald" },
+  { id: "kbs", name: "KBS", market: "domestic", badgeClass: "news-badge news-badge--blue-dark" },
+  { id: "sbs", name: "SBS", market: "domestic", badgeClass: "news-badge news-badge--violet" },
+  { id: "mbn", name: "MBN", market: "domestic", badgeClass: "news-badge news-badge--fuchsia" },
+  { id: "the-fact", name: "더팩트", market: "domestic", badgeClass: "news-badge news-badge--red-dark" },
+  { id: "kmaeil", name: "경북매일", market: "domestic", badgeClass: "news-badge news-badge--rose" },
+  { id: "newspim", name: "뉴스핌", market: "domestic", badgeClass: "news-badge news-badge--blue" },
+  { id: "cnbc", name: "CNBC", market: "us", badgeClass: "news-badge news-badge--yellow" },
+  { id: "financial-juice", name: "FinancialJuice", market: "us", badgeClass: "news-badge news-badge--amber" },
+  { id: "reuters", name: "로이터", market: "us", badgeClass: "news-badge news-badge--orange" },
+  { id: "bloomberg", name: "블룸버그", market: "us", badgeClass: "news-badge news-badge--emerald" },
+  { id: "unknown", name: "기타", market: "domestic", badgeClass: "news-badge news-badge--neutral" },
 ];
 
 const PUBLISHER_RULES: { match: string; id: NewsPublisherId }[] = [
@@ -77,7 +85,13 @@ const PUBLISHER_RULES: { match: string; id: NewsPublisherId }[] = [
   { match: "kbs.co.kr", id: "kbs" },
   { match: "sbs.co.kr", id: "sbs" },
   { match: "mbn.co.kr", id: "mbn" },
+  { match: "tf.co.kr", id: "the-fact" },
+  { match: "kmaeil.com", id: "kmaeil" },
+  { match: "newspim.com", id: "newspim" },
   { match: "cnbc.com", id: "cnbc" },
+  { match: "financialjuice.com", id: "financial-juice" },
+  { match: "reuters.com", id: "reuters" },
+  { match: "bloomberg.com", id: "bloomberg" },
 ];
 
 export function resolvePublisherFromUrl(url?: string, fallbackName?: string): NewsPublisher {

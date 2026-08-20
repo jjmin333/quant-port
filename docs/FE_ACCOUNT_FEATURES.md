@@ -1,74 +1,18 @@
-# FE 계좌 연동 기능 비노출 (2026-07-26)
+# 토스 계좌 연동 — 제거됨 (2026-08-20)
 
-## 결정
+예전에는 FE만 `ACCOUNT_FEATURES_VISIBLE=false`로 숨기고 BE(OAuth 키 저장, 포트폴리오 동기화, 인사이트 LLM)는 남겨 두었다. 화면이 없는데도 연동 사용자마다 6시간마다 Gemini를 치는 스케줄러가 돌아서, **계좌 연동 기능 자체를 제거**했다.
 
-**프론트엔드에서 계좌·증권사 연동 관련 메뉴와 화면을 비노출**한다.  
-백엔드 API, DB 스키마, 저장 로직은 **삭제하지 않고 유지**한다 (추후 재활용 가능).
+## 유지
 
-제어 플래그: `fe/src/lib/account-features.ts` → `ACCOUNT_FEATURES_VISIBLE = false`
+- Toss Open API **글로벌** 클라이언트 — 시세, 캔들, 호가, 체결, 랭킹, 종목 경고 배치
+- `/holdings` 수동 입력·스크린샷 OCR, `user_holdings` / `holding_trades` / `user_cash_balances`
+- 관심종목, 스탬프, 메모, 목표가, 뉴스, 종목 AI 요약, 뉴스 시장 브리핑
 
-## 배경
+## 제거
 
-개인 투자자는 여러 증권사 계좌를 나눠 사용하는 경우가 많다.  
-그러나 **모든 증권사가 Open API를 제공하지 않아**, 특정 증권사만 연동 가능한 현재 구조에서는:
+- `/api/v1/broker/toss/*`, `/portfolio/*`, `/insights/dashboard`, `/accounts`, `/orders`, 브로커 `/holdings`, `/disclosures/today`
+- `InsightsService.RunScheduler` (홈 포트폴리오 LLM 브리핑)
+- 테이블: `user_broker_credentials`, `broker_accounts`, `user_portfolio_cache`, `portfolio_snapshots` (`054_drop_broker_linking.sql`)
+- FE: 계좌 연동·거래내역·포트폴리오 분석·리스크·백테스트 페이지, 설정 「거래」 탭, `account-features.ts` 플래그
 
-- 보유종목 통합 조회
-- 실시간 체결·주문 연동
-- 계좌 단위 포트폴리오 분석
-
-등의 기능이 **연동 가능한 증권사 사용자에게만** 의미가 있고, 그렇지 않은 사용자에게는 제약·혼란을 준다.
-
-당분간 FE에서는 계좌 의존 UX를 숨기고, **시세·관심종목·뉴스·종목 분석** 등 API 제약이 적은 기능에 집중한다.
-
-## BE / Storage
-
-| 영역 | 처리 |
-|------|------|
-| `/api/v1/broker/*`, `/accounts`, `/orders`, `/portfolio/*` | **유지** |
-| Toss OAuth, broker credentials 테이블 | **유지** |
-| Portfolio poller, Redis/MySQL 캐시 | **유지** |
-
-재활성화 시 BE 변경 없이 FE 플래그만 `true`로 되돌리면 된다.
-
-## FE 비노출 범위
-
-### 사이드바 (제거된 메뉴)
-
-| 그룹 | 메뉴 |
-|------|------|
-| 계좌 | 계좌 연동, 보유종목 통합, 거래내역 |
-| 분석 | 포트폴리오 분석, 리스크 분석 |
-| 기록 | 백테스트 |
-
-### 기타 UI
-
-- 헤더 **「계좌 연동」** CTA
-- 설정 **「거래」** 탭 (증권사 API 키 연동)
-- 대시보드: 계좌 연동 부제·포트폴리오 위젯 (자산 요약, 계좌 목록, 보유 미리보기, 자산 추이 등)
-- 종목 상세 **「보유 현황」** 카드 (연동 계좌 기준)
-
-### URL 접근
-
-플래그가 `false`일 때 위 경로로 직접 접근하면 `/dashboard`로 리다이렉트 (`middleware.ts`).
-
-## FE 유지 (노출) 기능 예
-
-- 통합 대시보드 (시장 개요 중심)
-- 실시간 시세, 관심종목
-- 종목 분석, 재무, 뉴스
-- AI 투자일지, 목표가 (계좌 비의존 UI)
-
-## 재활성화 절차
-
-1. `fe/src/lib/account-features.ts`에서 `ACCOUNT_FEATURES_VISIBLE = true`
-2. BE `.env`에 Toss 등 broker 설정 확인
-3. FE 빌드·배포 후 사이드바·설정·대시보드 포트폴리오 위젯 복구 확인
-
-## 관련 파일
-
-- `fe/src/lib/account-features.ts` — 플래그·경로 헬퍼
-- `fe/src/components/layout/sidebar.tsx`
-- `fe/src/components/layout/header.tsx`
-- `fe/src/lib/settings-config.ts`, `settings-panel.tsx`
-- `fe/src/app/(main)/dashboard/page.tsx`
-- `fe/src/middleware.ts`
+옛 북마크(`/onboarding/link-broker` 등)는 미들웨어가 `/`로 보낸다.

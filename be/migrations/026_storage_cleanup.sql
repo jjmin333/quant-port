@@ -1,0 +1,53 @@
+-- 026_storage_cleanup.sql — 저장공간 회수 (수동 검토 후 실행)
+--
+-- 이 파일은 EnsureSchema 의 자동 적용 대상이 아닙니다. applyMigrationFiles 는
+-- 필수 테이블이 없을 때만 돌고, 아래 구문들은 데이터를 지우므로 반드시
+-- 내용을 확인한 뒤 직접 실행하세요.
+--
+--   docker run --rm --add-host=host.docker.internal:host-gateway mysql:8 \
+--     mysql -h host.docker.internal -uquantport -p quantport < migrations/026_storage_cleanup.sql
+--
+-- ---------------------------------------------------------------------------
+-- 1) candle_bars 재구축 백업본
+-- ---------------------------------------------------------------------------
+-- MigrateCandleBarsV2IfNeeded 가 bar_time 을 VARCHAR → DATETIME 으로 재구축하며
+-- 이전 테이블을 candle_bars_legacy_v1 로 남겨둡니다 (약 517MB).
+-- 차트가 정상 동작하는 것을 확인한 뒤 삭제하세요.
+--
+--   SELECT COUNT(*) FROM candle_bars;             -- 신규 (약 246만 행)
+--   SELECT COUNT(*) FROM candle_bars_legacy_v1;   -- 백업
+--
+-- DROP TABLE IF EXISTS candle_bars_legacy_v1;
+
+-- ---------------------------------------------------------------------------
+-- 2) fundamentals v2 마이그레이션 잔여 테이블
+-- ---------------------------------------------------------------------------
+-- MigrateFundamentalsV2IfNeeded 가 stock_fundamentals 를 재작성하며 남긴
+-- 백업본입니다 (약 2.5MB). stock_fundamentals 가 채워져 있으면 불필요합니다.
+--
+--   SELECT COUNT(*) FROM stock_fundamentals;      -- 현행
+--   SELECT COUNT(*) FROM old_stock_fundamentals;  -- 백업
+--
+-- DROP TABLE IF EXISTS old_stock_fundamentals;
+
+-- ---------------------------------------------------------------------------
+-- 3) 통계 갱신
+-- ---------------------------------------------------------------------------
+-- information_schema 의 DATA_LENGTH / TABLE_ROWS 는 지연 갱신됩니다.
+-- 관리자 DB 콘솔의 크기 표시를 정확히 보려면 실행하세요.
+
+ANALYZE TABLE candle_bars, news_articles, ranking_snapshot_entries, trade_ticks, stocks;
+
+-- ---------------------------------------------------------------------------
+-- 참고: 이번 최적화로 적용된 변경 (코드에서 자동 수행됨)
+-- ---------------------------------------------------------------------------
+--  * candle_bars.bar_time  VARCHAR(32) → DATETIME
+--      범위 스캔이 클러스터드 인덱스를 타게 되고, PK 3개 컬럼 중 하나가
+--      최대 33바이트에서 8바이트로 줄어듭니다.
+--  * candle_bars 의 idx_candle_bars_symbol_interval_time 제거
+--      (symbol, bar_interval, bar_time) 로 PK 와 컬럼·순서가 완전히 동일해
+--      InnoDB 가 같은 키를 두 벌 유지하고 있었습니다. PK 만으로 동일한
+--      접근 경로(역방향 스캔 포함)가 나옵니다.
+--      → 516.9MB (데이터 357.9 + 인덱스 158.9) → 195.8MB, 62% 감소
+--  * ranking_snapshot_entries 90일 보관 정책
+--      RankingSnapshotRepo.PruneOlderThan 이 12시간마다 5000행씩 정리합니다.

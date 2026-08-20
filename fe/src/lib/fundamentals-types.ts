@@ -32,6 +32,9 @@ export type FundamentalsData = {
   revenue?: number;
   netIncome?: number;
   totalEquity?: number;
+  sharesOutstanding?: number;
+  epsBasic?: number;
+  epsDiluted?: number;
 };
 
 export type MetricTone = "positive" | "negative" | "neutral" | "accent";

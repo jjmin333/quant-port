@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>실적 일정 — 위젯 선택용 목업 v1</title>
+<style>
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.97 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.93 0 0);
+  --border: oklch(0.87 0 0);
+  --brand: #2563EB;
+  --profit: #DC2626;
+  --loss: #2563EB;
+  --hit: #059669;
+  --warn: #D97706;
+  --sample: #7C3AED;
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --border: oklch(0.34 0 0);
+  --sample: #A78BFA;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 24px;
+  background: var(--background); color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
+  font-size: 13px; line-height: 1.5;
+}
+.wrap { max-width: 1240px; margin: 0 auto; }
+h1 { font-size: 20px; margin: 0 0 4px; }
+h2 { font-size: 15px; margin: 40px 0 4px; padding-top: 20px; border-top: 2px solid var(--border); }
+h3 { font-size: 13px; margin: 20px 0 8px; }
+.lede { color: var(--muted-foreground); margin: 0 0 8px; font-size: 12px; }
+.opt { display:inline-block; font-size:11px; font-weight:700; background:var(--foreground); color:var(--background);
+       padding:2px 7px; border-radius:999px; margin-right:6px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.up { color: var(--profit); font-weight: 700; }
+.down { color: var(--loss); font-weight: 700; }
+.mut { color: var(--muted-foreground); }
+.badge { display:inline-block; font-size:10px; padding:1px 6px; border-radius:999px; line-height:1.5; white-space:nowrap; }
+.b-conf { background: var(--muted); color: var(--foreground); }
+.b-sched { border:1px dashed var(--border); color: var(--muted-foreground); }
+.b-est { border:1px dashed color-mix(in srgb, var(--sample) 60%, transparent);
+         background: color-mix(in srgb, var(--sample) 10%, transparent); color: var(--sample); }
+.b-sess { background: var(--muted); color: var(--muted-foreground); border-radius:4px; }
+.b-basis { background: color-mix(in srgb, var(--brand) 12%, transparent); color: var(--brand); border-radius:4px; }
+.logo { width:22px;height:22px;border-radius:6px;background:var(--accent);display:inline-flex;
+        align-items:center;justify-content:center;font-size:9px;font-weight:700;flex:0 0 auto; }
+.row { display:flex; align-items:center; gap:8px; padding:7px 4px; border-bottom:1px solid var(--border); }
+.row:last-child { border-bottom:0; }
+.grow { flex:1; min-width:0; }
+.trunc { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+table { width:100%; border-collapse:collapse; font-size:12px; }
+th { text-align:left; font-weight:500; color:var(--muted-foreground); font-size:11px;
+     border-bottom:1px solid var(--border); padding:5px 6px; }
+td { padding:6px; border-bottom:1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+.note { font-size:11px; color:var(--muted-foreground); margin-top:8px; padding-top:8px; border-top:1px solid var(--border); }
+.grid2 { display:grid; grid-template-columns: minmax(0,1fr) 320px; gap:12px; align-items:start; }
+.pill { font-size:11px; padding:3px 9px; border-radius:999px; border:1px solid var(--border);
+        color:var(--muted-foreground); background:var(--card); }
+.pill.on { background:var(--foreground); color:var(--background); border-color:var(--foreground); }
+.toggle { display:inline-flex; gap:2px; background:var(--muted); padding:2px; border-radius:8px; }
+.toggle span { font-size:11px; padding:3px 9px; border-radius:6px; color:var(--muted-foreground); }
+.toggle span.on { background:var(--card); color:var(--foreground); font-weight:600; }
+.themebtn { position:fixed; top:12px; right:12px; z-index:9; font-size:11px; padding:6px 12px;
+            border:1px solid var(--border); background:var(--card); color:var(--foreground);
+            border-radius:999px; cursor:pointer; }
+.real { font-size:10px; color:var(--hit); font-weight:700; }
+</style>
+</head>
+<body>
+<button class="themebtn" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">라이트 / 다크</button>
+<div class="wrap">
+
+<h1>실적 일정 — 위젯 선택용 목업 v1</h1>
+<p class="lede">
+  <span class="real">숫자는 전부 우리 DB 실측값입니다</span> — 한국금융지주 +27.8% → 다음 거래일 −7.3%,
+  BGF리테일 +11.7% → +13.4%, 엘앤에프 −58.2% → +7.3%, 삼성전자 2026 2Q +5.5%, 미래에셋생명 연결/개별 충돌.
+  꾸민 값이 아니라 실제로 그릴 수 있는 것만 담았습니다.
+</p>
+<p class="lede" style="border-left:3px solid var(--warn);padding-left:8px">
+  <b>정정 (v1 초안 오류)</b> — 처음 이 목업에 적었던 「클리오 +123.4% → 다음 거래일 +28.2%」는
+  <b>틀린 값</b>이었습니다. <code>stock_daily_closes</code>의 최근 세션 커버리지가 얇아
+  (08-07까지 16,190종목/일 → 08-10부터 200~700) 「다음 거래일」을 찾다가 <b>한 주 뒤</b> 종가가
+  잡힌 것이었습니다(08-07 → 08-14). 구현에는 인접일 가드를 넣어 그런 경우 값을 내지 않고
+  「집계 중」으로 표시합니다. 아래 숫자는 커버리지가 조밀한 구간(08-05~08-07)의 실제 인접일 값입니다.
+</p>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<h2>W1. 발표 후 주가 반응 — <span class="mut" style="font-weight:400">가장 큰 한 방</span></h2>
+<p class="lede">
+  지금 화면은 「기대를 얼마나 넘겼나」까지만 말합니다. 투자자가 실제로 묻는 다음 질문은
+  <b>「그래서 주가는 어떻게 됐나」</b>입니다. <code>stock_daily_closes</code>에 발표일·다음 거래일 종가가
+  66,218쌍 있어서 <b>추가 수집 없이</b> 계산됩니다.
+</p>
+
+<h3><span class="opt">W1</span> 서프라이즈 옆에 반응 열 추가</h3>
+<div class="card">
+  <table>
+    <thead><tr>
+      <th>발표일</th><th>종목</th><th>기간</th><th>기대 → 발표</th>
+      <th style="text-align:right">서프라이즈</th><th style="text-align:right">다음 거래일</th><th>해석</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td class="mono">08/06</td>
+        <td><span style="display:inline-flex;align-items:center;gap:6px"><span class="logo">BGF</span>BGF리테일</span></td>
+        <td class="mono mut">2026 2Q <span class="badge b-basis">연결</span></td>
+        <td class="mono mut">기대 → 발표</td>
+        <td class="mono up" style="text-align:right">+11.7%</td>
+        <td class="mono up" style="text-align:right">+13.4%</td>
+        <td class="mut" style="font-size:11px">기대 상회 → 주가도 급등</td>
+      </tr>
+      <tr>
+        <td class="mono">08/06</td>
+        <td><span style="display:inline-flex;align-items:center;gap:6px"><span class="logo">한국</span>한국금융지주</span></td>
+        <td class="mono mut">2026 2Q <span class="badge b-basis">연결</span></td>
+        <td class="mono mut">기대 → 발표</td>
+        <td class="mono up" style="text-align:right">+27.8%</td>
+        <td class="mono down" style="text-align:right">−7.3%</td>
+        <td style="font-size:11px;color:var(--warn);font-weight:600">상회했는데 주가는 하락 ⚑</td>
+      </tr>
+      <tr>
+        <td class="mono">08/06</td>
+        <td><span style="display:inline-flex;align-items:center;gap:6px"><span class="logo">엘앤</span>엘앤에프</span></td>
+        <td class="mono mut">2026 2Q <span class="badge b-basis">연결</span></td>
+        <td class="mono mut">기대 → 발표</td>
+        <td class="mono down" style="text-align:right">−58.2%</td>
+        <td class="mono up" style="text-align:right">+7.3%</td>
+        <td style="font-size:11px;color:var(--warn);font-weight:600">하회했는데 주가는 상승 ⚑</td>
+      </tr>
+      <tr>
+        <td class="mono">08/14</td>
+        <td><span style="display:inline-flex;align-items:center;gap:6px"><span class="logo">현대</span>현대해상</span></td>
+        <td class="mono mut">2026 2Q <span class="badge b-basis">개별</span></td>
+        <td class="mono mut">3,690억 → 5,050억</td>
+        <td class="mono up" style="text-align:right">+36.9%</td>
+        <td class="mono mut" style="text-align:right">집계 중</td>
+        <td class="mut" style="font-size:11px">인접 거래일 종가 없음</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="note">
+    <b>「상회했는데 주가는 하락」이 이 열의 존재 이유입니다.</b> 그 줄은 숫자만 보면 좋은 실적인데
+    시장은 다르게 읽었다는 뜻이고, 지금 화면에서는 절대 알 수 없습니다.
+    가장 최근 발표는 다음 거래일 종가가 아직 없어 <span class="mut">「집계 중」</span>으로 둡니다 —
+    0%로 그리면 반응이 없었다는 거짓말이 됩니다.
+  </p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<h2>W2. 종목 실적 상세 모달 — <span class="mut" style="font-weight:400">현재는 범용 시세 모달만 열립니다</span></h2>
+<p class="lede">
+  지금 행을 누르면 <code>SymbolQuickLookModal</code>(현재가·차트)이 열립니다. 실적 화면에서 종목을 누른
+  사람이 보고 싶은 것은 시세가 아니라 <b>이 회사의 실적 이력</b>입니다. 종목당 분기가 5~10개 쌓여 있어
+  (실측: 5분기 이상 283종목) 추이와 적중 이력을 그릴 수 있습니다.
+</p>
+
+<h3><span class="opt">W2</span> 실적 전용 모달</h3>
+<div class="card" style="max-width:620px">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+    <span class="logo" style="width:28px;height:28px">삼성</span>
+    <div class="grow">
+      <div style="font-weight:700">삼성전자 <span class="mono mut" style="font-weight:400;font-size:11px">005930</span></div>
+      <div class="mut" style="font-size:11px">2026 2Q · 연결 · 07/07 발표 <span class="mut">(07/30 정정)</span></div>
+    </div>
+    <div style="text-align:right">
+      <div class="mono up" style="font-size:17px">+5.5%</div>
+      <div class="mut" style="font-size:10px">영업이익 서프라이즈</div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:12px 0">
+    <div style="border:1px solid var(--border);border-radius:8px;padding:7px">
+      <div class="mut" style="font-size:10px">매출</div>
+      <div class="mono" style="font-weight:700">171.5조</div>
+      <div class="mono up" style="font-size:10px">QoQ +28.1%</div>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:8px;padding:7px">
+      <div class="mut" style="font-size:10px">영업이익</div>
+      <div class="mono" style="font-weight:700">89.5조</div>
+      <div class="mono up" style="font-size:10px">QoQ +56.4%</div>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:8px;padding:7px">
+      <div class="mut" style="font-size:10px">순이익</div>
+      <div class="mono" style="font-weight:700">71.6조</div>
+      <div class="mono up" style="font-size:10px">QoQ +51.7%</div>
+    </div>
+  </div>
+
+  <div style="font-size:11px;font-weight:600;margin-bottom:6px">분기 추이 — 영업이익</div>
+  <svg viewBox="0 0 560 90" width="100%" height="90" style="overflow:visible">
+    <!-- 기대(회색 얇은 막대) vs 발표(진한 막대) 를 겹쳐 그린다 -->
+    <g font-size="9" fill="var(--muted-foreground)" font-family="ui-monospace">
+      <!-- 3Q25 -->
+      <rect x="20" y="62" width="34" height="18" fill="var(--accent)"/>
+      <rect x="26" y="55" width="22" height="25" fill="var(--profit)"/>
+      <text x="37" y="89" text-anchor="middle">3Q25</text>
+      <!-- FY25 -->
+      <rect x="130" y="46" width="34" height="34" fill="var(--accent)"/>
+      <rect x="136" y="44" width="22" height="36" fill="var(--profit)"/>
+      <text x="147" y="89" text-anchor="middle">FY25</text>
+      <!-- 1Q26 -->
+      <rect x="240" y="38" width="34" height="42" fill="var(--accent)"/>
+      <rect x="246" y="20" width="22" height="60" fill="var(--profit)"/>
+      <text x="257" y="89" text-anchor="middle">1Q26</text>
+      <!-- 2Q26 -->
+      <rect x="350" y="12" width="34" height="68" fill="var(--accent)"/>
+      <rect x="356" y="6" width="22" height="74" fill="var(--profit)"/>
+      <text x="367" y="89" text-anchor="middle">2Q26</text>
+      <!-- 3Q26 추정 -->
+      <rect x="460" y="20" width="34" height="60" fill="none"
+            stroke="var(--sample)" stroke-dasharray="3 2"/>
+      <text x="477" y="89" text-anchor="middle" fill="var(--sample)">3Q26</text>
+    </g>
+    <g font-size="9" font-family="sans-serif">
+      <rect x="20" y="-2" width="9" height="9" fill="var(--accent)"/>
+      <text x="33" y="6" fill="var(--muted-foreground)">기대</text>
+      <rect x="66" y="-2" width="9" height="9" fill="var(--profit)"/>
+      <text x="79" y="6" fill="var(--muted-foreground)">발표</text>
+      <rect x="112" y="-2" width="9" height="9" fill="none" stroke="var(--sample)" stroke-dasharray="2 2"/>
+      <text x="126" y="6" fill="var(--sample)">추정 일정</text>
+    </g>
+  </svg>
+
+  <div style="display:flex;gap:16px;align-items:center;margin:10px 0 0;padding:8px;background:var(--muted);border-radius:8px">
+    <div>
+      <div class="mut" style="font-size:10px">컨센서스 적중 이력</div>
+      <div style="font-weight:700"><span class="up">4</span> / 5분기 상회</div>
+    </div>
+    <div>
+      <div class="mut" style="font-size:10px">평균 서프라이즈</div>
+      <div class="mono up" style="font-weight:700">+17.2%</div>
+    </div>
+    <div>
+      <div class="mut" style="font-size:10px">다음 발표</div>
+      <div style="font-weight:700"><span class="badge b-est">추정</span> <span class="mono">10/14</span></div>
+    </div>
+  </div>
+
+  <div style="margin-top:10px">
+    <div style="font-size:11px;font-weight:600;margin-bottom:4px">이 발표를 다룬 뉴스</div>
+    <div class="mut" style="font-size:11px">· 삼성전자 2분기 영업이익 89.5조… 시장 기대 웃돌아</div>
+    <div class="mut" style="font-size:11px">· HBM 출하 확대에 메모리 수익성 개선</div>
+  </div>
+  <p class="note">
+    막대 <b>둘</b>을 겹쳐 그리는 이유: 한 분기의 「기대」와 「발표」를 나란히 두면 이 회사가
+    습관적으로 상회하는지 하회하는지가 한눈에 보입니다. 오른쪽 점선은 아직 발표 안 된 추정 일정입니다.
+  </p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<h2>W3. 상단 요약 띠 — <span class="mut" style="font-weight:400">이 날/이 주가 어땠나</span></h2>
+<p class="lede">지금은 달력 바로 아래 목록이 시작됩니다. 목록을 읽기 전에 「전체 그림」이 없습니다.</p>
+
+<h3><span class="opt">W3</span> 발표 시즌 스코어보드</h3>
+<div class="card">
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+    <div>
+      <div class="mut" style="font-size:10px">오늘 발표</div>
+      <div style="font-size:19px;font-weight:700">64<span class="mut" style="font-size:12px;font-weight:400">건</span></div>
+      <div class="mut" style="font-size:10px">해외 64 · 국내 0</div>
+    </div>
+    <div>
+      <div class="mut" style="font-size:10px">컨센서스 상회</div>
+      <div style="font-size:19px;font-weight:700" class="up">61%</div>
+      <div class="mut" style="font-size:10px">28 / 46건</div>
+    </div>
+    <div>
+      <div class="mut" style="font-size:10px">평균 서프라이즈</div>
+      <div style="font-size:19px;font-weight:700" class="up">+8.4%</div>
+      <div class="mut" style="font-size:10px">중위 +3.1%</div>
+    </div>
+    <div>
+      <div class="mut" style="font-size:10px">최대 상회</div>
+      <div style="font-weight:700;font-size:13px">대한항공</div>
+      <div class="mono up" style="font-size:11px">+319.9%</div>
+    </div>
+    <div>
+      <div class="mut" style="font-size:10px">최대 하회</div>
+      <div style="font-weight:700;font-size:13px">앤지</div>
+      <div class="mono down" style="font-size:11px">−3071.8%</div>
+    </div>
+  </div>
+  <p class="note">
+    <b>「상회 61%」는 시장 전체의 온도입니다</b> — 개별 종목 백 줄을 읽어야 나오는 값을 한 줄로 줍니다.
+    중위값을 함께 적는 이유: 평균은 +6232% 같은 한 종목이 끌어올려 실제 분위와 어긋납니다.
+  </p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<h2>W4. 해외 전용 — 장전/장후 타임라인</h2>
+<p class="lede">
+  해외는 <code>hour</code>(bmo/amc/dmh)가 채워져 옵니다(실측 1,446건 중 1,158건). 국내에는 이 값이
+  아예 없어서, <b>해외 화면에서만</b> 가능한 표현입니다 — 메뉴를 나누면 이런 차별화가 가능해집니다.
+</p>
+
+<h3><span class="opt">W4</span> 하루를 장전 · 장중 · 장후로</h3>
+<div class="card">
+  <div style="display:grid;grid-template-columns:70px minmax(0,1fr);gap:8px;align-items:start">
+    <div class="mut" style="font-size:11px;font-weight:600;padding-top:5px">장전<br><span style="font-weight:400">개장 전</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px">
+      <span class="pill">JNJ <span class="up mono">+4.2%</span></span>
+      <span class="pill">PG <span class="down mono">−1.1%</span></span>
+      <span class="pill">액스컴퓨트</span>
+      <span class="pill">빌드어베어 <span class="mut mono">$0.70</span></span>
+    </div>
+    <div class="mut" style="font-size:11px;font-weight:600;padding-top:5px">장중</div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px"><span class="pill">BTO</span></div>
+    <div class="mut" style="font-size:11px;font-weight:600;padding-top:5px">장후<br><span style="font-weight:400">마감 후</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px">
+      <span class="pill">NVDA <span class="mut mono">$1.24</span></span>
+      <span class="pill">CBAK <span class="mut mono">$-0.06</span></span>
+      <span class="pill">클렌 <span class="mut mono">$-0.38</span></span>
+      <span class="pill">아넥슨</span>
+    </div>
+    <div class="mut" style="font-size:11px;font-weight:600;padding-top:5px">미공개</div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px"><span class="pill">센미아오</span><span class="pill">AZIO AI</span></div>
+  </div>
+  <p class="note">
+    <b>미국 실적은 장 밖에서 나옵니다.</b> 장후 발표는 다음날 시가에 반영되고, 장전 발표는 그날
+    시가에 반영됩니다 — 그 차이를 모르면 「발표 후 반응」을 하루 잘못 읽습니다.
+    미공개는 따로 둡니다(장전·장후 중 하나로 찍으면 거짓말입니다).
+  </p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<h2>W5. 국내 전용 — 연결/개별 충돌 정리 <span class="mut" style="font-weight:400">(데이터 품질 — 실측 338건)</span></h2>
+<p class="lede">
+  같은 종목·같은 분기가 <b>연결</b>과 <b>개별</b> 두 줄로 내려오고, 컨센서스가 어긋나 붙습니다.
+</p>
+<div class="card">
+  <div style="font-size:11px;font-weight:600;margin-bottom:6px;color:var(--warn)">지금 (그대로 두 줄)</div>
+  <div class="row">
+    <span class="logo">미래</span><span class="grow">미래에셋생명 <span class="mono mut" style="font-size:11px">2026 2Q</span> <span class="badge b-basis">연결</span></span>
+    <span class="mono mut" style="font-size:11px">기대 153억 → 236억</span><span class="mono up">+54.6%</span>
+  </div>
+  <div class="row">
+    <span class="logo">미래</span><span class="grow">미래에셋생명 <span class="mono mut" style="font-size:11px">2026 2Q</span> <span class="badge b-basis">개별</span></span>
+    <span class="mono mut" style="font-size:11px">기대 526억 → 206억</span><span class="mono down">−60.8%</span>
+  </div>
+  <div style="font-size:11px;font-weight:600;margin:14px 0 6px;color:var(--hit)">제안 (연결 우선, 개별은 접어둠)</div>
+  <div class="row">
+    <span class="logo">미래</span><span class="grow">미래에셋생명 <span class="mono mut" style="font-size:11px">2026 2Q</span> <span class="badge b-basis">연결</span></span>
+    <span class="mono mut" style="font-size:11px">기대 153억 → 236억</span><span class="mono up">+54.6%</span>
+  </div>
+  <div style="padding:4px 4px 0;font-size:11px" class="mut">↳ 개별 기준도 있습니다 (−60.8%) · 눌러서 보기</div>
+  <p class="note">
+    <b>연결이 국내 실적 보도의 기준입니다.</b> 한 회사가 같은 날 +54.6%와 −60.8%를 동시에 말하면
+    둘 다 못 믿게 됩니다. 연결을 대표로 세우고 개별은 <b>지우지 않고 접어</b> 둡니다 —
+    지주회사처럼 개별이 의미 있는 경우가 있습니다.
+  </p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<h2>L. 레이아웃 — 두 안</h2>
+
+<h3><span class="opt">L1</span> 지금 구조 유지 + 요약 띠 · 반응 열 (달력 중심)</h3>
+<div class="grid2">
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <div class="card" style="padding:8px"><div class="mut" style="font-size:11px">W3 요약 띠 — 오늘 64건 · 상회 61% · 평균 +8.4%</div></div>
+    <div class="card">
+      <div class="mut" style="font-size:11px;text-align:center;padding:22px 0;border:1px dashed var(--border);border-radius:8px">
+        월 히트맵 (그대로) — 날짜별 건수 · 확정/예정/추정 점
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+        <b style="font-size:12px">8월 6일 (목) 46건</b><span class="pill">내 종목만</span>
+      </div>
+      <div class="row"><span class="mono" style="width:42px;text-align:right">11일 전</span><span class="logo">BGF</span>
+        <span class="grow trunc">BGF리테일 <span class="mut" style="font-size:11px">2026 2Q</span> <span class="badge b-conf">발표</span></span>
+        <span class="mono mut" style="font-size:11px">기대 → 발표</span>
+        <span class="mono up">+11.7%</span><span class="mono up" style="width:52px;text-align:right">↗ +13.4%</span></div>
+      <div class="row"><span class="mono" style="width:42px;text-align:right">11일 전</span><span class="logo">한국</span>
+        <span class="grow trunc">한국금융지주 <span class="mut" style="font-size:11px">2026 2Q</span> <span class="badge b-conf">발표</span></span>
+        <span class="mono mut" style="font-size:11px">기대 → 발표</span>
+        <span class="mono up">+27.8%</span><span class="mono down" style="width:52px;text-align:right">↘ −7.3%</span></div>
+    </div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <div class="card" style="padding:9px"><b style="font-size:12px">내 종목 다음 발표</b>
+      <div class="mut" style="font-size:11px;margin-top:4px">삼성전자 <span class="badge b-est">추정</span> 10/14</div></div>
+    <div class="card" style="padding:9px"><b style="font-size:12px">컨센서스 상회 TOP</b>
+      <div class="mut" style="font-size:11px;margin-top:4px">대한항공 +319.9% · 동원산업 +273.3%</div></div>
+    <div class="card" style="padding:9px"><b style="font-size:12px">기대와 주가가 엇갈림</b>
+      <div class="mut" style="font-size:11px;margin-top:4px">한국금융지주 +27.8% → −7.3%<br>엘앤에프 −58.2% → +7.3%</div></div>
+  </div>
+</div>
+
+<h3><span class="opt">L2</span> 주간 보드 중심 (달력은 작은 월 미니맵으로)</h3>
+<div class="card">
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+    <span class="toggle"><span>월</span><span class="on">주</span><span>일</span></span>
+    <span class="mut" style="font-size:11px">8/10 – 8/16</span>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">
+    <div style="border:1px solid var(--border);border-radius:8px;padding:7px">
+      <div style="font-size:11px;font-weight:700">월 10<span class="mut" style="font-weight:400"> · 262건</span></div>
+      <div class="mut" style="font-size:10px;margin:4px 0">상회 58%</div>
+      <div style="font-size:10px">한화솔루션 <span class="up mono">+42%</span></div>
+      <div style="font-size:10px">LG생건 <span class="down mono">−11%</span></div>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:8px;padding:7px">
+      <div style="font-size:11px;font-weight:700">화 11<span class="mut" style="font-weight:400"> · 197건</span></div>
+      <div class="mut" style="font-size:10px;margin:4px 0">상회 64%</div>
+      <div style="font-size:10px">아모레 <span class="up mono">+18%</span></div>
+    </div>
+    <div style="border:2px solid var(--foreground);border-radius:8px;padding:7px">
+      <div style="font-size:11px;font-weight:700">수 12<span class="mut" style="font-weight:400"> · 296건</span></div>
+      <div class="mut" style="font-size:10px;margin:4px 0">상회 61%</div>
+      <div style="font-size:10px">동원산업 <span class="up mono">+273%</span></div>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:8px;padding:7px">
+      <div style="font-size:11px;font-weight:700">목 13<span class="mut" style="font-weight:400"> · 181건</span></div>
+      <div class="mut" style="font-size:10px;margin:4px 0">상회 55%</div>
+      <div style="font-size:10px">클리오 <span class="up mono">+123%</span> <span class="mut">(서프라이즈)</span></div>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:8px;padding:7px">
+      <div style="font-size:11px;font-weight:700">금 14<span class="mut" style="font-weight:400"> · 43건</span></div>
+      <div class="mut" style="font-size:10px;margin:4px 0">상회 60%</div>
+      <div style="font-size:10px">현대해상 <span class="up mono">+37%</span></div>
+    </div>
+  </div>
+  <p class="note">
+    <b>실적은 주 단위로 몰립니다</b>(실측: 8월 3~14일에 국내 190건 전부). 한 주를 나란히 놓으면
+    「이번 주 어디가 격전지인가」가 보이는데, 월 히트맵은 그걸 색 농도로만 말합니다.
+    다만 <b>날짜 하나를 깊게 보는 흐름은 L1이 낫습니다.</b>
+  </p>
+</div>
+
+<p class="note" style="margin-top:32px">
+  선택하지 않은 것들: 애널리스트 목표주가 컨센서스(FnGuide 유료 영역 — 지금 소스에 없음),
+  섹터별 실적 집계(<code>stocks</code>에 섹터 컬럼이 아직 없음 — AGENT_STATE TODO),
+  실적 발표 알림/푸시(알림 인프라 없음), 리포트 연계(<code>research_calls</code> 3건뿐).
+</p>
+
+</div>
+</body>
+</html>

@@ -87,10 +87,7 @@ export function ChartFullscreenModal({
         <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold text-[var(--text-primary)]">{title}</h2>
-            <p className="text-xs text-[var(--text-muted)]">
-              {symbol}
-              {source === "toss" ? " · 토스 API" : ""}
-            </p>
+            <p className="text-xs text-[var(--text-muted)]">{symbol}</p>
           </div>
           <div className="flex items-center gap-2">
             <ChartZoomToolbar

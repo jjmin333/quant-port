@@ -28,7 +28,7 @@ func paginateAggregatedFromRaw(
 	var nextBefore *string
 	if rawNextBefore != nil {
 		nb := normalizeCandleBarTime(stored[0].Time, base)
-		nextBefore = &nb
+		nextBefore = model.CanonicalPaginationCursorPtr(&nb, base)
 	}
 
 	return CandlesPage{Candles: agg, NextBefore: nextBefore}

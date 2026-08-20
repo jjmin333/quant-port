@@ -45,6 +45,8 @@ func (s *QuotesService) refreshTerminalSnapshot(ctx context.Context, symbol stri
 		trades = []model.TradeTick{}
 	}
 
+	s.rehydrateQuoteDetailWithSources(ctx, &detail, trades, &book)
+
 	snap := model.QuoteTerminalSnapshot{
 		Detail:    detail,
 		OrderBook: book,
@@ -56,7 +58,25 @@ func (s *QuotesService) refreshTerminalSnapshot(ctx context.Context, symbol stri
 	s.persistQuoteDetail(ctx, symbol, detail, s.dataSource())
 	s.persistOrderBook(ctx, symbol, book)
 	s.persistTrades(ctx, symbol, trades)
+	s.publishQuoteUpdate(detail)
 	return snap, true
+}
+
+func (s *QuotesService) publishQuoteUpdate(detail model.QuoteDetail) {
+	if s.quoteStreamHub == nil {
+		return
+	}
+	s.quoteStreamHub.Publish(model.QuoteStreamEvent{
+		Type:          "quote_update",
+		Symbol:        detail.Symbol,
+		CurrentPrice:  detail.CurrentPrice,
+		Change:        detail.Change,
+		ChangeRate:    detail.ChangeRate,
+		PrevClose:     detail.PrevClose,
+		RegularClose:  detail.RegularClose,
+		MarketSession: detail.MarketSession,
+		UpdatedAt:     detail.UpdatedAt,
+	})
 }
 
 func (s *QuotesService) GetCandleSnapshot(ctx context.Context, symbol string, interval model.CandleInterval) (model.CandleSnapshot, bool) {
@@ -81,40 +101,86 @@ func (s *QuotesService) buildCandleSnapshot(
 	}
 }
 
+// splitFormingCandle peels off the bar covering the current bucket so it can be
+// streamed as `forming` instead of being cached/persisted as final history.
 func splitFormingCandle(candles []model.Candle, interval model.CandleInterval) ([]model.Candle, *model.Candle) {
 	if len(candles) == 0 {
 		return nil, nil
 	}
-	if interval == model.Interval1d || interval == model.Interval1w || interval == model.Interval1M {
+
+	idx := newestCandleIndex(candles)
+	if idx < 0 || parseQuoteCandleTime(candles[idx].Time).Before(currentBucketStart(interval)) {
 		return candles, nil
 	}
 
-	last := candles[len(candles)-1]
-	lastT := parseQuoteCandleTime(last.Time)
+	forming := candles[idx]
+	completed := make([]model.Candle, 0, len(candles)-1)
+	completed = append(completed, candles[:idx]...)
+	completed = append(completed, candles[idx+1:]...)
+	return completed, &forming
+}
+
+// newestCandleIndex locates the latest bar. Pages arrive ascending from the 1m
+// tail and the DB but descending from the Toss daily tail, so the newest bar
+// cannot be assumed to sit at either end. Returns -1 when no time parses.
+func newestCandleIndex(candles []model.Candle) int {
+	newestIdx := -1
+	var newest time.Time
+	for i, candle := range candles {
+		t := parseQuoteCandleTime(candle.Time)
+		if t.IsZero() {
+			continue
+		}
+		if newestIdx < 0 || t.After(newest) {
+			newest, newestIdx = t, i
+		}
+	}
+	return newestIdx
+}
+
+// currentBucketStart is the KST start of the bar bucket that "now" falls into.
+func currentBucketStart(interval model.CandleInterval) time.Time {
 	now := time.Now().In(kst)
-
-	var bucketStart time.Time
+	switch interval {
+	case model.Interval1d:
+		return startOfDay(now)
+	case model.Interval1w:
+		return weekStart(now)
+	case model.Interval1M:
+		return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, kst)
+	}
 	if minutes := intervalMinutes(interval); minutes > 0 {
-		bucketStart = truncateCandleTime(now, minutes)
-	} else {
-		bucketStart = truncateCandleTime(now, 1)
+		return truncateCandleTime(now, minutes)
 	}
-
-	if lastT.Before(bucketStart) {
-		return candles, nil
-	}
-
-	completed := append([]model.Candle(nil), candles[:len(candles)-1]...)
-	return completed, &last
+	return truncateCandleTime(now, 1)
 }
 
 func (s *QuotesService) refreshRawCandles(ctx context.Context, symbol string) error {
-	raw1m, ok1m := s.getCandlesPageUncached(ctx, symbol, model.Interval1m, "")
+	// intraday1mFetchTarget shrinks this to just the bars that could have
+	// changed since our last successful fetch (usually ~1-2 minutes' worth)
+	// instead of the full maxIntradayRawBars window every tick.
+	target1m := s.intraday1mFetchTarget(ctx, symbol)
+	raw1m, ok1m := s.getCandlesPageUncachedWithTarget(ctx, symbol, model.Interval1m, "", target1m)
 	raw1d, ok1d := s.getCandlesPageUncached(ctx, symbol, model.Interval1d, "")
 
+	// The Toss fetch above may only cover the recent delta, so merge in
+	// DB-stored history — the cached snapshot, its pagination cursor, and
+	// 5m-60m aggregation all need the same full lookback depth clients get
+	// today; only the Toss call itself should shrink.
+	m1Page := raw1m
+	if ok1m {
+		if history := s.listIntradayBarsFromDB(ctx, symbol, maxIntradayRawBars); len(history) > 0 {
+			merged := mergeIntraday1mBars(raw1m.Candles, history)
+			m1Page = CandlesPage{
+				Candles:    merged,
+				NextBefore: mergePaginationCursor(merged, model.Interval1m, raw1m.NextBefore),
+			}
+		}
+	}
+
 	var rev int64
-	if ok1m && len(raw1m.Candles) > 0 {
-		rev = s.storeRawTail(ctx, symbol, model.Interval1m, raw1m)
+	if ok1m && len(m1Page.Candles) > 0 {
+		rev = s.storeRawTail(ctx, symbol, model.Interval1m, m1Page)
 	}
 	if ok1d && len(raw1d.Candles) > 0 {
 		if rev == 0 {
@@ -130,12 +196,12 @@ func (s *QuotesService) refreshRawCandles(ctx context.Context, symbol string) er
 
 	var m1, d1 []model.Candle
 	if ok1m {
-		m1 = raw1m.Candles
+		m1 = m1Page.Candles
 	}
 	if ok1d {
 		d1 = raw1d.Candles
 	}
-	s.rebuildAggregatedSnapshots(ctx, symbol, m1, d1, raw1m.NextBefore, raw1d.NextBefore, rev)
+	s.rebuildAggregatedSnapshots(ctx, symbol, m1, d1, m1Page.NextBefore, raw1d.NextBefore, rev)
 	return nil
 }
 
@@ -210,28 +276,31 @@ func (s *QuotesService) rebuildAggregatedSnapshots(
 		}
 
 		agg := aggregateCandles(source, interval)
+		agg = trimCandlesTail(agg, candleDisplayBarCount(interval))
 		snap := s.buildCandleSnapshot(symbol, interval, agg, nextBefore)
 		snap.Rev = rev
 		s.cacheCandleSnapshot(ctx, snap)
 	}
 }
 
-func (s *QuotesService) refreshFormingBars(ctx context.Context, symbol string) {
+// refreshFormingBars patches the in-progress candle's close/high/low.
+// knownPrice should be the price refreshTerminalSnapshot already resolved
+// for this symbol this tick (model.QuoteDetail.CurrentPrice) — that value
+// went through rehydrateQuoteDetailWithSources' stale-price correction
+// (falls back to a direct Toss quote or the last ranking price when the
+// naive resolution lands exactly on prevClose), which the plain
+// resolveBestLivePrice call below does not. Reusing it keeps the header
+// price (quote_update) and the daily chart's forming bar (bar_update)
+// numerically identical instead of each tick computing "current price"
+// twice via two different algorithms. Pass 0 to fall back to the
+// independent resolution (e.g. when refreshTerminalSnapshot itself failed).
+func (s *QuotesService) refreshFormingBars(ctx context.Context, symbol string, knownPrice float64) {
 	if !s.TossEnabled() {
 		return
 	}
-	currentPrice := 0.0
-	if s.marketStore != nil {
-		if v, ok := s.marketStore.GetPrice(ctx, symbol); ok {
-			currentPrice = v
-		}
-	}
+	currentPrice := knownPrice
 	if currentPrice <= 0 {
-		price, err := s.toss.GetPrice(ctx, symbol)
-		if err != nil || price == nil {
-			return
-		}
-		currentPrice = parseDecimal(price.LastPrice)
+		currentPrice = s.resolveBestLivePrice(ctx, symbol, 0, nil, nil)
 	}
 	if currentPrice <= 0 {
 		return
@@ -239,6 +308,7 @@ func (s *QuotesService) refreshFormingBars(ctx context.Context, symbol string) {
 
 	for _, interval := range []model.CandleInterval{
 		model.Interval1m, model.Interval5m, model.Interval10m, model.Interval30m, model.Interval60m,
+		model.Interval1d,
 	} {
 		snap, ok := s.loadCandleSnapshot(ctx, symbol, interval)
 		if !ok {
@@ -260,10 +330,11 @@ func (s *QuotesService) refreshFormingBars(ctx context.Context, symbol string) {
 		snap.Forming = &forming
 		s.cacheCandleSnapshot(ctx, snap)
 
-		pub := forming
-		if norm := s.normalizeCandlesKRW(ctx, symbol, []model.Candle{forming}); len(norm) > 0 {
-			pub = norm[0]
+		if interval == model.Interval1m && s.candles != nil && s.candles.HasTable(ctx) {
+			_ = s.candles.UpsertBatch(ctx, symbol, model.Interval1m, []model.Candle{forming})
 		}
+
+		pub := forming
 
 		s.streamHub.Publish(model.StreamEvent{
 			Type:     "bar_update",
@@ -276,10 +347,11 @@ func (s *QuotesService) refreshFormingBars(ctx context.Context, symbol string) {
 }
 
 func lastCompletedTime(candles []model.Candle) string {
-	if len(candles) == 0 {
+	idx := newestCandleIndex(candles)
+	if idx < 0 {
 		return ""
 	}
-	return candles[len(candles)-1].Time
+	return candles[idx].Time
 }
 
 func findClosedBar(candles []model.Candle, timeKey string) *model.Candle {
@@ -330,12 +402,8 @@ func (s *QuotesService) ServeStream(w http.ResponseWriter, r *http.Request, symb
 		}
 		writeSSE(w, flusher, ev)
 		if len(snap.Completed) > 0 {
-			completed := s.normalizeCandlesKRW(r.Context(), symbol, snap.Completed)
-			var forming *model.Candle
-			if snap.Forming != nil {
-				norm := s.normalizeCandlesKRW(r.Context(), symbol, []model.Candle{*snap.Forming})
-				forming = &norm[0]
-			}
+			completed := snap.Completed
+			forming := snap.Forming
 			payload, _ := json.Marshal(map[string]any{
 				"type":      "snapshot_bars",
 				"symbol":    symbol,
@@ -367,6 +435,63 @@ func (s *QuotesService) ServeStream(w http.ResponseWriter, r *http.Request, symb
 }
 
 func writeSSE(w http.ResponseWriter, flusher http.Flusher, ev model.StreamEvent) {
+	payload, err := json.Marshal(ev)
+	if err != nil {
+		return
+	}
+	fmt.Fprintf(w, "data: %s\n\n", payload)
+	flusher.Flush()
+}
+
+func (s *QuotesService) ServeQuoteStream(w http.ResponseWriter, r *http.Request, symbol string) {
+	s.touchSymbol(symbol)
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Time{})
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	if detail, ok := s.GetQuote(r.Context(), symbol); ok {
+		ev := model.QuoteStreamEvent{
+			Type:          "quote_update",
+			Symbol:        detail.Symbol,
+			CurrentPrice:  detail.CurrentPrice,
+			Change:        detail.Change,
+			ChangeRate:    detail.ChangeRate,
+			PrevClose:     detail.PrevClose,
+			RegularClose:  detail.RegularClose,
+			MarketSession: detail.MarketSession,
+			UpdatedAt:     detail.UpdatedAt,
+		}
+		writeQuoteSSE(w, flusher, ev)
+	}
+
+	ch, cancel := s.quoteStreamHub.Subscribe(symbol)
+	defer cancel()
+
+	ctx := r.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case ev, open := <-ch:
+			if !open {
+				return
+			}
+			writeQuoteSSE(w, flusher, ev)
+		}
+	}
+}
+
+func writeQuoteSSE(w http.ResponseWriter, flusher http.Flusher, ev model.QuoteStreamEvent) {
 	payload, err := json.Marshal(ev)
 	if err != nil {
 		return

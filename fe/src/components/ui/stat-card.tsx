@@ -13,16 +13,18 @@ export function StatCard({ label, value, subValue, trend, className }: StatCardP
   return (
     <div
       className={cn(
-        "min-w-[var(--dashboard-stat-min)] shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 sm:p-4",
+        // 밀도는 Card와 같은 값을 쓴다 — 예전엔 p-3/p-4라 나란히 놓았을 때 카드마다
+        // 안쪽 여백이 달라 보였다 (docs/UI_SPEC.md §14)
+        "min-w-[var(--dashboard-stat-min)] shrink-0 rounded-xl border bg-card p-2.5",
         className,
       )}
     >
-      <p className="whitespace-nowrap text-xs text-[var(--text-muted)]">{label}</p>
-      <div className="mt-1 whitespace-nowrap text-[var(--text-primary)]">{value}</div>
+      <p className="whitespace-nowrap text-[11px] text-muted-foreground">{label}</p>
+      <div className="mt-0.5 whitespace-nowrap">{value}</div>
       {subValue && (
         <p
           className={cn(
-            "mt-1 whitespace-nowrap font-mono text-sm",
+            "mt-0.5 whitespace-nowrap font-mono text-xs",
             trend === "up" && trendTextClass(1),
             trend === "down" && trendTextClass(-1),
             trend === "neutral" && "text-[var(--text-secondary)]",

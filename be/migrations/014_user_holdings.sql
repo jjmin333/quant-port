@@ -1,0 +1,13 @@
+CREATE TABLE IF NOT EXISTS user_holdings (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  symbol VARCHAR(32) NOT NULL,
+  quantity DECIMAL(18, 4) NOT NULL DEFAULT 0,
+  broker_hint VARCHAR(64) NULL,
+  source VARCHAR(32) NOT NULL DEFAULT 'manual',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_user_holdings_user_symbol (user_id, symbol),
+  KEY idx_user_holdings_user (user_id),
+  CONSTRAINT fk_user_holdings_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);

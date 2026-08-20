@@ -4,20 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/enact/quant-port/be/internal/model"
 )
 
 const (
-	quotesTerminalKeyFmt   = "quotes:terminal:%s"
-	quotesDetailKeyFmt     = "quotes:detail:%s"
-	quotesDetailLastKeyFmt = "quotes:detail:last:%s"
-	quotesBookKeyFmt       = "quotes:book:%s"
-	quotesBookLastKeyFmt   = "quotes:book:last:%s"
-	quotesTradesKeyFmt     = "quotes:trades:%s"
-	quotesTradesLastKeyFmt = "quotes:trades:last:%s"
-	quotesListKeyFmt       = "quotes:list:v2:%s:%s:%d:%d"
+	quotesTerminalKeyFmt = "quotes:terminal:%s"
+	quotesBookKeyFmt     = "quotes:book:%s"
+	quotesTradesKeyFmt   = "quotes:trades:%s"
+	quotesListKeyFmt       = "quotes:list:v2:%s:%s:%d:%d" // catalog lists only; watchlist/held bypass cache
 	mdSnapKeyFmt           = "md:snap:%s:%s"
 	mdRevKeyFmt            = "md:rev:%s"
 	mdRaw1mKeyFmt          = "md:raw:1m:%s"
@@ -99,50 +96,68 @@ func (s *QuotesService) cacheCandleSnapshot(ctx context.Context, snap model.Cand
 	s.cacheSetJSON(ctx, fmt.Sprintf(mdSnapKeyFmt, snap.Symbol, snap.Interval), snap, ttl)
 }
 
-func (s *QuotesService) lastGoodCacheTTL() time.Duration {
-	return time.Duration(model.MarketDataLastGoodCacheSec) * time.Second
-}
-
-func (s *QuotesService) cacheQuoteDetailLast(ctx context.Context, symbol string, detail model.QuoteDetail) {
-	s.cacheSetJSON(ctx, fmt.Sprintf(quotesDetailLastKeyFmt, symbol), detail, s.lastGoodCacheTTL())
-}
-
-func (s *QuotesService) loadQuoteDetailLast(ctx context.Context, symbol string) (model.QuoteDetail, bool) {
-	var cached model.QuoteDetail
-	if s.cacheGetJSON(ctx, fmt.Sprintf(quotesDetailLastKeyFmt, symbol), &cached) {
-		return cached, true
+func tradesNewestTime(trades []model.TradeTick) time.Time {
+	var best time.Time
+	for _, t := range trades {
+		ts := parseQuoteCandleTime(t.Time)
+		if !ts.IsZero() && ts.After(best) {
+			best = ts
+		}
 	}
-	return model.QuoteDetail{}, false
+	return best
 }
 
-func (s *QuotesService) cacheTradesLast(ctx context.Context, symbol string, trades []model.TradeTick) {
-	if len(trades) == 0 {
-		return
+// loadQuoteDetailFromTerminalCache reads the 1s hot terminal snapshot (live detail path).
+func (s *QuotesService) loadQuoteDetailFromTerminalCache(ctx context.Context, symbol string) (model.QuoteDetail, bool) {
+	sym := strings.ToUpper(strings.TrimSpace(symbol))
+	var snap model.QuoteTerminalSnapshot
+	if !s.cacheGetJSON(ctx, fmt.Sprintf(quotesTerminalKeyFmt, sym), &snap) {
+		return model.QuoteDetail{}, false
 	}
-	s.cacheSetJSON(ctx, fmt.Sprintf(quotesTradesLastKeyFmt, symbol), trades, s.lastGoodCacheTTL())
-}
-
-func (s *QuotesService) loadTradesLast(ctx context.Context, symbol string) ([]model.TradeTick, bool) {
-	var cached []model.TradeTick
-	if s.cacheGetJSON(ctx, fmt.Sprintf(quotesTradesLastKeyFmt, symbol), &cached) && len(cached) > 0 {
-		return cached, true
+	if strings.TrimSpace(snap.Detail.Symbol) == "" {
+		return model.QuoteDetail{}, false
 	}
-	return nil, false
+	return snap.Detail, true
 }
 
-func (s *QuotesService) cacheOrderBookLast(ctx context.Context, symbol string, book model.OrderBook) {
+func (s *QuotesService) cacheOrderBook(ctx context.Context, symbol string, book model.OrderBook, source string) {
 	if len(book.Asks) == 0 && len(book.Bids) == 0 {
 		return
 	}
-	s.cacheSetJSON(ctx, fmt.Sprintf(quotesBookLastKeyFmt, symbol), book, s.lastGoodCacheTTL())
+	s.cacheSetEnvelope(ctx, fmt.Sprintf(quotesBookKeyFmt, symbol), book, source, s.terminalCacheTTL())
 }
 
-func (s *QuotesService) loadOrderBookLast(ctx context.Context, symbol string) (model.OrderBook, bool) {
-	var cached model.OrderBook
-	if s.cacheGetJSON(ctx, fmt.Sprintf(quotesBookLastKeyFmt, symbol), &cached) {
-		return cached, true
+func (s *QuotesService) loadOrderBookFromCache(ctx context.Context, symbol string, requireFresh bool) (model.OrderBook, bool) {
+	sym := strings.ToUpper(strings.TrimSpace(symbol))
+	var book model.OrderBook
+	fetchedAt, _, ok := s.cacheGetEnvelope(ctx, fmt.Sprintf(quotesBookKeyFmt, sym), &book)
+	if !ok {
+		return model.OrderBook{}, false
 	}
-	return model.OrderBook{}, false
+	if requireFresh && s.terminalDataNeedsRefresh(ctx, sym, fetchedAt, nil) {
+		return model.OrderBook{}, false
+	}
+	return book, true
+}
+
+func (s *QuotesService) cacheTrades(ctx context.Context, symbol string, trades []model.TradeTick, source string) {
+	if len(trades) == 0 {
+		return
+	}
+	s.cacheSetEnvelope(ctx, fmt.Sprintf(quotesTradesKeyFmt, symbol), trades, source, s.terminalCacheTTL())
+}
+
+func (s *QuotesService) loadTradesFromCache(ctx context.Context, symbol string, requireFresh bool) ([]model.TradeTick, bool) {
+	sym := strings.ToUpper(strings.TrimSpace(symbol))
+	var trades []model.TradeTick
+	fetchedAt, _, ok := s.cacheGetEnvelope(ctx, fmt.Sprintf(quotesTradesKeyFmt, sym), &trades)
+	if !ok || len(trades) == 0 {
+		return nil, false
+	}
+	if requireFresh && s.terminalDataNeedsRefresh(ctx, sym, fetchedAt, trades) {
+		return nil, false
+	}
+	return trades, true
 }
 
 func (s *QuotesService) loadCandleSnapshot(ctx context.Context, symbol string, interval model.CandleInterval) (model.CandleSnapshot, bool) {
@@ -155,6 +170,16 @@ func (s *QuotesService) loadCandleSnapshot(ctx context.Context, symbol string, i
 
 func quotesListCacheKey(filter, query string, limit, offset int) string {
 	return fmt.Sprintf(quotesListKeyFmt, filter, query, limit, offset)
+}
+
+func (s *QuotesService) InvalidateQuotesListCache(ctx context.Context, filter string) {
+	if s.redis == nil {
+		return
+	}
+	for _, limit := range []int{100, 200} {
+		key := quotesListCacheKey(filter, "", limit, 0)
+		_ = s.redis.Del(ctx, key).Err()
+	}
 }
 
 func (s *QuotesService) redisReady() bool {

@@ -4,30 +4,43 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/enact/quant-port/be/internal/marketdata"
 	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/repository"
+	"github.com/enact/quant-port/be/internal/safego"
 	"github.com/enact/quant-port/be/internal/toss"
 	"github.com/redis/go-redis/v9"
 )
 
 type QuotesService struct {
-	toss        *toss.Client
-	external    *marketdata.Clients
-	fx          *ExchangeRateService
-	watchlist   *repository.WatchlistRepo
-	portfolio   *PortfolioService
-	stocks      *repository.StockRepo
+	toss         *toss.Client
+	external     *marketdata.Clients
+	fx           *ExchangeRateService
+	watchlist    *repository.WatchlistRepo
+	userHoldings *UserHoldingsService
+	stocks       *repository.StockRepo
 	redis       *redis.Client
 	candles       *repository.CandleBarRepo
 	quoteTerminal *repository.QuoteTerminalRepo
+	rankingsRepo  *repository.MarketRankingsRepo
 	marketStore   *MarketDataStore
 	indexStore  *MarketIndexStore
-	streamHub   *streamHub
-	poller      *marketPoller
+	streamHub      *streamHub
+	quoteStreamHub *quoteStreamHub
+	poller         *marketPoller
+	pollerStarted  atomic.Bool
 	quoteRefresh *quoteRefreshCoordinator
+
+	stockInfoBatchMu sync.RWMutex
+	stockInfoBatch   map[string]stockInfoBatchEntry
+}
+
+func (s *QuotesService) SetUserHoldings(svc *UserHoldingsService) {
+	s.userHoldings = svc
 }
 
 func NewQuotesService(
@@ -35,7 +48,6 @@ func NewQuotesService(
 	external *marketdata.Clients,
 	fx *ExchangeRateService,
 	watchlist *repository.WatchlistRepo,
-	portfolio *PortfolioService,
 	stockRepo *repository.StockRepo,
 	redisClient *redis.Client,
 	candleRepo *repository.CandleBarRepo,
@@ -46,16 +58,27 @@ func NewQuotesService(
 		external:      external,
 		fx:            fx,
 		watchlist:     watchlist,
-		portfolio:     portfolio,
 		stocks:        stockRepo,
 		redis:         redisClient,
 		candles:       candleRepo,
 		quoteTerminal: quoteTerminalRepo,
-		streamHub:     newStreamHub(),
+		streamHub:      newStreamHub(),
+		quoteStreamHub: newQuoteStreamHub(),
+		stockInfoBatch: make(map[string]stockInfoBatchEntry),
 	}
 	s.poller = newMarketPoller(s)
-	go s.poller.Run(context.Background())
 	return s
+}
+
+// StartPolling launches the market poller. It is deliberately separate from the
+// constructor: the poller reads collaborators wired by the Set* methods
+// (marketStore, indexStore, userHoldings, rankingsRepo), so starting it inside
+// NewQuotesService would race with that wiring.
+func (s *QuotesService) StartPolling(ctx context.Context) {
+	if !s.pollerStarted.CompareAndSwap(false, true) {
+		return
+	}
+	safego.GoCtx(ctx, "market-poller", s.poller.Run)
 }
 
 func (s *QuotesService) SetIndexStore(store *MarketIndexStore) {
@@ -67,6 +90,10 @@ func (s *QuotesService) SetMarketStore(store *MarketDataStore) {
 	if s.poller != nil {
 		s.poller.quotes = s
 	}
+}
+
+func (s *QuotesService) SetRankingsRepo(repo *repository.MarketRankingsRepo) {
+	s.rankingsRepo = repo
 }
 
 func (s *QuotesService) TossEnabled() bool {
@@ -85,14 +112,27 @@ type QuoteListResult struct {
 }
 
 func (s *QuotesService) ListQuotes(ctx context.Context, filter, query string, limit, offset int) QuoteListResult {
+	// One watchlist/holdings lookup for the whole list instead of one per item.
+	ctx = withOverlayCache(ctx)
+
+	// Per-user filters must never hit Redis (symbols, metrics, live prices).
+	if filter == "watchlist" || filter == "held" {
+		return s.listQuotesUncached(ctx, filter, query, limit, offset)
+	}
+
+	watchSet := s.watchSymbolSet(ctx)
+	heldSet := s.heldSymbolSet(ctx)
+
 	key := quotesListCacheKey(filter, query, limit, offset)
 	var cached QuoteListResult
 	if s.cacheGetJSON(ctx, key, &cached) {
+		s.overlayQuoteFlags(cached.Items, watchSet, heldSet)
 		return cached
 	}
 
 	out := s.listQuotesUncached(ctx, filter, query, limit, offset)
-	s.cacheSetJSON(ctx, key, out, time.Duration(model.MarketDataListCacheSec)*time.Second)
+	s.overlayQuoteFlags(out.Items, watchSet, heldSet)
+	s.cacheSetJSON(ctx, key, stripQuoteListForCache(out), time.Duration(model.MarketDataListCacheSec)*time.Second)
 	return out
 }
 
@@ -105,6 +145,7 @@ func (s *QuotesService) listQuotesUncached(ctx context.Context, filter, query st
 		base := s.quotesForSymbols(ctx, s.watchlistSymbols(ctx), watchSet, heldSet)
 		filtered := filterQuotesByQuery(base, query)
 		items := s.applyLivePrices(ctx, filtered, watchSet, heldSet)
+		s.enrichWatchlistQuotes(ctx, items)
 		return QuoteListResult{Items: items, Total: len(items)}
 	case "held":
 		base := filterQuotesByHeld(ctx, s, nil, heldSet)
@@ -165,11 +206,7 @@ func (s *QuotesService) getOrderBookUncached(ctx context.Context, symbol string)
 	if s.TossEnabled() {
 		book, err := s.toss.GetOrderbook(ctx, symbol)
 		if err == nil && book != nil {
-			out := mapOrderbook(symbol, book)
-			if fx := s.fxForSymbol(ctx, symbol); fx > 0 {
-				s.normalizeOrderBookKRW(&out, fx)
-			}
-			return out, true
+			return mapOrderbook(symbol, book), true
 		}
 		return model.OrderBook{}, false
 	}
@@ -186,24 +223,9 @@ func (s *QuotesService) getTradesUncached(ctx context.Context, symbol string) ([
 	}
 	trades, err := s.toss.GetTrades(ctx, symbol, 50)
 	if err == nil && len(trades) > 0 {
-		out := mapTrades(symbol, trades)
-		if fx := s.fxForSymbol(ctx, symbol); fx > 0 {
-			s.normalizeTradesKRW(out, fx)
-		}
-		return out, true
+		return mapTrades(symbol, trades), true
 	}
 	return nil, false
-}
-
-func (s *QuotesService) fxForSymbol(ctx context.Context, symbol string) float64 {
-	if !s.TossEnabled() {
-		return 0
-	}
-	stock, err := s.toss.GetStock(ctx, symbol)
-	if err != nil || stock == nil || stock.Currency != toss.CurrencyUSD {
-		return 0
-	}
-	return s.usdKrwRate(ctx)
 }
 
 func (s *QuotesService) GetCandles(ctx context.Context, symbol string, interval model.CandleInterval) ([]model.Candle, bool) {

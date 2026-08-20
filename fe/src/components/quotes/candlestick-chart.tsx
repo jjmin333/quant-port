@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import {
   AreaSeries,
   BarSeries,
@@ -10,6 +10,7 @@ import {
   CrosshairMode,
   HistogramSeries,
   isBusinessDay,
+  LineStyle,
   type AreaData,
   type BarData,
   type CandlestickData,
@@ -25,10 +26,16 @@ import {
   formatAdaptiveChartAxisTime,
   formatChartCrosshairBusinessDay,
   formatChartCrosshairTime,
+  intradayInitialVisibleBars,
+  isDailyBarInterval,
   isDailyCandleInterval,
+  isMonthlyCandleInterval,
+  isWeeklyCandleInterval,
   toChartTime,
+  visibleEpochsFromChartTimes,
   type ChartVisibleSpan,
 } from "@/lib/chart-time";
+import { formatVolume } from "@/lib/format";
 import type { Candle, CandleInterval, ChartStyle } from "@/lib/quotes-types";
 
 type PriceSeriesType = Extract<SeriesType, "Candlestick" | "Bar" | "Area">;
@@ -46,18 +53,75 @@ type CandlestickChartProps = {
 
 const UP_COLOR = "#EF4444";
 const DOWN_COLOR = "#3B82F6";
-const INTRADAY_INITIAL_BARS = 120;
-/** Gaps larger than this start a new intraday session (overnight / multi-day tail). */
-const MAX_INTRADAY_GAP_SEC = 3 * 3600;
+const DAILY_INITIAL_BARS = 120;
+const WEEKLY_INITIAL_BARS = 52;
+const MONTHLY_INITIAL_BARS = 36;
+const LOAD_MORE_EDGE_BARS = 12;
+
+// getComputedStyle can return CSS Color 4 syntax (e.g. lab(), oklch()) for
+// custom properties defined via oklch() in globals.css. lightweight-charts'
+// color parser only understands hex/rgb/hsl, and re-reading fillStyle back
+// off a canvas context just echoes the same lab()/oklch() syntax on modern
+// Chrome — so instead paint 1x1px and read the composited pixel back,
+// which canvas always reports as plain unpremultiplied rgba.
+let colorNormalizeCtx: CanvasRenderingContext2D | null = null;
+function normalizeColor(value: string, fallback: string): string {
+  if (!value) return fallback;
+  if (typeof document === "undefined") return fallback;
+  if (!colorNormalizeCtx) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    colorNormalizeCtx = canvas.getContext("2d", { willReadFrequently: true });
+  }
+  if (!colorNormalizeCtx) return fallback;
+  try {
+    colorNormalizeCtx.clearRect(0, 0, 1, 1);
+    colorNormalizeCtx.fillStyle = value;
+    colorNormalizeCtx.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = colorNormalizeCtx.getImageData(0, 0, 1, 1).data;
+    return `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(3)})`;
+  } catch {
+    return fallback;
+  }
+}
 
 function readChartThemeColors() {
   if (typeof window === "undefined") {
-    return { textColor: "#94A3B8", gridColor: "rgba(148, 163, 184, 0.08)" };
+    return {
+      textColor: "#94A3B8",
+      gridColor: "rgba(148, 163, 184, 0.08)",
+      crosshairBg: "#1A2030",
+      crosshairText: "#F1F5F9",
+      crosshairBorder: "#334155",
+    };
   }
   const root = getComputedStyle(document.documentElement);
   return {
-    textColor: root.getPropertyValue("--text-secondary").trim() || "#94A3B8",
-    gridColor: root.getPropertyValue("--chart-grid").trim() || "rgba(148, 163, 184, 0.08)",
+    textColor: normalizeColor(root.getPropertyValue("--text-secondary").trim(), "#94A3B8"),
+    gridColor: normalizeColor(root.getPropertyValue("--chart-grid").trim(), "rgba(148, 163, 184, 0.08)"),
+    crosshairBg: normalizeColor(root.getPropertyValue("--chart-crosshair-bg").trim(), "#1A2030"),
+    crosshairText: normalizeColor(root.getPropertyValue("--chart-crosshair-text").trim(), "#F1F5F9"),
+    crosshairBorder: normalizeColor(root.getPropertyValue("--chart-crosshair-border").trim(), "#334155"),
+  };
+}
+
+function crosshairOptions() {
+  const { crosshairBg, crosshairText } = readChartThemeColors();
+  return {
+    mode: CrosshairMode.Normal,
+    vertLine: {
+      color: "rgba(148, 163, 184, 0.45)",
+      style: LineStyle.Dashed,
+      labelBackgroundColor: crosshairBg,
+      labelTextColor: crosshairText,
+    },
+    horzLine: {
+      color: "rgba(148, 163, 184, 0.45)",
+      style: LineStyle.Dashed,
+      labelBackgroundColor: crosshairBg,
+      labelTextColor: crosshairText,
+    },
   };
 }
 
@@ -69,7 +133,46 @@ function applyChartTheme(chart: IChartApi) {
       vertLines: { color: gridColor },
       horzLines: { color: gridColor },
     },
+    crosshair: crosshairOptions(),
   });
+}
+
+function formatChartPrice(price: number, currency: "KRW" | "USD"): string {
+  if (currency === "USD") {
+    return `$${price.toFixed(2)}`;
+  }
+  return `${Math.round(price).toLocaleString("ko-KR")}원`;
+}
+
+type ChartHoverTooltip = {
+  x: number;
+  y: number;
+  timeLabel: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number;
+};
+
+function barFromCrosshairData(
+  data: BarData<Time> | AreaData<Time> | undefined,
+  chartStyle: ChartStyle,
+): Pick<ChartHoverTooltip, "open" | "high" | "low" | "close"> | null {
+  if (!data) return null;
+  if (chartStyle === "area") {
+    const area = data as AreaData<Time>;
+    if (typeof area.value !== "number" || area.value <= 0) return null;
+    return { open: area.value, high: area.value, low: area.value, close: area.value };
+  }
+  const bar = data as BarData<Time>;
+  if (bar.close <= 0) return null;
+  return {
+    open: bar.open,
+    high: bar.high,
+    low: bar.low,
+    close: bar.close,
+  };
 }
 
 export type CandlestickChartHandle = {
@@ -96,16 +199,18 @@ function barEpochSeconds(time: Time): number {
   return new Date(time.year, time.month - 1, time.day).getTime() / 1000;
 }
 
-/** Index of the first bar in the latest contiguous intraday session. */
-function findIntradaySessionStart(ohlc: CandlestickData<Time>[]): number {
-  if (ohlc.length <= 1) return 0;
-  let start = ohlc.length - 1;
-  for (let i = ohlc.length - 2; i >= 0; i--) {
-    const gap = barEpochSeconds(ohlc[i + 1]!.time) - barEpochSeconds(ohlc[i]!.time);
-    if (gap > MAX_INTRADAY_GAP_SEC) break;
-    start = i;
-  }
-  return start;
+function formatAxisTickLabel(
+  time: Time,
+  interval: CandleInterval,
+  visible: ChartVisibleSpan,
+  visibleEpochs: number[],
+): string {
+  return formatAdaptiveChartAxisTime(
+    barEpochSeconds(time),
+    interval,
+    visible,
+    visibleEpochs,
+  );
 }
 
 function formatCrosshairTime(time: Time, interval: CandleInterval): string {
@@ -127,6 +232,7 @@ function buildSeriesData(candles: Candle[], interval: CandleInterval) {
   const volumeMap = new Map<string, HistogramData<Time>>();
 
   for (const candle of sorted) {
+    if (candle.close <= 0 && candle.open <= 0 && candle.high <= 0) continue;
     const time = toChartTime(candle.time, interval) as Time;
     const key = timeKey(time);
     const existing = ohlcMap.get(key);
@@ -165,6 +271,12 @@ function buildSeriesData(candles: Candle[], interval: CandleInterval) {
   const ohlc = Array.from(ohlcMap.values()).sort((a, b) => compareChartTime(a.time, b.time));
   const volume = Array.from(volumeMap.values()).sort((a, b) => compareChartTime(a.time, b.time));
   const area: AreaData<Time>[] = ohlc.map((bar) => ({ time: bar.time, value: bar.close }));
+
+  if (ohlc.length >= 2 && compareChartTime(ohlc[0]!.time, ohlc[ohlc.length - 1]!.time) > 0) {
+    ohlc.reverse();
+    volume.reverse();
+    area.reverse();
+  }
 
   return { ohlc, volume, area };
 }
@@ -229,15 +341,33 @@ function applyDefaultVisibleRange(
 ) {
   const barCount = ohlc.length;
   if (barCount <= 0) return;
-  if (isDailyCandleInterval(interval)) {
-    chart.timeScale().fitContent();
+  if (isMonthlyCandleInterval(interval)) {
+    const visible = Math.min(MONTHLY_INITIAL_BARS, barCount);
+    chart.timeScale().setVisibleLogicalRange({
+      from: Math.max(0, barCount - visible),
+      to: barCount + 0.5,
+    });
     return;
   }
-  const sessionStart = findIntradaySessionStart(ohlc);
-  const sessionLen = barCount - sessionStart;
-  const visible = Math.min(INTRADAY_INITIAL_BARS, sessionLen);
+  if (isWeeklyCandleInterval(interval)) {
+    const visible = Math.min(WEEKLY_INITIAL_BARS, barCount);
+    chart.timeScale().setVisibleLogicalRange({
+      from: Math.max(0, barCount - visible),
+      to: barCount + 0.5,
+    });
+    return;
+  }
+  if (isDailyBarInterval(interval)) {
+    const visible = Math.min(DAILY_INITIAL_BARS, barCount);
+    chart.timeScale().setVisibleLogicalRange({
+      from: Math.max(0, barCount - visible),
+      to: barCount + 0.5,
+    });
+    return;
+  }
+  const visible = Math.min(intradayInitialVisibleBars(interval), barCount);
   chart.timeScale().setVisibleLogicalRange({
-    from: Math.max(sessionStart, barCount - visible),
+    from: Math.max(0, barCount - visible),
     to: barCount + 0.5,
   });
 }
@@ -294,9 +424,27 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
   const ohlcRef = useRef<CandlestickData<Time>[]>([]);
   const volumeRef = useRef<HistogramData<Time>[]>([]);
   const visibleSpanRef = useRef<ChartVisibleSpan>({ spanSeconds: 0 });
+  const visibleEpochsRef = useRef<number[]>([]);
   const pinnedToLiveRef = useRef(true);
   const intervalRefForZoom = useRef(interval);
   const daily = isDailyCandleInterval(interval);
+  const [tooltip, setTooltip] = useState<ChartHoverTooltip | null>(null);
+  const currencyRef = useRef(currency);
+
+  const tryLoadMoreAtLeftEdgeRef = useRef<() => void>(() => {});
+
+  const tryLoadMoreAtLeftEdge = useCallback(() => {
+    const chart = chartRef.current;
+    if (!chart || !hasMoreRef.current || loadingMoreRef.current || loadMoreLockRef.current) return;
+    const range = chart.timeScale().getVisibleLogicalRange();
+    if (!range || range.from > LOAD_MORE_EDGE_BARS) return;
+    loadMoreLockRef.current = true;
+    onLoadMoreRef.current?.();
+  }, []);
+
+  useEffect(() => {
+    tryLoadMoreAtLeftEdgeRef.current = tryLoadMoreAtLeftEdge;
+  }, [tryLoadMoreAtLeftEdge]);
 
   useImperativeHandle(ref, () => ({
     zoomIn: () => {
@@ -327,6 +475,9 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
 
   useEffect(() => {
     hasMoreRef.current = hasMore;
+    chartRef.current?.applyOptions({
+      timeScale: { fixLeftEdge: !hasMore },
+    });
   }, [hasMore]);
 
   useEffect(() => {
@@ -337,50 +488,36 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
   }, [loadingMore]);
 
   useEffect(() => {
+    currencyRef.current = currency;
+  }, [currency]);
+
+  useEffect(() => {
     shouldFitRef.current = true;
     prevBarCountRef.current = 0;
     pinnedToLiveRef.current = true;
+    setTooltip(null);
   }, [interval, currency, daily, chartStyle]);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
+    const formatAxisTick = (time: Time) =>
+      formatAxisTickLabel(time, intervalRef.current, visibleSpanRef.current, visibleEpochsRef.current);
+
     const applyAxisFormat = () => {
       chartRef.current?.applyOptions({
         timeScale: {
-          tickMarkFormatter: (time: Time) => {
-            if (typeof time === "string") {
-              return formatAdaptiveChartAxisTime(
-                new Date(`${time}T00:00:00+09:00`).getTime() / 1000,
-                intervalRef.current,
-                visibleSpanRef.current,
-              );
-            }
-            if (isBusinessDay(time)) {
-              return formatAdaptiveChartAxisTime(
-                new Date(time.year, time.month - 1, time.day).getTime() / 1000,
-                intervalRef.current,
-                visibleSpanRef.current,
-              );
-            }
-            return formatAdaptiveChartAxisTime(
-              time as number,
-              intervalRef.current,
-              visibleSpanRef.current,
-            );
-          },
+          tickMarkFormatter: formatAxisTick,
         },
       });
     };
 
     const syncVisibleSpan = (range: LogicalRange | null) => {
       if (!range || ohlcRef.current.length === 0) return;
-      visibleSpanRef.current = computeVisibleSpan(
-        ohlcRef.current.map((bar) => bar.time),
-        range.from,
-        range.to,
-      );
+      const times = ohlcRef.current.map((bar) => bar.time);
+      visibleSpanRef.current = computeVisibleSpan(times, range.from, range.to);
+      visibleEpochsRef.current = visibleEpochsFromChartTimes(times, range.from, range.to);
       applyAxisFormat();
     };
 
@@ -398,7 +535,7 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
         vertLines: { color: gridColor },
         horzLines: { color: gridColor },
       },
-      crosshair: { mode: CrosshairMode.Normal },
+      crosshair: crosshairOptions(),
       handleScale: {
         axisPressedMouseMove: { time: true, price: true },
         mouseWheel: false,
@@ -416,37 +553,16 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
       },
       timeScale: {
         borderVisible: false,
+        fixLeftEdge: !hasMore,
         timeVisible: !daily,
         secondsVisible: false,
-        tickMarkFormatter: (time: Time) => {
-          if (typeof time === "string") {
-            return formatAdaptiveChartAxisTime(
-              new Date(`${time}T00:00:00+09:00`).getTime() / 1000,
-              intervalRef.current,
-              visibleSpanRef.current,
-            );
-          }
-          if (isBusinessDay(time)) {
-            return formatAdaptiveChartAxisTime(
-              new Date(time.year, time.month - 1, time.day).getTime() / 1000,
-              intervalRef.current,
-              visibleSpanRef.current,
-            );
-          }
-          return formatAdaptiveChartAxisTime(
-            time as number,
-            intervalRef.current,
-            visibleSpanRef.current,
-          );
-        },
+        tickMarkFormatter: (time: Time) =>
+          formatAxisTickLabel(time, intervalRef.current, visibleSpanRef.current, visibleEpochsRef.current),
       },
       localization: {
-        locale: "en-US",
+        locale: "ko-KR",
         timeFormatter: (time: Time) => formatCrosshairTime(time, intervalRef.current),
-        priceFormatter: (price: number) =>
-          currency === "USD"
-            ? `$${price.toFixed(2)}`
-            : `${Math.round(price).toLocaleString("ko-KR")}`,
+        priceFormatter: (price: number) => formatChartPrice(price, currencyRef.current),
       },
     });
 
@@ -455,6 +571,10 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
     const volumeSeries = chart.addSeries(HistogramSeries, {
       priceFormat: { type: "volume" },
       priceScaleId: "volume",
+      // The chart-wide priceFormatter appends the price currency, so a volume
+      // last-value badge would read "5,533,129원". Volume stays in the tooltip.
+      lastValueVisible: false,
+      priceLineVisible: false,
     });
 
     chart.priceScale("volume").applyOptions({
@@ -476,13 +596,34 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
     const handleVisibleRange = (range: LogicalRange | null) => {
       syncVisibleSpan(range);
       pinnedToLiveRef.current = isPinnedToLiveEdge(range, ohlcRef.current.length);
-      if (!range || range.from > 12 || !hasMoreRef.current || loadingMoreRef.current) return;
-      if (loadMoreLockRef.current) return;
-      loadMoreLockRef.current = true;
-      onLoadMoreRef.current?.();
+      tryLoadMoreAtLeftEdgeRef.current();
     };
 
     chart.timeScale().subscribeVisibleLogicalRangeChange(handleVisibleRange);
+
+    const handleCrosshairMove = (param: { point?: { x: number; y: number }; time?: Time; seriesData: Map<unknown, unknown> }) => {
+      if (!param.point || param.point.x < 0 || param.point.y < 0 || param.time == null) {
+        setTooltip(null);
+        return;
+      }
+      const priceData = param.seriesData.get(priceSeries) as BarData<Time> | AreaData<Time> | undefined;
+      const volData = param.seriesData.get(volumeSeries) as HistogramData<Time> | undefined;
+      const bar = barFromCrosshairData(priceData, chartStyleRef.current);
+      if (!bar) {
+        setTooltip(null);
+        return;
+      }
+      const width = container.clientWidth;
+      setTooltip({
+        x: Math.min(Math.max(param.point.x + 14, 8), Math.max(width - 176, 8)),
+        y: Math.max(param.point.y - 96, 8),
+        timeLabel: formatCrosshairTime(param.time, intervalRef.current),
+        ...bar,
+        volume: volData?.value,
+      });
+    };
+
+    chart.subscribeCrosshairMove(handleCrosshairMove);
 
     const resize = () => {
       if (containerRef.current && chartRef.current) {
@@ -498,11 +639,13 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
     return () => {
       themeObserver.disconnect();
       observer.disconnect();
+      chart.unsubscribeCrosshairMove(handleCrosshairMove);
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleVisibleRange);
       chart.remove();
       chartRef.current = null;
       priceSeriesRef.current = null;
       volumeSeriesRef.current = null;
+      setTooltip(null);
     };
   }, [height, interval, currency, daily, chartStyle]);
 
@@ -545,7 +688,9 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
         ohlcRef.current = ohlc;
         volumeRef.current = volume;
         if (pinned && !isDailyCandleInterval(interval)) {
-          const span = visibleRange ? visibleRange.to - visibleRange.from : INTRADAY_INITIAL_BARS;
+          const span = visibleRange
+            ? visibleRange.to - visibleRange.from
+            : intradayInitialVisibleBars(interval);
           followLiveEdge(chart, ohlc.length, span);
         }
         prevBarCountRef.current = ohlc.length;
@@ -566,7 +711,9 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
       shouldFitRef.current = false;
       pinnedToLiveRef.current = true;
     } else if (pinned && ohlc.length > prevCount && prevCount > 0 && !isDailyCandleInterval(interval)) {
-      const span = visibleRange ? visibleRange.to - visibleRange.from : INTRADAY_INITIAL_BARS;
+      const span = visibleRange
+        ? visibleRange.to - visibleRange.from
+        : intradayInitialVisibleBars(interval);
       followLiveEdge(chart, ohlc.length, span);
     } else if (visibleRange && addedLeft > 0) {
       chart.timeScale().setVisibleLogicalRange({
@@ -584,34 +731,62 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
         nextRange.from,
         nextRange.to,
       );
+      visibleEpochsRef.current = visibleEpochsFromChartTimes(
+        ohlc.map((bar) => bar.time),
+        nextRange.from,
+        nextRange.to,
+      );
       chart.applyOptions({
         timeScale: {
-          tickMarkFormatter: (time: Time) => {
-            if (typeof time === "string") {
-              return formatAdaptiveChartAxisTime(
-                new Date(`${time}T00:00:00+09:00`).getTime() / 1000,
-                interval,
-                visibleSpanRef.current,
-              );
-            }
-            if (isBusinessDay(time)) {
-              return formatAdaptiveChartAxisTime(
-                new Date(time.year, time.month - 1, time.day).getTime() / 1000,
-                interval,
-                visibleSpanRef.current,
-              );
-            }
-            return formatAdaptiveChartAxisTime(
-              time as number,
-              interval,
-              visibleSpanRef.current,
-            );
-          },
+          tickMarkFormatter: (time: Time) =>
+            formatAxisTickLabel(time, interval, visibleSpanRef.current, visibleEpochsRef.current),
         },
       });
     }
   }, [candles, interval, chartStyle]);
 
-  return <div ref={containerRef} className="h-full w-full min-h-[240px]" />;
+  return (
+    <div className="relative h-full w-full min-h-[240px]">
+      <div ref={containerRef} className="h-full w-full" />
+      {tooltip && (
+        <div
+          className="pointer-events-none absolute z-10 min-w-[9.5rem] rounded-lg border px-2.5 py-2 shadow-lg"
+          style={{
+            left: tooltip.x,
+            top: tooltip.y,
+            background: "var(--chart-crosshair-bg)",
+            borderColor: "var(--chart-crosshair-border)",
+            color: "var(--chart-crosshair-text)",
+          }}
+        >
+          <p className="text-[11px] font-semibold">{tooltip.timeLabel}</p>
+          <dl className="mt-1.5 space-y-0.5 font-mono text-[10px] leading-relaxed">
+            <div className="flex justify-between gap-3">
+              <dt className="text-[var(--text-muted)]">시가</dt>
+              <dd>{formatChartPrice(tooltip.open, currency)}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-[var(--text-muted)]">고가</dt>
+              <dd>{formatChartPrice(tooltip.high, currency)}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-[var(--text-muted)]">저가</dt>
+              <dd>{formatChartPrice(tooltip.low, currency)}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="font-medium text-[var(--text-secondary)]">종가</dt>
+              <dd className="font-semibold">{formatChartPrice(tooltip.close, currency)}</dd>
+            </div>
+            {tooltip.volume != null && tooltip.volume > 0 && (
+              <div className="flex justify-between gap-3 border-t border-[var(--chart-crosshair-border)] pt-1">
+                <dt className="text-[var(--text-muted)]">거래량</dt>
+                <dd>{formatVolume(tooltip.volume)}</dd>
+              </div>
+            )}
+          </dl>
+        </div>
+      )}
+    </div>
+  );
 },
 );

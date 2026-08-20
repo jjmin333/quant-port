@@ -12,6 +12,7 @@ type Stock struct {
 	SecurityType      string         `json:"securityType"`
 	Currency          QuoteCurrency  `json:"currency"`
 	AssetType         QuoteAssetType `json:"assetType"`
+	LogoURL           string         `json:"logoUrl,omitempty"`
 	Status            string         `json:"status"`
 	SharesOutstanding *int64         `json:"sharesOutstanding,omitempty"`
 	ListDate          *time.Time     `json:"listDate,omitempty"`

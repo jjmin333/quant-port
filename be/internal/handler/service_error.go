@@ -17,8 +17,6 @@ func writeServiceError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, authctx.ErrNoUser):
 		response.Error(w, http.StatusUnauthorized, "authentication required")
-	case errors.Is(err, repository.ErrBrokerNotLinked):
-		response.Error(w, http.StatusForbidden, "broker account not linked")
 	case errors.Is(err, service.ErrInvalidCredentials):
 		response.Error(w, http.StatusUnauthorized, err.Error())
 	case errors.Is(err, service.ErrWeakPassword):

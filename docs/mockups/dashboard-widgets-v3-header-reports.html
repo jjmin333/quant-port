@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>홈 — 상단 밴드 · 리포트 카드 선택용 목업 v3</title>
+<style>
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.97 0 0); --foreground: oklch(0.145 0 0); --card: oklch(1 0 0);
+  --muted: oklch(0.97 0 0); --muted-foreground: oklch(0.52 0 0); --accent: oklch(0.93 0 0);
+  --border: oklch(0.87 0 0); --brand: #2563EB; --brand-muted: rgba(37,99,235,.1);
+  --profit: #DC2626; --loss: #2563EB; --hit: #059669; --hit-muted: rgba(5,150,105,.12);
+  --miss: #B45309; --warn: #D97706; --warn-muted: rgba(217,119,6,.12); --sample: #7C3AED;
+  --score-high: #059669; --score-mid: #D97706; --score-low: #DC2626;
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0); --foreground: oklch(0.985 0 0); --card: oklch(0.205 0 0);
+  --muted: oklch(0.269 0 0); --muted-foreground: oklch(0.708 0 0); --accent: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 16%); --brand: #60A5FA; --brand-muted: rgba(96,165,250,.15);
+  --profit: #F87171; --loss: #60A5FA; --hit: #34D399; --hit-muted: rgba(52,211,153,.14);
+  --miss: #FBBF24; --warn: #FBBF24; --warn-muted: rgba(251,191,36,.14); --sample: #A78BFA;
+  --score-high: #34D399; --score-mid: #FBBF24; --score-low: #F87171;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--background); color: var(--foreground); font-size: 12px; line-height: 1.5;
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  padding: 24px; -webkit-font-smoothing: antialiased; }
+h1 { font-size: 19px; letter-spacing: -.02em; } h2 { font-size: 13.5px; } h3 { font-size: 12.5px; } h4 { font-size: 11px; }
+.wrap { max-width: 1320px; margin: 0 auto; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.mut { color: var(--muted-foreground); } .up { color: var(--profit); } .dn { color: var(--loss); }
+.sm { font-size: 10.5px; } .xs { font-size: 9.5px; }
+.topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: color-mix(in oklch, var(--background) 88%, transparent); backdrop-filter: blur(8px);
+  padding: 10px 0 12px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
+.lede { font-size: 11.5px; color: var(--muted-foreground); max-width: 84ch; line-height: 1.7; }
+.lede b { color: var(--foreground); font-weight: 600; }
+section { margin-top: 28px; }
+.shead { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; margin-bottom: 4px; }
+.tag { font-size: 10px; font-weight: 700; letter-spacing: .04em; padding: 2px 7px; border-radius: 5px;
+  background: var(--brand-muted); color: var(--brand); }
+.why { font-size: 11px; color: var(--muted-foreground); line-height: 1.7; margin-bottom: 10px; max-width: 92ch; }
+.why b { color: var(--foreground); font-weight: 600; }
+.opt { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); overflow: hidden; }
+.opt > header { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--muted) 55%, transparent); }
+.opt > header .id { font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 5px; background: var(--foreground); color: var(--card); }
+.opt > .pad { padding: 12px; background: var(--background); }
+.opt .note { padding: 8px 12px; border-top: 1px solid var(--border); font-size: 10.5px; color: var(--muted-foreground); line-height: 1.7; }
+.cols { display: grid; gap: 14px; } .c2 { grid-template-columns: repeat(auto-fit, minmax(400px,1fr)); }
+.card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 600; padding: 1px 6px;
+  border-radius: 5px; background: var(--muted); color: var(--muted-foreground); white-space: nowrap; }
+.badge.b-up { background: rgba(220,38,38,.12); color: var(--profit); }
+.badge.b-down { background: rgba(37,99,235,.12); color: var(--loss); }
+.badge.b-brand { background: var(--brand-muted); color: var(--brand); }
+.badge.b-hit { background: var(--hit-muted); color: var(--hit); }
+.av { width: 22px; height: 22px; border-radius: 6px; flex: 0 0 auto; background: var(--muted); display: grid;
+  place-items: center; font-size: 9px; font-weight: 700; color: var(--muted-foreground); }
+.pros { font-size: 10.5px; } .pros li { list-style: none; padding-left: 14px; position: relative; margin-top: 3px; color: var(--muted-foreground); }
+.pros li::before { position: absolute; left: 0; }
+.pros li.p::before { content: "+"; color: var(--hit); font-weight: 700; }
+.pros li.c::before { content: "−"; color: var(--miss); font-weight: 700; }
+.be { display: inline-flex; font-size: 9.5px; font-weight: 700; padding: 1px 5px; border-radius: 4px;
+  background: rgba(124,58,237,.12); color: var(--sample); }
+.ok { display: inline-flex; font-size: 9.5px; font-weight: 700; padding: 1px 5px; border-radius: 4px;
+  background: var(--hit-muted); color: var(--hit); }
+.dot { width: 7px; height: 7px; border-radius: 999px; display: inline-block; }
+.dot.live { background: var(--hit); box-shadow: 0 0 0 3px var(--hit-muted); }
+.dot.closed { background: var(--muted-foreground); }
+.clamp1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* 상단 밴드 시뮬레이터 */
+.band { border-bottom: 1px solid var(--border); background: var(--card); padding: 12px 16px; }
+.band .t { font-size: 15px; font-weight: 600; } .band .s { font-size: 11px; color: var(--muted-foreground); margin-top: 2px; }
+.tick { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.tick .i { display: flex; align-items: baseline; gap: 5px; }
+.tick .i .n { font-size: 10.5px; color: var(--muted-foreground); }
+.tick .i .v { font-size: 12px; font-weight: 600; }
+
+/* 리포트 카드 */
+.thumb { border-radius: 8px; background: linear-gradient(135deg, var(--muted), var(--accent)); display: grid;
+  place-items: center; color: var(--muted-foreground); font-size: 10px; }
+.spark svg { width: 100%; display: block; overflow: visible; }
+.axes { display: grid; gap: 2px; }
+.axes .a { display: grid; grid-template-columns: 40px 1fr 22px; gap: 6px; align-items: center; font-size: 9.5px; }
+.axes .a .tr { height: 4px; border-radius: 3px; background: var(--muted); position: relative; }
+.axes .a .tr i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--brand); }
+.prog { height: 5px; border-radius: 3px; background: var(--muted); position: relative; }
+.prog i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--brand); opacity: .8; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 9.5px; color: var(--muted-foreground); }
+.g4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; }
+.g2 { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; }
+.g3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <h1>홈 — 상단 밴드 · 리포트 카드 선택용 목업 v3</h1>
+  <button onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'"
+    style="font:inherit;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--foreground);padding:5px 11px;border-radius:7px">라이트 / 다크</button>
+  <span class="ok" style="margin-left:auto">기존 API로 가능</span>
+</div>
+
+<p class="lede">
+  ① <b>「홈」 제목 밴드</b>가 전폭 60px을 쓰면서 말하는 것은 이미 아는 사실뿐이다 — 앱 헤더에 브랜드가 있고
+  사이드바가 현재 위치를 표시한다. ② <b>「최신 투자 리포트」 카드</b>는 배지·제목·저자만 있는데,
+  리포트 목록 응답에는 <span class="mono sm">chart.bars</span>(200포인트)·<span class="mono sm">evidence.breakdown</span>(5축)·
+  <span class="mono sm">progress</span>·조회·좋아요가 <b>이미 전부 실려 온다</b>(실측). 카드를 채워도 <b>추가 요청 0</b>이다.
+</p>
+
+<!-- ══════════ 상단 밴드 ══════════ -->
+<section>
+  <div class="shead"><span class="tag">H · 택 1</span><h2>「홈」 제목 자리에 무엇을 둘 것인가</h2></div>
+  <p class="why">
+    <b>확인된 제약</b>: <span class="mono sm">/market-calendar/KR·US</span>는 동작하고 오늘 휴장 여부·직전 거래일 세션 시각까지 준다(실측).
+    다만 <b>다음 개장일은 응답에 없어</b> 「다음 개장까지 N시간」은 만들 수 없다 — 「오늘 휴장 · 직전 거래일 08-14」까지가 정직한 한계다.
+  </p>
+
+  <div class="cols c2">
+
+    <div class="opt">
+      <header><span class="id">H0</span><h3>현재</h3></header>
+      <div class="pad">
+        <div class="band"><div class="t">홈</div><div class="s">시장 현황 · 관심종목 · 뉴스</div></div>
+      </div>
+      <p class="note">전폭 60px. 「홈」은 사이드바가 이미 표시하고, 부제는 아래 위젯 이름을 그대로 반복한다.</p>
+    </div>
+
+    <div class="opt">
+      <header><span class="id">H1</span><h3>장 상태 바로 교체</h3><span class="badge b-brand" style="margin-left:auto">권장</span></header>
+      <div class="pad">
+        <div class="band">
+          <div class="tick">
+            <span style="display:flex;align-items:center;gap:6px"><i class="dot closed"></i><b>한국 휴장</b><span class="xs mut">직전 거래일 08-14 (금)</span></span>
+            <span style="display:flex;align-items:center;gap:6px"><i class="dot closed"></i><b>미국 휴장</b><span class="xs mut">직전 거래일 08-14 (금)</span></span>
+            <span class="xs mut" style="margin-left:auto">18:02 기준</span>
+          </div>
+        </div>
+        <p class="xs mut" style="margin:8px 0 4px">평일 장중이면 ↓</p>
+        <div class="band">
+          <div class="tick">
+            <span style="display:flex;align-items:center;gap:6px"><i class="dot live"></i><b>한국 장중</b><span class="xs mut">마감까지 1시간 12분</span></span>
+            <span style="display:flex;align-items:center;gap:6px"><i class="dot closed"></i><b>미국 마감</b><span class="xs mut">정규장 22:30 시작</span></span>
+            <span class="xs mut" style="margin-left:auto">14:18 기준</span>
+          </div>
+        </div>
+      </div>
+      <p class="note"><ul class="pros">
+        <li class="p">홈에 <b>지금이 장중인지 마감인지가 어디에도 없다</b> — 그래서 "왜 숫자가 안 움직이지"가 버그처럼 보인다</li>
+        <li class="p">밴드 높이가 60px → <b>42px</b>로 줄어든다</li>
+        <li class="c">Toss 연동에 의존 — 실패하면 밴드를 통째로 감춘다(없는 정보를 추측해 적지 않는다)</li>
+      </ul></p>
+    </div>
+
+    <div class="opt">
+      <header><span class="id">H2</span><h3>제목 유지 + 우측 지수 티커</h3></header>
+      <div class="pad">
+        <div class="band" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div><div class="t">홈</div><div class="s">시장 현황 · 관심종목 · 뉴스</div></div>
+          <div class="tick" style="margin-left:auto">
+            <span class="i"><span class="n">코스피</span><span class="v mono">6,977.94</span><span class="mono up sm">+2.42%</span></span>
+            <span class="i"><span class="n">나스닥</span><span class="v mono">27,412.5</span><span class="mono dn sm">-0.31%</span></span>
+            <span class="i"><span class="n">원/달러</span><span class="v mono">1,332.1</span><span class="mono dn sm">-0.28%</span></span>
+          </div>
+        </div>
+      </div>
+      <p class="note"><ul class="pros">
+        <li class="p">다른 페이지와 <b>헤더 형태가 같다</b>(PageHeader의 기존 <span class="mono sm">actions</span> 슬롯을 쓴다)</li>
+        <li class="c">바로 아래 지수 히어로가 <b>같은 숫자를 다시</b> 말한다 — 첫 화면에서 코스피를 두 번 읽게 된다</li>
+      </ul></p>
+    </div>
+
+    <div class="opt">
+      <header><span class="id">H3</span><h3>밴드 제거</h3></header>
+      <div class="pad">
+        <div style="border:1px dashed var(--border);border-radius:8px;padding:10px;color:var(--muted-foreground);font-size:10.5px;text-align:center">
+          (상단 밴드 없음 — 본문이 바로 시작)
+        </div>
+        <div class="card" style="margin-top:8px;padding:10px">
+          <div style="font-size:12px;font-weight:600">오늘의 시장 브리핑 <span class="badge b-up">▲ 강세</span></div>
+          <p class="sm mut" style="margin-top:4px">코스피가 6,977.94포인트로 마감하며 7000선 돌파를 목전에…</p>
+        </div>
+      </div>
+      <p class="note"><ul class="pros">
+        <li class="p">세로 <b>60px을 통째로</b> 되찾는다 — 첫 화면에 브리핑과 지수가 모두 들어온다</li>
+        <li class="c">홈만 다른 화면들과 <b>구조가 달라진다</b>(전 페이지가 PageHeader로 시작한다)</li>
+        <li class="c">「홈」이라는 제목이 사라지면 <b>모바일에서 현재 위치 표시가 사이드바뿐</b>이 된다</li>
+      </ul></p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════ 리포트 카드 ══════════ -->
+<section>
+  <div class="shead"><span class="tag">R · 택 1</span><h2>「최신 투자 리포트」를 어떻게 그릴 것인가</h2></div>
+  <p class="why">
+    셋 다 <b>추가 요청 0</b>이다 — 목록 응답이 이미 들고 오는 값만 쓴다. 표지 이미지가 없는 리포트는 <b>종목 로고</b>로 대신한다
+    (리포트 화면이 이미 쓰는 규칙). 카드 클릭 = 퀵룩 모달은 이미 붙어 있다.
+  </p>
+
+  <div class="cols" style="grid-template-columns:1fr">
+
+    <div class="opt">
+      <header><span class="id">R0</span><h3>현재</h3><span class="badge" style="margin-left:auto">4열</span></header>
+      <div class="pad"><div class="g4">
+        <div class="card" style="padding:10px">
+          <div style="display:flex;align-items:center;gap:5px"><span class="badge b-up">강세</span><span class="xs mut">삼성전자</span></div>
+          <p class="clamp2" style="font-size:11px;font-weight:500;margin-top:5px;line-height:1.45">메모리 사이클 반등, 목표 92,000</p>
+          <p class="xs mut" style="margin-top:8px">홍길동 · 2시간 전</p>
+        </div>
+        <div class="card" style="padding:10px">
+          <div style="display:flex;align-items:center;gap:5px"><span class="badge b-down">약세</span><span class="xs mut">카카오</span></div>
+          <p class="clamp2" style="font-size:11px;font-weight:500;margin-top:5px;line-height:1.45">광고 회복 지연, 하향 조정</p>
+          <p class="xs mut" style="margin-top:8px">김분석 · 5시간 전</p>
+        </div>
+        <div class="card" style="padding:10px;opacity:.5"></div>
+        <div class="card" style="padding:10px;opacity:.5"></div>
+      </div></div>
+      <p class="note">배지·종목명·제목·저자 넷뿐. <b>왜 강세인지, 목표까지 얼마나 남았는지, 지금 맞고 있는지</b>가 전부 없다 — 응답에는 다 있는데.</p>
+    </div>
+
+    <div class="opt">
+      <header><span class="id">R1</span><h3>세로 카드 4장 강화</h3><span class="badge b-brand" style="margin-left:auto">권장</span></header>
+      <div class="pad"><div class="g4">
+        <div class="card" style="padding:10px">
+          <div class="thumb" style="aspect-ratio:16/10;margin-bottom:7px">표지 · 없으면 종목 로고</div>
+          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+            <span class="av">삼</span><span class="xs mut">삼성전자</span><span class="badge b-up">강세</span>
+            <span class="badge b-brand" style="margin-left:auto">D-84</span>
+          </div>
+          <p class="clamp2" style="font-size:11.5px;font-weight:600;margin-top:5px;line-height:1.4">메모리 사이클 반등, 목표 92,000</p>
+          <p class="clamp1 xs mut" style="margin-top:3px">3분기 서버 D램 계약가가 전 분기 대비 12% 올랐고…</p>
+          <div class="spark" style="margin-top:7px">
+            <svg viewBox="0 0 160 34" preserveAspectRatio="none" style="height:34px">
+              <polyline fill="none" stroke="var(--muted-foreground)" stroke-width="1.4" opacity=".45" points="0,26 20,24 40,27 60,20 78,22"/>
+              <polyline fill="none" stroke="var(--profit)" stroke-width="1.6" points="78,22 96,17 114,20 132,11 150,13 160,7"/>
+              <line x1="0" y1="6" x2="160" y2="6" stroke="var(--profit)" stroke-width="1" stroke-dasharray="3 3" opacity=".6"/>
+              <circle cx="78" cy="22" r="2.4" fill="var(--foreground)"/>
+            </svg>
+          </div>
+          <div style="margin-top:6px">
+            <div class="prog"><i style="width:37%"></i></div>
+            <div class="meta" style="margin-top:3px;justify-content:space-between">
+              <span>68,400 → 목표 92,000</span><span class="up mono">+10.0%</span>
+            </div>
+          </div>
+          <div class="meta" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
+            <span>홍길동</span><span>2시간 전</span><span>👁 412</span><span>♥ 18</span>
+          </div>
+        </div>
+
+        <div class="card" style="padding:10px">
+          <div class="thumb" style="aspect-ratio:16/10;margin-bottom:7px">카</div>
+          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+            <span class="av">카</span><span class="xs mut">카카오</span><span class="badge b-down">약세</span>
+            <span class="badge b-brand" style="margin-left:auto">D-31</span>
+          </div>
+          <p class="clamp2" style="font-size:11.5px;font-weight:600;margin-top:5px;line-height:1.4">광고 회복 지연, 목표 하향</p>
+          <p class="clamp1 xs mut" style="margin-top:3px">커머스 성장은 유지되나 광고 단가 회복이…</p>
+          <div class="spark" style="margin-top:7px">
+            <svg viewBox="0 0 160 34" preserveAspectRatio="none" style="height:34px">
+              <polyline fill="none" stroke="var(--muted-foreground)" stroke-width="1.4" opacity=".45" points="0,12 20,14 40,11 60,16 78,15"/>
+              <polyline fill="none" stroke="var(--loss)" stroke-width="1.6" points="78,15 96,19 114,17 132,24 150,22 160,27"/>
+              <circle cx="78" cy="15" r="2.4" fill="var(--foreground)"/>
+            </svg>
+          </div>
+          <div style="margin-top:6px">
+            <div class="prog"><i style="width:62%"></i></div>
+            <div class="meta" style="margin-top:3px;justify-content:space-between">
+              <span>52,100 → 목표 43,000</span><span class="dn mono">-6.4%</span>
+            </div>
+          </div>
+          <div class="meta" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
+            <span>김분석</span><span>5시간 전</span><span>👁 208</span><span>♥ 6</span>
+          </div>
+        </div>
+        <div class="card" style="padding:10px;opacity:.45;display:grid;place-items:center;font-size:10px;color:var(--muted-foreground)">3번째</div>
+        <div class="card" style="padding:10px;opacity:.45;display:grid;place-items:center;font-size:10px;color:var(--muted-foreground)">4번째</div>
+      </div></div>
+      <p class="note"><ul class="pros">
+        <li class="p"><b>4장 그리드를 유지</b>한다 — 리포트가 홈의 마지막 줄이라 가로로 넓게 쓰는 편이 자연스럽다</li>
+        <li class="p">스파크라인은 <b>발행 전 회색 · 발행 후 색 + 발행 지점 점 하나</b> — 리포트 화면과 같은 그림이라 두 번 배울 필요가 없다</li>
+        <li class="p">「목표까지 +10.0%」와 진행 막대가 <b>이 주장이 지금 맞고 있는지</b>를 말한다</li>
+        <li class="c">카드 높이 78px → 약 <b>250px</b></li>
+      </ul></p>
+    </div>
+
+    <div class="opt">
+      <header><span class="id">R2</span><h3>리포트 페이지와 같은 가로형 2장</h3></header>
+      <div class="pad"><div class="g2">
+        <div class="card" style="padding:12px;display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px">
+          <div>
+            <div class="thumb" style="aspect-ratio:16/10">표지</div>
+            <div class="spark" style="margin-top:6px"><svg viewBox="0 0 150 30" preserveAspectRatio="none" style="height:30px">
+              <polyline fill="none" stroke="var(--muted-foreground)" stroke-width="1.4" opacity=".45" points="0,24 30,22 60,25 75,20"/>
+              <polyline fill="none" stroke="var(--profit)" stroke-width="1.6" points="75,20 100,15 125,10 150,5"/></svg></div>
+            <div class="axes" style="margin-top:6px">
+              <div class="a"><span class="mut">추세</span><span class="tr"><i style="width:80%"></i></span><span class="mono">80</span></div>
+              <div class="a"><span class="mut">수익성</span><span class="tr"><i style="width:77%"></i></span><span class="mono">77</span></div>
+              <div class="a"><span class="mut">가치</span><span class="tr"><i style="width:31%"></i></span><span class="mono">31</span></div>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+              <span class="av">삼</span><span class="xs mut">삼성전자</span><span class="badge b-up">강세</span>
+              <span class="badge b-brand" style="margin-left:auto">D-84</span>
+            </div>
+            <h3 style="margin-top:6px;font-weight:600;line-height:1.4">메모리 사이클 반등, 목표 92,000</h3>
+            <p class="clamp2 sm mut" style="margin-top:4px">3분기 서버 D램 계약가가 전 분기 대비 12% 올랐고, 감산 효과가…</p>
+            <div class="meta" style="margin-top:7px"><span>홍길동</span><span>2시간 전</span><span>4분</span><span>👁 412</span><span>♥ 18</span></div>
+            <div class="prog" style="margin-top:8px"><i style="width:37%"></i></div>
+            <div class="meta" style="margin-top:3px;justify-content:space-between"><span>68,400 → 92,000</span><span class="up mono">+10.0%</span></div>
+          </div>
+        </div>
+        <div class="card" style="padding:12px;opacity:.45;display:grid;place-items:center;font-size:10px;color:var(--muted-foreground);min-height:200px">2번째</div>
+      </div></div>
+      <p class="note"><ul class="pros">
+        <li class="p">리포트 화면의 카드와 <b>완전히 같은 물건</b> — 컴포넌트를 그대로 재사용한다</li>
+        <li class="p"><b>5축 막대</b>까지 들어간다(왜 이 주장을 하는지의 근거)</li>
+        <li class="c"><b>2장만</b> 보인다 — 지금 4장이던 것이 절반으로 준다</li>
+        <li class="c">홈의 다른 위젯은 전부 조밀한 목록인데 여기만 밀도가 확 떨어진다</li>
+      </ul></p>
+    </div>
+
+    <div class="opt">
+      <header><span class="id">R3</span><h3>압축 가로형 3장</h3></header>
+      <div class="pad"><div class="g3">
+        <div class="card" style="padding:10px;display:grid;grid-template-columns:64px minmax(0,1fr);gap:9px">
+          <div class="thumb" style="aspect-ratio:1">삼</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+              <span class="xs mut">삼성전자</span><span class="badge b-up">강세</span><span class="badge b-brand" style="margin-left:auto">D-84</span>
+            </div>
+            <p class="clamp2" style="font-size:11.5px;font-weight:600;margin-top:4px;line-height:1.4">메모리 사이클 반등, 목표 92,000</p>
+            <div class="prog" style="margin-top:6px"><i style="width:37%"></i></div>
+            <div class="meta" style="margin-top:3px;justify-content:space-between"><span>목표까지</span><span class="up mono">+10.0%</span></div>
+            <div class="meta" style="margin-top:4px"><span>홍길동 · 2시간</span><span>👁 412</span></div>
+          </div>
+        </div>
+        <div class="card" style="padding:10px;display:grid;grid-template-columns:64px minmax(0,1fr);gap:9px">
+          <div class="thumb" style="aspect-ratio:1">카</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+              <span class="xs mut">카카오</span><span class="badge b-down">약세</span><span class="badge b-brand" style="margin-left:auto">D-31</span>
+            </div>
+            <p class="clamp2" style="font-size:11.5px;font-weight:600;margin-top:4px;line-height:1.4">광고 회복 지연, 목표 하향</p>
+            <div class="prog" style="margin-top:6px"><i style="width:62%"></i></div>
+            <div class="meta" style="margin-top:3px;justify-content:space-between"><span>목표까지</span><span class="dn mono">-6.4%</span></div>
+            <div class="meta" style="margin-top:4px"><span>김분석 · 5시간</span><span>👁 208</span></div>
+          </div>
+        </div>
+        <div class="card" style="padding:10px;opacity:.45;display:grid;place-items:center;font-size:10px;color:var(--muted-foreground);min-height:110px">3번째</div>
+      </div></div>
+      <p class="note"><ul class="pros">
+        <li class="p">세로를 <b>가장 적게</b> 먹으면서(약 120px) 목표 진행까지 담는다</li>
+        <li class="c"><b>스파크라인이 없다</b> — "지금 맞고 있나"는 숫자 하나로만 답한다</li>
+        <li class="c">4장 → 3장으로 준다</li>
+      </ul></p>
+    </div>
+
+  </div>
+</section>
+
+<p class="xs mut" style="margin-top:28px">수치는 예시입니다. 실제 화면은 리포트 페이지가 이미 쓰는 컴포넌트(ResearchThumbnail·ResearchSparkline·ResearchAxisBars·HorizonProgress)를 재사용합니다.</p>
+
+</div>
+</body>
+</html>

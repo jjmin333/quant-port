@@ -1,0 +1,489 @@
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>뉴스 개편 v2 — A3 LLM 입력 설계 · 비로그인 유도</title>
+<style>
+:root {
+  --background: oklch(0.97 0 0); --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0); --muted: oklch(0.97 0 0); --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.93 0 0); --border: oklch(0.87 0 0);
+  --brand: #2563EB; --brand-muted: rgba(37, 99, 235, 0.1);
+  --profit: #DC2626; --loss: #2563EB;
+  --score-high: #059669; --score-mid: #D97706; --score-low: #DC2626;
+  --hot: #E11D48; --amber: #D97706; --amber-bg: rgba(217,119,6,.08);
+  --code-bg: oklch(0.955 0.004 260);
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0); --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0); --muted: oklch(0.269 0 0); --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0); --border: oklch(1 0 0 / 16%);
+  --brand: #60A5FA; --brand-muted: rgba(96, 165, 250, 0.15);
+  --profit: #F87171; --loss: #60A5FA;
+  --score-high: #34D399; --score-mid: #FBBF24; --score-low: #F87171;
+  --hot: #FB7185; --amber: #FBBF24; --amber-bg: rgba(251,191,36,.10);
+  --code-bg: oklch(0.24 0.01 260);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--background); color: var(--foreground);
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 12px; line-height: 1.5; padding: 24px; -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1080px; margin: 0 auto; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+h3 { font-size: 13px; font-weight: 700; margin: 30px 0 12px; padding-top: 18px; border-top: 2px solid var(--border); }
+h4 { font-size: 12px; font-weight: 700; margin: 18px 0 8px; }
+.sub { color: var(--muted-foreground); font-size: 12px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.up { color: var(--profit); } .down { color: var(--loss); } .dim { color: var(--muted-foreground); }
+
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-bottom: 16px; margin-bottom: 18px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--background); z-index: 5; }
+button.tgl { font: inherit; cursor: pointer; border: 1px solid var(--border);
+  background: var(--card); color: var(--foreground); border-radius: 8px; padding: 5px 12px; }
+
+.opt { margin-bottom: 22px; }
+.opt-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.tag { font-size: 11px; font-weight: 700; background: var(--brand-muted); color: var(--brand);
+  border-radius: 6px; padding: 2px 7px; flex: none; }
+.tag.cur { background: var(--muted); color: var(--muted-foreground); }
+.tag.rec { background: color-mix(in oklab, var(--score-high) 16%, transparent); color: var(--score-high); }
+.tag.warn { background: var(--amber-bg); color: var(--amber); }
+.note { color: var(--muted-foreground); font-size: 11px; margin-top: 8px; }
+.note b { color: var(--foreground); }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg);
+  border-radius: 4px; padding: 1px 4px; font-size: 11px; }
+
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+.card + .card { margin-top: 8px; }
+.card-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.card-t { font-size: 12px; font-weight: 600; }
+.more { font-size: 11px; color: var(--muted-foreground); }
+
+.callout { border: 1px solid color-mix(in oklab, var(--amber) 35%, transparent);
+  background: var(--amber-bg); border-radius: 12px; padding: 12px 14px; }
+.callout .ttl { font-size: 12px; font-weight: 700; color: var(--amber); margin-bottom: 5px; }
+
+pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px;
+  padding: 11px 12px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px; line-height: 1.6; }
+pre .k { color: var(--brand); } pre .s { color: var(--score-high); }
+pre .c { color: var(--muted-foreground); } pre .n { color: var(--hot); }
+
+table { width: 100%; border-collapse: collapse; font-size: 11px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--muted-foreground); font-weight: 600; font-size: 10px; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+tr.pick td { background: color-mix(in oklab, var(--score-high) 7%, transparent); }
+
+.chip { font-size: 11px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--card); color: var(--muted-foreground); cursor: pointer; }
+.chip.on { background: var(--brand); color: #fff; border-color: var(--brand); }
+.chip.lock { border-style: dashed; opacity: .55; }
+.chip.demo { border-color: color-mix(in oklab, var(--amber) 45%, transparent); color: var(--amber);
+  background: var(--amber-bg); }
+.pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.badge { font-size: 9px; font-weight: 700; border-radius: 5px; padding: 1px 5px;
+  border: 1px solid var(--border); color: var(--muted-foreground); }
+.badge.pub { background: var(--muted); }
+.badge.brk { background: color-mix(in oklab, var(--hot) 15%, transparent); color: var(--hot); border-color: transparent; }
+
+.demobar { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 9px;
+  background: var(--amber-bg); border: 1px solid color-mix(in oklab, var(--amber) 32%, transparent);
+  font-size: 11px; }
+.demobar .tx { flex: 1; min-width: 0; }
+.demobar a { color: var(--amber); font-weight: 700; text-decoration: none; white-space: nowrap; }
+
+.temp { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center; min-width: 0; }
+.temp .l { font-size: 10px; color: var(--muted-foreground); }
+.temp .v { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.temp .d { font-size: 10px; color: var(--muted-foreground); }
+.a3grid { display: grid; grid-template-columns: 1fr 320px; gap: 14px; align-items: center; }
+@media (max-width: 800px) { .a3grid { grid-template-columns: 1fr; } }
+
+.mood { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700;
+  border-radius: 999px; padding: 2px 9px; }
+.mood.bull { background: color-mix(in oklab, var(--profit) 13%, transparent); color: var(--profit); }
+.mood.flat { background: var(--muted); color: var(--muted-foreground); }
+
+/* 팝오버 */
+.pop-host { position: relative; display: inline-block; }
+.popover { width: 260px; background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 12px; box-shadow: 0 10px 34px rgba(0,0,0,.16); }
+.popover .ttl { font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+.popover ul { margin: 6px 0 0 15px; font-size: 11px; color: var(--muted-foreground); line-height: 1.65; }
+.btnrow { display: flex; gap: 6px; margin-top: 10px; }
+.btn { flex: 1; text-align: center; font-size: 11px; padding: 7px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--card); cursor: pointer; }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
+
+.modal-f { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--border); }
+.railrow { display: flex; align-items: center; gap: 8px; padding: 4px 1px; font-size: 11px;
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent); }
+.railrow:last-child { border-bottom: 0; }
+.railrow .n { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.railrow .v { font-variant-numeric: tabular-nums; flex: none; }
+.blurred { filter: blur(3px); opacity: .5; user-select: none; }
+.gate { position: relative; }
+.gate .over { position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+  background: color-mix(in oklab, var(--card) 55%, transparent); border-radius: 10px; }
+
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+@media (max-width: 800px) { .two { grid-template-columns: 1fr; } }
+.three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-items: start; }
+@media (max-width: 860px) { .three { grid-template-columns: 1fr; } }
+.pick { display: flex; gap: 6px; align-items: center; margin-top: 10px; padding: 8px 10px;
+  border: 1px dashed var(--border); border-radius: 10px; font-size: 11px; color: var(--muted-foreground); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div>
+    <h1>뉴스 개편 v2 — <span class="dim" style="font-size:14px;font-weight:400">A3 LLM 입력 설계 · 비로그인 유도</span></h1>
+    <p class="sub">v1에서 고르신 <b>A1·A2·A3 / B1·B2 / C1·C2 / D1·D2 / E1~E4</b> 중, 설계가 더 필요한 두 가지만 다룹니다.</p>
+  </div>
+  <button class="tgl" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme==='dark'?'light':'dark'">🌗 테마</button>
+</div>
+
+
+<!-- ═════════ 0. 먼저 알아야 할 제약 ═════════ -->
+<div class="callout">
+  <div class="ttl">⚠️ 이 코드베이스의 LLM 지출 규칙 — 설계가 여기서 갈립니다</div>
+  <p class="sub" style="color:var(--foreground)">
+    <code>stock_summary.go</code>에 이렇게 못박혀 있습니다:
+    <b>“LLM 호출 진입점은 정확히 둘 — 예약 배치와 관리자 수동 실행. 일반 조회는 캐시가 아무리 낡았어도 절대 LLM을 부르지 않는다.”</b>
+    하루 비용이 <b>배치가 계획한 건수와 정확히 같아지는</b> 것이 이 규칙의 목적입니다.
+  </p>
+  <p class="sub" style="margin-top:6px">
+    → 그러므로 A3 브리핑도 <b>사용자가 페이지를 열 때 생성하면 안 됩니다.</b> 배치가 미리 만들어 두고, 화면은 <b>저장된 것을 읽기만</b> 합니다.
+    아래 선택지는 전부 이 전제 위에 있습니다. (지금의 규칙 기반 브리핑은 FE에서 즉석 계산이라 이 제약과 무관했습니다.)
+  </p>
+</div>
+
+<h3>1. A3 — LLM에 무엇을 넣을까 (입력 범위)</h3>
+
+<p class="sub">A3 카드의 <b>숫자 4칸</b>(기사 수·속보 수·지수·환율)은 LLM이 필요 없습니다. 이미 가진 값을 세면 됩니다. LLM이 맡을 것은 <b>문장</b>뿐입니다. 문제는 그 문장을 쓰라고 <b>무엇을 보여줄 것인가</b>입니다.</p>
+
+<table style="margin-top:10px">
+  <thead><tr><th style="width:52px">안</th><th>입력</th><th class="num" style="width:76px">토큰/회</th><th style="width:34%">쓸 수 있는 문장 / 못 쓰는 문장</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>L1</b></td>
+      <td>상위 <b>40건 제목</b> + 발행시각 + 매체</td>
+      <td class="num">~1,400</td>
+      <td>“반도체 관련 기사가 오늘 가장 많았다” ✅<br><span class="dim">“그래서 하이닉스가 4% 올랐다” ❌ (시세를 모름)</span></td>
+    </tr>
+    <tr class="pick">
+      <td><b>L2</b> <span class="tag rec">추천</span></td>
+      <td>L1 + <b>지수 5개 등락</b> + <b>언급 상위 종목 10개</b>(건수·등락률) + 속보 건수 + 시장 세션 상태</td>
+      <td class="num">~2,300</td>
+      <td>“HBM4 양산 발표 이후 SK하이닉스가 4.2% 올랐다” ✅<br>A1 스트립과 <b>같은 집계</b>를 보므로 카드와 문장이 어긋나지 않음 ✅</td>
+    </tr>
+    <tr>
+      <td><b>L3</b></td>
+      <td>L2 + <b>직전 브리핑 요약</b> 1개</td>
+      <td class="num">~2,600</td>
+      <td>“어제의 외국인 순매도 흐름이 오늘 반전됐다” ✅ (연속성)<br><span class="dim">직전 문장이 틀렸으면 오류가 이어붙음 ⚠️</span></td>
+    </tr>
+    <tr>
+      <td><b>L4</b></td>
+      <td>L2 + 상위 15건 <b>본문 요약문</b></td>
+      <td class="num">~7,800</td>
+      <td>가장 구체적. <span class="dim">토큰이 3배인데 제목만으로도 대부분 나옵니다 — 비용 대비 이득이 작습니다.</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h4>L2 입력 실물 — 실제로 이렇게 들어갑니다</h4>
+<pre><span class="c">// systemPrompt (고정)</span>
+당신은 한국 투자자를 위한 시장 뉴스 브리핑 작성자입니다.
+<span class="n">주어진 JSON 사실만 사용하십시오. 사건·가격·수치를 새로 만들어내지 마십시오.</span>
+JSON으로만 응답: {"summary":"...","mood":"강세|중립|약세","moodReason":"...",
+                 "highlights":[{"text":"...","symbols":["005930"]}],"watchPoints":["..."]}
+summary는 한국어 2문장. 투자 조언이 아니라 사실 요약입니다.
+
+<span class="c">// userContent (배치가 매번 새로 조립)</span>
+{
+  <span class="k">"market"</span>: <span class="s">"domestic"</span>,
+  <span class="k">"generatedAt"</span>: <span class="s">"2026-08-14T15:20:00+09:00"</span>,
+  <span class="k">"session"</span>: <span class="s">"장중"</span>,                       <span class="c">// calendar.ScheduleKRX에서</span>
+  <span class="k">"articleCount"</span>: <span class="n">168</span>, <span class="k">"breakingCount"</span>: <span class="n">7</span>,
+  <span class="k">"indices"</span>: [
+    {<span class="k">"name"</span>:<span class="s">"코스피"</span>,<span class="k">"value"</span>:<span class="n">2781.4</span>,<span class="k">"changeRate"</span>:<span class="n">0.83</span>},
+    {<span class="k">"name"</span>:<span class="s">"코스닥"</span>,<span class="k">"value"</span>:<span class="n">812.6</span>,<span class="k">"changeRate"</span>:<span class="n">-0.21</span>},
+    {<span class="k">"name"</span>:<span class="s">"원/달러"</span>,<span class="k">"value"</span>:<span class="n">1391.2</span>,<span class="k">"changeRate"</span>:<span class="n">-0.21</span>}
+  ],
+  <span class="k">"topMentioned"</span>: [                              <span class="c">// ← A1 스트립과 동일한 집계</span>
+    {<span class="k">"symbol"</span>:<span class="s">"000660"</span>,<span class="k">"name"</span>:<span class="s">"SK하이닉스"</span>,<span class="k">"mentions"</span>:<span class="n">14</span>,<span class="k">"changeRate"</span>:<span class="n">4.21</span>},
+    {<span class="k">"symbol"</span>:<span class="s">"005930"</span>,<span class="k">"name"</span>:<span class="s">"삼성전자"</span>,<span class="k">"mentions"</span>:<span class="n">11</span>,<span class="k">"changeRate"</span>:<span class="n">1.02</span>}
+  ],
+  <span class="k">"headlines"</span>: [                                 <span class="c">// 최신 40건, 매체 편중 방지 위해 매체당 최대 5건</span>
+    {<span class="k">"t"</span>:<span class="s">"SK하이닉스, HBM4 내년 1분기 양산 확정"</span>,<span class="k">"at"</span>:<span class="s">"15:08"</span>,<span class="k">"pub"</span>:<span class="s">"한국경제"</span>,<span class="k">"breaking"</span>:<span class="n">true</span>},
+    {<span class="k">"t"</span>:<span class="s">"외국인 6거래일 만에 순매수 전환"</span>,<span class="k">"at"</span>:<span class="s">"14:42"</span>,<span class="k">"pub"</span>:<span class="s">"연합뉴스"</span>}
+  ]
+}</pre>
+<p class="note"><b>“새로 만들어내지 마십시오”</b>는 기존 <code>GenerateBriefing</code>·<code>GenerateStockSummary</code>가 이미 쓰고 있는 문구입니다. 같은 규율을 그대로 씁니다.</p>
+
+<h4>출력을 화면에 붙이면</h4>
+<div class="card">
+  <div class="a3grid">
+    <div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:12px;font-weight:700">🤖 AI 시장 브리핑</span>
+        <span class="mood bull">▲ 강세</span>
+        <span class="dim" style="font-size:10px">15:20 생성 · 168건 분석</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted-foreground);line-height:1.6;margin-top:5px">
+        반도체가 오늘 뉴스의 절반을 차지했다. SK하이닉스는 HBM4 양산 시점 확정 발표 이후 4.2% 올랐고, 외국인이 6거래일 만에 순매수로 돌아서며 코스피는 0.83% 상승했다.
+      </div>
+      <div style="display:flex;gap:5px;margin-top:7px;flex-wrap:wrap;font-size:10px">
+        <span class="dim" style="align-self:center">지켜볼 것</span>
+        <span class="chip" style="padding:2px 8px">원/달러 1,390선 이탈 여부</span>
+        <span class="chip" style="padding:2px 8px">삼성전자 HBM4 대응 발표</span>
+      </div>
+    </div>
+    <div class="temp">
+      <div><div class="l">오늘 기사</div><div class="v">168</div><div class="d">15:20 기준</div></div>
+      <div><div class="l">속보</div><div class="v" style="color:var(--hot)">7</div><div class="d">24시간</div></div>
+      <div><div class="l">코스피</div><div class="v up">+0.83%</div><div class="d">2,781.4</div></div>
+      <div><div class="l">환율</div><div class="v down">−0.21%</div><div class="d">1,391.2</div></div>
+    </div>
+  </div>
+</div>
+<p class="note"><span class="mood bull" style="font-size:10px">▲ 강세</span> 와 <b>지켜볼 것</b>은 L2의 출력 스키마에 <code>mood</code>·<code>watchPoints</code>를 넣어야 나옵니다 → 아래 <b>2번</b>에서 고르십시오.</p>
+
+
+<!-- ═════════ 2. 출력 스키마 ═════════ -->
+<h3>2. A3 — 출력 스키마 (LLM이 무엇을 돌려줄까)</h3>
+<div class="three">
+  <div>
+    <div class="opt-head"><span class="tag">O1</span><h2 style="font-size:13px">기존 그대로</h2></div>
+    <pre style="font-size:10px">{
+  "summary": "…2문장",
+  "highlights": ["…","…"],
+  "volatility": "보통"
+}</pre>
+    <p class="note"><code>BriefingLLMOutput</code>을 <b>그대로 재사용</b> — BE 타입 추가 0. 대신 「강세/약세」·「지켜볼 것」은 못 씁니다.</p>
+  </div>
+  <div>
+    <div class="opt-head"><span class="tag">O2</span><span class="tag rec">추천</span><h2 style="font-size:13px">+ 시황·지켜볼 것</h2></div>
+    <pre style="font-size:10px">{
+  "summary": "…2문장",
+  "mood": "강세|중립|약세",
+  "moodReason": "…한 줄",
+  "highlights": ["…","…"],
+  "watchPoints": ["…","…"]
+}</pre>
+    <p class="note">위 카드 그대로 나옵니다. <code>mood</code>는 <b>지수 등락과 어긋날 수 있어</b> 배지 옆에 실제 지수 등락률을 항상 같이 둡니다.</p>
+  </div>
+  <div>
+    <div class="opt-head"><span class="tag">O3</span><h2 style="font-size:13px">+ 종목 태그</h2></div>
+    <pre style="font-size:10px">{
+  … O2 전체 …
+  "highlights": [
+    {"text":"…",
+     "symbols":["000660"]}
+  ]
+}</pre>
+    <p class="note">highlight를 누르면 <b>A1 스트립·목록 필터가 그 종목으로</b> 걸립니다. 브리핑이 읽는 글에서 <b>조작할 수 있는 것</b>이 됩니다. 대신 LLM이 없는 심볼을 지어낼 수 있어 <b>입력에 있던 심볼만 통과</b>시키는 검증이 필요합니다.</p>
+  </div>
+</div>
+
+
+<!-- ═════════ 3. 실행 주기 ═════════ -->
+<h3>3. A3 — 언제 생성할까 (비용이 여기서 정해집니다)</h3>
+<table>
+  <thead><tr><th style="width:52px">안</th><th>시각 (국내 / 해외 각각)</th><th class="num" style="width:80px">일 호출</th><th class="num" style="width:92px">일 토큰</th><th style="width:36%">체감</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>S1</b></td>
+      <td>개장 1시간 전 · 마감 30분 후</td>
+      <td class="num">4</td><td class="num">~9,200</td>
+      <td>가장 쌉니다. <span class="dim">장중에 큰 뉴스가 터져도 브리핑은 아침 것 그대로 — 「15:20 생성」 표시가 무색해집니다.</span></td>
+    </tr>
+    <tr class="pick">
+      <td><b>S2</b> <span class="tag rec">추천</span></td>
+      <td>개장 전 · <b>장중 2회</b> · 마감 후</td>
+      <td class="num">8</td><td class="num">~18,400</td>
+      <td>장중에도 한 번은 갱신됩니다. 기존 AI 요약 배치(종목 수십 건)에 비하면 <b>무시할 수준</b>입니다.</td>
+    </tr>
+    <tr>
+      <td><b>S3</b></td>
+      <td>장중 2시간마다 + 개장 전 · 마감 후</td>
+      <td class="num">14</td><td class="num">~32,000</td>
+      <td>거의 실시간. <span class="dim">기사 40건 중 대부분이 직전과 겹쳐 문장이 별로 안 바뀝니다.</span></td>
+    </tr>
+  </tbody>
+</table>
+<p class="note">
+  <b>어디서 돌까</b> — 기존 「AI 요약 배치」와 같은 자리, 즉 <b>API 프로세스 안</b>입니다(<code>NewsStore</code>·LLM 클라이언트를 그대로 써야 하므로).
+  <code>/admin/batch</code> 카탈로그에 <b>「AI 뉴스 브리핑 — 국내 / 해외」</b> 두 줄을 추가해 <b>수동 실행·이력</b>도 됩니다.<br>
+  <b>LLM이 꺼져 있거나 실패하면</b> — 지금의 <b>규칙 기반 브리핑으로 자동 대체</b>하고 배지를 <code>규칙</code>으로 표시합니다. 화면이 비는 일은 없습니다.
+</p>
+
+
+<!-- ═════════ 4. 비로그인 유도 ═════════ -->
+<h3>4. 비로그인 — B1 「내 종목」 pill</h3>
+<p class="sub">지금 <code>/watchlist</code>·보유 조회는 <b>로그인 필수</b>입니다. 비로그인 사용자에게 이 pill을 어떻게 보일지 세 가지입니다.</p>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">G1</span><span class="tag rec">추천</span><h2>미리보기로 <b>실제 동작</b> + 안내 띠</h2></div>
+  <p class="sub">인기 종목(삼성전자·SK하이닉스·NAVER / 해외 NVDA·AAPL·TSLA)을 임시 「내 종목」으로 두고 <b>필터가 진짜로 걸립니다</b>. 기능을 써 본 뒤에 로그인을 권합니다.</p>
+  <div class="card" style="margin-top:8px">
+    <div class="pills">
+      <span class="chip">전체</span><span class="chip">속보</span>
+      <span class="chip demo on" style="background:var(--amber-bg);color:var(--amber);border-color:color-mix(in oklab,var(--amber) 45%,transparent)">⭐ 내 종목 <span class="mono">18</span> · 예시</span>
+      <span class="chip">코스피</span><span class="chip">코스닥</span><span class="chip">SK하이닉스 <span class="mono dim">14</span></span>
+    </div>
+    <div class="demobar" style="margin-top:10px">
+      <span>⭐</span>
+      <span class="tx"><b>지금은 인기 종목 3개</b> 기준입니다 — 삼성전자 · SK하이닉스 · NAVER.
+        로그인하면 <b>내 보유·관심 종목</b>으로 바뀝니다.</span>
+      <a href="#">로그인 →</a>
+    </div>
+    <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
+      <div style="display:flex;gap:8px;align-items:center;padding:5px 0">
+        <span class="badge brk">속보</span><span class="badge pub">한국경제</span>
+        <span style="flex:1;font-size:12px;font-weight:600">SK하이닉스, HBM4 내년 1분기 양산 확정</span>
+        <span class="up mono" style="font-size:11px;font-weight:700">+4.2%</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;padding:5px 0">
+        <span class="badge pub">연합뉴스</span>
+        <span style="flex:1;font-size:12px;font-weight:600">삼성전자, 파운드리 대형 수주 임박</span>
+        <span class="up mono" style="font-size:11px;font-weight:700">+1.0%</span>
+      </div>
+    </div>
+  </div>
+  <p class="note"><b>왜 이게 낫나</b> — 잠긴 버튼은 “나중에”가 되지만, 써 본 기능은 “내 종목으로 바꾸고 싶다”가 됩니다. 예시임을 <b>pill과 띠 두 군데</b>에 표시해 오해는 막습니다.</p>
+</div>
+
+<div class="two">
+  <div class="opt">
+    <div class="opt-head"><span class="tag">G2</span><h2 style="font-size:13px">누르면 로그인 팝오버</h2></div>
+    <div class="card">
+      <div class="pills"><span class="chip">전체</span><span class="chip lock">⭐ 내 종목 🔒</span><span class="chip">코스피</span></div>
+      <div class="popover" style="margin-top:8px">
+        <div class="ttl">내 종목 뉴스만 보기</div>
+        <p class="sub" style="font-size:11px">보유·관심 종목이 언급된 기사만 골라 봅니다.</p>
+        <ul><li>보유·관심 종목 자동 연동</li><li>담은 뒤 등락까지 함께</li></ul>
+        <div class="btnrow"><span class="btn">회원가입</span><span class="btn primary">로그인</span></div>
+      </div>
+    </div>
+    <p class="note">정직하지만 <b>기능을 못 보여 준 채</b> 결제창을 먼저 내미는 셈입니다.</p>
+  </div>
+  <div class="opt">
+    <div class="opt-head"><span class="tag">G3</span><h2 style="font-size:13px">비활성 + 툴팁</h2></div>
+    <div class="card">
+      <div class="pills"><span class="chip">전체</span><span class="chip lock" style="cursor:not-allowed">⭐ 내 종목 🔒</span><span class="chip">코스피</span></div>
+      <p class="sub" style="margin-top:10px;font-size:11px">호버 시 <span class="dim">“로그인이 필요합니다”</span></p>
+    </div>
+    <p class="note">가장 조용하지만 <b>유도 효과가 거의 없습니다.</b></p>
+  </div>
+</div>
+
+
+<h3>5. 비로그인 — D1 모달 액션 · E2 레일</h3>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">G4</span><span class="tag rec">추천</span><h2>버튼은 그대로, 누르면 <b>무엇이 저장되는지</b> 보여주는 팝오버</h2></div>
+  <p class="sub">버튼을 흐리게 하지 않습니다. 누르면 “왜 로그인해야 하는지”가 아니라 <b>“로그인하면 무엇이 남는지”</b>를 이 기사 기준으로 말합니다.</p>
+  <div class="card" style="margin-top:8px;max-width:640px;padding:0">
+    <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center">
+      <span class="badge pub">한국경제</span><span class="badge brk">속보</span>
+      <span style="font-size:12px;font-weight:700">SK하이닉스, HBM4 내년 1분기 양산 확정</span>
+    </div>
+    <div style="padding:12px 14px;position:relative">
+      <div class="sub" style="font-size:11px;line-height:1.7">SK하이닉스가 차세대 고대역폭메모리(HBM4)의 양산 시점을 내년 1분기로 확정했다고 14일 밝혔다…</div>
+      <div style="display:flex;justify-content:flex-end;margin-top:10px">
+        <div class="popover">
+          <div class="ttl">🔖 이 기사로 스탬프 찍기</div>
+          <p class="sub" style="font-size:11px">지금 이 순간의 <b>가격·점수·이 기사</b>를 그대로 봉인해 두고, 나중에 내 판단이 맞았는지 확인합니다.</p>
+          <ul>
+            <li>SK하이닉스 <b class="mono">248,500원</b> · 점수 <b class="mono">78</b></li>
+            <li>이 기사 링크와 오늘 날짜</li>
+          </ul>
+          <div class="btnrow"><span class="btn">회원가입</span><span class="btn primary">로그인하고 찍기</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-f">
+      <span class="btn">⭐ 관심 추가</span><span class="btn">🖋️ 메모</span>
+      <span class="btn" style="border-color:var(--brand);color:var(--brand)">🔖 스탬프</span>
+      <span class="btn primary">원문 ↗</span>
+    </div>
+  </div>
+  <p class="note">
+    <b>로그인 후 되돌아오기</b> — <code>/login?next=</code>에 <b>지금 보던 기사</b>까지 실어 보냅니다(<code>?next=/news/domestic?article=abc123</code>).
+    로그인하면 <b>그 기사 모달이 다시 열린 채로</b> 돌아옵니다. 그러지 않으면 기껏 로그인하고 목록 맨 위에 떨어집니다.
+    <br><b>버튼별 문구는 각각 다릅니다</b> — 관심: “5초마다 갱신되는 내 목록에 올려둡니다” / 메모: “이 기사에 붙는 내 기록” / 스탬프: 위 그대로.
+  </p>
+</div>
+
+<div class="two">
+  <div class="opt">
+    <div class="opt-head"><span class="tag">G5</span><h2 style="font-size:13px">E2 레일 — 흐리게 + 덮개</h2></div>
+    <div class="card">
+      <div class="card-h"><span class="card-t">내 종목 뉴스</span></div>
+      <div class="gate">
+        <div class="blurred">
+          <div class="railrow"><span class="badge brk">속보</span><span class="n">SK하이닉스 HBM4 양산 확정</span><span class="v up">+4.2%</span></div>
+          <div class="railrow"><span class="badge pub">보유</span><span class="n">삼성전자 파운드리 수주</span><span class="v up">+1.0%</span></div>
+          <div class="railrow"><span class="badge pub">관심</span><span class="n">알테오젠 기술수출 공시</span><span class="v up">+7.8%</span></div>
+        </div>
+        <div class="over"><div><div style="font-size:11px;font-weight:700">내 종목 뉴스</div>
+          <span class="btn primary" style="display:inline-block;margin-top:6px;padding:5px 12px">로그인</span></div></div>
+      </div>
+    </div>
+    <p class="note"><b>주의</b> — 흐린 내용이 <b>실제 남의 데이터</b>처럼 보입니다. 쓰려면 위처럼 <b>인기 종목 예시</b>여야 하고 그렇게 적어야 합니다.</p>
+  </div>
+  <div class="opt">
+    <div class="opt-head"><span class="tag">G6</span><span class="tag rec">추천</span><h2 style="font-size:13px">E2 레일 — 예시 + 안내</h2></div>
+    <div class="card">
+      <div class="card-h"><span class="card-t">내 종목 뉴스</span><span class="more" style="color:var(--amber)">예시</span></div>
+      <div class="railrow"><span class="badge brk">속보</span><span class="n">SK하이닉스 HBM4 양산 확정</span><span class="v up">+4.2%</span></div>
+      <div class="railrow"><span class="badge pub">인기</span><span class="n">삼성전자 파운드리 수주</span><span class="v up">+1.0%</span></div>
+      <div class="railrow"><span class="badge pub">인기</span><span class="n">NAVER, AI 검색 개편 발표</span><span class="v down">−0.6%</span></div>
+      <div class="demobar" style="margin-top:8px">
+        <span class="tx">인기 종목 예시입니다</span><a href="#">내 종목으로 →</a>
+      </div>
+    </div>
+    <p class="note">G1과 <b>같은 규칙</b>을 씁니다 — 화면 두 곳이 다른 말을 하지 않게.</p>
+  </div>
+</div>
+
+
+<!-- ═════════ 6. 정리 ═════════ -->
+<h3>골라 주실 것 — 6가지</h3>
+<div class="card">
+  <table>
+    <thead><tr><th style="width:130px">항목</th><th style="width:150px">선택지</th><th>제 추천</th></tr></thead>
+    <tbody>
+      <tr><td><b>① LLM 입력</b></td><td>L1 / <b>L2</b> / L3 / L4</td><td><b>L2</b> — 뉴스와 시세를 잇는 문장이 나오면서, A1 스트립과 같은 집계를 봐서 카드·문장이 어긋나지 않습니다.</td></tr>
+      <tr><td><b>② 출력 스키마</b></td><td>O1 / <b>O2</b> / O3</td><td><b>O2</b> — 「강세/약세」와 「지켜볼 것」이 A3 카드의 값어치입니다. O3(종목 태그)는 검증 코드가 더 붙으니 <b>2차</b>로 미루길 권합니다.</td></tr>
+      <tr><td><b>③ 실행 주기</b></td><td>S1 / <b>S2</b> / S3</td><td><b>S2</b> — 하루 8콜. 기존 AI 요약 배치 대비 오차 수준입니다.</td></tr>
+      <tr><td><b>④ B1 비로그인</b></td><td><b>G1</b> / G2 / G3</td><td><b>G1</b> — 기능을 실제로 써 보게 한 뒤 권합니다.</td></tr>
+      <tr><td><b>⑤ D1 액션 비로그인</b></td><td><b>G4</b></td><td><b>G4</b> + <code>?next=</code>에 기사 id까지 실어 <b>보던 모달로 복귀</b>.</td></tr>
+      <tr><td><b>⑥ E2 레일 비로그인</b></td><td>G5 / <b>G6</b></td><td><b>G6</b> — 흐림 처리는 없는 데이터를 있는 것처럼 보이게 합니다.</td></tr>
+    </tbody>
+  </table>
+  <p class="note" style="margin-top:12px">
+    <b>제 일괄 추천은 <span style="color:var(--foreground)">L2 · O2 · S2 · G1 · G4 · G6</span></b> 입니다.
+    “<b>추천대로</b>”라고만 하셔도 되고, 바꾸실 항목만 (예: “③은 S1로”) 알려 주셔도 됩니다.
+  </p>
+</div>
+
+<div class="pick" style="margin-bottom:40px">
+  <span>📌</span>
+  <span>확정되면 <b>BE</b>(뉴스 브리핑 배치·저장·조회 API) → <b>FE</b>(A1·A2·A3 → B1·B2 → C1·C2 → D1·D2 → E1~E4) 순으로 구현하고,
+  단계마다 <code>tsc</code>·<code>go test</code>·Docker 재기동으로 검증하겠습니다.</span>
+</div>
+
+</div>
+</body>
+</html>

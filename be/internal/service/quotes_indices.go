@@ -39,15 +39,16 @@ var marketIndexCatalog = []indexCatalogEntry{
 	{id: "sp500", name: "S&P 500", currency: model.CurrencyUSD, source: indexSourceFRED, symbol: "SP500"},
 	{id: "dow", name: "다우존스", currency: model.CurrencyUSD, source: indexSourceFRED, symbol: "DJIA"},
 	{id: "vix", name: "VIX", currency: model.CurrencyUSD, source: indexSourceFRED, symbol: "VIXCLS"},
+	{id: "us10y", name: "미 국채 10년", currency: model.CurrencyUSD, source: indexSourceFRED, symbol: "DGS10"},
 	{id: "sox", name: "필라델피아 반도체", currency: model.CurrencyUSD, source: indexSourceFinnhub, symbol: "SOXX", badge: "SOXX"},
 	{id: "btc", name: "비트코인", currency: model.CurrencyKRW, source: indexSourceUpbit, symbol: "KRW-BTC"},
 	{id: "gold", name: "금", currency: model.CurrencyUSD, source: indexSourceGoldPrice, symbol: "XAU"},
 }
 
 const (
-	quotesIndexKeyFmt     = "quotes:index:v6:%s"
-	indexGoodCacheTTL     = 45 * 24 * time.Hour
-	indexSparklinePoints  = 20
+	quotesIndexKeyFmt    = "quotes:index:v6:%s"
+	indexGoodCacheTTL    = 45 * 24 * time.Hour
+	indexSparklinePoints = 20
 )
 
 type cachedMarketIndex struct {
@@ -59,6 +60,37 @@ func emptyIndicesFromCatalog() []model.MarketIndex {
 	out := make([]model.MarketIndex, len(marketIndexCatalog))
 	for i, idx := range marketIndexCatalog {
 		out[i] = emptyMarketIndex(idx.id, idx.name, idx.currency)
+	}
+	return out
+}
+
+// alignIndicesToCatalog rewrites a snapshot into current catalog order and
+// length. Redis may still hold a shorter list from before an index was added;
+// indexing that slice by catalog position would pin the wrong meta on sox/금.
+func alignIndicesToCatalog(indices []model.MarketIndex) []model.MarketIndex {
+	out := emptyIndicesFromCatalog()
+	if len(indices) == 0 {
+		return out
+	}
+	byID := make(map[string]model.MarketIndex, len(indices))
+	for i, idx := range indices {
+		if idx.ID == "" && i < len(marketIndexCatalog) {
+			idx.ID = marketIndexCatalog[i].id
+		}
+		if idx.ID != "" {
+			byID[idx.ID] = idx
+		}
+	}
+	for i, entry := range marketIndexCatalog {
+		if idx, ok := byID[entry.id]; ok {
+			out[i] = idx
+			if out[i].Name == "" {
+				out[i].Name = entry.name
+			}
+			if out[i].ID == "" {
+				out[i].ID = entry.id
+			}
+		}
 	}
 	return out
 }

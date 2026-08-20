@@ -11,6 +11,7 @@ export const MARKET_INDEX_PLACEHOLDERS: MarketIndex[] = [
   { id: "sp500", name: "S&P 500", value: 0, change: 0, changeRate: 0, currency: "USD" },
   { id: "dow", name: "다우존스", value: 0, change: 0, changeRate: 0, currency: "USD" },
   { id: "vix", name: "VIX", value: 0, change: 0, changeRate: 0, currency: "USD" },
+  { id: "us10y", name: "미 국채 10년", value: 0, change: 0, changeRate: 0, currency: "USD" },
   { id: "sox", name: "필라델피아 반도체", value: 0, change: 0, changeRate: 0, currency: "USD", badge: "SOXX" },
   { id: "btc", name: "비트코인", value: 0, change: 0, changeRate: 0, currency: "KRW" },
   { id: "gold", name: "금", value: 0, change: 0, changeRate: 0, currency: "USD" },

@@ -1,90 +1,104 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { PageHeader } from "@/components/layout/header";
+import { AnalysisTabBar } from "@/components/analysis/analysis-tab-bar";
+import { ScoreRankingPanel } from "@/components/analysis/score-ranking-panel";
+import { StockSideRail } from "@/components/analysis/stock-side-rail";
+import { PageColumns } from "@/components/layout/page-columns";
+import { AIAnalysisTab } from "@/components/analysis/ai-analysis-tab";
+import { EarningsTab } from "@/components/analysis/earnings-tab";
+import { InsiderTab } from "@/components/analysis/insider-tab";
+import {
+  CompanyInfoTab,
+  FinancialsChartsTab,
+  ValuationTab,
+} from "@/components/analysis/lazy-tabs";
+import { QuoteDailyChartModal } from "@/components/quotes/quote-daily-chart-modal";
+import { PageScrollShell } from "@/components/layout/page-content-shell";
 import { useHeaderSearch } from "@/components/providers/header-search-provider";
-import { FundamentalsSection } from "@/components/analysis/fundamentals-section";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useShellMode } from "@/components/providers/shell-mode-provider";
+import { useStockScore } from "@/hooks/use-stock-score";
+import { useStockSummary } from "@/hooks/use-stock-summary";
 import { fetchFundamentalsClient } from "@/lib/fundamentals-api";
 import type { FundamentalsData } from "@/lib/fundamentals-types";
+import { analysisSymbolHref, parseAnalysisTab, type AnalysisTabId } from "@/lib/analysis-tabs";
+import { useRankingView } from "@/lib/ranking-view";
 import {
-  fetchStockClient,
-  searchStocksCatalogClient,
-} from "@/lib/market-api";
-import type { BriefingEvent, DashboardInsights } from "@/lib/insights-types";
-import { formatDateKST, formatListDate } from "@/lib/format";
-import type { StockInfo } from "@/lib/quotes-types";
-import { cn } from "@/lib/utils";
-import { uniqueStocksBySymbol } from "@/lib/stock-utils";
+  inferMarketCountryFromStock,
+  marketRadarSymbolHref,
+} from "@/lib/market-radar-config";
+import { fetchQuoteDetailClient, fetchStockClient } from "@/lib/market-api";
+import type { QuoteDetail, StockInfo } from "@/lib/quotes-types";
+import { StockNewsPanel } from "@/components/stocks/stock-news-panel";
+import { StockSymbolActionBar } from "@/components/stocks/stock-symbol-action-bar";
+import { useWatchlistToggle } from "@/hooks/use-watchlist-toggle";
 
 type StockRow = StockInfo & { fetchError?: string };
 
+function stockNewsMarket(stock: { assetType?: string; currency?: string }): "domestic" | "us" {
+  if (stock.assetType === "us" || stock.currency === "USD") return "us";
+  return "domestic";
+}
+
 type AnalysisClientProps = {
-  holdings: StockRow[];
-  initialInsights: DashboardInsights | null;
-  initialDisclosures: BriefingEvent[];
+  defaultSymbol: string | null;
 };
 
-type SidebarTab = "holdings" | "search";
-
-const SECTIONS = [
-  { id: "fundamentals", label: "펀더멘털" },
-  { id: "earnings", label: "실적" },
-  { id: "news", label: "뉴스" },
-  { id: "disclosures", label: "공시" },
-  { id: "ai-analysis", label: "AI 분석" },
-  { id: "analyst", label: "애널리스트" },
-] as const;
-
-export function AnalysisClient({
-  holdings,
-  initialInsights,
-  initialDisclosures,
-}: AnalysisClientProps) {
+export function AnalysisClient({ defaultSymbol }: AnalysisClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isCompact } = useShellMode();
+  const { registerStockPickHandler } = useHeaderSearch();
   const symbolParam = searchParams.get("symbol");
-  const { activeQuery, mode, isSearchActive } = useHeaderSearch();
+  const selectedSymbol = symbolParam ?? defaultSymbol;
+  const activeTab = parseAnalysisTab(searchParams.get("tab"));
+  const rankingView = useRankingView();
 
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("holdings");
-  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(
-    symbolParam ?? holdings[0]?.symbol ?? null,
-  );
   const [selectedStock, setSelectedStock] = useState<StockRow | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<StockInfo[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
+  const [quote, setQuote] = useState<QuoteDetail | null>(null);
   const [fundamentals, setFundamentals] = useState<FundamentalsData | null>(null);
   const [fundamentalsLoading, setFundamentalsLoading] = useState(false);
-  const [insights] = useState(initialInsights);
-  const [disclosures] = useState(initialDisclosures);
+  const [stockLoading, setStockLoading] = useState(false);
+  const [quoteModalOpen, setQuoteModalOpen] = useState(false);
+
+  const loading = stockLoading || fundamentalsLoading;
+  const { data: aiSummary, loading: aiSummaryLoading, error: aiSummaryError } = useStockSummary(selectedSymbol ?? "");
+  const { data: stockScore, loading: stockScoreLoading } = useStockScore(selectedSymbol ?? "");
+  const {
+    watchlisted,
+    busy: watchlistBusy,
+    toggleWatchlist,
+  } = useWatchlistToggle(selectedSymbol ?? "", {
+    loginNext: selectedSymbol ? analysisSymbolHref(selectedSymbol, activeTab) : "/analysis",
+  });
 
   useEffect(() => {
-    if (symbolParam) {
-      setSelectedSymbol(symbolParam);
-      setSidebarTab(holdings.some((h) => h.symbol === symbolParam) ? "holdings" : "search");
-    }
-  }, [symbolParam, holdings]);
+    registerStockPickHandler((symbol) => {
+      router.replace(analysisSymbolHref(symbol, "ai"), { scroll: false });
+    });
+    return () => registerStockPickHandler(null);
+  }, [registerStockPickHandler, router]);
 
   useEffect(() => {
     if (!selectedSymbol) {
       setSelectedStock(null);
-      return;
-    }
-
-    const holding = holdings.find((h) => h.symbol === selectedSymbol);
-    if (holding) {
-      setSelectedStock(holding);
+      setQuote(null);
       return;
     }
 
     let cancelled = false;
-    fetchStockClient(selectedSymbol)
-      .then((stock) => {
-        if (!cancelled) setSelectedStock(stock);
+    setStockLoading(true);
+    Promise.all([
+      fetchStockClient(selectedSymbol),
+      fetchQuoteDetailClient(selectedSymbol).catch(() => null),
+    ])
+      .then(([stock, detail]) => {
+        if (!cancelled) {
+          setSelectedStock(stock);
+          setQuote(detail);
+        }
       })
       .catch(() => {
         if (!cancelled) {
@@ -94,13 +108,17 @@ export function AnalysisClient({
             market: "—",
             currency: "USD",
           });
+          setQuote(null);
         }
+      })
+      .finally(() => {
+        if (!cancelled) setStockLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [selectedSymbol, holdings]);
+  }, [selectedSymbol]);
 
   useEffect(() => {
     if (!selectedSymbol) {
@@ -126,432 +144,164 @@ export function AnalysisClient({
     };
   }, [selectedSymbol]);
 
-  useEffect(() => {
-    if (mode !== "stock") return;
-    setSearchQuery(activeQuery);
-    if (activeQuery.trim()) {
-      setSidebarTab("search");
-    }
-  }, [activeQuery, mode]);
-
-  useEffect(() => {
-    const q = searchQuery.trim();
-    if (q.length < 1) {
-      setSearchResults([]);
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      setSearchLoading(true);
-      try {
-        const res = await searchStocksCatalogClient(q, "", 20);
-        if (res.items.length > 0) {
-          setSearchResults(uniqueStocksBySymbol(res.items));
-          return;
-        }
-        const symbolCandidate = q.trim().toUpperCase();
-        if (/^[A-Z0-9.-]{1,12}$/.test(symbolCandidate)) {
-          try {
-            const stock = await fetchStockClient(symbolCandidate);
-            setSearchResults([stock]);
-            return;
-          } catch {
-            // fall through
-          }
-        }
-        setSearchResults([]);
-      } catch {
-        setSearchResults([]);
-      } finally {
-        setSearchLoading(false);
-      }
-    }, 250);
-
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  const symbolEarnings = useMemo(
+  const stock = useMemo(
     () =>
-      selectedSymbol
-        ? (insights?.briefing.earnings ?? []).filter((e) => e.symbol === selectedSymbol)
-        : [],
-    [insights, selectedSymbol],
+      selectedStock ?? {
+        symbol: selectedSymbol ?? "",
+        name: selectedSymbol ?? "",
+        market: "—",
+        currency: "KRW" as const,
+      },
+    [selectedStock, selectedSymbol],
   );
 
-  const symbolDisclosures = useMemo(
-    () =>
-      selectedSymbol
-        ? disclosures.filter((d) => d.symbol === selectedSymbol)
-        : [],
-    [disclosures, selectedSymbol],
-  );
-
-  const filteredHoldings = useMemo(() => {
-    const base =
-      mode !== "stock" || !isSearchActive
-        ? holdings
-        : (() => {
-            const q = activeQuery.trim().toLowerCase();
-            if (!q) return holdings;
-            return holdings.filter(
-              (h) =>
-                h.symbol.toLowerCase().includes(q) ||
-                h.name.toLowerCase().includes(q),
-            );
-          })();
-    return uniqueStocksBySymbol(base);
-  }, [holdings, activeQuery, isSearchActive, mode]);
-
-  function selectSymbol(symbol: string, tab: SidebarTab) {
-    setSelectedSymbol(symbol);
-    setSidebarTab(tab);
-    router.replace(`/analysis?symbol=${encodeURIComponent(symbol)}`, { scroll: false });
+  function setTab(tab: AnalysisTabId) {
+    if (!selectedSymbol) return;
+    router.replace(analysisSymbolHref(selectedSymbol, tab), { scroll: false });
   }
 
+  const liveQuotesHref = selectedSymbol
+    ? marketRadarSymbolHref(selectedSymbol, inferMarketCountryFromStock(stock))
+    : "/market";
+
+  /*
+   * 3단 조립 (docs/UI_SPEC.md §7 · 08-11 전체 폭 전환의 후속).
+   *
+   * 예전엔 랭킹 패널이 화면 폭을 통째로 가로지르는 배너였고, 그 아래에 탭 본문이
+   * 또 한 번 폭을 다 썼다. 전체 폭으로 바뀌면서 20종목짜리 목록 한 줄이 1,500px을
+   * 건너가 훑기 어려워졌고, 본문은 본문대로 늘어나기만 했다.
+   *
+   * 랭킹은 "여기서 다음 종목을 고른다"는 뜻이므로 왼쪽 레일이 제자리다 — 목록에서
+   * 고르면 오른쪽 본문이 바뀐다는 관계가 위·아래보다 좌·우일 때 분명하다.
+   * 오른쪽 레일은 탭과 무관한 상시 맥락(시세·점수·뉴스·리포트)을 맡는다.
+   */
   return (
-    <>
-      <PageHeader
-        title="종목 분석"
-        subtitle="펀더멘털 · 실적 · 공시 · AI 분석을 한 화면에서 확인"
-      />
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6">
-        <div className="mx-auto flex min-w-0 max-w-6xl flex-col gap-6 xl:flex-row xl:items-start">
-          <Card className="min-w-0 flex-1 overflow-hidden p-0 xl:max-w-sm xl:shrink-0">
-            <div className="flex border-b border-[var(--border)]">
-              <SidebarTabButton
-                active={sidebarTab === "holdings"}
-                onClick={() => setSidebarTab("holdings")}
-                label="보유"
-                count={filteredHoldings.length}
-              />
-              <SidebarTabButton
-                active={sidebarTab === "search"}
-                onClick={() => setSidebarTab("search")}
-                label="검색"
-              />
+    <PageScrollShell>
+      <PageColumns
+        // 랭킹 `넓게` 보기는 한 줄에 이름·시세·스파크라인·등락·점수를 다 놓아서
+        // 300px 레일에서는 종목명이 한 글자로 잘린다. 그때만 본문에서 폭을 빌린다.
+        wideLead={rankingView === "wide"}
+        leadRail={<ScoreRankingPanel activeSymbol={selectedSymbol} className="xl:flex-1" />}
+        rail={
+          selectedSymbol ? (
+            <StockSideRail
+              symbol={stock.symbol}
+              name={stock.name}
+              currency={stock.currency}
+              market={stockNewsMarket(stock)}
+              quote={quote}
+              score={stockScore}
+              scoreLoading={stockScoreLoading}
+            />
+          ) : undefined
+        }
+      >
+        {!selectedSymbol ? (
+          <div className="py-12 text-center">
+            <h1 className="text-xl font-bold tracking-tight text-[var(--text-primary)]">
+              종목 분석
+            </h1>
+            <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--text-muted)]">
+              상단 검색창에 종목명 또는 심볼을 입력하거나, 왼쪽 랭킹에서 종목을 골라 주세요.
+            </p>
+            <Link
+              href="/market"
+              className="mt-4 inline-block text-xs text-[var(--brand)] hover:underline"
+            >
+              마켓 레이더로 이동 →
+            </Link>
+          </div>
+        ) : (
+          <>
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="truncate text-xl font-bold tracking-tight text-[var(--text-primary)]">
+                  {stockLoading ? "…" : stock.name}
+                </h1>
+                <p className="mt-0.5 text-[12px] text-[var(--text-muted)]">
+                  {stock.symbol} · {stock.market} · {stock.currency}
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center">
+                <button
+                  type="button"
+                  onClick={() => setQuoteModalOpen(true)}
+                  className="rounded-lg border border-[var(--border)] px-2.5 py-1 text-[11px] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+                >
+                  실시간 시세
+                </button>
+                <StockSymbolActionBar
+                  symbol={stock.symbol}
+                  watchlisted={watchlisted}
+                  watchlistBusy={watchlistBusy}
+                  onToggleWatchlist={toggleWatchlist}
+                  price={quote?.currentPrice}
+                  currency={quote?.currency}
+                  week52High={quote?.week52High}
+                  week52Low={quote?.week52Low}
+                />
+              </div>
             </div>
 
-            {sidebarTab === "holdings" ? (
-              <HoldingsList
-                holdings={filteredHoldings}
-                selectedSymbol={selectedSymbol}
-                onSelect={(symbol) => selectSymbol(symbol, "holdings")}
-              />
-            ) : (
-              <SearchPanel
-                query={searchQuery}
-                onQueryChange={setSearchQuery}
-                loading={searchLoading}
-                results={searchResults}
-                selectedSymbol={selectedSymbol}
-                onSelect={(symbol) => selectSymbol(symbol, "search")}
-              />
-            )}
-          </Card>
+            <AnalysisTabBar active={activeTab} onChange={setTab} />
 
-          <div className="min-w-0 flex-1 space-y-6">
-            {!selectedStock ? (
-              <Card className="flex min-h-[320px] items-center justify-center p-8 text-center text-sm text-[var(--text-muted)]">
-                왼쪽에서 종목을 선택하거나 검색해 주세요.
-              </Card>
-            ) : (
-              <>
-                <Card className="sticky top-0 z-10 border-[var(--border)] bg-[var(--surface)]/95 p-3 backdrop-blur">
-                  <div className="mb-2">
-                    <h2 className="text-base font-semibold text-[var(--text-primary)]">
-                      {selectedStock.name}
-                    </h2>
-                    <p className="text-xs text-[var(--text-muted)]">
-                      {selectedStock.symbol} · {selectedStock.market} · {selectedStock.currency}
-                    </p>
-                  </div>
-                  <nav className="flex flex-wrap gap-1.5">
-                    {SECTIONS.map((section) => (
-                      <a
-                        key={section.id}
-                        href={`#${section.id}`}
-                        className="rounded-md border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
-                      >
-                        {section.label}
-                      </a>
-                    ))}
-                  </nav>
-                </Card>
-
-                <section id="fundamentals" className="scroll-mt-28">
-                  <FundamentalsSection
-                    stock={selectedStock}
-                    data={fundamentals}
-                    loading={fundamentalsLoading}
-                  />
-                </section>
-
-                <AnalysisSection id="earnings" title="실적 캘린더" badge={`${symbolEarnings.length}건`}>
-                  {symbolEarnings.length === 0 ? (
-                    <p className="text-sm text-[var(--text-muted)]">
-                      {selectedStock.symbol} 관련 예정 실적이 없습니다.
-                    </p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {symbolEarnings.map((item) => (
-                        <li
-                          key={`${item.date}-${item.event}`}
-                          className="flex items-center justify-between gap-3 rounded-lg bg-[var(--surface-elevated)] px-4 py-3"
-                        >
-                          <p className="text-sm text-[var(--text-secondary)]">{item.event}</p>
-                          <time className="shrink-0 text-xs tabular-nums text-[var(--text-muted)]">
-                            {formatDateKST(item.date)}
-                          </time>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </AnalysisSection>
-
-                <AnalysisSection id="news" title="뉴스" badge="준비 중">
-                  <p className="text-sm text-[var(--text-secondary)]">
-                    {selectedStock.name}({selectedStock.symbol}) 뉴스 API 연동 예정입니다. 종목
-                    상세 페이지에서 시세와 차트를 확인할 수 있습니다.
-                  </p>
-                  <Link
-                    href={`/stocks/${selectedStock.symbol}`}
-                    className="mt-3 inline-flex text-sm text-[var(--accent)] hover:underline"
-                  >
-                    종목 상세 보기 →
-                  </Link>
-                </AnalysisSection>
-
-                <AnalysisSection id="disclosures" title="공시" badge={`${symbolDisclosures.length}건`}>
-                  {symbolDisclosures.length === 0 ? (
-                    <p className="text-sm text-[var(--text-muted)]">
-                      오늘 등록된 {selectedStock.symbol} 공시가 없습니다.
-                    </p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {symbolDisclosures.map((item) => (
-                        <li
-                          key={`${item.date}-${item.event}`}
-                          className="rounded-lg bg-[var(--surface-elevated)] px-4 py-3"
-                        >
-                          <p className="text-sm text-[var(--text-secondary)]">{item.event}</p>
-                          <time className="mt-1 block text-xs tabular-nums text-[var(--text-muted)]">
-                            {formatDateKST(item.date)}
-                          </time>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </AnalysisSection>
-
-                <AnalysisSection
-                  id="ai-analysis"
-                  title="AI 분석"
-                  badge={insights?.briefing.source === "llm" ? "AI" : "규칙"}
-                >
-                  {insights ? (
-                    <div className="space-y-4">
-                      <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
-                        {insights.briefing.summary}
-                      </p>
-                      {insights.briefing.highlights.length > 0 && (
-                        <ul className="space-y-2">
-                          {insights.briefing.highlights.slice(0, 5).map((item) => (
-                            <li
-                              key={item}
-                              className="rounded-lg bg-[var(--surface-elevated)] px-4 py-3 text-sm text-[var(--text-secondary)]"
-                            >
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      <p className="text-xs text-[var(--text-muted)]">
-                        생성 시각 {formatDateKST(insights.briefing.generatedAt)} · 포트폴리오
-                        브리핑 기준
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-[var(--text-muted)]">AI 브리핑을 불러오지 못했습니다.</p>
-                  )}
-                </AnalysisSection>
-
-                <AnalysisSection id="analyst" title="애널리스트 의견" badge="준비 중">
-                  <p className="text-sm text-[var(--text-secondary)]">
-                    애널리스트 컨센서스·목표가 데이터 연동 예정입니다.
-                  </p>
-                </AnalysisSection>
-              </>
-            )}
-          </div>
-        </div>
-      </main>
-    </>
-  );
-}
-
-function SidebarTabButton({
-  active,
-  onClick,
-  label,
-  count,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  count?: number;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex-1 px-4 py-3 text-sm font-medium transition-colors",
-        active
-          ? "border-b-2 border-[var(--accent)] text-[var(--accent)]"
-          : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]",
-      )}
-    >
-      {label}
-      {count != null ? ` (${count})` : ""}
-    </button>
-  );
-}
-
-function HoldingsList({
-  holdings,
-  selectedSymbol,
-  onSelect,
-}: {
-  holdings: StockRow[];
-  selectedSymbol: string | null;
-  onSelect: (symbol: string) => void;
-}) {
-  if (holdings.length === 0) {
-    return (
-      <p className="p-5 text-sm text-[var(--text-muted)]">
-        보유 종목이 없습니다. 검색 탭에서 종목을 찾아보세요.
-      </p>
-    );
-  }
-
-  return (
-    <div className="max-h-[480px] overflow-y-auto">
-      <table className="w-full text-sm">
-        <thead className="sticky top-0 bg-[var(--surface)]">
-          <tr className="text-left text-xs text-[var(--text-muted)]">
-            <th className="px-4 py-2 font-medium">종목</th>
-            <th className="hidden px-2 py-2 font-medium sm:table-cell">시장</th>
-          </tr>
-        </thead>
-        <tbody>
-          {holdings.map((stock) => (
-            <tr
-              key={stock.symbol}
-              className={cn(
-                "cursor-pointer border-t border-[var(--border)] transition-colors",
-                stock.symbol === selectedSymbol
-                  ? "bg-[var(--accent)]/10"
-                  : "hover:bg-[var(--surface-elevated)]/60",
+            <div className="mt-3">
+              {activeTab === "ai" && (
+                <AIAnalysisTab
+                  symbol={stock.symbol}
+                  currency={stock.currency}
+                  data={aiSummary}
+                  loading={aiSummaryLoading}
+                  error={aiSummaryError}
+                  compact={isCompact}
+                  score={stockScore}
+                  scoreLoading={stockScoreLoading}
+                />
               )}
-              onClick={() => onSelect(stock.symbol)}
-            >
-              <td className="px-4 py-3">
-                <p className="font-medium text-[var(--text-primary)]">{stock.name}</p>
-                <p className="text-xs text-[var(--text-muted)]">{stock.symbol}</p>
-              </td>
-              <td className="hidden px-2 py-3 text-xs text-[var(--text-secondary)] sm:table-cell">
-                {stock.market}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function SearchPanel({
-  query,
-  onQueryChange,
-  loading,
-  results,
-  selectedSymbol,
-  onSelect,
-}: {
-  query: string;
-  onQueryChange: (value: string) => void;
-  loading: boolean;
-  results: StockInfo[];
-  selectedSymbol: string | null;
-  onSelect: (symbol: string) => void;
-}) {
-  return (
-    <div className="p-4">
-      <input
-        type="search"
-        value={query}
-        onChange={(e) => onQueryChange(e.target.value)}
-        placeholder="종목명 또는 심볼 검색"
-        className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
-      />
-      <p className="mt-2 text-xs text-[var(--text-muted)]">
-        DB 종목 + Toss API로 ETF 등 미등록 종목도 검색됩니다.
-      </p>
-      <div className="mt-3 max-h-[400px] overflow-y-auto">
-        {loading && <p className="text-sm text-[var(--text-muted)]">검색 중…</p>}
-        {!loading && query.trim() && results.length === 0 && (
-          <p className="text-sm text-[var(--text-muted)]">검색 결과가 없습니다.</p>
+              {activeTab === "company" && (
+                <CompanyInfoTab stock={stock} quote={quote} fundamentals={fundamentals} />
+              )}
+              {activeTab === "valuation" && (
+                <ValuationTab
+                  stock={stock}
+                  fundamentals={fundamentals}
+                  quote={quote}
+                  loading={loading}
+                />
+              )}
+              {activeTab === "financials" && (
+                <FinancialsChartsTab stock={stock} fundamentals={fundamentals} loading={loading} />
+              )}
+              {activeTab === "earnings" && (
+                <EarningsTab
+                  symbol={stock.symbol}
+                  currency={stock.currency}
+                  fundamentals={fundamentals}
+                />
+              )}
+              {activeTab === "insider" && (
+                <InsiderTab symbol={stock.symbol} currency={stock.currency} />
+              )}
+              {activeTab === "news" && (
+                <StockNewsPanel
+                  symbol={stock.symbol}
+                  name={stock.name}
+                  market={stockNewsMarket(stock)}
+                />
+              )}
+            </div>
+          </>
         )}
-        <ul className="space-y-1">
-          {results.map((stock) => (
-            <li key={stock.symbol}>
-              <button
-                type="button"
-                onClick={() => onSelect(stock.symbol)}
-                className={cn(
-                  "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left transition-colors",
-                  stock.symbol === selectedSymbol
-                    ? "bg-[var(--accent)]/10"
-                    : "hover:bg-[var(--surface-elevated)]",
-                )}
-              >
-                <div>
-                  <p className="text-sm font-medium text-[var(--text-primary)]">{stock.name}</p>
-                  <p className="text-xs text-[var(--text-muted)]">
-                    {stock.symbol}
-                    {stock.securityType ? ` · ${stock.securityType}` : ""}
-                  </p>
-                </div>
-                <span className="text-xs text-[var(--text-muted)]">{stock.market}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
-}
+      </PageColumns>
 
-function AnalysisSection({
-  id,
-  title,
-  badge,
-  children,
-}: {
-  id: string;
-  title: string;
-  badge?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section id={id} className="scroll-mt-28">
-      <Card className="p-5">
-        <CardHeader className="mb-4 px-0 pt-0">
-          <CardTitle>{title}</CardTitle>
-          {badge ? <Badge variant="info">{badge}</Badge> : null}
-        </CardHeader>
-        {children}
-      </Card>
-    </section>
+      <QuoteDailyChartModal
+        open={quoteModalOpen}
+        onClose={() => setQuoteModalOpen(false)}
+        stock={selectedSymbol ? stock : null}
+        initialQuote={quote}
+        compact={isCompact}
+        fullQuotesHref={liveQuotesHref}
+      />
+    </PageScrollShell>
   );
 }

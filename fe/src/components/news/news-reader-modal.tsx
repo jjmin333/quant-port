@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { ExternalLink, Loader2, X } from "lucide-react";
 import type { NewsArticle, NewsReaderContent } from "@/lib/news-types";
+import { newsArticleLink } from "@/lib/news-types";
+import { newsDisplayHeadline } from "@/lib/news-display";
 import { fetchNewsReader } from "@/lib/news-api";
 import { formatRelativeTime } from "@/lib/format-news";
 import {
@@ -15,52 +17,11 @@ import { cn } from "@/lib/utils";
 type NewsReaderModalProps = {
   article: NewsArticle | null;
   onClose: () => void;
+  /** 관련 종목·같은 이슈·액션 블록 (NewsArticleContext) */
+  context?: React.ReactNode;
 };
 
-export function NewsReaderModal({ article, onClose }: NewsReaderModalProps) {
-  const previewZoom = useNewsPreviewZoom();
-  const [content, setContent] = useState<NewsReaderContent | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    previewZoom.reset();
-  }, [article?.id, previewZoom.reset]);
-
-  useEffect(() => {
-    if (!article?.url || article.url === "#") {
-      setContent(null);
-      setError(null);
-      return;
-    }
-
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setContent(null);
-
-    fetchNewsReader(article.url)
-      .then((data) => {
-        if (!cancelled) {
-          setContent(data);
-        }
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "본문을 불러오지 못했습니다");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [article]);
-
+export function NewsReaderModal({ article, onClose, context }: NewsReaderModalProps) {
   useEffect(() => {
     if (!article) {
       return;
@@ -85,8 +46,85 @@ export function NewsReaderModal({ article, onClose }: NewsReaderModalProps) {
     return null;
   }
 
-  const title = content?.title || article.headline;
-  const hasUrl = Boolean(article.url && article.url !== "#");
+  return (
+    <NewsReaderModalFrame
+      key={article.id}
+      article={article}
+      onClose={onClose}
+      context={context}
+    />
+  );
+}
+
+function NewsReaderModalFrame({
+  article,
+  onClose,
+  context,
+}: {
+  article: NewsArticle;
+  onClose: () => void;
+  context?: React.ReactNode;
+}) {
+  const previewZoom = useNewsPreviewZoom();
+  const [content, setContent] = useState<NewsReaderContent | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const link = newsArticleLink(article);
+  const articleId = article.id;
+  const articleMarket = article.market;
+
+  useEffect(() => {
+    if (!link) return;
+
+    let cancelled = false;
+
+    fetchNewsReader(link, { market: articleMarket, articleId })
+      .then((data) => {
+        if (!cancelled) {
+          setContent(data);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "본문을 불러오지 못했습니다");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [link, articleId, articleMarket]);
+
+  const title = content?.title || newsDisplayHeadline(article);
+  const heroImage = content?.imageUrl || article.imageUrl;
+  const hasUrl = Boolean(link);
+  const isUs = article.market === "us";
+  const loadingLabel = isUs ? "본문 추출 및 번역 중…" : "본문 추출 중…";
+  const footerLabel = content?.translated
+    ? `${content.siteName ? `${content.siteName} · ` : ""}Papago 번역 · Reader`
+    : `${content?.siteName ? `${content.siteName} · ` : ""}Reader 추출`;
+
+  if (!link) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <button
+          type="button"
+          aria-label="닫기"
+          className="absolute inset-0 bg-black/60"
+          onClick={onClose}
+        />
+        <div className="relative rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] px-6 py-4 text-sm text-[var(--text-muted)]">
+          원문 URL이 없습니다.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
@@ -115,8 +153,13 @@ export function NewsReaderModal({ article, onClose }: NewsReaderModalProps) {
                 {article.publisher.name}
               </span>
               <span className="rounded-md bg-violet-500/15 px-2 py-0.5 text-[11px] font-semibold text-violet-300">
-                Reader API
+                Reader
               </span>
+              {isUs && (
+                <span className="rounded-md bg-sky-500/15 px-2 py-0.5 text-[11px] font-semibold text-sky-300">
+                  한국어
+                </span>
+              )}
               <time dateTime={article.publishedAt} className="text-[11px] text-[var(--text-muted)]">
                 {formatRelativeTime(article.publishedAt)}
               </time>
@@ -127,6 +170,9 @@ export function NewsReaderModal({ article, onClose }: NewsReaderModalProps) {
             >
               {title}
             </h2>
+            {content?.originalTitle && content.originalTitle !== title && (
+              <p className="text-xs leading-relaxed text-[var(--text-muted)]">{content.originalTitle}</p>
+            )}
             {content?.byline && (
               <p className="text-xs text-[var(--text-muted)]">{content.byline}</p>
             )}
@@ -153,7 +199,7 @@ export function NewsReaderModal({ article, onClose }: NewsReaderModalProps) {
             {loading && (
               <div className="flex h-40 items-center justify-center gap-2 text-sm text-[var(--text-muted)]">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                본문 추출 중…
+                {loadingLabel}
               </div>
             )}
             {error && (
@@ -163,21 +209,40 @@ export function NewsReaderModal({ article, onClose }: NewsReaderModalProps) {
             )}
             {!loading && !error && content && (
               <NewsPreviewZoomViewport zoom={previewZoom.zoom}>
-                <article className="mx-auto max-w-2xl whitespace-pre-wrap text-[15px] leading-7 text-[var(--text-primary)]">
-                  {content.textContent}
-                </article>
+                <div className="mx-auto max-w-2xl space-y-4">
+                  {heroImage ? (
+                    <div className="overflow-hidden rounded-lg border border-[var(--border)]">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={heroImage} alt="" className="max-h-64 w-full object-cover" />
+                    </div>
+                  ) : null}
+                  {content.contentHtml ? (
+                    <article
+                      className="prose prose-invert max-w-none text-[15px] leading-7 text-[var(--text-primary)] [&_a]:text-[var(--brand)] [&_img]:max-w-full [&_p]:mb-4"
+                      dangerouslySetInnerHTML={{ __html: content.contentHtml }}
+                    />
+                  ) : (
+                    <article className="whitespace-pre-wrap text-[15px] leading-7 text-[var(--text-primary)]">
+                      {content.textContent}
+                    </article>
+                  )}
+                </div>
               </NewsPreviewZoomViewport>
+            )}
+
+            {!loading && !error && context && (
+              <div className="mx-auto mt-6 max-w-2xl border-t border-[var(--border)] pt-4">
+                {context}
+              </div>
             )}
           </div>
         </div>
 
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border)] px-4 py-3 sm:px-5">
-          <span className="text-[11px] text-[var(--text-muted)]">
-            {content?.siteName ? `${content.siteName} · ` : ""}Reader API 추출
-          </span>
+          <span className="text-[11px] text-[var(--text-muted)]">{footerLabel}</span>
           {hasUrl && (
             <a
-              href={article.url}
+              href={link}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--background)]"

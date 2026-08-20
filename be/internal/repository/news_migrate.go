@@ -16,7 +16,7 @@ func MigrateNewsIfNeeded(ctx context.Context, db *sql.DB, migrationsDir string) 
 		return err
 	}
 	if exists {
-		return nil
+		return MigrateNewsPreviewIfNeeded(ctx, db, migrationsDir)
 	}
 
 	path := filepath.Join(migrationsDir, "010_news_articles.sql")
@@ -30,5 +30,93 @@ func MigrateNewsIfNeeded(ctx context.Context, db *sql.DB, migrationsDir string) 
 		}
 	}
 	log.Println("mysql: applied 010_news_articles.sql")
+	return MigrateNewsPreviewIfNeeded(ctx, db, migrationsDir)
+}
+
+// MigrateNewsPreviewIfNeeded applies 013_news_preview.sql column additions.
+func MigrateNewsPreviewIfNeeded(ctx context.Context, db *sql.DB, migrationsDir string) error {
+	hasCol, err := columnExists(ctx, db, "news_articles", "original_url")
+	if err != nil {
+		return err
+	}
+	if hasCol {
+		return MigrateNewsTranslationIfNeeded(ctx, db, migrationsDir)
+	}
+
+	path := filepath.Join(migrationsDir, "013_news_preview.sql")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read 013_news_preview.sql: %w", err)
+	}
+	for _, stmt := range splitSQLStatements(string(body)) {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("013_news_preview.sql: %w", err)
+		}
+	}
+	log.Println("mysql: applied 013_news_preview.sql")
+	return MigrateNewsTranslationIfNeeded(ctx, db, migrationsDir)
+}
+
+// MigrateNewsTranslationIfNeeded applies 018_news_translation.sql column additions.
+func MigrateNewsTranslationIfNeeded(ctx context.Context, db *sql.DB, migrationsDir string) error {
+	hasCol, err := columnExists(ctx, db, "news_articles", "headline_ko")
+	if err != nil {
+		return err
+	}
+	if hasCol {
+		return MigrateNewsReaderTranslationIfNeeded(ctx, db, migrationsDir)
+	}
+
+	path := filepath.Join(migrationsDir, "018_news_translation.sql")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read 018_news_translation.sql: %w", err)
+	}
+	for _, stmt := range splitSQLStatements(string(body)) {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("018_news_translation.sql: %w", err)
+		}
+	}
+	log.Println("mysql: applied 018_news_translation.sql")
+	return MigrateNewsReaderTranslationIfNeeded(ctx, db, migrationsDir)
+}
+
+// MigrateNewsReaderTranslationIfNeeded applies 019_news_reader_translation.sql.
+func MigrateNewsReaderTranslationIfNeeded(ctx context.Context, db *sql.DB, migrationsDir string) error {
+	exists, err := tableExists(ctx, db, "news_reader_translations")
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+
+	path := filepath.Join(migrationsDir, "019_news_reader_translation.sql")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read 019_news_reader_translation.sql: %w", err)
+	}
+	for _, stmt := range splitSQLStatements(string(body)) {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("019_news_reader_translation.sql: %w", err)
+		}
+	}
+	log.Println("mysql: applied 019_news_reader_translation.sql")
 	return nil
+}
+
+func columnExists(ctx context.Context, db *sql.DB, table, column string) (bool, error) {
+	var name string
+	err := db.QueryRowContext(ctx, `
+		SELECT column_name
+		FROM information_schema.columns
+		WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?
+	`, table, column).Scan(&name)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }

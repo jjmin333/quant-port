@@ -11,18 +11,21 @@ import (
 
 // extendedMigrations — base RequiredTables 이후 추가된 테이블.
 // EnsureSchema는 RequiredTables만 보므로, 기존 DB에는 별도 적용이 필요하다.
+// 007_user_portfolio_cache.sql 은 넣지 않는다. 054가 매 기동마다 DROP하는데
+// 여기 남아 있으면 없는 테이블을 다시 CREATE 한 뒤 또 지운다.
 var extendedMigrations = []struct {
 	table string
 	file  string
 }{
-	{"user_portfolio_cache", "007_user_portfolio_cache.sql"},
 	{"market_fx_rates", "008_market_fx_rates.sql"},
 	{"market_indices", "009_market_indices.sql"},
 	{"news_articles", "010_news_articles.sql"},
 	{"quote_snapshots", "011_quote_terminal_persist.sql"},
+	{"ranking_snapshot_entries", "016_ranking_snapshots.sql"},
+	{"market_rankings", "017_market_rankings.sql"},
 }
 
-// MigrateExtendedSchemaIfNeeded applies 007–010 when individual tables are missing.
+// MigrateExtendedSchemaIfNeeded applies 008–011/016–017 when individual tables are missing.
 func MigrateExtendedSchemaIfNeeded(ctx context.Context, db *sql.DB, migrationsDir string) error {
 	for _, m := range extendedMigrations {
 		exists, err := tableExists(ctx, db, m.table)

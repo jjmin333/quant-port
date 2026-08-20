@@ -6,7 +6,7 @@
 quant-port/
 ├── fe/                 # Next.js 16 + TypeScript + Tailwind v4
 ├── be/                 # Go REST API (chi + MySQL + Redis)
-├── docker-compose.yml  # 개발용 Redis (MySQL은 로컬 PC 사용)
+├── docker-compose.yml  # Redis + API (Tesseract 포함)
 └── README.md
 ```
 
@@ -17,11 +17,14 @@ quant-port/
 **MySQL** — 로컬 PC에 설치된 MySQL `3306`, DB `quantport` 사용.  
 `be/.env`의 `MYSQL_DSN`을 로컬 계정에 맞게 설정하세요.
 
-**Redis** — Docker로 실행:
+**Redis + API** — Docker (필수):
 
 ```bash
-docker compose up -d
+docker compose up -d --build
+# Windows: cd be && .\scripts\restart.ps1 -Background
 ```
+
+→ [`be/docs/docker.md`](be/docs/docker.md)
 
 ### 2. 프론트엔드
 
@@ -33,18 +36,17 @@ npm run dev
 
 → http://localhost:3000
 
-### 3. 백엔드
+### 3. 백엔드 (Docker only)
 
 ```powershell
 cd be
 cp .env.example .env
-.\scripts\restart.ps1          # 빌드 후 실행 (방화벽 친화적)
-# 또는 백그라운드: .\scripts\restart.ps1 -Background
+.\scripts\restart.ps1 -Background
 ```
 
-Linux/macOS: `make run` (동일하게 `go build` → `bin/api` 실행)
+Linux/macOS: `cd be && make docker-up`
 
-→ http://localhost:8080/health
+→ http://localhost:8080/health · `docker logs -f quant-port-api`
 
 ## 기술 스택
 
@@ -52,7 +54,7 @@ Linux/macOS: `make run` (동일하게 `go build` → `bin/api` 실행)
 |------|------|
 | Frontend (`fe/`) | Next.js 16, React 19, TypeScript, Tailwind CSS v4, Recharts |
 | Backend (`be/`) | Go 1.25, chi, MySQL, Redis |
-| Infra | 로컬 MySQL + Docker Compose (Redis 7) |
+| Infra | 로컬 MySQL + Docker Compose (Redis 7 + API/Tesseract) |
 
 ## 문서
 

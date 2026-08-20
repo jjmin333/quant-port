@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -111,6 +112,19 @@ func (r *FundamentalsRepo) Upsert(ctx context.Context, f model.StockFundamentals
 		nullTime(f.FetchedAt),
 	)
 	return err
+}
+
+func (r *FundamentalsRepo) ListSymbolSlice(ctx context.Context) ([]string, error) {
+	set, err := r.ListSymbols(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(set))
+	for sym := range set {
+		out = append(out, sym)
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 func (r *FundamentalsRepo) ListSymbols(ctx context.Context) (map[string]struct{}, error) {

@@ -6,7 +6,7 @@ export type QuotesChartPrefs = {
 };
 
 export const DEFAULT_QUOTES_CHART_PREFS: QuotesChartPrefs = {
-  interval: "5m",
+  interval: "1d",
   chartStyle: "candle",
 };
 

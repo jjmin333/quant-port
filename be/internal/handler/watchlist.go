@@ -50,3 +50,34 @@ func (h *WatchlistHandler) Remove(w http.ResponseWriter, r *http.Request) {
 	}
 	response.JSON(w, http.StatusOK, map[string]any{"data": map[string]string{"symbol": symbol}})
 }
+
+func (h *WatchlistHandler) Reorder(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Symbols []string `json:"symbols"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+	if err := h.svc.Reorder(r.Context(), body.Symbols); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]any{"data": map[string]bool{"ok": true}})
+}
+
+func (h *WatchlistHandler) BulkAdd(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Symbols []string `json:"symbols"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+	added, err := h.svc.BulkAdd(r.Context(), body.Symbols)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]any{"data": map[string]int{"added": added}})
+}

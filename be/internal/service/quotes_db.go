@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/enact/quant-port/be/internal/model"
+	"github.com/enact/quant-port/be/internal/stocklogo"
 )
 
 func (s *QuotesService) buildQuoteDetailFromDB(ctx context.Context, symbol string) (model.QuoteDetail, bool) {
@@ -26,11 +27,8 @@ func (s *QuotesService) buildQuoteDetailFromDB(ctx context.Context, symbol strin
 	}
 
 	prevClose := stats.PrevClose
-	change := 0.0
-	changeRate := 0.0
-	if prevClose > 0 {
-		change = currentPrice - prevClose
-		changeRate = (change / prevClose) * 100
+	if ref, ok := s.resolvePrevClose(ctx, sym); ok {
+		prevClose = ref
 	}
 
 	updatedAt := time.Now().UTC().Format(time.RFC3339)
@@ -46,10 +44,8 @@ func (s *QuotesService) buildQuoteDetailFromDB(ctx context.Context, symbol strin
 			Name:         stock.Name,
 			Market:       stock.Market,
 			Currency:     stock.Currency,
-			AssetType:    stock.AssetType,
+			AssetType:    assetTypeFromMarket(stock.Market, stock.SecurityType),
 			CurrentPrice: currentPrice,
-			Change:       change,
-			ChangeRate:   changeRate,
 			Volume:       stats.Volume,
 			TradingValue: stats.TradingValue,
 		},
@@ -62,14 +58,14 @@ func (s *QuotesService) buildQuoteDetailFromDB(ctx context.Context, symbol strin
 		MarketCap:  stats.MarketCap,
 		UpdatedAt:  updatedAt,
 	}
+	s.applyQuoteChange(ctx, sym, currentPrice, prevClose, &detail)
 
 	watchSet := s.watchSymbolSet(ctx)
 	heldSet := s.heldSymbolSet(ctx)
 	detail.IsWatchlisted = watchSet[sym]
 	detail.IsHeld = heldSet[sym]
 
-	fx := s.usdKrwRate(ctx)
-	s.normalizeQuoteDetailKRW(&detail, fx)
+	stocklogo.ApplyToQuoteSummary(&detail.QuoteSummary)
 	return detail, true
 }
 
@@ -96,7 +92,7 @@ func (s *QuotesService) statsFromDBCandles(ctx context.Context, symbol string, s
 		LastBarTime: lastDaily.Time,
 	}
 	if len(daily) >= 2 {
-		stats.PrevClose = daily[len(daily)-2].Close
+		// PrevClose filled via resolvePrevClose in buildQuoteDetailFromDB.
 	} else {
 		stats.PrevClose = lastDaily.Close
 	}

@@ -15,20 +15,16 @@ import (
 const persistedTradeTickLimit = 50
 
 type QuoteTerminalRepo struct {
-	db *sql.DB
+	db    *sql.DB
+	table *tableExistsCache
 }
 
 func NewQuoteTerminalRepo(db *sql.DB) *QuoteTerminalRepo {
-	return &QuoteTerminalRepo{db: db}
+	return &QuoteTerminalRepo{db: db, table: newTableExistsCache("quote_snapshots")}
 }
 
 func (r *QuoteTerminalRepo) HasTable(ctx context.Context) bool {
-	var name string
-	err := r.db.QueryRowContext(ctx, `
-		SELECT table_name FROM information_schema.tables
-		WHERE table_schema = DATABASE() AND table_name = 'quote_snapshots'
-	`).Scan(&name)
-	return err == nil && strings.TrimSpace(name) != ""
+	return r.table.Has(ctx, r.db)
 }
 
 func (r *QuoteTerminalRepo) UpsertDetail(ctx context.Context, symbol string, detail model.QuoteDetail, source string) error {
@@ -141,7 +137,7 @@ func (r *QuoteTerminalRepo) ReplaceTrades(ctx context.Context, symbol string, tr
 	for _, t := range trades {
 		id := strings.TrimSpace(t.ID)
 		if id == "" {
-			id = fmt.Sprintf("%s-%s-%v", t.Time, t.Price, t.Quantity)
+			id = fmt.Sprintf("%s-%g-%v", t.Time, t.Price, t.Quantity)
 		}
 		side := strings.TrimSpace(t.Side)
 		if side == "" {

@@ -17,7 +17,7 @@ func (d *DartClient) fetchURL(ctx context.Context, u string) ([]byte, error) {
 	if err == nil {
 		return body, nil
 	}
-	if !isDartTLSFailure(err) || runtime.GOOS != "windows" {
+	if !isDartTLSFailure(err) {
 		return nil, err
 	}
 	return fetchURLViaCurl(ctx, u)
@@ -59,8 +59,15 @@ func (d *DartClient) fetchURLHTTP(ctx context.Context, u string) ([]byte, error)
 	return body, nil
 }
 
+// fetchURLViaCurl shells out to curl when Go's TLS client fails to negotiate
+// with opendart.fss.or.kr — observed on both native Windows and inside the
+// Linux Docker container (curl's TLS stack succeeds where crypto/tls doesn't).
 func fetchURLViaCurl(ctx context.Context, u string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "curl.exe", "-sS", "-f", "-L", u)
+	bin := "curl"
+	if runtime.GOOS == "windows" {
+		bin = "curl.exe"
+	}
+	cmd := exec.CommandContext(ctx, bin, "-sS", "-f", "-L", u)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("dart curl: %w", err)

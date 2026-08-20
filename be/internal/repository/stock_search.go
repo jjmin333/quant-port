@@ -61,6 +61,14 @@ func searchRelevanceScore(q string, st model.Stock, latinOnly bool) int {
 	score := 0
 
 	if latinOnly && st.AssetType == model.AssetDomestic {
+		if len([]rune(q)) <= 3 {
+			for _, word := range tokenizeEnglishName(en) {
+				if word == qLower || strings.HasPrefix(word, qLower) {
+					score += 3200
+					return score
+				}
+			}
+		}
 		return 0
 	}
 
@@ -85,6 +93,9 @@ func searchRelevanceScore(q string, st model.Stock, latinOnly bool) int {
 
 	if strings.Contains(name, q) || strings.Contains(name, qLower) {
 		score += 4500
+		if strings.EqualFold(strings.TrimSpace(st.Name), strings.TrimSpace(q)) {
+			score += 50000
+		}
 	}
 	for _, word := range tokenizeEnglishName(en) {
 		if word == qLower || strings.HasPrefix(word, qLower) {
@@ -101,6 +112,43 @@ type scoredStock struct {
 	stock model.Stock
 	score int
 	pop   int64
+	pri   int
+}
+
+// SearchInstrumentPriority ranks listing types for search tie-breaks (higher = 본주 우선).
+func SearchInstrumentPriority(st model.Stock) int {
+	combined := strings.ToLower(st.Name + " " + st.EnglishName + " " + st.SecurityType)
+	sec := strings.ToUpper(strings.TrimSpace(st.SecurityType))
+
+	if st.AssetType == model.AssetETF || strings.Contains(sec, "ETF") || strings.Contains(sec, "ETN") {
+		if isLeveragedOrStructuredETP(combined) {
+			return 10
+		}
+		return 25
+	}
+	if strings.Contains(combined, "adr") {
+		return 55
+	}
+	if isLeveragedOrStructuredETP(combined) {
+		return 15
+	}
+	if st.AssetType == model.AssetDomestic || st.AssetType == model.AssetUS {
+		return 100
+	}
+	return 40
+}
+
+func isLeveragedOrStructuredETP(s string) bool {
+	markers := []string{
+		"레버리지", "레버", "인버스", "2배", "3배", "단일종목", "선물단일",
+		"밸류체인", "etn", "2x", "3x", "ultra", "leverag", "short", "inverse",
+	}
+	for _, m := range markers {
+		if strings.Contains(s, m) {
+			return true
+		}
+	}
+	return false
 }
 
 func rankSearchResults(items []model.Stock, q string, latinOnly bool) []model.Stock {
@@ -122,12 +170,20 @@ func rankSearchResults(items []model.Stock, q string, latinOnly bool) []model.St
 		if rel <= 0 {
 			continue
 		}
-		scored = append(scored, scoredStock{stock: st, score: rel, pop: searchPopularity(st)})
+		scored = append(scored, scoredStock{
+			stock: st,
+			score: rel,
+			pop:   searchPopularity(st),
+			pri:   SearchInstrumentPriority(st),
+		})
 	}
 
 	sort.SliceStable(scored, func(i, j int) bool {
 		if scored[i].score != scored[j].score {
 			return scored[i].score > scored[j].score
+		}
+		if scored[i].pri != scored[j].pri {
+			return scored[i].pri > scored[j].pri
 		}
 		if scored[i].pop != scored[j].pop {
 			return scored[i].pop > scored[j].pop
@@ -171,11 +227,17 @@ func appendSearchQueryFilter(query *string, args *[]any, q string, latinOnly boo
 	prefix := q + "%"
 
 	if latinOnly {
-		*query += ` AND asset_type != 'domestic'`
 		if len([]rune(q)) <= 3 {
-			*query += ` AND (UPPER(symbol) = UPPER(?) OR symbol LIKE ?)`
-			*args = append(*args, q, prefix)
+			symContains := "%" + strings.ToUpper(q) + "%"
+			enContains := "%" + q + "%"
+			*query += ` AND (
+				(asset_type != 'domestic' AND (UPPER(symbol) = UPPER(?) OR symbol LIKE ? OR UPPER(symbol) LIKE ?))
+				OR english_name LIKE ?
+				OR (asset_type != 'domestic' AND english_name LIKE ?)
+			)`
+			*args = append(*args, q, prefix, symContains, prefix, enContains)
 		} else {
+			*query += ` AND asset_type != 'domestic'`
 			*query += ` AND (UPPER(symbol) = UPPER(?) OR symbol LIKE ? OR english_name LIKE ?)`
 			*args = append(*args, q, prefix, like)
 		}

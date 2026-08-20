@@ -2,7 +2,7 @@
 
 import { PriceDisplay } from "@/components/ui/price-display";
 import { useExchangeRate } from "@/hooks/use-exchange-rate";
-import { formatPriceChange, formatUSD } from "@/lib/format";
+import { formatPercent, formatPriceChange, formatUSD } from "@/lib/format";
 import { trendTextClass } from "@/lib/trend-colors";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +13,8 @@ type QuotePriceProps = {
   size?: "sm" | "md" | "lg" | "xl" | "hero";
   className?: string;
   signed?: boolean;
+  /** USD 표시 시 원화 환산 병기 (기본 true). 좁은 목록 등에서는 false */
+  showKrwEquivalent?: boolean;
 };
 
 export function QuotePrice({
@@ -22,8 +24,11 @@ export function QuotePrice({
   size = "md",
   className,
   signed = false,
+  showKrwEquivalent = true,
 }: QuotePriceProps) {
-  const fetchedRate = useExchangeRate(currency === "USD" && !(exchangeRateProp && exchangeRateProp > 0));
+  const fetchedRate = useExchangeRate(
+    currency === "USD" && showKrwEquivalent && !(exchangeRateProp && exchangeRateProp > 0),
+  );
   const exchangeRate = exchangeRateProp && exchangeRateProp > 0 ? exchangeRateProp : fetchedRate;
 
   if (value <= 0) {
@@ -48,7 +53,7 @@ export function QuotePrice({
   const abs = Math.abs(value);
 
   const krwPart =
-    exchangeRate > 0 ? (
+    showKrwEquivalent && exchangeRate > 0 ? (
       <span className="text-[0.72em] font-normal text-[var(--text-secondary)]">
         (
         <PriceDisplay
@@ -99,7 +104,6 @@ export function QuoteChange({
   const fetchedRate = useExchangeRate(currency === "USD" && !(exchangeRateProp && exchangeRateProp > 0));
   const exchangeRate = exchangeRateProp && exchangeRateProp > 0 ? exchangeRateProp : fetchedRate;
 
-  const isUp = changeRate >= 0;
   const sizeClass =
     size === "lg" ? "text-lg" : size === "sm" ? "text-xs" : "text-sm";
 
@@ -114,7 +118,7 @@ export function QuoteChange({
   const changeText =
     currency === "USD"
       ? formatPriceChange(change, "USD", exchangeRate)
-      : `${isUp ? "+" : ""}${Math.abs(change).toLocaleString("ko-KR")}`;
+      : formatPriceChange(change, "KRW");
 
   return (
     <span
@@ -125,10 +129,7 @@ export function QuoteChange({
       )}
     >
       <span>{changeText}</span>
-      <span>
-        ({isUp ? "+" : ""}
-        {changeRate.toFixed(2)}%)
-      </span>
+      <span>({formatPercent(changeRate)})</span>
     </span>
   );
 }

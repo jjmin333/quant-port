@@ -36,6 +36,10 @@ type FundamentalsResponse struct {
 	Revenue     *int64 `json:"revenue,omitempty"`
 	NetIncome   *int64 `json:"netIncome,omitempty"`
 	TotalEquity *int64 `json:"totalEquity,omitempty"`
+
+	SharesOutstanding *int64   `json:"sharesOutstanding,omitempty"`
+	EPSBasic          *float64 `json:"epsBasic,omitempty"`
+	EPSDiluted        *float64 `json:"epsDiluted,omitempty"`
 }
 
 func BuildFundamentalsResponse(view *model.FundamentalsView, stock *model.Stock) FundamentalsResponse {
@@ -66,6 +70,9 @@ func BuildFundamentalsResponse(view *model.FundamentalsView, stock *model.Stock)
 		Revenue:          f.Revenue,
 		NetIncome:        f.NetIncome,
 		TotalEquity:      f.TotalEquity,
+		SharesOutstanding: f.SharesOutstanding,
+		EPSBasic:          f.EPSBasic,
+		EPSDiluted:        f.EPSDiluted,
 	}
 
 	if stock != nil {

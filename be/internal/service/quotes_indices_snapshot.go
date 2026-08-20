@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	quotesIndicesSnapshotKey = "quotes:indices:snapshot:v1"
+	quotesIndicesSnapshotKey = "quotes:indices:snapshot:v2"
 	indicesSnapshotTTL       = 10 * time.Minute
 	indicesRefreshTimeout    = 90 * time.Second
 )

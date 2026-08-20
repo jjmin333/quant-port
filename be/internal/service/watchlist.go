@@ -12,11 +12,16 @@ import (
 )
 
 type WatchlistService struct {
-	repo *repository.WatchlistRepo
+	repo   *repository.WatchlistRepo
+	quotes *QuotesService
 }
 
 func NewWatchlistService(repo *repository.WatchlistRepo) *WatchlistService {
 	return &WatchlistService{repo: repo}
+}
+
+func (s *WatchlistService) SetQuotes(quotes *QuotesService) {
+	s.quotes = quotes
 }
 
 func (s *WatchlistService) List(ctx context.Context) ([]model.WatchlistItem, error) {
@@ -24,17 +29,21 @@ func (s *WatchlistService) List(ctx context.Context) ([]model.WatchlistItem, err
 	if err != nil {
 		return nil, err
 	}
-	symbols, err := s.repo.List(ctx, userID)
+	entries, err := s.repo.ListEntries(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]model.WatchlistItem, 0, len(symbols))
-	for i, sym := range symbols {
-		out = append(out, model.WatchlistItem{
-			ID:        int64(i + 1),
-			Symbol:    sym,
-			CreatedAt: time.Now().Format(time.RFC3339),
-		})
+	out := make([]model.WatchlistItem, 0, len(entries))
+	for _, entry := range entries {
+		item := model.WatchlistItem{
+			ID:        entry.ID,
+			Symbol:    entry.Symbol,
+			CreatedAt: entry.CreatedAt.UTC().Format(time.RFC3339),
+		}
+		if entry.AddedPrice.Valid && entry.AddedPrice.Float64 > 0 {
+			item.AddedPrice = entry.AddedPrice.Float64
+		}
+		out = append(out, item)
 	}
 	return out, nil
 }
@@ -56,7 +65,16 @@ func (s *WatchlistService) Add(ctx context.Context, symbol string) error {
 	if symbol == "" {
 		return fmt.Errorf("symbol required")
 	}
-	return s.repo.Add(ctx, userID, symbol)
+	if err := s.repo.Add(ctx, userID, symbol); err != nil {
+		return err
+	}
+	if s.quotes != nil {
+		if price, ok := s.quotes.CurrentPriceForSymbol(ctx, symbol); ok {
+			_ = s.repo.SetAddedPrice(ctx, userID, symbol, price)
+		}
+		s.quotes.InvalidateQuotesListCache(ctx, "watchlist")
+	}
+	return nil
 }
 
 func (s *WatchlistService) Remove(ctx context.Context, symbol string) error {
@@ -64,5 +82,68 @@ func (s *WatchlistService) Remove(ctx context.Context, symbol string) error {
 	if err != nil {
 		return err
 	}
-	return s.repo.Remove(ctx, userID, strings.TrimSpace(strings.ToUpper(symbol)))
+	symbol = strings.TrimSpace(strings.ToUpper(symbol))
+	if err := s.repo.Remove(ctx, userID, symbol); err != nil {
+		return err
+	}
+	if s.quotes != nil {
+		s.quotes.InvalidateQuotesListCache(ctx, "watchlist")
+	}
+	return nil
+}
+
+func (s *WatchlistService) BulkAdd(ctx context.Context, symbols []string) (int, error) {
+	userID, err := authctx.RequireUserID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	added := 0
+	for _, sym := range symbols {
+		sym = strings.TrimSpace(strings.ToUpper(sym))
+		if sym == "" {
+			continue
+		}
+		if err := s.repo.Add(ctx, userID, sym); err == nil {
+			if s.quotes != nil {
+				if price, ok := s.quotes.CurrentPriceForSymbol(ctx, sym); ok {
+					_ = s.repo.SetAddedPrice(ctx, userID, sym, price)
+				}
+			}
+			added++
+		}
+	}
+	if added > 0 && s.quotes != nil {
+		s.quotes.InvalidateQuotesListCache(ctx, "watchlist")
+	}
+	return added, nil
+}
+
+func (s *WatchlistService) Reorder(ctx context.Context, symbols []string) error {
+	userID, err := authctx.RequireUserID(ctx)
+	if err != nil {
+		return err
+	}
+	normalized := make([]string, 0, len(symbols))
+	seen := map[string]struct{}{}
+	for _, sym := range symbols {
+		sym = strings.TrimSpace(strings.ToUpper(sym))
+		if sym == "" {
+			continue
+		}
+		if _, dup := seen[sym]; dup {
+			continue
+		}
+		seen[sym] = struct{}{}
+		normalized = append(normalized, sym)
+	}
+	if len(normalized) == 0 {
+		return fmt.Errorf("symbols required")
+	}
+	if err := s.repo.Reorder(ctx, userID, normalized); err != nil {
+		return err
+	}
+	if s.quotes != nil {
+		s.quotes.InvalidateQuotesListCache(ctx, "watchlist")
+	}
+	return nil
 }

@@ -87,6 +87,24 @@ func TestBTCAlwaysPolls(t *testing.T) {
 	}
 }
 
+// Regression: ScheduleAlways originally had no loc, so SessionCloseAt panicked
+// with "missing Location in call to Time.In" the moment anything called it —
+// which nothing did until worker-close-overseas started using session-close
+// triggers for its indices. alwaysPoll must still resolve to a real close time
+// (docs/DAILY_CLOSE_DESIGN.md §5.1: KST midnight), not a nil location.
+func TestSessionCloseAtAlwaysDoesNotPanic(t *testing.T) {
+	day := mustKST(t, "2006-01-02 15:04", "2026-07-25 00:00")
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("SessionCloseAt(ScheduleAlways) panicked: %v", r)
+		}
+	}()
+	closeAt := SessionCloseAt(ScheduleAlways, day)
+	if closeAt.IsZero() {
+		t.Fatal("expected a non-zero close time for ScheduleAlways")
+	}
+}
+
 func TestScheduleForIndex(t *testing.T) {
 	if ScheduleForIndex("kospi") != ScheduleKRX {
 		t.Fatal("kospi schedule")

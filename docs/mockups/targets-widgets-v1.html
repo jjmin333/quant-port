@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>목표가 관리 — 위젯 선택용 목업 v1</title>
+<style>
+/* 목업 공용 스타일 — journal/targets/reports v1 */
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.97 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.93 0 0);
+  --border: oklch(0.87 0 0);
+  --brand: #2563EB;
+  --brand-muted: rgba(37, 99, 235, 0.1);
+  --profit: #DC2626;
+  --loss: #2563EB;
+  --hit: #059669;
+  --hit-muted: rgba(5, 150, 105, 0.12);
+  --miss: #B45309;
+  --warn: #D97706;
+  --warn-muted: rgba(217, 119, 6, 0.12);
+  --sample: #7C3AED;
+  --heat0: oklch(0.93 0 0);
+  --heat1: rgba(37, 99, 235, 0.20);
+  --heat2: rgba(37, 99, 235, 0.42);
+  --heat3: rgba(37, 99, 235, 0.66);
+  --heat4: rgba(37, 99, 235, 0.9);
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 16%);
+  --brand: #60A5FA;
+  --brand-muted: rgba(96, 165, 250, 0.15);
+  --profit: #F87171;
+  --loss: #60A5FA;
+  --hit: #34D399;
+  --hit-muted: rgba(52, 211, 153, 0.14);
+  --miss: #FBBF24;
+  --warn: #FBBF24;
+  --warn-muted: rgba(251, 191, 36, 0.14);
+  --sample: #A78BFA;
+  --heat0: oklch(0.269 0 0);
+  --heat1: rgba(96, 165, 250, 0.2);
+  --heat2: rgba(96, 165, 250, 0.4);
+  --heat3: rgba(96, 165, 250, 0.62);
+  --heat4: rgba(96, 165, 250, 0.88);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--background); color: var(--foreground);
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 12px; line-height: 1.5; padding: 24px; -webkit-font-smoothing: antialiased;
+}
+h1 { font-size: 19px; letter-spacing: -.02em; }
+h2 { font-size: 13.5px; letter-spacing: -.01em; }
+h3 { font-size: 12.5px; }
+h4 { font-size: 11px; }
+.wrap { max-width: 1280px; margin: 0 auto; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.mut { color: var(--muted-foreground); }
+.up { color: var(--profit); } .dn { color: var(--loss); }
+.hit { color: var(--hit); } .warnc { color: var(--warn); }
+.sm { font-size: 10.5px; } .xs { font-size: 9.5px; }
+
+.topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: color-mix(in oklch, var(--background) 88%, transparent); backdrop-filter: blur(8px);
+  padding: 10px 0 12px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
+.lede { font-size: 11.5px; color: var(--muted-foreground); max-width: 76ch; line-height: 1.65; }
+
+/* 섹션 */
+section { margin-top: 26px; }
+.shead { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; margin-bottom: 4px; }
+.tag { font-size: 10px; font-weight: 700; letter-spacing: .04em; padding: 2px 7px; border-radius: 5px;
+  background: var(--brand-muted); color: var(--brand); }
+.why { font-size: 11px; color: var(--muted-foreground); line-height: 1.7; margin-bottom: 10px; max-width: 86ch; }
+.why b { color: var(--foreground); font-weight: 600; }
+
+/* 옵션 카드 */
+.opt { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); overflow: hidden; }
+.opt > header { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--muted) 55%, transparent); }
+.opt > header .id { font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 5px; background: var(--foreground); color: var(--card); }
+.opt > .pad { padding: 12px; }
+.opt .note { padding: 8px 12px; border-top: 1px solid var(--border); font-size: 10.5px; color: var(--muted-foreground); line-height: 1.65; }
+.cols { display: grid; gap: 14px; }
+.c2 { grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); }
+.c3 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.c4 { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+
+/* 공용 프리미티브 */
+.card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 600; padding: 1px 6px;
+  border-radius: 5px; background: var(--muted); color: var(--muted-foreground); white-space: nowrap; }
+.badge.b-up { background: rgba(220,38,38,.12); color: var(--profit); }
+.badge.b-down { background: rgba(37,99,235,.12); color: var(--loss); }
+.badge.b-hit { background: var(--hit-muted); color: var(--hit); }
+.badge.b-warn { background: var(--warn-muted); color: var(--warn); }
+.badge.b-brand { background: var(--brand-muted); color: var(--brand); }
+[data-theme="dark"] .badge.b-up { background: rgba(248,113,113,.15); }
+[data-theme="dark"] .badge.b-down { background: rgba(96,165,250,.15); }
+.av { width: 22px; height: 22px; border-radius: 6px; flex: 0 0 auto; background: var(--muted); display: grid;
+  place-items: center; font-size: 9px; font-weight: 700; color: var(--muted-foreground); }
+.av.lg { width: 30px; height: 30px; font-size: 10px; border-radius: 8px; }
+.btn { font: inherit; font-size: 11px; cursor: pointer; border: 1px solid var(--border); background: var(--card);
+  color: var(--foreground); padding: 5px 11px; border-radius: 7px; }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
+.btn.ghost { border-color: transparent; color: var(--muted-foreground); }
+.btn.on { border-color: var(--brand); background: var(--brand-muted); color: var(--brand); font-weight: 600; }
+.btn.sm { padding: 3px 8px; font-size: 10.5px; }
+.field { width: 100%; font: inherit; font-size: 11.5px; padding: 6px 9px; border: 1px solid var(--border);
+  border-radius: 7px; background: var(--card); color: var(--foreground); }
+.pillrow { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.chip { font-size: 10px; padding: 2px 8px; border-radius: 999px; background: var(--muted); color: var(--muted-foreground); }
+.chip.on { background: var(--brand-muted); color: var(--brand); font-weight: 600; }
+
+/* 행 */
+.row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--border); }
+.row:first-of-type { border-top: none; }
+.row:hover { background: var(--accent); }
+.col-main { min-width: 0; flex: 1 1 auto; }
+.name { font-size: 12.5px; font-weight: 600; }
+.meta { font-size: 10.5px; color: var(--muted-foreground); margin-top: 1px; display: flex; gap: 7px; flex-wrap: wrap; }
+.clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* 목표가 게이지 */
+.tg { flex: 0 0 168px; }
+.tg .bar { position: relative; height: 6px; border-radius: 3px; background: var(--muted); margin: 5px 0 4px; }
+.tg .bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: var(--brand); opacity: .75; }
+.tg .bar b { position: absolute; top: -4px; width: 2px; height: 14px; background: var(--foreground); opacity: .7; }
+.tg .bar s { position: absolute; top: -3px; width: 8px; height: 12px; text-decoration: none;
+  border-right: 2px dashed var(--profit); }
+.tg .bar u { position: absolute; top: -3px; width: 2px; height: 12px; background: var(--loss); text-decoration: none; }
+.tg .k { display: flex; justify-content: space-between; font-size: 9.5px; color: var(--muted-foreground); }
+
+/* 스파크 */
+.spark { width: 108px; height: 30px; flex: 0 0 auto; }
+.spark.w2 { width: 150px; height: 38px; }
+.spark svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+/* 타일 */
+.tiles { display: grid; gap: 10px; }
+.tile { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
+.tile.click { cursor: pointer; } .tile.click:hover { border-color: var(--brand); }
+.tile .l { font-size: 10.5px; color: var(--muted-foreground); display: flex; align-items: center; gap: 4px; }
+.tile .val { font-size: 20px; font-weight: 700; letter-spacing: -.02em; margin-top: 1px; }
+.tile .foot { font-size: 9.5px; color: var(--muted-foreground); margin-top: 2px; }
+
+/* 모달 */
+.modal-shell { border: 1px solid var(--border); border-radius: 12px; background: var(--card);
+  box-shadow: 0 12px 32px rgba(0,0,0,.14); overflow: hidden; }
+[data-theme="dark"] .modal-shell { box-shadow: 0 12px 32px rgba(0,0,0,.5); }
+.modal-head { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.modal-body { padding: 12px 14px; display: grid; gap: 10px; }
+.modal-foot { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--border); }
+.panel { border: 1px solid var(--border); border-radius: 9px; padding: 9px 10px; }
+.panel > h4 { font-size: 10.5px; font-weight: 600; color: var(--muted-foreground); margin-bottom: 6px; }
+.kv { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; padding: 1.5px 0; }
+.kv > span:first-child { color: var(--muted-foreground); }
+
+/* 레일 카드 */
+.rail { display: grid; gap: 10px; align-content: start; }
+.sc { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); padding: 10px 11px; }
+.sc > h4 { font-size: 11px; font-weight: 600; margin-bottom: 7px; display: flex; justify-content: space-between; align-items: center; }
+
+/* 히트맵 */
+.heat { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 10px); gap: 2.5px; }
+.heat i { width: 10px; height: 10px; border-radius: 2px; background: var(--heat0); display: block; }
+.heat i.l1 { background: var(--heat1); } .heat i.l2 { background: var(--heat2); }
+.heat i.l3 { background: var(--heat3); } .heat i.l4 { background: var(--heat4); }
+
+table.t { width: 100%; border-collapse: collapse; font-size: 11px; }
+table.t th { font-weight: 500; color: var(--muted-foreground); text-align: right; padding: 4px 6px; font-size: 10px; }
+table.t th:first-child, table.t td:first-child { text-align: left; }
+table.t td { padding: 5px 6px; border-top: 1px solid var(--border); text-align: right; }
+table.t tr:hover td { background: var(--accent); }
+
+.pros { font-size: 10.5px; }
+.pros li { list-style: none; padding-left: 14px; position: relative; margin-top: 3px; color: var(--muted-foreground); }
+.pros li::before { position: absolute; left: 0; }
+.pros li.p::before { content: "+"; color: var(--hit); font-weight: 700; }
+.pros li.c::before { content: "−"; color: var(--miss); font-weight: 700; }
+.be { display: inline-flex; align-items: center; gap: 3px; font-size: 9.5px; font-weight: 700; padding: 1px 5px;
+  border-radius: 4px; background: rgba(124,58,237,.12); color: var(--sample); }
+</style>
+<style>
+  /* 목표가 전용 */
+  .trow { display: flex; align-items: center; gap: 12px; padding: 11px 13px; border-top: 1px solid var(--border); }
+  .trow:first-of-type { border-top: none; }
+  .trow:hover { background: var(--accent); }
+
+  /* 축 게이지: 등록가 — 현재가 — 목표가 (손절 포함) */
+  .axis { flex: 0 0 216px; }
+  .axis .track { position: relative; height: 7px; border-radius: 4px; background: var(--muted); margin: 13px 0 4px; }
+  .axis .track .fill { position: absolute; top: 0; bottom: 0; border-radius: 4px; background: var(--brand); opacity: .8; }
+  .axis .track .now { position: absolute; top: -5px; width: 3px; height: 17px; border-radius: 2px; background: var(--foreground); }
+  .axis .track .tgt { position: absolute; top: -6px; bottom: -6px; width: 0; border-right: 2px dashed var(--profit); }
+  .axis .track .stp { position: absolute; top: -6px; bottom: -6px; width: 0; border-right: 2px dashed var(--loss); }
+  .axis .track em { position: absolute; top: -15px; font-size: 9px; font-style: normal; color: var(--muted-foreground);
+    transform: translateX(-50%); white-space: nowrap; }
+  .axis .k { display: flex; justify-content: space-between; font-size: 9.5px; color: var(--muted-foreground); }
+
+  .tcard { border: 1px solid var(--border); border-radius: 11px; background: var(--card); padding: 11px 12px; display: grid; gap: 7px; }
+  .tcard.near { border-color: var(--warn); box-shadow: 0 0 0 2px var(--warn-muted); }
+  .tcard.hitc { border-color: var(--hit); box-shadow: 0 0 0 2px var(--hit-muted); }
+
+  .lad { display: grid; gap: 3px; }
+  .lad .l { display: grid; grid-template-columns: 46px 1fr 62px; gap: 7px; align-items: center; font-size: 10.5px; }
+  .lad .l .tr { height: 6px; border-radius: 3px; background: var(--muted); position: relative; }
+  .lad .l .tr i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <h1>목표가 관리 — 위젯 선택용 목업 v1</h1>
+  <span class="badge b-brand">/targets</span>
+  <button class="btn" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme==='dark'?'light':'dark'">라이트 / 다크</button>
+</div>
+
+<p class="lede">
+  지금 이 화면은 <b>「목표가 82,000 · 목표까지 +11.4%」라는 한 줄</b>이 전부다. 실제로 목표가를 관리한다는 건
+  <b>어디서 출발해 지금 어디쯤 왔는지</b>, <b>틀렸을 때 어디서 접을지</b>, <b>어떤 종목이 곧 닿는지</b>를 아는 일인데
+  그 셋 다 화면에 없다. <span class="be">BE</span> 표시는 서버 스키마·API 변경이 필요한 항목.
+</p>
+
+<!-- ══════════ 행 디자인 ══════════ -->
+<section>
+  <div class="shead"><span class="tag">행 디자인</span><h2>목록 한 줄을 어떻게 그릴 것인가 (택 1)</h2></div>
+  <p class="why">
+    현재 행: <span class="mono sm">이름 / 현재가 / 목표가 / 목표까지 %</span>. 숫자 네 개가 나란히 있을 뿐이라
+    <b>+11.4%가 가까운 건지 먼 건지</b>가 안 읽힌다. 세 후보 모두 「등록가 → 현재가 → 목표가」를 한 축에 올린다.
+  </p>
+
+  <div class="cols c2">
+
+    <!-- T1 -->
+    <div class="opt">
+      <header><span class="id">T1</span><h3>진행 축 행</h3><span class="badge" style="margin-left:auto">밀도 높음</span></header>
+      <div class="pad">
+        <div class="card">
+          <div class="trow">
+            <span class="av">삼</span>
+            <div class="col-main">
+              <div class="pillrow"><span class="name">삼성전자</span><span class="xs mut mono">005930</span><span class="badge b-warn">임박 4.2%</span></div>
+              <div class="meta"><span>1차 목표 · 실적 반등 확인</span></div>
+            </div>
+            <div class="axis">
+              <div class="track">
+                <em style="left:0">등록 68,400</em>
+                <em style="left:78%">목표 82,000</em>
+                <div class="fill" style="left:0;width:74%"></div>
+                <div class="now" style="left:74%"></div>
+                <div class="tgt" style="left:78%"></div>
+              </div>
+              <div class="k"><span>진행 74%</span><span class="mono">현재 78,600</span></div>
+            </div>
+            <div style="flex:0 0 74px;text-align:right">
+              <div class="xs mut">목표까지</div>
+              <b class="mono" style="font-size:13px">+4.3%</b>
+            </div>
+            <span class="spark"><svg viewBox="0 0 108 30">
+              <line x1="0" y1="4" x2="108" y2="4" stroke="var(--profit)" stroke-width="1" stroke-dasharray="3 3"/>
+              <polyline fill="none" stroke="var(--foreground)" stroke-width="1.3" opacity=".8" points="0,26 13,24 27,25 40,19 54,20 67,14 81,15 94,10 108,9"/>
+            </svg></span>
+            <span class="mut">⋯</span>
+          </div>
+          <div class="trow">
+            <span class="av">AA</span>
+            <div class="col-main">
+              <div class="pillrow"><span class="name">Apple</span><span class="xs mut mono">AAPL</span><span class="badge b-hit">목표 도달</span></div>
+              <div class="meta"><span>08-11 도달 · 등록 후 34일</span></div>
+            </div>
+            <div class="axis">
+              <div class="track">
+                <em style="left:0">등록 $268</em>
+                <em style="left:70%">목표 $305</em>
+                <div class="fill" style="left:0;width:100%;background:var(--hit)"></div>
+                <div class="now" style="left:calc(100% - 3px)"></div>
+                <div class="tgt" style="left:70%"></div>
+              </div>
+              <div class="k"><span class="hit">초과 +4.9%</span><span class="mono">현재 $320</span></div>
+            </div>
+            <div style="flex:0 0 74px;text-align:right">
+              <div class="xs mut">목표까지</div>
+              <b class="mono hit" style="font-size:13px">도달</b>
+            </div>
+            <span class="spark"><svg viewBox="0 0 108 30">
+              <line x1="0" y1="10" x2="108" y2="10" stroke="var(--profit)" stroke-width="1" stroke-dasharray="3 3"/>
+              <polyline fill="none" stroke="var(--foreground)" stroke-width="1.3" opacity=".8" points="0,25 13,23 27,20 40,22 54,16 67,12 81,9 94,6 108,4"/>
+            </svg></span>
+            <span class="mut">⋯</span>
+          </div>
+          <div class="trow">
+            <span class="av">LG</span>
+            <div class="col-main">
+              <div class="pillrow"><span class="name">LG에너지솔루션</span><span class="xs mut mono">373220</span><span class="badge b-down">손절 근접</span></div>
+              <div class="meta"><span>등록 후 −8.1% · 손절 350,000</span></div>
+            </div>
+            <div class="axis">
+              <div class="track">
+                <em style="left:14%">손절</em><em style="left:86%">목표</em>
+                <div class="fill" style="left:14%;width:12%;background:var(--loss)"></div>
+                <div class="stp" style="left:14%"></div>
+                <div class="now" style="left:26%"></div>
+                <div class="tgt" style="left:86%"></div>
+              </div>
+              <div class="k"><span class="dn">손절까지 −5.2%</span><span class="mono">현재 369,000</span></div>
+            </div>
+            <div style="flex:0 0 74px;text-align:right">
+              <div class="xs mut">목표까지</div>
+              <b class="mono" style="font-size:13px">+21.9%</b>
+            </div>
+            <span class="spark"><svg viewBox="0 0 108 30">
+              <line x1="0" y1="3" x2="108" y2="3" stroke="var(--profit)" stroke-width="1" stroke-dasharray="3 3"/>
+              <line x1="0" y1="27" x2="108" y2="27" stroke="var(--loss)" stroke-width="1" stroke-dasharray="3 3"/>
+              <polyline fill="none" stroke="var(--foreground)" stroke-width="1.3" opacity=".8" points="0,13 13,15 27,14 40,18 54,17 67,21 81,20 94,23 108,22"/>
+            </svg></span>
+            <span class="mut">⋯</span>
+          </div>
+        </div>
+      </div>
+      <div class="note">한 줄에 <b>등록가·현재가·목표가·손절가</b>가 전부 좌표로 들어간다. 종목 10~20개를 위아래로 훑을 때 가장 빠르다.</div>
+    </div>
+
+    <!-- T2 -->
+    <div class="opt">
+      <header><span class="id">T2</span><h3>카드 그리드</h3></header>
+      <div class="pad">
+        <div class="cols c3" style="gap:10px">
+          <div class="tcard near">
+            <div class="pillrow"><span class="av">삼</span><b style="font-size:12px">삼성전자</b><span class="badge b-warn" style="margin-left:auto">임박</span></div>
+            <div class="pillrow" style="justify-content:space-between">
+              <span><span class="xs mut">현재 </span><b class="mono" style="font-size:14px">78,600</b></span>
+              <span><span class="xs mut">목표 </span><b class="mono up" style="font-size:14px">82,000</b></span>
+            </div>
+            <span style="display:block;height:44px"><svg viewBox="0 0 200 44" preserveAspectRatio="none" style="width:100%;height:100%">
+              <line x1="0" y1="7" x2="200" y2="7" stroke="var(--profit)" stroke-width="1.2" stroke-dasharray="4 3"/>
+              <polyline fill="none" stroke="var(--foreground)" stroke-width="1.5" opacity=".85" points="0,38 25,35 50,36 75,28 100,29 125,20 150,22 175,15 200,13"/>
+            </svg></span>
+            <div class="axis" style="flex:none">
+              <div class="track" style="margin-top:6px"><div class="fill" style="left:0;width:74%"></div><div class="now" style="left:74%"></div><div class="tgt" style="left:78%"></div></div>
+              <div class="k"><span>등록 68,400</span><span>+4.3% 남음</span></div>
+            </div>
+            <div class="xs mut">1차 목표 · 실적 반등 확인</div>
+          </div>
+          <div class="tcard hitc">
+            <div class="pillrow"><span class="av">AA</span><b style="font-size:12px">Apple</b><span class="badge b-hit" style="margin-left:auto">도달</span></div>
+            <div class="pillrow" style="justify-content:space-between">
+              <span><span class="xs mut">현재 </span><b class="mono" style="font-size:14px">$320.4</b></span>
+              <span><span class="xs mut">목표 </span><b class="mono up" style="font-size:14px">$305</b></span>
+            </div>
+            <span style="display:block;height:44px"><svg viewBox="0 0 200 44" preserveAspectRatio="none" style="width:100%;height:100%">
+              <line x1="0" y1="15" x2="200" y2="15" stroke="var(--profit)" stroke-width="1.2" stroke-dasharray="4 3"/>
+              <polyline fill="none" stroke="var(--foreground)" stroke-width="1.5" opacity=".85" points="0,37 25,34 50,30 75,32 100,24 125,18 150,13 175,9 200,6"/>
+            </svg></span>
+            <div class="axis" style="flex:none">
+              <div class="track" style="margin-top:6px"><div class="fill" style="left:0;width:100%;background:var(--hit)"></div><div class="now" style="left:calc(100% - 3px)"></div><div class="tgt" style="left:70%"></div></div>
+              <div class="k"><span>등록 $268</span><span class="hit">초과 +4.9%</span></div>
+            </div>
+            <div class="xs mut">08-11 도달 · 다음 목표 설정?</div>
+          </div>
+          <div class="tcard">
+            <div class="pillrow"><span class="av">LG</span><b style="font-size:12px">LG에너지솔루션</b><span class="badge b-down" style="margin-left:auto">−8.1%</span></div>
+            <div class="pillrow" style="justify-content:space-between">
+              <span><span class="xs mut">현재 </span><b class="mono" style="font-size:14px">369,000</b></span>
+              <span><span class="xs mut">목표 </span><b class="mono up" style="font-size:14px">450,000</b></span>
+            </div>
+            <span style="display:block;height:44px"><svg viewBox="0 0 200 44" preserveAspectRatio="none" style="width:100%;height:100%">
+              <line x1="0" y1="5" x2="200" y2="5" stroke="var(--profit)" stroke-width="1.2" stroke-dasharray="4 3"/>
+              <line x1="0" y1="39" x2="200" y2="39" stroke="var(--loss)" stroke-width="1.2" stroke-dasharray="4 3"/>
+              <polyline fill="none" stroke="var(--foreground)" stroke-width="1.5" opacity=".85" points="0,19 25,22 50,20 75,26 100,24 125,30 150,29 175,33 200,32"/>
+            </svg></span>
+            <div class="axis" style="flex:none">
+              <div class="track" style="margin-top:6px"><div class="fill" style="left:14%;width:12%;background:var(--loss)"></div><div class="stp" style="left:14%"></div><div class="now" style="left:26%"></div><div class="tgt" style="left:86%"></div></div>
+              <div class="k"><span class="dn">손절까지 −5.2%</span><span>+21.9% 남음</span></div>
+            </div>
+            <div class="xs mut">재고 사이클 확인 후 재진입</div>
+          </div>
+        </div>
+      </div>
+      <div class="note">차트가 크게 들어가 <b>목표선까지의 궤적</b>이 눈에 보인다. 대신 종목이 15개 넘어가면 스크롤이 길다.</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════ 위젯 ══════════ -->
+<section>
+  <div class="shead"><span class="tag">위젯</span><h2>추가 컴포넌트 후보 (복수 선택)</h2></div>
+
+  <div class="cols c2">
+
+    <!-- T-A -->
+    <div class="opt">
+      <header><span class="id">T-A</span><h3>상단 요약 타일 + 상태 필터</h3></header>
+      <div class="pad" style="display:grid;gap:10px">
+        <div class="tiles" style="grid-template-columns:repeat(4,1fr)">
+          <div class="tile click"><div class="l">등록</div><div class="val mono">11</div><div class="foot">9종목 · 국내 6 해외 3</div></div>
+          <div class="tile click" style="border-color:var(--hit)"><div class="l">목표 도달</div><div class="val mono hit">3</div><div class="foot">평균 41일 소요</div></div>
+          <div class="tile click" style="border-color:var(--warn)"><div class="l">도달 임박 <span class="xs">5% 이내</span></div><div class="val mono warnc">2</div><div class="foot">삼성전자 · 현대차</div></div>
+          <div class="tile click"><div class="l">평균 남은 거리</div><div class="val mono">+13.8%</div><div class="foot">등록 후 평균 +5.1%</div></div>
+        </div>
+        <div class="pillrow">
+          <span class="chip on">전체 11</span><span class="chip">도달 3</span><span class="chip">임박 2</span>
+          <span class="chip">손절 근접 1</span><span class="chip">보유 중 5</span>
+          <span style="margin-left:auto" class="pillrow"><span class="xs mut">정렬</span><span class="chip on">임박순</span><span class="chip">등록순</span><span class="chip">등락순</span></span>
+        </div>
+      </div>
+      <div class="note">타일을 누르면 그 상태로 목록이 걸러진다. 지금은 정렬·필터가 <b>하나도 없어서</b> 등록한 순서대로만 본다.</div>
+    </div>
+
+    <!-- T-B -->
+    <div class="opt">
+      <header><span class="id">T-B</span><h3>손절가 · 2차 목표 (목표 사다리)</h3><span class="be">BE</span></header>
+      <div class="pad" style="display:grid;gap:10px">
+        <div class="panel">
+          <h4>SK하이닉스 — 현재 212,000</h4>
+          <div class="lad">
+            <div class="l"><span class="mut">2차 목표</span><span class="tr"><i style="width:100%;background:var(--profit);opacity:.35"></i></span><span class="mono up">260,000</span></div>
+            <div class="l"><span class="mut">1차 목표</span><span class="tr"><i style="width:72%;background:var(--profit);opacity:.6"></i></span><span class="mono up">240,000</span></div>
+            <div class="l"><b>현재가</b><span class="tr"><i style="width:47%;background:var(--foreground);opacity:.5"></i></span><b class="mono">212,000</b></div>
+            <div class="l"><span class="mut">등록가</span><span class="tr"><i style="width:36%;background:var(--muted-foreground);opacity:.4"></i></span><span class="mono mut">195,000</span></div>
+            <div class="l"><span class="mut">손절가</span><span class="tr"><i style="width:18%;background:var(--loss);opacity:.6"></i></span><span class="mono dn">185,000</span></div>
+          </div>
+          <div class="kv" style="margin-top:8px;border-top:1px solid var(--border);padding-top:7px">
+            <span>손익비 (R:R)</span><b class="mono">2.07 : 1</b>
+          </div>
+          <div class="kv"><span>1차까지 / 손절까지</span><b class="mono"><span class="up">+13.2%</span> / <span class="dn">−12.7%</span></b></div>
+        </div>
+      </div>
+      <div class="note">지금은 목표가 <b>한 개</b>만 저장된다(<span class="mono">target_price</span>). 실제 매매는 「여기서 접고, 여기서 절반 팔고, 여기까지 간다」로 움직이는데 그걸 적을 칸이 없어서 다들 메모 필드에 텍스트로 쓴다. <span class="mono">stop_price</span>·<span class="mono">target_price_2</span> 컬럼 추가.</div>
+    </div>
+
+    <!-- T-C -->
+    <div class="opt">
+      <header><span class="id">T-C</span><h3>등록 시점 박제 + 도달 이력</h3><span class="be">BE</span></header>
+      <div class="pad" style="display:grid;gap:10px">
+        <div class="panel">
+          <h4>등록 이후</h4>
+          <div class="kv"><span>등록 시점 주가</span><b class="mono">68,400 <span class="xs mut">(07-10)</span></b></div>
+          <div class="kv"><span>등록 후 등락</span><b class="mono up">+14.9%</b></div>
+          <div class="kv"><span>목표 대비 진행</span><b class="mono">74%</b></div>
+          <div class="kv"><span>최고 도달</span><b class="mono">81,200 <span class="xs mut">(08-12, 목표의 99%)</span></b></div>
+        </div>
+        <div class="panel">
+          <h4>도달 이력 <span class="xs mut">달성한 목표는 지우지 않고 남긴다</span></h4>
+          <table class="t">
+            <tr><th>종목</th><th>목표</th><th>등록가</th><th>도달일</th><th>소요</th></tr>
+            <tr><td>Apple</td><td class="mono">$305</td><td class="mono">$268</td><td>08-11</td><td class="mono">34일</td></tr>
+            <tr><td>현대차</td><td class="mono">265,000</td><td class="mono">228,000</td><td>07-29</td><td class="mono">52일</td></tr>
+            <tr><td>NVIDIA</td><td class="mono">$198</td><td class="mono">$171</td><td>06-30</td><td class="mono">21일</td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="note">현재 <span class="mono">user_price_targets</span>는 <span class="mono">symbol·target_price·note·created_at</span>뿐이다. 등록가가 없어서 <b>「내가 얼마에 이 목표를 세웠나」</b>를 영원히 알 수 없고, 도달하면 사용자가 지워버려 기록이 사라진다. <span class="mono">base_price</span>·<span class="mono">reached_at</span> 추가.</div>
+    </div>
+
+    <!-- T-D -->
+    <div class="opt">
+      <header><span class="id">T-D</span><h3>레일 · 종목 퀵룩 모달</h3></header>
+      <div class="pad">
+        <div class="cols c2" style="gap:10px">
+          <div class="rail">
+            <div class="sc">
+              <h4>도달 임박 <span class="badge b-warn">2</span></h4>
+              <div class="kv"><span class="pillrow"><span class="av" style="width:16px;height:16px;font-size:7px">삼</span>삼성전자</span><b class="mono warnc">+4.3%</b></div>
+              <div class="kv"><span class="pillrow"><span class="av" style="width:16px;height:16px;font-size:7px">현</span>현대차</span><b class="mono warnc">+2.1%</b></div>
+            </div>
+            <div class="sc">
+              <h4>보유 중인 목표가 <span class="xs mut">평단 대비</span></h4>
+              <div class="kv"><span>삼성전자</span><span class="xs mono">평단 71,200 → 목표 82,000 <b class="up">+15.2%</b></span></div>
+              <div class="kv"><span>SK하이닉스</span><span class="xs mono">평단 176,300 → 목표 240,000 <b class="up">+36.1%</b></span></div>
+            </div>
+            <div class="sc">
+              <h4>목표가 없는 보유 종목 <span class="badge">4</span></h4>
+              <div class="kv"><span>기아 · POSCO홀딩스</span><button class="btn sm">목표 설정</button></div>
+              <div class="kv"><span>Microsoft · Tesla</span><button class="btn sm">목표 설정</button></div>
+            </div>
+          </div>
+          <div class="modal-shell">
+            <div class="modal-head">
+              <span class="av lg">삼</span>
+              <div class="col-main"><b style="font-size:13px">삼성전자</b><div class="meta"><span class="mono">005930</span><span class="mono">78,600</span><span class="badge b-up">+1.2%</span></div></div>
+              <span class="mut">✕</span>
+            </div>
+            <div class="modal-body">
+              <span style="display:block;height:52px"><svg viewBox="0 0 300 52" preserveAspectRatio="none" style="width:100%;height:100%">
+                <line x1="0" y1="8" x2="300" y2="8" stroke="var(--profit)" stroke-width="1.2" stroke-dasharray="4 3"/>
+                <polyline fill="none" stroke="var(--foreground)" stroke-width="1.5" opacity=".85" points="0,45 37,42 75,43 112,33 150,35 187,24 225,26 262,17 300,15"/>
+              </svg></span>
+              <div class="panel">
+                <h4>내 목표</h4>
+                <div class="kv"><span>목표가</span><b class="mono up">82,000 (+4.3%)</b></div>
+                <div class="kv"><span>손절가</span><b class="mono dn">68,000 (−13.5%)</b></div>
+                <div class="kv"><span>등록</span><span class="mono">07-10 · 68,400</span></div>
+              </div>
+              <div class="pillrow"><span class="badge b-brand">종합점수 62/100 B</span><span class="badge">52주 위치 81%</span><span class="badge">실적발표 D-9</span></div>
+              <div class="panel"><h4>관련 뉴스</h4>
+                <div class="xs mut">· 삼성전자, HBM4 양산 일정 앞당긴다 <span>08-15</span></div>
+                <div class="xs mut">· 반도체 수출 3개월 연속 증가 <span>08-14</span></div>
+              </div>
+            </div>
+            <div class="modal-foot">
+              <button class="btn sm">목표 수정</button><button class="btn sm">메모 남기기</button>
+              <button class="btn sm primary" style="margin-left:auto">종목 분석</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">모달은 <b>기존 <span class="mono">StockQuickLookModal</span>을 그대로 쓴다</b> — 「내 목표」 패널만 <span class="mono">contextSection</span> 슬롯으로 끼운다(관심·보유가 이미 이 방식). 레일의 <b>「목표가 없는 보유 종목」</b>은 이 화면을 실제로 채우게 만드는 유일한 진입점이다.</div>
+    </div>
+
+  </div>
+</section>
+
+<p class="lede" style="margin-top:26px">※ 숫자·종목은 전부 예시.</p>
+
+</div>
+</body>
+</html>

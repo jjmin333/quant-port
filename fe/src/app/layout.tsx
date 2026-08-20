@@ -1,14 +1,10 @@
 import type { Metadata } from "next";
 import Script from "next/script";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/providers/auth-provider";
 import { PreferencesProvider } from "@/components/providers/preferences-provider";
+import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -26,7 +22,9 @@ const themeInitScript = `
     var raw = localStorage.getItem("quant-port-preferences");
     var prefs = raw ? JSON.parse(raw) : {};
     var mode = prefs.colorMode || "light";
-    if (mode === "general") mode = "midnight";
+    // 테마는 light/dark 2종. 없앤 midnight(옛 이름 general)은 dark로 접는다.
+    if (mode === "general" || mode === "midnight") mode = "dark";
+    if (mode !== "dark") mode = "light";
     document.documentElement.setAttribute("data-theme", mode);
   } catch (e) {
     document.documentElement.setAttribute("data-theme", "light");
@@ -43,7 +41,7 @@ export default function RootLayout({
     <html
       lang="ko"
       data-theme="light"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full">

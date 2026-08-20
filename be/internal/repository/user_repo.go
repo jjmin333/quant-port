@@ -22,10 +22,14 @@ func NewUserRepo(db *sql.DB) *UserRepo {
 
 func (r *UserRepo) Create(ctx context.Context, email, displayName, passwordHash string) (*model.User, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
+	role := model.RoleUser
+	if model.IsAdminUser(email, "") {
+		role = model.RoleAdmin
+	}
 	res, err := r.db.ExecContext(ctx, `
-		INSERT INTO users (email, display_name, password_hash)
-		VALUES (?, ?, ?)
-	`, email, strings.TrimSpace(displayName), passwordHash)
+		INSERT INTO users (email, display_name, password_hash, role)
+		VALUES (?, ?, ?, ?)
+	`, email, strings.TrimSpace(displayName), passwordHash, role)
 	if err != nil {
 		if isDuplicateKey(err) {
 			return nil, ErrEmailTaken
@@ -38,7 +42,7 @@ func (r *UserRepo) Create(ctx context.Context, email, displayName, passwordHash 
 
 func (r *UserRepo) GetByID(ctx context.Context, id int64) (*model.User, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, email, display_name, last_login_at, created_at, updated_at
+		SELECT id, email, display_name, role, last_login_at, created_at, updated_at
 		FROM users WHERE id = ?
 	`, id)
 	return scanUser(row)
@@ -47,14 +51,14 @@ func (r *UserRepo) GetByID(ctx context.Context, id int64) (*model.User, error) {
 func (r *UserRepo) GetByEmail(ctx context.Context, email string) (*model.User, string, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, email, display_name, last_login_at, created_at, updated_at, password_hash
+		SELECT id, email, display_name, role, last_login_at, created_at, updated_at, password_hash
 		FROM users WHERE email = ?
 	`, email)
 	var u model.User
 	var lastLogin sql.NullTime
 	var passwordHash sql.NullString
 	if err := row.Scan(
-		&u.ID, &u.Email, &u.DisplayName, &lastLogin, &u.CreatedAt, &u.UpdatedAt, &passwordHash,
+		&u.ID, &u.Email, &u.DisplayName, &u.Role, &lastLogin, &u.CreatedAt, &u.UpdatedAt, &passwordHash,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, "", ErrUserNotFound
@@ -83,11 +87,17 @@ type userRowScanner interface {
 func scanUser(row userRowScanner) (*model.User, error) {
 	var u model.User
 	var lastLogin sql.NullTime
-	if err := row.Scan(&u.ID, &u.Email, &u.DisplayName, &lastLogin, &u.CreatedAt, &u.UpdatedAt); err != nil {
+	var role sql.NullString
+	if err := row.Scan(&u.ID, &u.Email, &u.DisplayName, &role, &lastLogin, &u.CreatedAt, &u.UpdatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ErrUserNotFound
 		}
 		return nil, err
+	}
+	if role.Valid && role.String != "" {
+		u.Role = role.String
+	} else {
+		u.Role = model.RoleUser
 	}
 	if lastLogin.Valid {
 		t := lastLogin.Time

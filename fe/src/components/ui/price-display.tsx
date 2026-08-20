@@ -11,22 +11,6 @@ const sizeClass: Record<PriceDisplaySize, string> = {
   hero: "text-3xl font-bold tracking-tight lg:text-4xl xl:text-5xl",
 };
 
-/** Geist Mono ₩ 글리프만 비정상 → sans 기호 + mono 숫자 (USD와 동일 컨테이너) */
-function KrwSymbol() {
-  return (
-    <span
-      className="mr-px inline-block align-baseline font-normal leading-none"
-      style={{
-        fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
-        fontSize: "0.88em",
-      }}
-      aria-hidden
-    >
-      ₩
-    </span>
-  );
-}
-
 export type PriceDisplayProps = {
   value: number;
   currency: "KRW" | "USD";
@@ -40,8 +24,8 @@ export type PriceDisplayProps = {
 
 /**
  * 화면용 가격 표시.
- * - USD: Geist Mono, `$` + 숫자
- * - KRW: 동일 mono 컨테이너 + 숫자, ₩만 sans 미세 보정 (A안)
+ * - USD: `$` + 숫자
+ * - KRW: 숫자 + `원`
  */
 export function PriceDisplay({
   value,
@@ -66,24 +50,21 @@ export function PriceDisplay({
     );
   }
 
-  const prefix = signed && value > 0 ? "+" : signed && value < 0 ? "-" : "";
-  const abs = Math.abs(value);
-
-  if (currency === "USD") {
+  if (currency === "KRW") {
     return (
-      <span
-        className={cn(
-          "inline-flex shrink-0 items-baseline whitespace-nowrap font-mono tabular-nums text-[var(--text-primary)]",
-          sizeClass[size],
-          className,
-        )}
-      >
-        {prefix}${formatUSD(abs, decimals)}
-      </span>
+      <PriceAmountPlain
+        value={value}
+        size={size}
+        className={cn("text-[var(--text-primary)]", className)}
+        signed={signed}
+        compact={compact}
+        suffix="원"
+      />
     );
   }
 
-  const amount = compact ? formatCompactAmount(abs) : formatAmount(abs);
+  const prefix = signed && value > 0 ? "+" : signed && value < 0 ? "-" : "";
+  const abs = Math.abs(value);
 
   return (
     <span
@@ -93,14 +74,12 @@ export function PriceDisplay({
         className,
       )}
     >
-      {prefix}
-      <KrwSymbol />
-      {amount}
+      {prefix}${formatUSD(abs, decimals)}
     </span>
   );
 }
 
-/** 원화 기호 없이 금액 + 접미사 (예: +3,280,000원) */
+/** 금액 + 접미사 (예: +3,280,000원) */
 export function PriceAmountPlain({
   value,
   size = "md",
@@ -118,8 +97,8 @@ export function PriceAmountPlain({
 }) {
   const prefix = signed && value > 0 ? "+" : signed && value < 0 ? "-" : "";
   const displayAmount = compact
-    ? formatCompactAmount(Math.abs(value))
-    : formatAmount(Math.abs(value));
+    ? `${formatCompactAmount(Math.abs(value))}${suffix}`
+    : `${formatAmount(Math.abs(value))}${suffix}`;
 
   return (
     <span
@@ -131,7 +110,6 @@ export function PriceAmountPlain({
     >
       {prefix}
       {displayAmount}
-      {suffix}
     </span>
   );
 }

@@ -1,17 +1,18 @@
-import { PageHeader } from "@/components/layout/header";
-import { StockDetailClient } from "@/components/stocks/stock-detail-client";
+import { Suspense } from "react";
+import { StockWorkspacePageLoader } from "./stock-workspace-page-client";
 
 type Props = { params: Promise<{ symbol: string }> };
 
-export default async function StockDetailPage({ params }: Props) {
-  const { symbol } = await params;
-
+export default function StockWorkspacePage({ params }: Props) {
   return (
-    <>
-      <PageHeader title={symbol} subtitle="종목 상세" />
-      <main className="flex-1 overflow-y-auto p-6">
-        <StockDetailClient symbol={symbol} />
-      </main>
-    </>
+    <Suspense
+      fallback={
+        <main className="flex flex-1 items-center justify-center p-8 text-sm text-[var(--text-muted)]">
+          종목 정보를 불러오는 중…
+        </main>
+      }
+    >
+      <StockWorkspacePageLoader params={params} />
+    </Suspense>
   );
 }

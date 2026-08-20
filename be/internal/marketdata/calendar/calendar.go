@@ -23,14 +23,14 @@ const (
 )
 
 type session struct {
-	loc            *time.Location
-	openHour       int
-	openMinute     int
-	closeHour      int
-	closeMinute    int
-	holidays       map[string]struct{}
-	weekdaysOnly   bool
-	alwaysPoll     bool
+	loc          *time.Location
+	openHour     int
+	openMinute   int
+	closeHour    int
+	closeMinute  int
+	holidays     map[string]struct{}
+	weekdaysOnly bool
+	alwaysPoll   bool
 }
 
 // Calendar decides whether an index provider should be polled at a given time.
@@ -91,8 +91,17 @@ func mustNewCalendar() *Calendar {
 				closeMinute:  59,
 				weekdaysOnly: true,
 			},
+			// alwaysPoll means "every day is a trading day" (see IsTradingDay),
+			// not "there is no close time" — sessionCloseAt still needs a real
+			// loc/closeHour, or it nil-derefs (found via worker-close-overseas
+			// panicking in production: previously nothing ever called
+			// SessionCloseAt for this schedule). Settling at KST 23:59 matches
+			// docs/DAILY_CLOSE_DESIGN.md §5.1: "24/7 자산은 KST 자정 기준 일봉 확정".
 			ScheduleAlways: {
-				alwaysPoll: true,
+				loc:         seoul,
+				closeHour:   23,
+				closeMinute: 59,
+				alwaysPoll:  true,
 			},
 		},
 	}
@@ -161,7 +170,7 @@ func ScheduleForIndex(indexID string) ScheduleID {
 		return ScheduleWeekdays
 	case "btc":
 		return ScheduleAlways
-	case "nasdaq", "nasdaq100", "nq100", "sp500", "dow", "vix", "sox", "gold":
+	case "nasdaq", "nasdaq100", "nq100", "sp500", "dow", "vix", "sox", "gold", "us10y":
 		return ScheduleUS
 	default:
 		return ScheduleAlways

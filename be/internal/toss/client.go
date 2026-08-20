@@ -86,7 +86,7 @@ func (c *Client) do(
 			return err
 		}
 
-		raw, status, err := c.doOnce(ctx, method, path, query, body, accountSeq, token)
+		raw, status, rl, err := c.doOnce(ctx, method, path, query, body, accountSeq, token)
 		if err != nil {
 			return err
 		}
@@ -98,7 +98,7 @@ func (c *Client) do(
 		if status >= 400 {
 			var errBody ErrorBody
 			if json.Unmarshal(raw, &errBody) == nil && errBody.Error.Code != "" {
-				apiErr := newErrorFromAPI(status, errBody)
+				apiErr := newErrorFromAPI(status, errBody, rl)
 				if IsInvalidTokenError(apiErr) && attempt == 0 {
 					c.auth.Invalidate(ctx)
 					continue
@@ -130,10 +130,10 @@ func (c *Client) doOnce(
 	body any,
 	accountSeq *int64,
 	token string,
-) ([]byte, int, error) {
+) ([]byte, int, RateLimitStatus, error) {
 	u, err := url.Parse(c.baseURL + path)
 	if err != nil {
-		return nil, 0, fmt.Errorf("parse url: %w", err)
+		return nil, 0, RateLimitStatus{}, fmt.Errorf("parse url: %w", err)
 	}
 	if len(query) > 0 {
 		u.RawQuery = query.Encode()
@@ -143,14 +143,14 @@ func (c *Client) doOnce(
 	if body != nil {
 		payload, err := json.Marshal(body)
 		if err != nil {
-			return nil, 0, fmt.Errorf("marshal body: %w", err)
+			return nil, 0, RateLimitStatus{}, fmt.Errorf("marshal body: %w", err)
 		}
 		bodyReader = bytes.NewReader(payload)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), bodyReader)
 	if err != nil {
-		return nil, 0, fmt.Errorf("new request: %w", err)
+		return nil, 0, RateLimitStatus{}, fmt.Errorf("new request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -164,15 +164,18 @@ func (c *Client) doOnce(
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("http do: %w", err)
+		return nil, 0, RateLimitStatus{}, fmt.Errorf("http do: %w", err)
 	}
 	defer resp.Body.Close()
 
+	rl := parseRateLimitStatus(resp.Header)
+	logRateLimitStatus(method, path, resp.StatusCode, rl)
+
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, 0, fmt.Errorf("read body: %w", err)
+		return nil, 0, rl, fmt.Errorf("read body: %w", err)
 	}
-	return raw, resp.StatusCode, nil
+	return raw, resp.StatusCode, rl, nil
 }
 
 // WithAccount is a helper for account-scoped calls.

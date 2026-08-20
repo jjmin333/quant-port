@@ -3,11 +3,11 @@ package model
 // Market data cache / stream revision and snapshot types.
 
 const (
-	MarketDataQuoteCacheSec      = 2
-	MarketDataOrderBookCacheSec  = 2
-	MarketDataTradesCacheSec     = 2
+	MarketDataQuoteCacheSec      = 1
+	MarketDataOrderBookCacheSec  = 1
+	MarketDataTradesCacheSec     = 1
 	MarketDataIndicesCacheSec    = 5
-	MarketDataListCacheSec       = 3
+	MarketDataListCacheSec       = 3 // catalog quotes only; user flags stripped before cache (see stripQuoteListForCache)
 	MarketDataCandleHistCacheSec = 3600        // completed daily+ bars
 	MarketDataCandleTailCacheSec = 90          // intraday tail
 	MarketDataLastGoodCacheSec   = 30 * 24 * 3600 // stale detail/trades when market closed
@@ -38,4 +38,17 @@ type StreamEvent struct {
 	Bar      *Candle        `json:"bar,omitempty"`
 	Forming  *Candle        `json:"forming,omitempty"`
 	Rev      int64          `json:"rev"`
+}
+
+// QuoteStreamEvent is pushed over SSE for live header/detail price updates.
+type QuoteStreamEvent struct {
+	Type          string  `json:"type"` // quote_update
+	Symbol        string  `json:"symbol"`
+	CurrentPrice  float64 `json:"currentPrice"`
+	Change        float64 `json:"change"`
+	ChangeRate    float64 `json:"changeRate"`
+	PrevClose     float64 `json:"prevClose"`
+	RegularClose  float64 `json:"regularClose,omitempty"`
+	MarketSession string  `json:"marketSession,omitempty"`
+	UpdatedAt     string  `json:"updatedAt"`
 }
