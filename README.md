@@ -10,44 +10,6 @@ quant-port/
 └── README.md
 ```
 
-## 빠른 시작
-
-### 1. 인프라
-
-**MySQL** — 로컬 PC에 설치된 MySQL `3306`, DB `quantport` 사용.  
-`be/.env`의 `MYSQL_DSN`을 로컬 계정에 맞게 설정하세요.
-
-**Redis + API** — Docker (필수):
-
-```bash
-docker compose up -d --build
-# Windows: cd be && .\scripts\restart.ps1 -Background
-```
-
-→ [`be/docs/docker.md`](be/docs/docker.md)
-
-### 2. 프론트엔드
-
-```bash
-cd fe
-npm install
-npm run dev
-```
-
-→ http://localhost:3000
-
-### 3. 백엔드 (Docker only)
-
-```powershell
-cd be
-cp .env.example .env
-.\scripts\restart.ps1 -Background
-```
-
-Linux/macOS: `cd be && make docker-up`
-
-→ http://localhost:8080/health · `docker logs -f quant-port-api`
-
 ## 기술 스택
 
 | 영역 | 스택 |
@@ -60,9 +22,3 @@ Linux/macOS: `cd be && make docker-up`
 
 - [프론트엔드 디자인 시스템](fe/DESIGN.md)
 - [백엔드 API README](be/README.md)
-
-## 개발 메모
-
-- 프론트는 현재 `fe/src/lib/*-mock-data.ts` 목업 데이터 사용
-- 백엔드 `/api/v1/quotes/*` 엔드포인트가 동일 도메인 API 틀 제공 (목업 응답)
-- 추후 FE에서 `NEXT_PUBLIC_API_URL=http://localhost:8080` 로 BE 연동 예정
