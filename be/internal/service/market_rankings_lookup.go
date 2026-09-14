@@ -39,17 +39,18 @@ func lookupRankingBasePrice(ctx context.Context, rdb *redis.Client, repo *reposi
 	return lookupRankingBasePriceDB(ctx, repo, sym)
 }
 
+/*
+슬롯 넷을 훑되, 슬롯마다 **가격 표**를 본다 — payload 전체를 매번 받아 오지 않는다
+(`market_rankings_price_index.go` 참고).
+*/
 func lookupRankingBasePriceRedis(ctx context.Context, rdb *redis.Client, symbol string) (float64, bool) {
 	if rdb == nil {
 		return 0, false
 	}
 	for _, slot := range rankingBasePriceSlots {
-		payload, ok := loadRankingsPayloadFromRedis(ctx, rdb, slot)
-		if !ok {
-			continue
-		}
-		if v, ok := basePriceFromRankingPayload(payload, symbol); ok {
-			return v, true
+		prices := rankingPricesForSlot(ctx, rdb, rankingsCacheKey(slot))
+		if pair, ok := prices[symbol]; ok && pair.base > 0 {
+			return pair.base, true
 		}
 	}
 	return 0, false
@@ -111,12 +112,9 @@ func lookupRankingLastPrice(ctx context.Context, rdb *redis.Client, repo *reposi
 	}
 	if rdb != nil {
 		for _, slot := range rankingBasePriceSlots {
-			payload, ok := loadRankingsPayloadFromRedis(ctx, rdb, slot)
-			if !ok {
-				continue
-			}
-			if v, ok := lastPriceFromRankingPayload(payload, sym); ok {
-				return v, true
+			prices := rankingPricesForSlot(ctx, rdb, rankingsCacheKey(slot))
+			if pair, ok := prices[sym]; ok && pair.last > 0 {
+				return pair.last, true
 			}
 		}
 	}

@@ -41,13 +41,6 @@ export const ANALYSIS_TABS = STOCK_WORKSPACE_TABS.filter(
 /** @deprecated use StockWorkspaceTabId */
 export type AnalysisTabId = Exclude<StockWorkspaceTabId, "overview" | "chart">;
 
-export const VALUATION_SUB_TABS = [
-  { id: "multiples", label: "배수" },
-  { id: "indicators", label: "지표" },
-] as const;
-
-export type ValuationSubTabId = (typeof VALUATION_SUB_TABS)[number]["id"];
-
 const VALID_TAB_IDS = new Set<string>(STOCK_WORKSPACE_TABS.map((t) => t.id));
 
 export function parseStockWorkspaceTab(value: string | null): StockWorkspaceTabId {
@@ -62,13 +55,6 @@ export function parseAnalysisTab(value: string | null): AnalysisTabId {
   const tab = parseStockWorkspaceTab(value);
   if (tab === "overview" || tab === "chart") return "company";
   return tab;
-}
-
-export function parseValuationSubTab(value: string | null): ValuationSubTabId {
-  if (value && VALUATION_SUB_TABS.some((t) => t.id === value)) {
-    return value as ValuationSubTabId;
-  }
-  return "multiples";
 }
 
 export function stockWorkspaceHref(symbol: string, tab: StockWorkspaceTabId = "overview"): string {

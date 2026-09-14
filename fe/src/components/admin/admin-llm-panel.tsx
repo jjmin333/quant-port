@@ -34,6 +34,8 @@ import {
   type StockSummaryStatus,
 } from "@/lib/admin";
 import { cn } from "@/lib/utils";
+import { toUserMessage } from "@/lib/error-message";
+import { buttonVariants } from "@/components/ui/button";
 
 function formatDateTime(value: string | null | undefined): string {
   if (!value) return "-";
@@ -62,12 +64,12 @@ const REFRESH_STATUS_LABELS: Record<LLMRefreshSymbolState["status"], string> = {
 
 function RefreshStateRow({ state }: { state: LLMRefreshSymbolState }) {
   return (
-    <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-2.5 py-2 text-xs">
+    <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-2.5 py-2 text-cell">
       <span className="flex items-center gap-2">
         {state.status === "running" && <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--brand)]" />}
-        <span className="font-mono font-medium text-[var(--text-primary)]">{state.symbol}</span>
+        <span className="font-code font-medium text-[var(--text-primary)]">{state.symbol}</span>
       </span>
-      <span className="flex items-center gap-2 text-right text-[10px] text-[var(--text-muted)]">
+      <span className="flex items-center gap-2 text-right text-micro text-[var(--text-muted)]">
         {state.status === "done" && (
           <>
             <span>{state.source === "llm" ? "AI 생성" : "규칙 기반 폴백"}</span>
@@ -107,7 +109,7 @@ function QuotaBar({ label, count, limit }: { label: string; count: number; limit
   const ratio = usageRatio(count, limit);
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+      <div className="flex items-center justify-between text-cell text-[var(--text-muted)]">
         <span>{label}</span>
         <span className="tabular-nums text-[var(--text-secondary)]">
           {count.toLocaleString()}
@@ -120,6 +122,20 @@ function QuotaBar({ label, count, limit }: { label: string; count: number; limit
           style={{ width: `${ratio == null ? (count > 0 ? 100 : 0) : ratio * 100}%` }}
         />
       </div>
+    </div>
+  );
+}
+
+function QuotaPanel({ title, quota }: { title?: string; quota: ApiQuotaUsage }) {
+  return (
+    <div className="space-y-2">
+      {title ? <p className="text-cell font-medium text-[var(--text-secondary)]">{title}</p> : null}
+      <QuotaBar label="분당 요청 (RPM)" count={quota.minuteCount} limit={quota.limits.perMinute} />
+      <QuotaBar label="분당 토큰 (TPM)" count={quota.minuteTokens ?? 0} limit={quota.limits.tokensPerMinute} />
+      <QuotaBar label="일간 요청 (RPD)" count={quota.dayCount} limit={quota.limits.dailyQuota} />
+      <QuotaBar label="일간 토큰 (TPD)" count={quota.dayTokens ?? 0} limit={quota.limits.tokensPerDay} />
+      <QuotaBar label="월간 요청" count={quota.monthCount} limit={quota.limits.monthlyQuota} />
+      <p className="text-micro text-[var(--text-muted)]">마지막 호출: {formatDateTime(quota.lastCallAt)}</p>
     </div>
   );
 }
@@ -139,18 +155,18 @@ function BatchMarketCard({
   return (
     <div className="rounded-lg border border-[var(--border)] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold text-[var(--text-primary)]">
+        <h3 className="text-cell font-semibold text-[var(--text-primary)]">
           {marketLabel(status.market)} 배치
         </h3>
         {run?.running && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--brand-muted)] px-2 py-0.5 text-[10px] text-[var(--brand)]">
+          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--brand-muted)] px-2 py-0.5 text-micro text-[var(--brand)]">
             <Loader2 className="h-3 w-3 animate-spin" />
             실행 중
           </span>
         )}
       </div>
 
-      <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+      <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-cell">
         <dt className="text-[var(--text-muted)]">다음 실행</dt>
         <dd className="text-right tabular-nums text-[var(--text-secondary)]">
           {formatDateTime(status.nextRunAt)}
@@ -158,6 +174,14 @@ function BatchMarketCard({
         <dt className="text-[var(--text-muted)]">개장 전 마감</dt>
         <dd className="text-right tabular-nums text-[var(--text-secondary)]">
           {formatDateTime(status.nextDeadlineAt)}
+        </dd>
+        <dt className="text-[var(--text-muted)]">오늘 남은 요청</dt>
+        <dd className="text-right tabular-nums text-[var(--text-secondary)]">
+          {formatAllowance(status.callsRemaining)}
+        </dd>
+        <dt className="text-[var(--text-muted)]">오늘 남은 토큰</dt>
+        <dd className="text-right tabular-nums text-[var(--text-secondary)]">
+          {formatAllowance(status.tokensRemaining)}
         </dd>
         {targets && (
           <>
@@ -175,7 +199,7 @@ function BatchMarketCard({
           {excludedEntries.map(([reason, count]) => (
             <span
               key={reason}
-              className="rounded-full bg-[var(--surface-elevated)] px-2 py-0.5 text-[10px] text-[var(--text-muted)]"
+              className="rounded-full bg-[var(--surface-elevated)] px-2 py-0.5 text-micro text-[var(--text-muted)]"
             >
               {LLM_BATCH_EXCLUDE_LABELS[reason] ?? reason} {count}
             </span>
@@ -184,7 +208,7 @@ function BatchMarketCard({
       )}
 
       {run ? (
-        <div className="mt-2.5 border-t border-[var(--border)] pt-2 text-[11px]">
+        <div className="mt-2.5 border-t border-[var(--border)] pt-2 text-cell">
           <p className="text-[var(--text-muted)]">
             최근 실행 {run.tradeDate} · {formatDateTime(run.startedAt)}
           </p>
@@ -204,7 +228,7 @@ function BatchMarketCard({
           )}
         </div>
       ) : (
-        <p className="mt-2.5 border-t border-[var(--border)] pt-2 text-[11px] text-[var(--text-muted)]">
+        <p className="mt-2.5 border-t border-[var(--border)] pt-2 text-cell text-[var(--text-muted)]">
           아직 실행 기록이 없습니다.
         </p>
       )}
@@ -219,22 +243,22 @@ function RequestLogRow({ entry }: { entry: LLMRequestLogEntry }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left text-xs hover:bg-[var(--surface-elevated)]"
+        className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left text-cell hover:bg-[var(--surface-elevated)]"
       >
         <span className="flex items-center gap-2">
           <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 transition-transform", open && "rotate-180")} />
           <span className="font-medium text-[var(--text-primary)]">{entry.name || entry.symbol}</span>
-          <span className="font-mono text-[10px] text-[var(--text-muted)]">{entry.symbol}</span>
-          <span className="text-[10px] text-[var(--text-muted)]">{formatDateTime(entry.timestamp)}</span>
+          <span className="font-code text-micro text-[var(--text-muted)]">{entry.symbol}</span>
+          <span className="text-micro text-[var(--text-muted)]">{formatDateTime(entry.timestamp)}</span>
           {entry.manual && (
-            <span className="rounded-full bg-[var(--brand-muted)] px-1.5 py-0.5 text-[10px] text-[var(--brand)]">
+            <span className="rounded-full bg-[var(--brand-muted)] px-1.5 py-0.5 text-micro text-[var(--brand)]">
               수동
             </span>
           )}
         </span>
         <span
           className={cn(
-            "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
+            "shrink-0 rounded-full px-2 py-0.5 text-micro font-medium",
             entry.success ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400",
           )}
         >
@@ -244,9 +268,9 @@ function RequestLogRow({ entry }: { entry: LLMRequestLogEntry }) {
       {open && (
         <div className="border-t border-[var(--border)] px-2.5 py-2">
           {!entry.success && entry.error && (
-            <p className="mb-2 text-[11px] text-red-400">{entry.error}</p>
+            <p className="mb-2 text-cell text-red-400">{entry.error}</p>
           )}
-          <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-[var(--background)] p-2 text-[10px] text-[var(--text-secondary)]">
+          <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-[var(--background)] p-2 text-micro text-[var(--text-secondary)]">
             {(() => {
               try {
                 return JSON.stringify(JSON.parse(entry.factsJson), null, 2);
@@ -266,7 +290,9 @@ export function AdminLLMPanel() {
   const { session, loading } = useAuth();
 
   const [status, setStatus] = useState<StockSummaryStatus | null>(null);
-  const [quota, setQuota] = useState<ApiQuotaUsage | null>(null);
+  const [quotaKR, setQuotaKR] = useState<ApiQuotaUsage | null>(null);
+  const [quotaUS, setQuotaUS] = useState<ApiQuotaUsage | null>(null);
+  const [quotaShared, setQuotaShared] = useState<ApiQuotaUsage | null>(null);
   const [requestLog, setRequestLog] = useState<LLMRequestLogEntry[]>([]);
   const [logTotal, setLogTotal] = useState(0);
   const [logPage, setLogPage] = useState(1);
@@ -307,13 +333,15 @@ export function AdminLLMPanel() {
       setStatus(statusData);
       setSettings(settingsData);
       setSymbolsDraft((settingsData.pilotSymbols ?? []).join(", "));
-      setQuota(quotas.find((q) => q.provider === "openai") ?? null);
+      setQuotaKR(quotas.find((q) => q.provider === "llm_kr") ?? null);
+      setQuotaUS(quotas.find((q) => q.provider === "llm_us") ?? null);
+      setQuotaShared(quotas.find((q) => q.provider === "openai") ?? null);
       setManualJob(job && job.symbols?.length ? job : null);
       setBatch(batchData);
       setTargets({ KR: krTargets, US: usTargets });
       setLoadedAt(new Date());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "불러오기 실패");
+      setError(toUserMessage(e, "불러오기 실패"));
     } finally {
       setBusy(false);
     }
@@ -340,7 +368,7 @@ export function AdminLLMPanel() {
       setRequestLog(logData.entries);
       setLogTotal(logData.total);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "요청 기록을 불러오지 못했습니다");
+      setError(toUserMessage(e, "요청 기록을 불러오지 못했습니다"));
     } finally {
       setLogBusy(false);
     }
@@ -414,7 +442,7 @@ export function AdminLLMPanel() {
       setStatus(statusData);
       setBatch(batchData);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "저장 실패");
+      setError(toUserMessage(e, "저장 실패"));
     } finally {
       setSaving(false);
     }
@@ -431,7 +459,7 @@ export function AdminLLMPanel() {
       const job = await triggerAdminLLMRefresh(symbols);
       setManualJob(job);
     } catch (e) {
-      setManualError(e instanceof Error ? e.message : "요청 실패");
+      setManualError(toUserMessage(e, "요청 실패"));
     } finally {
       setTriggering(false);
     }
@@ -454,16 +482,16 @@ export function AdminLLMPanel() {
       />
       <PageScrollShell bare>
         <div className="page-shell-wide min-w-0 space-y-4 py-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-cell">
             <Link
               href="/admin"
-              className="rounded-md border border-[var(--border)] px-2.5 py-1.5 text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]")}
             >
               ← 관리자 홈
             </Link>
             <div className="flex items-center gap-2">
               {loadedAt && (
-                <span className="text-[10px] text-[var(--text-muted)]">
+                <span className="text-micro text-[var(--text-muted)]">
                   마지막 새로고침 {formatDateTime(loadedAt.toISOString())}
                 </span>
               )}
@@ -471,7 +499,7 @@ export function AdminLLMPanel() {
                 type="button"
                 onClick={() => void load()}
                 disabled={busy}
-                className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)] disabled:opacity-50"
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)] disabled:opacity-50")}
               >
                 <RefreshCw className={cn("h-3.5 w-3.5", busy && "animate-spin")} />
                 새로고침
@@ -487,56 +515,61 @@ export function AdminLLMPanel() {
 
           <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="flex items-center gap-1.5 text-sm font-semibold text-[var(--text-primary)]">
+              <h2 className="flex items-center gap-1.5 text-section font-semibold text-[var(--text-primary)]">
                 <Sparkles className="h-4 w-4 text-[var(--brand)]" />
                 LLM Provider
               </h2>
               {status && (
                 <span
                   className={cn(
-                    "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                    "rounded-full px-2 py-0.5 text-micro font-medium",
                     status.enabled
                       ? "bg-emerald-500/15 text-emerald-400"
                       : "bg-[var(--surface-elevated)] text-[var(--text-muted)]",
                   )}
                 >
-                  {status.enabled ? `활성 · ${status.provider || "provider 미상"}` : "비활성 — 규칙 기반 폴백만 사용"}
+                  {status.enabled
+                    ? `활성 · ${status.provider || "provider 미상"}${status.splitKeys ? " · 국내/해외 키 분리" : ""}`
+                    : "비활성 — 규칙 기반 폴백만 사용"}
                 </span>
               )}
             </div>
-            {quota ? (
-              <div className="mt-3 space-y-2">
-                <QuotaBar label="분당 요청 (RPM)" count={quota.minuteCount} limit={quota.limits.perMinute} />
-                <QuotaBar label="분당 토큰 (TPM)" count={quota.minuteTokens ?? 0} limit={quota.limits.tokensPerMinute} />
-                <QuotaBar label="일간 요청 (RPD)" count={quota.dayCount} limit={quota.limits.dailyQuota} />
-                <QuotaBar label="일간 토큰 (TPD)" count={quota.dayTokens ?? 0} limit={quota.limits.tokensPerDay} />
-                <QuotaBar label="월간 요청" count={quota.monthCount} limit={quota.limits.monthlyQuota} />
-                <p className="text-[10px] text-[var(--text-muted)]">
-                  마지막 호출: {formatDateTime(quota.lastCallAt)} · 상세 provider 목록은{" "}
-                  <Link href="/admin/api" className="text-[var(--brand)] hover:underline">
-                    API 관리
-                  </Link>
-                  에서 확인하세요.
-                </p>
+            {status?.splitKeys && (quotaKR || quotaUS) ? (
+              <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                {quotaKR ? <QuotaPanel title="국내 키 (종목 요약 + 국내 브리핑)" quota={quotaKR} /> : null}
+                {quotaUS ? <QuotaPanel title="해외 키 (종목 요약 + 해외 브리핑)" quota={quotaUS} /> : null}
+              </div>
+            ) : quotaShared ? (
+              <div className="mt-3">
+                <QuotaPanel quota={quotaShared} />
               </div>
             ) : (
-              <p className="mt-2 text-xs text-[var(--text-muted)]">API 한도 정보를 불러오지 못했습니다.</p>
+              <p className="mt-2 text-cell text-[var(--text-muted)]">API 한도 정보를 불러오지 못했습니다.</p>
+            )}
+            {(quotaKR || quotaUS || quotaShared) && (
+              <p className="mt-2 text-micro text-[var(--text-muted)]">
+                상세 provider 목록은{" "}
+                <Link href="/admin/api" className="text-[var(--brand)] hover:underline">
+                  API 관리
+                </Link>
+                에서 확인하세요.
+              </p>
             )}
           </section>
 
           <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="flex items-center gap-1.5 text-sm font-semibold text-[var(--text-primary)]">
+              <h2 className="flex items-center gap-1.5 text-section font-semibold text-[var(--text-primary)]">
                 <CalendarClock className="h-4 w-4 text-[var(--brand)]" />
                 자동 배치 (마켓 레이더 기준)
               </h2>
               {batch && (
-                <span className="rounded-full bg-[var(--surface-elevated)] px-2 py-0.5 text-[10px] text-[var(--text-muted)]">
+                <span className="rounded-full bg-[var(--surface-elevated)] px-2 py-0.5 text-micro text-[var(--text-muted)]">
                   {batch.targetMode === "radar" ? "레이더 상위 종목" : "고정 종목만"} · 상한 {batch.dailyCap}
                 </span>
               )}
             </div>
-            <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">
+            <p className="mt-1 text-cell leading-relaxed text-[var(--text-muted)]">
               마켓 레이더 <strong className="text-[var(--text-secondary)]">1일 기준 거래대금·거래량 상위 100</strong>{" "}
               종목에서 ETF·ETN·ETP를 제외한 개별 종목을 시장별로 하루 한 번 분석합니다. 각 시장의{" "}
               <strong className="text-[var(--text-secondary)]">정규장 개장 전</strong>에 끝나도록 역산해 시작하며,
@@ -544,19 +577,32 @@ export function AdminLLMPanel() {
               종목은 다음 실행으로 이월합니다.
             </p>
             {batch && (
-              <div className="mt-3 grid gap-2 text-[11px] sm:grid-cols-3">
-                <div className="rounded-lg border border-[var(--border)] px-2.5 py-2">
-                  <p className="text-[var(--text-muted)]">오늘 남은 요청</p>
-                  <p className="tabular-nums text-[var(--text-primary)]">
-                    {formatAllowance(batch.callsRemaining)}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-[var(--border)] px-2.5 py-2">
-                  <p className="text-[var(--text-muted)]">오늘 남은 토큰</p>
-                  <p className="tabular-nums text-[var(--text-primary)]">
-                    {formatAllowance(batch.tokensRemaining)}
-                  </p>
-                </div>
+              <div className="mt-3 grid gap-2 text-cell sm:grid-cols-3">
+                {status?.splitKeys && batch.markets.length > 0 ? (
+                  batch.markets.map((m) => (
+                    <div key={m.market} className="rounded-lg border border-[var(--border)] px-2.5 py-2">
+                      <p className="text-[var(--text-muted)]">{marketLabel(m.market)} 남은 요청</p>
+                      <p className="tabular-nums text-[var(--text-primary)]">
+                        {formatAllowance(m.callsRemaining)}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <>
+                    <div className="rounded-lg border border-[var(--border)] px-2.5 py-2">
+                      <p className="text-[var(--text-muted)]">오늘 남은 요청</p>
+                      <p className="tabular-nums text-[var(--text-primary)]">
+                        {formatAllowance(batch.callsRemaining)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-[var(--border)] px-2.5 py-2">
+                      <p className="text-[var(--text-muted)]">오늘 남은 토큰</p>
+                      <p className="tabular-nums text-[var(--text-primary)]">
+                        {formatAllowance(batch.tokensRemaining)}
+                      </p>
+                    </div>
+                  </>
+                )}
                 <div className="rounded-lg border border-[var(--border)] px-2.5 py-2">
                   <p className="text-[var(--text-muted)]">호출당 평균 토큰</p>
                   <p className="tabular-nums text-[var(--text-primary)]">
@@ -574,19 +620,19 @@ export function AdminLLMPanel() {
             )}
             {settings && (
               <div className="mt-3 flex flex-wrap items-end gap-2">
-                <label className="flex flex-col gap-1 text-[11px] text-[var(--text-muted)]">
+                <label className="flex flex-col gap-1 text-cell text-[var(--text-muted)]">
                   대상 선정
                   <select
                     value={settings.targetMode}
                     onChange={(e) => void handleSave({ targetMode: e.target.value as LLMTargetMode })}
                     disabled={saving}
-                    className="rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--brand)] disabled:opacity-50"
+                    className="rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-cell text-[var(--text-primary)] outline-none focus:border-[var(--brand)] disabled:opacity-50"
                   >
                     <option value="radar">레이더 상위 + 고정 종목</option>
                     <option value="manual">고정 종목만</option>
                   </select>
                 </label>
-                <label className="flex flex-col gap-1 text-[11px] text-[var(--text-muted)]">
+                <label className="flex flex-col gap-1 text-cell text-[var(--text-muted)]">
                   1회 최대 종목 수
                   <input
                     type="number"
@@ -600,20 +646,20 @@ export function AdminLLMPanel() {
                       }
                     }}
                     disabled={saving}
-                    className="w-28 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--brand)] disabled:opacity-50"
+                    className="w-28 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-cell text-[var(--text-primary)] outline-none focus:border-[var(--brand)] disabled:opacity-50"
                   />
                 </label>
-                <p className="text-[10px] text-[var(--text-muted)]">
-                  예비 한도: 요청 {settings.quotaReserve} · 토큰 {settings.tokenReserve.toLocaleString()} (번역·브리핑·수동
-                  생성용으로 남겨둡니다)
+                <p className="text-micro text-[var(--text-muted)]">
+                  예비 한도: 요청 {settings.quotaReserve} · 토큰 {settings.tokenReserve.toLocaleString()} (시장
+                  브리핑·수동 생성용으로 해당 시장 키에 남겨둡니다)
                 </p>
               </div>
             )}
           </section>
 
           <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">고정 종목</h2>
-            <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">
+            <h2 className="text-section font-semibold text-[var(--text-primary)]">고정 종목</h2>
+            <p className="mt-1 text-cell leading-relaxed text-[var(--text-muted)]">
               레이더 순위에 없어도{" "}
               <strong className="text-[var(--text-secondary)]">항상 분석 대상에 포함</strong>되는 종목입니다. 배치
               목록의 맨 앞에 놓이므로 한도가 모자라 잘릴 때도 살아남습니다. 심볼을 쉼표로 구분해 입력하세요
@@ -631,21 +677,21 @@ export function AdminLLMPanel() {
                 type="button"
                 onClick={() => void handleSave()}
                 disabled={saving}
-                className="mt-1 inline-flex w-fit items-center justify-center gap-1.5 rounded-md bg-[var(--brand)] px-3 py-2 text-sm font-medium text-[var(--brand-foreground)] disabled:opacity-50"
+                className={cn(buttonVariants({ variant: "default", size: "default" }), "mt-1 w-fit bg-[var(--brand)] text-[var(--brand-foreground)] disabled:opacity-50")}
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 저장
               </button>
             </div>
-            {saveMessage && <p className="mt-2 text-xs text-emerald-400">{saveMessage}</p>}
+            {saveMessage && <p className="mt-2 text-cell text-emerald-400">{saveMessage}</p>}
           </section>
 
           <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-            <h2 className="flex items-center gap-1.5 text-sm font-semibold text-[var(--text-primary)]">
+            <h2 className="flex items-center gap-1.5 text-section font-semibold text-[var(--text-primary)]">
               <Play className="h-4 w-4 text-[var(--brand)]" />
               수동 즉시 생성
             </h2>
-            <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">
+            <p className="mt-1 text-cell leading-relaxed text-[var(--text-muted)]">
               자동 배치와 무관하게 지금 바로 AI 요약을 다시 만듭니다.{" "}
               <strong className="text-[var(--text-secondary)]">배치 대상이 아니어도 됩니다</strong> — 여기 입력한
               종목은 레이더 순위·고정 목록과 상관없이 LLM을 호출합니다. 한 번에 최대{" "}
@@ -664,7 +710,7 @@ export function AdminLLMPanel() {
                 type="button"
                 onClick={() => void handleManualRefresh()}
                 disabled={triggering || manualRunning || manualDraft.trim() === ""}
-                className="inline-flex w-fit shrink-0 items-center justify-center gap-1.5 rounded-md bg-[var(--brand)] px-3 py-2 text-sm font-medium text-[var(--brand-foreground)] disabled:opacity-50"
+                className={cn(buttonVariants({ variant: "default", size: "default" }), "w-fit bg-[var(--brand)] text-[var(--brand-foreground)] disabled:opacity-50")}
               >
                 {triggering || manualRunning ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -674,10 +720,10 @@ export function AdminLLMPanel() {
                 {manualRunning ? "생성 중…" : "즉시 생성"}
               </button>
             </div>
-            {manualError && <p className="mt-2 text-xs text-red-400">{manualError}</p>}
+            {manualError && <p className="mt-2 text-cell text-red-400">{manualError}</p>}
             {manualJob && (
               <div className="mt-3 space-y-1.5">
-                <p className="text-[10px] text-[var(--text-muted)]">
+                <p className="text-micro text-[var(--text-muted)]">
                   시작 {formatDateTime(manualJob.startedAt)}
                   {manualJob.finishedAt && ` · 완료 ${formatDateTime(manualJob.finishedAt)}`}
                 </p>
@@ -689,18 +735,18 @@ export function AdminLLMPanel() {
           </section>
 
           <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">고정 종목 캐시 상태</h2>
+            <h2 className="text-section font-semibold text-[var(--text-primary)]">고정 종목 캐시 상태</h2>
             {!status || status.symbols.length === 0 ? (
-              <p className="mt-2 text-xs text-[var(--text-muted)]">고정 종목이 설정되지 않았습니다.</p>
+              <p className="mt-2 text-cell text-[var(--text-muted)]">고정 종목이 설정되지 않았습니다.</p>
             ) : (
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {status.symbols.map((s) => (
                   <div
                     key={s.symbol}
-                    className="flex items-center justify-between rounded-lg border border-[var(--border)] px-2.5 py-2 text-xs"
+                    className="flex items-center justify-between rounded-lg border border-[var(--border)] px-2.5 py-2 text-cell"
                   >
-                    <span className="font-mono font-medium text-[var(--text-primary)]">{s.symbol}</span>
-                    <span className="text-right text-[10px] text-[var(--text-muted)]">
+                    <span className="font-code font-medium text-[var(--text-primary)]">{s.symbol}</span>
+                    <span className="text-right text-micro text-[var(--text-muted)]">
                       {s.cached ? (
                         <>
                           {s.source === "llm" ? "AI 생성" : "규칙 기반"} · {formatDateTime(s.generatedAt)}
@@ -717,12 +763,12 @@ export function AdminLLMPanel() {
 
           <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-[var(--text-primary)]">요청 INPUT 기록</h2>
+              <h2 className="text-section font-semibold text-[var(--text-primary)]">요청 INPUT 기록</h2>
               <div className="flex items-center gap-2">
                 <select
                   value={logStatusFilter}
                   onChange={(e) => setLogStatusFilter(e.target.value as "all" | "failed")}
-                  className="rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--brand)]"
+                  className="rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-cell text-[var(--text-primary)] outline-none focus:border-[var(--brand)]"
                 >
                   <option value="all">전체 상태</option>
                   <option value="failed">실패만</option>
@@ -731,7 +777,7 @@ export function AdminLLMPanel() {
                   <select
                     value={nameFilter}
                     onChange={(e) => setNameFilter(e.target.value)}
-                    className="rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--brand)]"
+                    className="rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-cell text-[var(--text-primary)] outline-none focus:border-[var(--brand)]"
                   >
                     <option value="all">전체 종목</option>
                     {requestNames.map((name) => (
@@ -743,15 +789,15 @@ export function AdminLLMPanel() {
                 )}
               </div>
             </div>
-            <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">
+            <p className="mt-1 text-cell leading-relaxed text-[var(--text-muted)]">
               LLM에 실제로 전송된 입력(factsJSON)과 성공/실패 여부를 기록합니다. 전체{" "}
               {logTotal.toLocaleString()}건 중 {requestLog.length}건 표시 중입니다. 항목을 눌러 펼치면 전체
               입력을 확인할 수 있습니다.
             </p>
             {logBusy ? (
-              <p className="mt-2 text-xs text-[var(--text-muted)]">불러오는 중...</p>
+              <p className="mt-2 text-cell text-[var(--text-muted)]">불러오는 중...</p>
             ) : filteredRequestLog.length === 0 ? (
-              <p className="mt-2 text-xs text-[var(--text-muted)]">아직 기록된 요청이 없습니다.</p>
+              <p className="mt-2 text-cell text-[var(--text-muted)]">아직 기록된 요청이 없습니다.</p>
             ) : (
               <div className="mt-3 space-y-1.5">
                 {filteredRequestLog.map((entry, i) => (
@@ -765,18 +811,18 @@ export function AdminLLMPanel() {
                   type="button"
                   disabled={logPage <= 1 || logBusy}
                   onClick={() => setLogPage((p) => Math.max(1, p - 1))}
-                  className="rounded-md border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--text-primary)] disabled:opacity-40"
+                  className={cn(buttonVariants({ variant: "outline", size: "xs" }), "border-[var(--border)] text-[var(--text-primary)] disabled:opacity-40")}
                 >
                   이전
                 </button>
-                <span className="text-[11px] text-[var(--text-muted)]">
+                <span className="text-cell text-[var(--text-muted)]">
                   {logPage} / {Math.max(1, Math.ceil(logTotal / logPageSize))} 페이지
                 </span>
                 <button
                   type="button"
                   disabled={logPage >= Math.ceil(logTotal / logPageSize) || logBusy}
                   onClick={() => setLogPage((p) => p + 1)}
-                  className="rounded-md border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--text-primary)] disabled:opacity-40"
+                  className={cn(buttonVariants({ variant: "outline", size: "xs" }), "border-[var(--border)] text-[var(--text-primary)] disabled:opacity-40")}
                 >
                   다음
                 </button>

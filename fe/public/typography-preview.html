@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quant Port — 타이포그래피 미리보기</title>
+
+  <!-- 현재 사용 중 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+  <!-- 대안 후보 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/sun-typeface/SUIT/fonts/variable/woff2/SUIT-Variable.css" />
+  <link rel="stylesheet" href="https://spoqa.github.io/spoqa-han-sans/css/SpoqaHanSansNeo.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── Quant Port design tokens (globals.css 기준) ── */
+    :root {
+      --radius: 0.625rem;
+      --background: oklch(0.97 0 0);
+      --foreground: oklch(0.145 0 0);
+      --card: oklch(1 0 0);
+      --muted: oklch(0.97 0 0);
+      --muted-foreground: oklch(0.52 0 0);
+      --accent: oklch(0.93 0 0);
+      --border: oklch(0.87 0 0);
+      --brand: #2563EB;
+      --brand-muted: rgba(37, 99, 235, 0.1);
+      --profit: #DC2626;
+      --loss: #2563EB;
+      --success: #15803D;
+      --score-high: #15803D;
+      --score-mid: #C2410C;
+      --score-low: #B91C1C;
+      --sidebar: oklch(0.985 0 0);
+      --sidebar-accent: oklch(0.93 0 0);
+      --sidebar-border: oklch(0.87 0 0);
+      --sidebar-width: 220px;
+      --text-primary: var(--foreground);
+      --text-secondary: var(--muted-foreground);
+      --text-muted: oklch(0.65 0 0);
+      --surface: var(--card);
+      --surface-elevated: var(--accent);
+
+      /* 폰트 프리셋 — JS로 body에 적용 */
+      --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      --font-mono: "Geist Mono", ui-monospace, monospace;
+      --body-size: 12px;
+      --body-tracking: -0.01em;
+      --num-tracking: 0;
+      --heading-weight: 600;
+      --label-weight: 500;
+    }
+
+    [data-theme="dark"] {
+      --background: oklch(0.145 0 0);
+      --foreground: oklch(0.985 0 0);
+      --card: oklch(0.205 0 0);
+      --muted: oklch(0.269 0 0);
+      --muted-foreground: oklch(0.708 0 0);
+      --accent: oklch(0.269 0 0);
+      --border: oklch(1 0 0 / 16%);
+      --brand: #60A5FA;
+      --brand-muted: rgba(96, 165, 250, 0.15);
+      --profit: #F87171;
+      --loss: #60A5FA;
+      --success: #4ADE80;
+      --score-high: #4ADE80;
+      --score-mid: #FB923C;
+      --score-low: #F87171;
+      --sidebar: oklch(0.205 0 0);
+      --sidebar-accent: oklch(0.269 0 0);
+      --sidebar-border: oklch(1 0 0 / 16%);
+      --text-muted: oklch(0.6 0 0);
+      --surface: var(--card);
+      --surface-elevated: var(--accent);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: var(--body-size);
+      letter-spacing: var(--body-tracking);
+      background: var(--background);
+      color: var(--text-primary);
+      font-synthesis: none;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      line-height: 1.5;
+    }
+
+    .mono, .num {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: var(--num-tracking);
+    }
+
+    /* ── 컨트롤 패널 (고정) ── */
+    .controls {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: color-mix(in srgb, var(--card) 92%, transparent);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+    }
+    .controls-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 20px;
+      align-items: center;
+    }
+    .controls h1 {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--brand);
+      letter-spacing: 0.06em;
+      white-space: nowrap;
+    }
+    .controls p.hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      max-width: 420px;
+      line-height: 1.45;
+    }
+    .preset-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .preset-btn {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-secondary);
+      border-radius: calc(var(--radius) - 2px);
+      padding: 6px 10px;
+      font: inherit;
+      font-size: 11px;
+      font-weight: var(--label-weight);
+      cursor: pointer;
+      transition: background 140ms, border-color 140ms, color 140ms;
+    }
+    .preset-btn:hover { background: var(--accent); color: var(--text-primary); }
+    .preset-btn.active {
+      border-color: var(--brand);
+      background: var(--brand-muted);
+      color: var(--brand);
+      font-weight: 600;
+    }
+    .theme-btn {
+      margin-left: auto;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: calc(var(--radius) - 2px);
+      padding: 6px 12px;
+      font: inherit;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    /* ── 비교 샘플 (상단) ── */
+    .compare-section {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .compare-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .compare-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+    }
+    .compare-card h3 {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .compare-card .sample-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .compare-card .sample-body {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+    }
+    .compare-card .sample-nums {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: 13px;
+    }
+    .compare-card .up { color: var(--profit); }
+    .compare-card .down { color: var(--loss); }
+
+    /* ── 앱 셸 ── */
+    .app-shell {
+      display: flex;
+      min-height: calc(100vh - 120px);
+      border-top: 1px solid var(--border);
+    }
+    .sidebar {
+      width: var(--sidebar-width);
+      flex-shrink: 0;
+      background: var(--sidebar);
+      border-right: 1px solid var(--sidebar-border);
+      padding: 12px 8px;
+      display: none;
+    }
+    @media (min-width: 1024px) { .sidebar { display: block; } }
+    .sidebar-brand {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      padding: 8px 10px 16px;
+      color: var(--text-primary);
+    }
+    .sidebar-brand span { color: var(--brand); margin-right: 4px; }
+    .nav-group { margin-bottom: 12px; }
+    .nav-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      padding: 4px 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: calc(var(--radius) - 2px);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-decoration: none;
+    }
+    .nav-item.active {
+      background: var(--sidebar-accent);
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+    .nav-dot {
+      width: 14px; height: 14px;
+      border-radius: 3px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+    .nav-item.active .nav-dot { background: var(--brand); }
+
+    .main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .header-title h2 {
+      font-size: 17px;
+      font-weight: var(--heading-weight);
+    }
+    .header-title p {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .search {
+      margin-left: auto;
+      width: 220px;
+      height: 32px;
+      border: 1px solid var(--border);
+      border-radius: calc(var(--radius) - 2px);
+      background: var(--background);
+      padding: 0 12px;
+      font: inherit;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .content {
+      flex: 1;
+      padding: 12px 16px 32px;
+      max-width: min(72rem, 100%);
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* ── 지수 스트립 ── */
+    .ticker-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    .ticker-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .ticker-head h3 { font-size: 13px; font-weight: 600; }
+    .ticker-head span { font-size: 11px; color: var(--text-muted); }
+    .ticker-row {
+      display: flex;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .ticker-row::-webkit-scrollbar { display: none; }
+    .ticker-cell {
+      flex-shrink: 0;
+      padding: 10px 14px;
+      border-right: 1px solid var(--border);
+      min-width: 148px;
+    }
+    .ticker-cell:last-child { border-right: none; }
+    .ticker-name { font-size: 11px; font-weight: 500; color: var(--text-muted); }
+    .ticker-val { font-size: 15px; font-weight: 700; margin: 2px 0; }
+    .ticker-chg { font-size: 11px; }
+
+    /* ── 카드 ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px;
+    }
+    .card-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .card-title { font-size: 13px; font-weight: 600; }
+    .card-meta { font-size: 10px; color: var(--text-muted); font-weight: 400; }
+    .toggle {
+      display: inline-flex;
+      background: var(--muted);
+      border-radius: calc(var(--radius) - 2px);
+      padding: 2px;
+      gap: 2px;
+    }
+    .toggle span {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+    .toggle span.on {
+      background: var(--surface);
+      color: var(--text-primary);
+      font-weight: 600;
+      box-shadow: 0 1px 2px rgba(0,0,0,.06);
+    }
+
+    .row-2 {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    @media (min-width: 1024px) {
+      .row-2 { grid-template-columns: 2fr 1fr; align-items: stretch; }
+    }
+    .row-4 {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    @media (min-width: 640px) { .row-4 { grid-template-columns: 1fr 1fr; } }
+    @media (min-width: 1280px) { .row-4 { grid-template-columns: repeat(4, 1fr); } }
+
+    /* 리스트 행 */
+    .list-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+      min-height: 30px;
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    }
+    .list-row:last-child { border-bottom: none; }
+    .rank { width: 14px; text-align: right; font-size: 11px; color: var(--text-muted); font-weight: 500; }
+    .avatar {
+      width: 24px; height: 24px;
+      border-radius: 6px;
+      background: var(--accent);
+      display: grid;
+      place-items: center;
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .stock-name { flex: 1; min-width: 0; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stock-price { font-size: 11px; text-align: right; }
+    .stock-pct { width: 52px; text-align: right; font-size: 12px; font-weight: 700; }
+    .grade {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: color-mix(in srgb, var(--score-high) 12%, transparent);
+      color: var(--score-high);
+    }
+
+    /* 브리핑 */
+    .briefing-text {
+      font-size: 12px;
+      line-height: 1.65;
+      color: var(--text-secondary);
+    }
+    .briefing-text b { color: var(--text-primary); font-weight: 600; }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .chip {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--muted);
+      color: var(--text-muted);
+    }
+    .news-item {
+      padding: 6px 0;
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    }
+    .news-item:last-child { border-bottom: none; }
+    .news-title { font-size: 12px; font-weight: 500; line-height: 1.4; margin-bottom: 3px; }
+    .news-meta { font-size: 10px; color: var(--text-muted); }
+
+    .footer-note {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 16px 20px 40px;
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+    .footer-note strong { color: var(--text-secondary); }
+  </style>
+</head>
+<body data-preset="current">
+
+  <!-- ── 컨트롤 ── -->
+  <div class="controls">
+    <div class="controls-inner">
+      <h1>QUANT PORT · TYPO</h1>
+      <p class="hint">
+        토스증권은 비공개 <strong style="color:var(--text-secondary)">Toss Product Sans</strong>를 씁니다.
+        아래는 공개 대안 + 현재 조합으로 홈 화면을 미리보는 페이지입니다.
+      </p>
+      <div class="preset-group" role="group" aria-label="폰트 프리셋">
+        <button type="button" class="preset-btn active" data-preset="current">A · 현재 (Pretendard + Geist Mono)</button>
+        <button type="button" class="preset-btn" data-preset="unified">B · Pretendard 통일 ★토스 유사</button>
+        <button type="button" class="preset-btn" data-preset="suit">C · SUIT + IBM Plex Mono</button>
+        <button type="button" class="preset-btn" data-preset="spoqa">D · Spoqa Han Sans Neo + JetBrains</button>
+        <button type="button" class="preset-btn" data-preset="ibm">E · IBM Plex Sans KR</button>
+        <button type="button" class="preset-btn" data-preset="soft">F · Pretendard Soft (부드럽게 조정)</button>
+      </div>
+      <button type="button" class="theme-btn" id="theme-toggle">🌙 다크</button>
+    </div>
+  </div>
+
+  <!-- ── 글자 샘플 비교 ── -->
+  <section class="compare-section">
+    <div class="compare-grid" id="compare-grid">
+      <!-- JS가 채움 -->
+    </div>
+  </section>
+
+  <!-- ── 홈 화면 목업 ── -->
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand"><span>◆</span>QUANT PORT</div>
+      <div class="nav-group">
+        <div class="nav-label">순위</div>
+        <a class="nav-item" href="#"><span class="nav-dot"></span>실시간 차트</a>
+        <a class="nav-item" href="#"><span class="nav-dot"></span>AI 추천 랭킹</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-label">내 투자</div>
+        <a class="nav-item active" href="#"><span class="nav-dot"></span>홈</a>
+        <a class="nav-item" href="#"><span class="nav-dot"></span>내 포트폴리오</a>
+        <a class="nav-item" href="#"><span class="nav-dot"></span>관심 종목</a>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="header">
+        <div class="header-title">
+          <h2>홈</h2>
+          <p>시장 현황 · 관심종목 · 뉴스</p>
+        </div>
+        <input class="search" type="text" placeholder="종목 검색…" readonly />
+      </header>
+
+      <div class="content">
+        <!-- 지수 스트립 -->
+        <div class="ticker-wrap">
+          <div class="ticker-head">
+            <h3>오늘의 시장</h3>
+            <span>09:32 기준 · 12개 지수</span>
+          </div>
+          <div class="ticker-row">
+            <div class="ticker-cell">
+              <div class="ticker-name">코스피</div>
+              <div class="ticker-val mono">2,687.45</div>
+              <div class="ticker-chg mono up">+18.32 +0.69%</div>
+            </div>
+            <div class="ticker-cell">
+              <div class="ticker-name">코스닥</div>
+              <div class="ticker-val mono">842.11</div>
+              <div class="ticker-chg mono down">−4.87 −0.58%</div>
+            </div>
+            <div class="ticker-cell">
+              <div class="ticker-name">S&amp;P 500</div>
+              <div class="ticker-val mono">5,487.03</div>
+              <div class="ticker-chg mono up">+12.44 +0.23%</div>
+            </div>
+            <div class="ticker-cell">
+              <div class="ticker-name">나스닥</div>
+              <div class="ticker-val mono">17,420.18</div>
+              <div class="ticker-chg mono up">+86.25 +0.50%</div>
+            </div>
+            <div class="ticker-cell">
+              <div class="ticker-name">USD/KRW</div>
+              <div class="ticker-val mono">1,342.50</div>
+              <div class="ticker-chg mono down">−3.20 −0.24%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 브리핑 + 뉴스 -->
+        <div class="row-2">
+          <div class="card">
+            <div class="card-head">
+              <span class="card-title">오늘의 시장 브리핑</span>
+              <span class="card-meta">AI · 09:00</span>
+            </div>
+            <p class="briefing-text">
+              <b>코스피</b>는 외국인 순매수에 힘입어 <b class="mono up">+0.69%</b> 상승 마감했습니다.
+              반도체 대형주 중심으로 매수세가 유입됐고, <b>삼성전자</b>·<b>SK하이닉스</b>가 지수를 견인했습니다.
+              미국 증시는 고용 지표 호조로 <b class="mono up">+0.23%</b> 소폭 상승했습니다.
+            </p>
+            <div class="chip-row">
+              <span class="chip">반도체 +1.2%</span>
+              <span class="chip">2차전지 −0.8%</span>
+              <span class="chip">바이오 +0.4%</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <span class="card-title">실시간 뉴스</span>
+              <span class="card-meta">국내</span>
+            </div>
+            <div class="news-item">
+              <div class="news-title">삼성전자, HBM4 양산 일정 앞당긴다… AI 수요 대응</div>
+              <div class="news-meta">연합뉴스 · <span class="mono">09:28</span></div>
+            </div>
+            <div class="news-item">
+              <div class="news-title">美 CPI 예상치 하회… 금리 인하 기대감 확산</div>
+              <div class="news-meta">Bloomberg · <span class="mono">08:52</span></div>
+            </div>
+            <div class="news-item">
+              <div class="news-title">코스피, 외국인 3거래일 연속 순매수… 2,680선 회복</div>
+              <div class="news-meta">한국경제 · <span class="mono">08:15</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4열 카드 -->
+        <div class="row-4">
+          <div class="card">
+            <div class="card-head">
+              <span class="card-title">AI 추천 랭킹 TOP <span class="card-meta">· 08-30</span></span>
+              <div class="toggle"><span class="on">국내</span><span>해외</span></div>
+            </div>
+            <div class="list-row">
+              <span class="rank">1</span><span class="avatar">삼</span>
+              <span class="stock-name">삼성전자</span>
+              <span class="stock-price mono">74,300</span>
+              <span class="stock-pct mono up">+1.64%</span>
+              <span class="grade">A</span>
+            </div>
+            <div class="list-row">
+              <span class="rank">2</span><span class="avatar">SK</span>
+              <span class="stock-name">SK하이닉스</span>
+              <span class="stock-price mono">198,500</span>
+              <span class="stock-pct mono up">+2.31%</span>
+              <span class="grade">A</span>
+            </div>
+            <div class="list-row">
+              <span class="rank">3</span><span class="avatar">현</span>
+              <span class="stock-name">현대차</span>
+              <span class="stock-price mono">241,000</span>
+              <span class="stock-pct mono down">−0.82%</span>
+              <span class="grade" style="background:color-mix(in srgb,var(--score-mid) 12%,transparent);color:var(--score-mid)">B</span>
+            </div>
+            <div class="list-row">
+              <span class="rank">4</span><span class="avatar">LG</span>
+              <span class="stock-name">LG에너지솔루션</span>
+              <span class="stock-price mono">352,000</span>
+              <span class="stock-pct mono down">−1.12%</span>
+              <span class="grade" style="background:color-mix(in srgb,var(--score-mid) 12%,transparent);color:var(--score-mid)">B</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <span class="card-title">거래대금 TOP</span>
+              <div class="toggle"><span class="on">국내</span><span>해외</span></div>
+            </div>
+            <div class="list-row">
+              <span class="rank">1</span><span class="avatar">삼</span>
+              <span class="stock-name">삼성전자</span>
+              <span class="stock-price mono">1.2조</span>
+              <span class="stock-pct mono up">+1.64%</span>
+            </div>
+            <div class="list-row">
+              <span class="rank">2</span><span class="avatar">SK</span>
+              <span class="stock-name">SK하이닉스</span>
+              <span class="stock-price mono">8,420억</span>
+              <span class="stock-pct mono up">+2.31%</span>
+            </div>
+            <div class="list-row">
+              <span class="rank">3</span><span class="avatar">두</span>
+              <span class="stock-name">두산에너빌리티</span>
+              <span class="stock-price mono">5,180억</span>
+              <span class="stock-pct mono up">+4.52%</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <span class="card-title">실적 · 배당 일정</span>
+            </div>
+            <div class="list-row">
+              <span class="rank mono" style="width:36px;color:var(--brand);font-weight:700">D-1</span>
+              <span class="stock-name">LG전자</span>
+              <span class="stock-meta" style="font-size:10px;color:var(--text-muted)">2분기 실적</span>
+            </div>
+            <div class="list-row">
+              <span class="rank mono" style="width:36px">D-3</span>
+              <span class="stock-name">카카오</span>
+              <span class="stock-meta" style="font-size:10px;color:var(--text-muted)">배당 기준일</span>
+            </div>
+            <div class="list-row">
+              <span class="rank mono" style="width:36px">D-5</span>
+              <span class="stock-name">NAVER</span>
+              <span class="stock-meta" style="font-size:10px;color:var(--text-muted)">2분기 실적</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <span class="card-title">오늘의 키워드</span>
+            </div>
+            <div class="chip-row" style="margin-top:0">
+              <span class="chip">#HBM</span>
+              <span class="chip">#금리인하</span>
+              <span class="chip">#반도체</span>
+              <span class="chip">#CPI</span>
+              <span class="chip">#외국인매수</span>
+              <span class="chip">#2차전지</span>
+            </div>
+            <p style="margin-top:10px;font-size:11px;color:var(--text-muted);line-height:1.5">
+              국내 뉴스 128건에서 추출 · 실시간 갱신
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer-note">
+    <strong>추천 순서 (토스 느낌 기준)</strong><br />
+    ① <strong>B · Pretendard 통일</strong> — 토스도 본문·숫자를 한 서체로 맞춥니다. Geist Mono 대비 덜 각지고 부드럽습니다. tabular-nums만 유지하면 표 정렬도 됩니다.<br />
+    ② <strong>F · Pretendard Soft</strong> — 현재 폰트 유지하면서 자간·굵기·크기만 토스 쪽으로 조정한 버전입니다. 마이그레이션 비용이 가장 낮습니다.<br />
+    ③ <strong>C · SUIT</strong> — Pretendard보다 둥글고 넓은 인상. 핀테크 앱에서 자주 쓰이며 가독성이 좋습니다.<br />
+    <br />
+    파일 위치: <code>fe/public/typography-preview.html</code> · dev 서버 실행 중이면
+    <a href="/typography-preview.html" style="color:var(--brand)">/typography-preview.html</a> 로 열 수 있습니다.
+  </footer>
+
+  <script>
+    const PRESETS = {
+      current: {
+        label: "A · Pretendard + Geist Mono",
+        sans: '"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
+        mono: '"Geist Mono", ui-monospace, monospace',
+        bodySize: "12px",
+        bodyTracking: "-0.01em",
+        numTracking: "0",
+        headingWeight: "600",
+        labelWeight: "500",
+        note: "현재 프로덕션 설정",
+      },
+      unified: {
+        label: "B · Pretendard 통일",
+        sans: '"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
+        mono: '"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
+        bodySize: "12.5px",
+        bodyTracking: "-0.015em",
+        numTracking: "-0.02em",
+        headingWeight: "600",
+        labelWeight: "500",
+        note: "토스 Product Sans처럼 UI·숫자 한 서체. 가장 부드러운 통일감",
+      },
+      suit: {
+        label: "C · SUIT + IBM Plex Mono",
+        sans: '"SUIT Variable", SUIT, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", sans-serif',
+        mono: '"IBM Plex Mono", ui-monospace, monospace',
+        bodySize: "12.5px",
+        bodyTracking: "-0.01em",
+        numTracking: "0",
+        headingWeight: "600",
+        labelWeight: "500",
+        note: "둥글고 시원한 인상 · 핀테크 대안",
+      },
+      spoqa: {
+        label: "D · Spoqa Han Sans Neo",
+        sans: '"Spoqa Han Sans Neo", "Noto Sans KR", sans-serif',
+        mono: '"JetBrains Mono", ui-monospace, monospace',
+        bodySize: "12px",
+        bodyTracking: "0",
+        numTracking: "0",
+        headingWeight: "600",
+        labelWeight: "500",
+        note: "카카오·토스 초기에 많이 쓰던 계열 · 중성적",
+      },
+      ibm: {
+        label: "E · IBM Plex Sans KR",
+        sans: '"IBM Plex Sans KR", "Noto Sans KR", sans-serif',
+        mono: '"IBM Plex Mono", ui-monospace, monospace',
+        bodySize: "12px",
+        bodyTracking: "0",
+        numTracking: "0",
+        headingWeight: "600",
+        labelWeight: "500",
+        note: "숫자 가독성 우수 · 다소 딱딱한 터미널 느낌",
+      },
+      soft: {
+        label: "F · Pretendard Soft",
+        sans: '"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
+        mono: '"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
+        bodySize: "13px",
+        bodyTracking: "-0.02em",
+        numTracking: "-0.025em",
+        headingWeight: "600",
+        labelWeight: "500",
+        note: "현재 폰트 + 토스식 자간·크기 조정",
+      },
+    };
+
+    const root = document.documentElement;
+    const body = document.body;
+    const compareGrid = document.getElementById("compare-grid");
+    const themeBtn = document.getElementById("theme-toggle");
+
+    function applyPreset(id) {
+      const p = PRESETS[id];
+      if (!p) return;
+      root.style.setProperty("--font-sans", p.sans);
+      root.style.setProperty("--font-mono", p.mono);
+      root.style.setProperty("--body-size", p.bodySize);
+      root.style.setProperty("--body-tracking", p.bodyTracking);
+      root.style.setProperty("--num-tracking", p.numTracking);
+      root.style.setProperty("--heading-weight", p.headingWeight);
+      root.style.setProperty("--label-weight", p.labelWeight);
+      body.dataset.preset = id;
+
+      document.querySelectorAll(".preset-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.preset === id);
+      });
+
+      renderCompare(id);
+    }
+
+    function renderCompare(activeId) {
+      const sampleNums = `
+        <span class="mono">74,300</span>
+        <span class="mono up">+1,200 +1.64%</span>
+        <span class="mono down">−750 −1.79%</span>
+      `;
+      compareGrid.innerHTML = Object.entries(PRESETS).map(([id, p]) => {
+        const active = id === activeId;
+        const monoSame = p.mono === p.sans;
+        return `
+          <div class="compare-card" style="${active ? "outline:2px solid var(--brand);outline-offset:-1px" : ""}">
+            <h3>${p.label}${active ? " ← 선택됨" : ""}</h3>
+            <div class="sample-title" style="font-family:${p.sans};font-weight:600;letter-spacing:${p.bodyTracking}">
+              통합 자산 관리, 한눈에 보는 시장
+            </div>
+            <div class="sample-body" style="font-family:${p.sans};font-size:${p.bodySize};letter-spacing:${p.bodyTracking}">
+              ${p.note} · ${monoSame ? "숫자도 동일 서체" : "숫자는 별도 모노"}
+            </div>
+            <div class="sample-nums" style="font-family:${monoSame ? p.sans : p.mono};letter-spacing:${p.numTracking};font-variant-numeric:tabular-nums">
+              ${sampleNums}
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    document.querySelectorAll(".preset-btn").forEach((btn) => {
+      btn.addEventListener("click", () => applyPreset(btn.dataset.preset));
+    });
+
+    themeBtn.addEventListener("click", () => {
+      const html = document.documentElement;
+      const next = html.dataset.theme === "dark" ? "light" : "dark";
+      html.dataset.theme = next;
+      themeBtn.textContent = next === "dark" ? "☀️ 라이트" : "🌙 다크";
+    });
+
+    applyPreset("current");
+  </script>
+</body>
+</html>

@@ -1,3 +1,5 @@
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { LogIn } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -30,13 +32,13 @@ export function LoginRequiredPanel({
           <div className="flex flex-wrap gap-2">
             <Link
               href={`/login${loginNext ? `?next=${encodeURIComponent(loginNext)}` : ""}`}
-              className="inline-flex h-9 items-center rounded-lg bg-[var(--brand)] px-4 text-sm font-semibold text-white hover:opacity-90"
+              className={cn(buttonVariants({ variant: "default", size: "default" }), "h-9 bg-[var(--brand)] text-white hover:opacity-90")}
             >
               로그인
             </Link>
             <Link
               href="/signup"
-              className="inline-flex h-9 items-center rounded-lg border border-[var(--border)] px-4 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              className={cn(buttonVariants({ variant: "outline", size: "lg" }), "border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]")}
             >
               회원가입
             </Link>

@@ -62,6 +62,7 @@ func TestBriefingEarningsScoreWMTAndNVDA(t *testing.T) {
 		MarketCap:  &nvdaCap,
 		DateStatus: model.EarningsDateScheduled,
 		Date:       "2026-08-26",
+		Session:    model.EarningsSessionAfterClose,
 	}
 	nvdaImp, _ := briefingEarningsScore(nvda, today)
 	// cap 80 + soon(5d) 10 = 90

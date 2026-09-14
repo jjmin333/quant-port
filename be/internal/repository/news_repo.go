@@ -53,26 +53,44 @@ func NewNewsRepo(db *sql.DB) *NewsRepo {
 	return &NewsRepo{db: db}
 }
 
+/*
+marshalJSONStringArray — 문자열 목록을 **항상 JSON 배열로** 만든다.
+
+`json.Marshal`은 nil 슬라이스를 `[]`가 아니라 **`null`**로 쓴다. 그래서 종목을
+하나도 못 찾은 기사는 `symbols_json`이 JSON `null`이 됐다 — 실측(2026-08-24)
+93,469행 중 **28,470행**이 그 상태였다.
+
+두 가지가 걸린다:
+
+	① 「종목 없음」이 `[]`와 `null` 두 가지로 저장돼 의미가 갈린다.
+	② **multi-valued index를 만들 수 없다.** MySQL의 `CAST(... AS ARRAY)`는
+	   배열이나 SQL NULL만 받고 JSON `null`에서는 실패한다.
+
+빈 배열로 통일하면 둘 다 사라진다. `tags`·`keywords`도 같은 코드 경로라
+같은 문제를 갖고 있었으므로 함께 통과시킨다.
+*/
+func marshalJSONStringArray(items []string) []byte {
+	if items == nil {
+		items = []string{}
+	}
+	raw, err := json.Marshal(items)
+	if err != nil {
+		return []byte("[]")
+	}
+	return raw
+}
+
 func (r *NewsRepo) Upsert(ctx context.Context, rec NewsArticleRecord) error {
-	tags, err := json.Marshal(rec.Tags)
-	if err != nil {
-		tags = []byte("[]")
-	}
-	symbols, err := json.Marshal(rec.Symbols)
-	if err != nil {
-		symbols = []byte("[]")
-	}
-	keywords, err := json.Marshal(rec.Keywords)
-	if err != nil {
-		keywords = []byte("[]")
-	}
+	tags := marshalJSONStringArray(rec.Tags)
+	symbols := marshalJSONStringArray(rec.Symbols)
+	keywords := marshalJSONStringArray(rec.Keywords)
 	previewMode := strings.TrimSpace(rec.PreviewMode)
 	if previewMode == "" {
 		previewMode = "summary"
 	}
 	publishedAt := NormalizeNewsPublishedAt(rec.PublishedAt)
 
-	_, err = r.db.ExecContext(ctx, `
+	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO news_articles (
 			id, market, url_hash, url, original_url, portal_url,
 			headline, headline_ko, summary, summary_ko, image_url, preview_mode,
@@ -292,6 +310,35 @@ func (r *NewsRepo) GetByID(ctx context.Context, id string) (*NewsArticleRecord, 
 	return scanNewsRow(row)
 }
 
+/*
+translationMaxAttempts — 한 제목을 몇 번까지 다시 옮겨 볼 것인가.
+
+번역 실패의 대부분은 그 제목 자체의 성질이다(고유명사 덩어리 · 숫자만 있는 제목).
+일시적인 장애는 한 번의 재시도로 거의 다 걷힌다. 세 번은 그 둘 사이이고, 3에서
+멈추면 최악의 낭비가 제목당 3회로 묶인다.
+
+세는 자리는 서비스 쪽이다(`runUSTranslationBatch`) — 예산에 걸려 **못 보낸** 회차와
+「보냈는데 쓸 수 없었다」를 거기서만 구분할 수 있다.
+*/
+const translationMaxAttempts = 3
+
+/*
+translationWindowDays — 얼마나 지난 기사까지 옮길 것인가.
+
+두 가지를 한꺼번에 한다.
+
+  · **비용** — 무료 등급은 월 200만 자다. 실측 신규 해외 기사가 하루 500~1,900건
+    (평균 제목 68자)이라 전량은 월 2.5M자로 한도를 넘는다. 오래된 기사를 빼는 것이
+    가장 덜 아픈 축소다 — 목록은 최신부터 읽히고, 3주 지난 제목을 여는 사람은 거의
+    없다.
+  · **질의 비용** — 재시도 상한이 생기면서 「상한에 닿은 행」이 쌓인다. 창이 없으면
+    이 질의가 매 회차 그 무덤을 지나 24건을 찾아 뒤로 계속 걸어간다. 창을 두면
+    `idx_news_market_published`의 범위 훑기로 끝난다.
+
+되돌리려면(전량 번역으로 가려면) 이 값을 늘리고 `translate_attempts`를 0으로 되돌린다.
+*/
+const translationWindowDays = 7
+
 func (r *NewsRepo) ListMissingTranslation(ctx context.Context, market string, limit int) ([]NewsArticleRecord, error) {
 	if limit <= 0 {
 		limit = 20
@@ -304,16 +351,38 @@ func (r *NewsRepo) ListMissingTranslation(ctx context.Context, market string, li
 			tags_json, symbols_json, keywords_json, published_at, view_count, highlighted, updated_at
 		FROM news_articles
 		WHERE market = ?
+		  AND published_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
 		  AND (headline_ko IS NULL OR headline_ko = '')
 		  AND headline != ''
+		  AND translate_attempts < ?
 		ORDER BY published_at DESC
 		LIMIT ?
-	`, market, limit)
+	`, market, translationWindowDays, translationMaxAttempts, limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	return scanNewsRows(rows)
+}
+
+/*
+BumpTranslateAttempts marks headlines the engine answered but we could not use.
+
+**한 문장으로 끝낸다.** 회차마다 스물넷이 실패할 수 있고 그때마다 UPDATE를 스물네
+번 내면, 2분 주기가 DB에 내는 부하가 번역보다 커진다(운영 DB가 1 ECPU다).
+*/
+func (r *NewsRepo) BumpTranslateAttempts(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	args := make([]any, 0, len(ids))
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	q := `UPDATE news_articles SET translate_attempts = translate_attempts + 1
+	      WHERE id IN (?` + strings.Repeat(",?", len(ids)-1) + `)`
+	_, err := r.db.ExecContext(ctx, q, args...)
+	return err
 }
 
 func (r *NewsRepo) ListMissingImages(ctx context.Context, market string, limit int) ([]NewsArticleRecord, error) {
@@ -407,7 +476,9 @@ func (r *NewsRepo) List(ctx context.Context, params NewsListParams) ([]NewsArtic
 		args = append(args, src)
 	}
 	if sym := strings.ToUpper(strings.TrimSpace(params.Symbol)); sym != "" {
-		query += " AND JSON_CONTAINS(symbols_json, JSON_QUOTE(?))"
+		// MEMBER OF 라야 idx_news_symbols_mv(multi-valued index)를 탄다 —
+		// JSON_CONTAINS는 같은 결과를 주지만 인덱스를 못 쓴다(061 마이그레이션 참조).
+		query += ` AND ? MEMBER OF (symbols_json->'$')`
 		args = append(args, sym)
 	}
 	if q := strings.TrimSpace(params.Query); q != "" {

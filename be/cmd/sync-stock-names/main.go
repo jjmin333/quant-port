@@ -38,7 +38,7 @@ func main() {
 		defer cancel()
 	}
 
-	mysql, err := repository.NewMySQL(cfg.MySQLDSN)
+	mysql, err := repository.NewMySQLForCLI(cfg.MySQLDSN)
 	if err != nil {
 		log.Fatalf("mysql: %v", err)
 	}
@@ -50,7 +50,7 @@ func main() {
 	}
 
 	if !cfg.Toss.Enabled() {
-		log.Fatal("toss api is not configured (TOSS_CLIENT_ID / TOSS_CLIENT_SECRET)")
+		log.Fatal("toss api is not configured (TOSS_PRIMARY_CLIENT_ID / TOSS_PRIMARY_CLIENT_SECRET)")
 	}
 
 	var tokenStore toss.TokenStore

@@ -16,6 +16,7 @@ import { createHoldingTradeClient } from "@/lib/holding-trades-api";
 import type { StockScoreData } from "@/lib/stock-score-api";
 import { trendTextClass } from "@/lib/trend-colors";
 import type { WatchlistRow } from "@/lib/watchlist-calc";
+import { toUserMessage } from "@/lib/error-message";
 
 /**
  * 관심종목 퀵룩 — 공용 `StockQuickLookModal`에 관심종목 맥락만 얹는다.
@@ -89,7 +90,7 @@ export function WatchlistQuickLookModal({
               <QuickLookStat label="보유 여부" value={q.isHeld ? "보유 중" : "미보유"} />
             </div>
             {row.addedPrice == null && (
-              <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+              <p className="mt-1 text-micro leading-relaxed text-muted-foreground">
                 담은 가격이 기록되기 전에 추가된 종목입니다 — 이후 추가하는 종목부터 채워집니다.
               </p>
             )}
@@ -163,7 +164,7 @@ function AddToHoldings({ row, onAdded }: { row: WatchlistRow; onAdded: () => voi
       setQuantity("");
       onAdded();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "저장 실패");
+      setError(toUserMessage(err, "저장 실패"));
     } finally {
       setBusy(false);
     }
@@ -183,22 +184,22 @@ function AddToHoldings({ row, onAdded }: { row: WatchlistRow; onAdded: () => voi
         </Button>
       ) : (
         <>
-          <p className="mb-1.5 text-[11px] font-semibold">
+          <p className="mb-1.5 text-cell font-semibold">
             {q.isHeld ? "매수 기록 추가" : "보유에 추가"}
           </p>
           <div className="grid grid-cols-2 gap-1.5">
             <label className="block min-w-0">
-              <span className="mb-0.5 block text-[10px] text-muted-foreground">수량</span>
+              <span className="mb-0.5 block text-micro text-muted-foreground">수량</span>
               <Input
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
                 inputMode="decimal"
                 placeholder="0"
-                className="font-mono"
+                className="font-num"
               />
             </label>
             <label className="block min-w-0">
-              <span className="mb-0.5 block text-[10px] text-muted-foreground">
+              <span className="mb-0.5 block text-micro text-muted-foreground">
                 매수 단가 ({q.currency})
               </span>
               <Input
@@ -206,7 +207,7 @@ function AddToHoldings({ row, onAdded }: { row: WatchlistRow; onAdded: () => voi
                 onChange={(e) => setPrice(e.target.value)}
                 inputMode="decimal"
                 placeholder="0"
-                className="font-mono"
+                className="font-num"
               />
             </label>
           </div>
@@ -214,9 +215,9 @@ function AddToHoldings({ row, onAdded }: { row: WatchlistRow; onAdded: () => voi
           <Button size="sm" className="mt-2 w-full" disabled={busy} onClick={submit}>
             저장
           </Button>
-          {error && <p className="mt-1.5 text-[10px] text-[var(--danger)]">{error}</p>}
-          {done && !error && <p className="mt-1.5 text-[10px] text-[var(--success)]">{done}</p>}
-          <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">
+          {error && <p className="mt-1.5 text-micro text-[var(--danger)]">{error}</p>}
+          {done && !error && <p className="mt-1.5 text-micro text-[var(--success)]">{done}</p>}
+          <p className="mt-1.5 text-micro leading-relaxed text-muted-foreground">
             매수 기록으로 저장됩니다 — 수량·평단이 이력에서 계산되고, 평가금액 추이에 매수일부터
             반영됩니다.
           </p>

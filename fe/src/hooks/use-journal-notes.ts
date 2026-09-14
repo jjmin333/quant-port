@@ -91,11 +91,11 @@ export function useJournalNotes({ sample = false }: { sample?: boolean } = {}) {
    * 알아야 의미가 생긴다. 연결된 종목의 현재가를 한 번에 받아 목록·모달이 함께 쓴다.
    * 실패해도 메모는 그대로 뜬다: 시세는 덧붙는 정보이지 메모의 전제가 아니다.
    *
-   * 예시 모드에서는 부르지 않는다. 픽스처의 작성 당시 가격과 실시간 시세를 섞으면
-   * 설명해둔 등락률과 화면이 어긋난다(AGENT_STATE 「예시 데이터」 항목과 같은 이유).
+   * 예시에서도 부른다. 예전에는 픽스처의 작성 당시 가격과 실시간 시세가 다른 세계라
+   * 막아뒀지만, 지금은 작성 당시 가격이 **그 날짜의 실제 종가**다.
    */
   useEffect(() => {
-    if (sample || !symbolKey) return;
+    if (!symbolKey) return;
     let alive = true;
     fetchQuotesBatchClient(symbolKey.split(","))
       .then((rows) => {
@@ -107,7 +107,7 @@ export function useJournalNotes({ sample = false }: { sample?: boolean } = {}) {
     return () => {
       alive = false;
     };
-  }, [sample, symbolKey]);
+  }, [symbolKey]);
 
   const tags = useMemo(() => {
     const counts = new Map<string, number>();

@@ -19,6 +19,13 @@ export type FinancialHistoryPeriod = {
   debtRatio?: number;
   currentRatio?: number;
 
+  /** 분기말 종가 ÷ 최근 4개 분기 EPS 합. 만들 수 없으면 없다. */
+  per?: number;
+  /** 분기말 종가 ÷ 주당순자산. */
+  pbr?: number;
+  /** 위 둘의 분자 — 그 분기 마지막 거래일 종가. */
+  closeAtPeriodEnd?: number;
+
   revenueGrowthQoq?: number;
   operatingIncomeGrowthQoq?: number;
   netIncomeGrowthQoq?: number;

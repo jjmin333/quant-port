@@ -125,3 +125,17 @@ export function formatBriefingTimestamp(iso: string): string {
   });
   return `${date} (${weekday}) ${time}`;
 }
+
+/** 승계 배지의 「AI 17:00」 — 문장이 쓰인 시각만 뽑는다. */
+export function formatBriefingClock(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    return "";
+  }
+  return d.toLocaleTimeString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}

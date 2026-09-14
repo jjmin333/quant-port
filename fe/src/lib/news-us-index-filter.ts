@@ -26,6 +26,8 @@ export const NEWS_US_STOCK_FILTERS: NewsUSStockFilter[] = [
   { id: "MSFT", label: "Microsoft", terms: ["msft", "microsoft", "마이크로소프트"] },
 ];
 
+// 국내와 같은 이유로 종목 티커를 뺐다 — 그 자리는 서버 집계가 채운다.
+// 자세한 사연은 `news-index-filter.ts`의 같은 상수 참고.
 export const NEWS_US_INDEX_PILLS: NewsUSIndexFilter[] = [
   "all",
   "breaking",
@@ -33,9 +35,6 @@ export const NEWS_US_INDEX_PILLS: NewsUSIndexFilter[] = [
   "sp500",
   "nasdaq",
   "dow",
-  "NVDA",
-  "AAPL",
-  "MSFT",
 ];
 
 const MACRO_TERMS = [

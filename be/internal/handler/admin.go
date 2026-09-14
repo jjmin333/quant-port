@@ -31,6 +31,21 @@ type AdminHandler struct {
 	scores        *service.ScoreService
 	scoreSettings *service.ScoreSettingsStore
 	batch         *service.BatchAdminService
+	// incidents는 운영 사건 원장이다. 생성자 인자로 받지 않고 세터로 붙인다 —
+	// 생성자 인자가 이미 열 개가 넘어 순서 실수가 나기 쉽고, 이 값은 없어도
+	// 나머지 관리자 기능이 전부 동작한다.
+	incidents *repository.OpsIncidentRepo
+	// aliases / aliasStocks — 종목 별칭 관리 (`admin_aliases.go`). incidents와 같은
+	// 이유로 세터다. aliasStocks 는 심볼이 카탈로그에 실재하는지 보는 데만 쓴다.
+	aliases     *repository.StockAliasRepo
+	aliasStocks *repository.StockRepo
+}
+
+// SetIncidents wires the ops ledger reader.
+func (h *AdminHandler) SetIncidents(repo *repository.OpsIncidentRepo) {
+	if h != nil {
+		h.incidents = repo
+	}
 }
 
 func NewAdminHandler(
@@ -231,9 +246,10 @@ func (h *AdminHandler) StockSummaryStatus(w http.ResponseWriter, r *http.Request
 	provider, enabled := h.stockSummary.Provider()
 	response.JSON(w, http.StatusOK, map[string]any{
 		"data": map[string]any{
-			"provider": provider,
-			"enabled":  enabled,
-			"symbols":  h.stockSummary.PilotStatus(r.Context()),
+			"provider":  provider,
+			"enabled":   enabled,
+			"splitKeys": h.stockSummary.SplitKeys(),
+			"symbols":   h.stockSummary.PilotStatus(r.Context()),
 		},
 	})
 }

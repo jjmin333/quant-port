@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,16 +19,21 @@ type Config struct {
 	APIKey   string
 	BaseURL  string
 	Model    string
+	// BudgetProvider is the apibudget bucket this client charges. Empty
+	// means ProviderOpenAI (shared/legacy key). Split KR/US keys use
+	// ProviderLLMKR / ProviderLLMUS so each API key has its own RPD.
+	BudgetProvider apibudget.Provider
 }
 
 func (c Config) Enabled() bool {
-	return c.APIKey != ""
+	return strings.TrimSpace(c.APIKey) != ""
 }
 
 type Client struct {
-	cfg        Config
-	httpClient *http.Client
-	budget     *apibudget.Manager
+	cfg            Config
+	httpClient     *http.Client
+	budget         *apibudget.Manager
+	budgetProvider apibudget.Provider
 }
 
 func NewClient(cfg Config, budget *apibudget.Manager) *Client {
@@ -39,22 +45,41 @@ func NewClient(cfg Config, budget *apibudget.Manager) *Client {
 	if model == "" {
 		model = "gpt-4o-mini"
 	}
+	bp := cfg.BudgetProvider
+	if bp == "" {
+		bp = apibudget.ProviderOpenAI
+	}
 	return &Client{
-		cfg:        Config{Provider: cfg.Provider, APIKey: cfg.APIKey, BaseURL: base, Model: model},
-		httpClient: &http.Client{Timeout: 45 * time.Second},
-		budget:     budget,
+		cfg:            Config{Provider: cfg.Provider, APIKey: cfg.APIKey, BaseURL: base, Model: model, BudgetProvider: bp},
+		httpClient:     &http.Client{Timeout: 45 * time.Second},
+		budget:         budget,
+		budgetProvider: bp,
 	}
 }
 
 // Provider reports which LLM backend is configured ("openai", "gemini", or
 // "" when disabled) — used for admin monitoring, not request behavior.
 func (c *Client) Provider() string {
+	if c == nil {
+		return ""
+	}
 	return c.cfg.Provider
 }
 
 // Model reports the configured chat-completions model id, for admin display.
 func (c *Client) Model() string {
+	if c == nil {
+		return ""
+	}
 	return c.cfg.Model
+}
+
+// BudgetProvider reports which apibudget bucket this client charges.
+func (c *Client) BudgetProvider() apibudget.Provider {
+	if c == nil {
+		return ""
+	}
+	return c.budgetProvider
 }
 
 // Headroom reports how much of today's provider allowance is still unspent.
@@ -64,7 +89,7 @@ func (c *Client) Headroom(ctx context.Context) apibudget.Headroom {
 	if c == nil || c.budget == nil {
 		return apibudget.Headroom{Calls: -1, DayTokens: -1, MinuteTokens: -1}
 	}
-	return c.budget.Headroom(ctx, apibudget.ProviderOpenAI)
+	return c.budget.Headroom(ctx, c.budgetProvider)
 }
 
 // Limits reports the enforced provider quotas, for pacing decisions and admin
@@ -73,11 +98,11 @@ func (c *Client) Limits() apibudget.Limits {
 	if c == nil || c.budget == nil {
 		return apibudget.Limits{}
 	}
-	return c.budget.LimitsFor(apibudget.ProviderOpenAI)
+	return c.budget.LimitsFor(c.budgetProvider)
 }
 
 func (c *Client) Enabled() bool {
-	return c.cfg.Enabled()
+	return c != nil && c.cfg.Enabled()
 }
 
 // llmUnavailableRetryWait is how long we pause after a 503 before the one
@@ -89,6 +114,20 @@ var llmUnavailableRetryWait = 4 * time.Second
 func isLLMUnavailable(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "llm api 503")
 }
+
+// IsBudgetExhausted reports the failures that mean "the allowance is spent" —
+// our own day/minute quotas, the token ceilings, and the provider's 429 (plus
+// the block it puts us in). A caller must **not** retry these: the answer will
+// be the same, and if it were not, the retry would be spending an allowance we
+// deliberately withheld.
+func IsBudgetExhausted(err error) bool {
+	return errors.Is(err, apibudget.ErrExhausted)
+}
+
+// IsUnavailable reports the provider-capacity 503. chatCompletion already
+// retried it once on the caller's behalf, so a caller-level retry on top would
+// make it four attempts for one slot.
+func IsUnavailable(err error) bool { return isLLMUnavailable(err) }
 
 // chatCompletion sends a single system+user message to the chat completions
 // endpoint and returns the raw response content plus the tokens the call
@@ -117,7 +156,7 @@ func (c *Client) chatCompletion(
 	}
 	wait := llmUnavailableRetryWait
 	if c.budget != nil {
-		if d := c.budget.MinInterval(apibudget.ProviderOpenAI); d > wait {
+		if d := c.budget.MinInterval(c.budgetProvider); d > wait {
 			wait = d
 		}
 	}
@@ -141,7 +180,7 @@ func (c *Client) chatCompletionOnce(
 	}
 	estimate := EstimateTokens(systemPrompt, userContent) + expectedOutput
 	if c.budget != nil {
-		if err := c.budget.CheckTokens(ctx, apibudget.ProviderOpenAI, estimate); err != nil {
+		if err := c.budget.CheckTokens(ctx, c.budgetProvider, estimate); err != nil {
 			return "", 0, err
 		}
 	}
@@ -182,15 +221,15 @@ func (c *Client) chatCompletionOnce(
 	}
 	if res.StatusCode == http.StatusTooManyRequests {
 		if c.budget != nil {
-			c.budget.BlockFor(ctx, apibudget.ProviderOpenAI, apibudget.ParseRetryAfter(res.Header.Get("Retry-After")))
+			c.budget.BlockFor(ctx, c.budgetProvider, apibudget.ParseRetryAfter(res.Header.Get("Retry-After")))
 		}
-		return "", 0, fmt.Errorf("llm api 429: %s", strings.TrimSpace(string(body)))
+		return "", 0, apibudget.Exhaustedf("llm api 429: %s", strings.TrimSpace(string(body)))
 	}
 	if res.StatusCode >= 400 {
 		return "", 0, fmt.Errorf("llm api %d: %s", res.StatusCode, strings.TrimSpace(string(body)))
 	}
 	if c.budget != nil {
-		c.budget.Record(ctx, apibudget.ProviderOpenAI)
+		c.budget.Record(ctx, c.budgetProvider)
 	}
 
 	var apiResp struct {
@@ -214,7 +253,7 @@ func (c *Client) chatCompletionOnce(
 		used = estimate
 	}
 	if c.budget != nil {
-		c.budget.RecordTokens(ctx, apibudget.ProviderOpenAI, used)
+		c.budget.RecordTokens(ctx, c.budgetProvider, used)
 	}
 	if len(apiResp.Choices) == 0 {
 		return "", used, fmt.Errorf("llm empty response")
@@ -259,6 +298,10 @@ type ArticleSentimentLabel struct {
 // sentences of narrative per section, plus per-article sentiment labels for
 // the news section (never an LLM-invented aggregate count).
 type StockSummaryLLMOutput struct {
+	// Overview is the 개요 탭 headline — written from all four sections at
+	// once, in the same call, so the summary a user sees first is not just the
+	// valuation paragraph wearing a different label.
+	Overview       string                  `json:"overview"`
 	Valuation      string                  `json:"valuation"`
 	Technical      string                  `json:"technical"`
 	Insider        string                  `json:"insider"`
@@ -274,10 +317,15 @@ type StockSummaryLLMOutput struct {
 
 // Expected completion sizes, in tokens, used only for the pre-flight budget
 // check. Measured against real responses and rounded up: the AI 요약 emits
-// four Korean paragraphs plus one sentiment entry per article, which is by
-// far the largest completion this client asks for.
+// five Korean paragraphs (개요 + four sections) plus one sentiment entry per
+// article, which is by far the largest completion this client asks for.
+//
+// 1,200 → 1,400: the 개요 문단이 2~3문장 늘었다. 한국어는 음절당 토큰이라 한
+// 문단이 대략 120~150 토큰이고, 여유를 보태 200을 올린다. 이 값은 **예산
+// 사전 점검에만** 쓰이므로 넉넉한 쪽이 안전하다 — 모자라면 남은 한도를 실제보다
+// 크게 보고 배치가 한도 끝에서 거절당한다.
 const (
-	stockSummaryOutputTokens = 1_200
+	stockSummaryOutputTokens = 1_400
 	translationOutputRatio   = 2
 )
 
@@ -286,6 +334,14 @@ const (
 // this once per tab; assemble every fact the four sections need into
 // factsJSON and cache the result (see StockSummaryService).
 func (c *Client) GenerateStockSummary(ctx context.Context, factsJSON, scoreLine string) (*StockSummaryLLMOutput, error) {
+	_, out, err := c.GenerateStockSummaryRaw(ctx, factsJSON, scoreLine)
+	return out, err
+}
+
+// GenerateStockSummaryRaw returns the provider completion before parsing, plus
+// the decoded payload. Callers that only need the prose can use
+// GenerateStockSummary; admin/dry-run tooling uses the raw string for auditing.
+func (c *Client) GenerateStockSummaryRaw(ctx context.Context, factsJSON, scoreLine string) (raw string, out *StockSummaryLLMOutput, err error) {
 	content, used, err := c.chatCompletion(
 		ctx,
 		stockSummarySystemPrompt,
@@ -295,14 +351,14 @@ func (c *Client) GenerateStockSummary(ctx context.Context, factsJSON, scoreLine 
 		stockSummaryOutputTokens,
 	)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
-	var out StockSummaryLLMOutput
-	if err := decodeLLMJSON(content, &out); err != nil {
-		return nil, err
+	var parsed StockSummaryLLMOutput
+	if err := decodeLLMJSON(content, &parsed); err != nil {
+		return content, nil, err
 	}
-	out.TotalTokens = used
-	return &out, nil
+	parsed.TotalTokens = used
+	return content, &parsed, nil
 }
 
 // EstimateStockSummaryTokens reports what one GenerateStockSummary call is
@@ -338,14 +394,17 @@ the numbers as a list — the user can already see them. Your job is the part th
 4. 근거 있는 판단 — a clear closing view, framed as analysis of the current state, never as a
    recommendation to buy or sell and never as a prediction of future price.
 
-Peer percentiles ("...PeerPct", "peerTopPercent") are the stock's rank among comparable companies, where a
-higher number means better on that measure. Prefer them over raw ratios when judging cheap/expensive —
-"PER 24.9" alone says nothing without the peer context.
+Every peer figure in the facts — "peerTopPercent" and each "...TopPercent" — is already expressed as
+상위 N% among comparable companies: 1 is the best of the peer group and 100 the worst, so a LOWER number
+means better. Write each one in Korean exactly as given ("상위 6%"): never subtract it from 100, never
+re-rank it, and never turn 상위 6% into 상위 94% or the reverse. Prefer these over raw ratios when judging
+cheap/expensive — "PER 24.9" alone says nothing without the peer context.
 
 "dataGaps" lists what could not be measured. Stay silent on those areas rather than hedging throughout.
 
 Respond with valid JSON only, this exact shape:
 {
+  "overview": "위 네 갈래(밸류에이션·기술적 분석·내부자 거래·뉴스)를 **모두 고려한** 종합 요약 2~3문장. 개요 화면의 첫 문단이므로, 한 축만 골라 말하지 말고 지금 이 종목의 상태를 가장 크게 좌우하는 것부터 적고 축들이 엇갈리면 그 긴장을 드러낼 것",
   "valuation": "실적·수익성·밸류에이션 해석 3문장 이내. 동종 대비 어디에 서 있는지와 그 이유",
   "technical": "가격 흐름 해석 3문장 이내. 추세와 펀더멘털이 엇갈리면 그 이유를 우선 설명",
   "insider": "내부자 거래 동향 3문장 이내. 방향이 실적·주가와 어떻게 맞물리는지",

@@ -14,7 +14,7 @@ var brokerLinkingTables = []string{
 }
 
 // MigrateDropBrokerLinkingIfNeeded drops per-user Toss account-linking tables.
-// Market-data Toss credentials (env TOSS_CLIENT_*) are not stored here.
+// Market-data Toss credentials (env TOSS_PRIMARY_* / TOSS_SECONDARY_*) are not stored here.
 func MigrateDropBrokerLinkingIfNeeded(ctx context.Context, db *sql.DB, migrationsDir string) error {
 	var any bool
 	for _, table := range brokerLinkingTables {

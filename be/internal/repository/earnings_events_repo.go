@@ -421,6 +421,44 @@ func (r *EarningsEventRepo) Coverage(ctx context.Context, market string) (rows, 
 	return rows, symbols, latest, nil
 }
 
+// ConfirmedSymbols lists symbols that have actually reported at least once.
+//
+// 과거 서프라이즈 백필의 대상 집합이다. 카탈로그 전체(미국 9,198종목)를 돌지
+// 않는 이유는 호출이 그만큼 늘어서가 아니라 **대부분이 빈 응답**이기 때문이다 —
+// 한 번도 발표한 적 없는 종목에 과거 4분기가 있을 리 없다.
+//
+// 시총 순이 아니라 심볼 순인 것은 재실행 때문이다. 순서가 고정이어야 `-limit`으로
+// 잘라 시험한 구간과 본실행의 앞부분이 같아진다.
+func (r *EarningsEventRepo) ConfirmedSymbols(ctx context.Context, market string) ([]string, error) {
+	if r == nil || r.db == nil {
+		return nil, nil
+	}
+	q := `SELECT DISTINCT symbol FROM earnings_events
+		WHERE date_status = ?`
+	args := []any{model.EarningsDateConfirmed}
+	if market != "" {
+		q += ` AND market = ?`
+		args = append(args, market)
+	}
+	q += ` ORDER BY symbol`
+
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("earnings_events confirmed symbols: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]string, 0, 4096)
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
 // EarningsPeriodKey is the identity of "this company's this reporting period".
 func EarningsPeriodKey(symbol string, year int, period string) string {
 	return fmt.Sprintf("%s|%d|%s", symbol, year, period)

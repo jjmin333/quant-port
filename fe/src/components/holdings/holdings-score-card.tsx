@@ -84,7 +84,7 @@ export function HoldingsScoreCard({
   if (loading) {
     return (
       <Card className="p-3">
-        <p className="mb-2 text-xs font-semibold">보유 종목 점수</p>
+        <p className="mb-2 text-cell font-semibold">보유 종목 점수</p>
         <div className="h-24 animate-pulse rounded bg-muted" />
       </Card>
     );
@@ -93,8 +93,8 @@ export function HoldingsScoreCard({
   if (!stats) {
     return (
       <Card className="p-3">
-        <p className="mb-2 text-xs font-semibold">보유 종목 점수</p>
-        <p className="py-8 text-center text-[11px] text-muted-foreground">
+        <p className="mb-2 text-cell font-semibold">보유 종목 점수</p>
+        <p className="py-8 text-center text-cell text-muted-foreground">
           점수가 산출된 보유 종목이 없습니다
         </p>
       </Card>
@@ -106,15 +106,15 @@ export function HoldingsScoreCard({
   return (
       <Card className="p-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs font-semibold">보유 종목 점수</p>
-          <span className="text-[10px] text-muted-foreground">{stats.tradeDate} 기준</span>
+          <p className="text-cell font-semibold">보유 종목 점수</p>
+          <span className="text-micro text-muted-foreground">{stats.tradeDate} 기준</span>
         </div>
 
         <div className="flex items-baseline gap-2">
-          <b className={cn("font-mono text-2xl font-bold tabular-nums", SCORE_TONE_TEXT[scoreTone(avg)])}>
+          <b className={cn("font-num text-2xl font-bold tabular-nums", SCORE_TONE_TEXT[scoreTone(avg)])}>
             {avg.toFixed(1)}
           </b>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-cell text-muted-foreground">
             {stats.average == null ? "단순 평균" : "평가금액 가중 평균"}
           </span>
         </div>
@@ -132,7 +132,7 @@ export function HoldingsScoreCard({
             .map(([band, label, color]) => (
               <span
                 key={band}
-                className="grid place-items-center text-[10px] font-semibold text-white"
+                className="grid place-items-center text-micro font-semibold text-white"
                 style={{ flex: stats.bands[band], backgroundColor: color }}
               >
                 {label} {stats.bands[band]}
@@ -156,14 +156,14 @@ export function HoldingsScoreCard({
         </div>
 
         <div className="mt-2 border-t pt-1.5">
-          <p className="mb-1 text-[11px] font-semibold">점수 낮은 보유 종목</p>
+          <p className="mb-1 text-cell font-semibold">점수 낮은 보유 종목</p>
           <ul className="min-w-0">
             {stats.lowest.map(({ m, score }) => (
               <li key={m.symbol}>
                 <button
                   type="button"
                   onClick={() => onSelect(m.symbol)}
-                  className="flex h-[30px] w-full min-w-0 items-center gap-2 rounded-md px-1 text-left text-[11px] hover:bg-accent"
+                  className="flex h-[30px] w-full min-w-0 items-center gap-2 rounded-md px-1 text-left text-cell hover:bg-accent"
                 >
                   <StockAvatar
                     symbol={m.symbol}
@@ -176,21 +176,21 @@ export function HoldingsScoreCard({
                   <span className="min-w-0 flex-1 truncate">{m.name}</span>
                   <span
                     className={cn(
-                      "shrink-0 rounded px-1 text-[10px] font-semibold",
+                      "shrink-0 rounded px-1 text-micro font-semibold",
                       SCORE_TONE_BADGE[scoreTone(score.score ?? 0)],
                     )}
                   >
                     {score.score}
                     {score.grade ? ` ${score.grade}` : ""}
                   </span>
-                  <span className="w-11 shrink-0 text-right font-mono tabular-nums">
+                  <span className="w-11 shrink-0 text-right font-num tabular-nums">
                     {m.weight == null ? "—" : `${m.weight.toFixed(1)}%`}
                   </span>
                 </button>
               </li>
             ))}
           </ul>
-          <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+          <p className="mt-1 text-micro leading-relaxed text-muted-foreground">
             점수는 정보이지 매매 신호가 아닙니다. 종목을 누르면 5축 분해와 내 보유 내역이
             열립니다.
           </p>
@@ -202,8 +202,8 @@ export function HoldingsScoreCard({
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex min-w-0 items-center justify-between gap-2 py-0.5">
-      <span className="shrink-0 text-[11px] text-muted-foreground">{label}</span>
-      <b className="min-w-0 truncate font-mono text-[11px] tabular-nums">{value}</b>
+      <span className="shrink-0 text-cell text-muted-foreground">{label}</span>
+      <b className="min-w-0 truncate font-num text-cell tabular-nums">{value}</b>
     </div>
   );
 }

@@ -1,48 +1,14 @@
 package service
 
-import (
-	"testing"
-
-	"github.com/enact/quant-port/be/internal/model"
-)
+import "testing"
 
 func f(v float64) *float64 { return &v }
 
-func TestStockSummaryScoreNilWithoutData(t *testing.T) {
-	if got := stockSummaryScore(nil, nil); got != nil {
-		t.Fatalf("expected nil score with no inputs, got %d", *got)
-	}
-	if got := stockSummaryScore(&model.StockSummaryView{}, &TechnicalIndicators{}); got != nil {
-		t.Fatalf("expected nil score with empty indicators, got %d", *got)
-	}
-}
-
-func TestStockSummaryScoreRangesAndOrdering(t *testing.T) {
-	bullish := &TechnicalIndicators{
-		LastClose: f(110), SMA20: f(100), SMA50: f(95),
-		RSI14: f(62), MACD: f(2), MACDSignal: f(1),
-		PctFromLow52Week: f(80), PctFromHigh52Week: f(-5),
-	}
-	bearish := &TechnicalIndicators{
-		LastClose: f(88), SMA20: f(100), SMA50: f(105),
-		RSI14: f(28), MACD: f(-2), MACDSignal: f(1),
-		PctFromLow52Week: f(5), PctFromHigh52Week: f(-60),
-	}
-
-	bull := stockSummaryScore(nil, bullish)
-	bear := stockSummaryScore(nil, bearish)
-	if bull == nil || bear == nil {
-		t.Fatal("expected scores for populated indicators")
-	}
-	if *bull <= *bear {
-		t.Fatalf("bullish setup (%d) should score above bearish (%d)", *bull, *bear)
-	}
-	for _, s := range []int{*bull, *bear} {
-		if s < 0 || s > 100 {
-			t.Fatalf("score %d out of 0..100", s)
-		}
-	}
-}
+/*
+이 파일이 재던 `stockSummaryScore`는 없앴다 (2026-09-03 §6) — 종합 점수를 두
+군데서 서로 다른 잣대로 만들던 쪽이었다. 남은 곡선들은 점수 배치의 `technicalAxis`가
+쓰므로, 검사도 곡선 자체의 성질로 옮긴다.
+*/
 
 // An overbought RSI must not read as the strongest possible momentum — the
 // curve peaks below 70 and decays above it.
@@ -64,32 +30,31 @@ func TestRSIScorePeaksBelowOverbought(t *testing.T) {
 	}
 }
 
-// A missing component must be dropped, never scored as zero — otherwise absent
-// data would read as a maximally bearish signal.
-func TestMissingComponentsAreDroppedNotZeroed(t *testing.T) {
-	rsiOnly := stockSummaryScore(nil, &TechnicalIndicators{RSI14: f(62)})
-	if rsiOnly == nil {
-		t.Fatal("expected a score from RSI alone")
+// MACD above its signal is momentum turning up; below is turning down. The
+// technical axis leans on this ordering, so it is worth pinning.
+func TestMACDScoreOrdering(t *testing.T) {
+	up := macdScore(2, 1)
+	down := macdScore(-2, 1)
+	if up <= down {
+		t.Fatalf("MACD above signal (%.1f) should score above MACD below signal (%.1f)", up, down)
 	}
-	// RSI 62 sits in the strong band, so a re-weighted single component must
-	// land there too rather than being diluted toward 0.
-	if *rsiOnly < 60 {
-		t.Fatalf("single strong component scored %d — missing data was treated as bearish", *rsiOnly)
+	for name, v := range map[string]float64{"up": up, "down": down} {
+		if v < 0 || v > 100 {
+			t.Fatalf("%s score %.1f out of 0..100", name, v)
+		}
 	}
 }
 
-func TestNewsSentimentContributes(t *testing.T) {
-	ti := &TechnicalIndicators{RSI14: f(50)}
-	positive := stockSummaryScore(&model.StockSummaryView{
-		NewsSentiment: &model.NewsSentimentSummary{Total: 10, AverageScore: 80},
-	}, ti)
-	negative := stockSummaryScore(&model.StockSummaryView{
-		NewsSentiment: &model.NewsSentimentSummary{Total: 10, AverageScore: -80},
-	}, ti)
-	if positive == nil || negative == nil {
-		t.Fatal("expected scores")
+// Price above both moving averages is a stronger setup than price below both.
+func TestTrendScoreOrdering(t *testing.T) {
+	above := trendScore(110, 100, 95)
+	below := trendScore(88, 100, 105)
+	if above <= below {
+		t.Fatalf("price above its MAs (%.1f) should score above price below them (%.1f)", above, below)
 	}
-	if *positive <= *negative {
-		t.Fatalf("positive sentiment (%d) should score above negative (%d)", *positive, *negative)
+	for name, v := range map[string]float64{"above": above, "below": below} {
+		if v < 0 || v > 100 {
+			t.Fatalf("%s score %.1f out of 0..100", name, v)
+		}
 	}
 }

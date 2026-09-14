@@ -17,26 +17,42 @@ import (
 )
 
 type QuotesService struct {
-	toss         *toss.Client
-	external     *marketdata.Clients
-	fx           *ExchangeRateService
-	watchlist    *repository.WatchlistRepo
-	userHoldings *UserHoldingsService
-	stocks       *repository.StockRepo
-	redis       *redis.Client
-	candles       *repository.CandleBarRepo
-	quoteTerminal *repository.QuoteTerminalRepo
-	rankingsRepo  *repository.MarketRankingsRepo
-	marketStore   *MarketDataStore
-	indexStore  *MarketIndexStore
+	toss           *toss.Client
+	external       *marketdata.Clients
+	fx             *ExchangeRateService
+	watchlist      *repository.WatchlistRepo
+	userHoldings   *UserHoldingsService
+	stocks         *repository.StockRepo
+	redis          *redis.Client
+	candles        *repository.CandleBarRepo
+	quoteTerminal  *repository.QuoteTerminalRepo
+	rankingsRepo   *repository.MarketRankingsRepo
+	marketStore    *MarketDataStore
+	indexStore     *MarketIndexStore
 	streamHub      *streamHub
 	quoteStreamHub *quoteStreamHub
+	// listPriceHub — 목록 화면(마켓 랭킹·AI 랭킹·보유·관심)이 공유하는 가격 방송.
+	// 발행자는 MarketDataStore 한 곳이고, 이 서비스는 구독만 넘겨준다.
+	listPriceHub *listPriceHub
 	poller         *marketPoller
 	pollerStarted  atomic.Bool
-	quoteRefresh *quoteRefreshCoordinator
+	quoteRefresh   *quoteRefreshCoordinator
 
 	stockInfoBatchMu sync.RWMutex
 	stockInfoBatch   map[string]stockInfoBatchEntry
+
+	// assetTypes — 종목별 자산 구분 캐시. 목록이 종목마다 `stocks`를 다시 읽던 것을
+	// 없앤다(quotes_catalog_cache.go 헤더의 실측 참조).
+	assetTypes *assetTypeCache
+
+	// dailyFetchAt — 심볼별로 Toss 일봉을 **마지막으로 받아 온** 시각.
+	// refreshRawCandles가 30초마다 200봉을 통째로 다시 받던 것을 막는다
+	// (dailyRefetchInterval 헤더 참조).
+	// stream — 웹소켓 구독 서비스. nil이면 폴링만 돈다(기본값).
+	stream *QuoteStreamService
+
+	dailyFetchMu sync.Mutex
+	dailyFetchAt map[string]time.Time
 }
 
 func (s *QuotesService) SetUserHoldings(svc *UserHoldingsService) {
@@ -54,17 +70,19 @@ func NewQuotesService(
 	quoteTerminalRepo *repository.QuoteTerminalRepo,
 ) *QuotesService {
 	s := &QuotesService{
-		toss:          tossClient,
-		external:      external,
-		fx:            fx,
-		watchlist:     watchlist,
-		stocks:        stockRepo,
-		redis:         redisClient,
-		candles:       candleRepo,
-		quoteTerminal: quoteTerminalRepo,
+		toss:           tossClient,
+		external:       external,
+		fx:             fx,
+		watchlist:      watchlist,
+		stocks:         stockRepo,
+		redis:          redisClient,
+		candles:        candleRepo,
+		quoteTerminal:  quoteTerminalRepo,
 		streamHub:      newStreamHub(),
 		quoteStreamHub: newQuoteStreamHub(),
+		listPriceHub:   newListPriceHub(),
 		stockInfoBatch: make(map[string]stockInfoBatchEntry),
+		assetTypes:     newAssetTypeCache(),
 	}
 	s.poller = newMarketPoller(s)
 	return s
@@ -90,6 +108,9 @@ func (s *QuotesService) SetMarketStore(store *MarketDataStore) {
 	if s.poller != nil {
 		s.poller.quotes = s
 	}
+	// 가격을 쓰는 쪽과 구독하는 쪽을 같은 허브에 맞춘다. 여기서 매는 이유는
+	// 스토어가 생성자보다 늦게 오기 때문이다(StartPolling 주석과 같은 사정).
+	store.AttachListPriceHub(s.listPriceHub)
 }
 
 func (s *QuotesService) SetRankingsRepo(repo *repository.MarketRankingsRepo) {
@@ -245,7 +266,7 @@ func modelCurrency(c toss.Currency) model.QuoteCurrency {
 
 func mapCandleInterval(interval model.CandleInterval) (toss.CandleInterval, bool) {
 	switch interval {
-	case model.Interval1m, model.Interval5m, model.Interval10m, model.Interval30m, model.Interval60m:
+	case model.Interval1m, model.Interval5m, model.Interval10m, model.Interval30m:
 		return toss.CandleInterval1m, true
 	case model.Interval1d, model.Interval1w, model.Interval1M:
 		return toss.CandleInterval1d, true

@@ -38,7 +38,7 @@ export function StampTargetGauge({
   if (stamp.stance === "neutral" || stamp.targetProgress === undefined) {
     const drift = stamp.current?.changeRate;
     return (
-      <div className={cn("text-[10px] text-[var(--text-muted)]", className)}>
+      <div className={cn("text-micro text-[var(--text-muted)]", className)}>
         {showTargetPrice && <div>{targetLabel}</div>}
         <div>
           {drift === undefined
@@ -64,7 +64,7 @@ export function StampTargetGauge({
 
   return (
     <div className={cn("min-w-0", className)}>
-      <div className="flex justify-between text-[9.5px] text-[var(--text-muted)]">
+      <div className="flex justify-between text-micro text-[var(--text-muted)]">
         <span>{stamp.targetHit ? "도달" : "현재"}</span>
         <span>{targetLabel}</span>
       </div>
@@ -79,7 +79,7 @@ export function StampTargetGauge({
           style={{ left: `${markerAt}%` }}
         />
       </div>
-      <div className="text-[10px]" style={{ color: tone }}>
+      <div className="text-micro" style={{ color: tone }}>
         {stamp.targetHit
           ? "목표가 도달"
           : progress < 0

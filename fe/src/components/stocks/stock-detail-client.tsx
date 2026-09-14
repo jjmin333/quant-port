@@ -12,6 +12,8 @@ import type { CandlestickChartHandle } from "@/components/quotes/candlestick-cha
 import { QuoteChange, QuotePrice } from "@/components/quotes/quote-price";
 import { PublishCallButton } from "@/components/research/publish-call-button";
 import { StampButton } from "@/components/stamps/stamp-button";
+import { HEADER_ACTION_CLASS } from "@/components/stocks/stock-symbol-action-bar";
+import { Button } from "@/components/ui/button";
 import { StockNewsPanel } from "@/components/stocks/stock-news-panel";
 import { StockAvatar } from "@/components/stocks/stock-avatar";
 import { useExchangeRate } from "@/hooks/use-exchange-rate";
@@ -26,9 +28,10 @@ import {
   formatVolume,
 } from "@/lib/format";
 import type { QuoteAssetType } from "@/lib/quotes-types";
-import { quoteChangeBaseline, quoteChangeBasisLabel } from "@/lib/quotes-types";
+import { quoteChangeBaseline, QUOTE_CHANGE_BASIS_LABEL } from "@/lib/quotes-types";
 import { trendTextClass } from "@/lib/trend-colors";
 import { cn } from "@/lib/utils";
+import { useLoginGate } from "@/hooks/use-login-gate";
 
 function stockNewsMarket(assetType: QuoteAssetType, currency: "KRW" | "USD"): "domestic" | "us" {
   if (assetType === "us" || currency === "USD") return "us";
@@ -42,12 +45,15 @@ export function StockDetailClient({ symbol }: { symbol: string }) {
     symbol,
     "1d",
     detail?.currentPrice ?? 0,
+    // 마감 중에는 일봉이 자라지 않는다 — 2초 스냅샷 폴링을 걷는다.
+    detail?.marketSession !== "closed",
   );
   const exchangeRate = useExchangeRate(true);
   const chartRef = useRef<CandlestickChartHandle>(null);
   const chartAreaRef = useRef<HTMLDivElement>(null);
   const [chartHeight, setChartHeight] = useState(360);
   const [watchlisted, setWatchlisted] = useState(false);
+  const gate = useLoginGate("관심 추가");
 
   useEffect(() => {
     fetchWatchlistClient()
@@ -65,13 +71,23 @@ export function StockDetailClient({ symbol }: { symbol: string }) {
     return () => observer.disconnect();
   }, [detail]);
 
+  /*
+    관심 등록도 로그인이 필요한 동작이다 (2026-09-04 사용자 요청 2 「다른 로그인이
+    필요한 모든 버튼」).
+
+    전에는 비로그인으로 누르면 401이 나고 `catch`가 그것을 통째로 삼켰다 — 하트가
+    안 채워지고 화면에는 아무 말도 없어서, 사용자에게는 **버튼이 고장 난 것**이다.
+    랭킹 목록의 같은 버튼은 이미 로그인으로 보내고 있었고(`market-radar-list`),
+    상세 화면만 빠져 있었다.
+  */
   async function toggleWatchlist() {
+    if (!gate.run(() => {})) return;
     try {
       if (watchlisted) await removeWatchlistClient(symbol);
       else await addWatchlistClient(symbol);
       setWatchlisted(!watchlisted);
     } catch {
-      // ignore
+      // 등록 실패는 되돌리지 않는다 — 다음 조회가 서버 상태로 맞춘다.
     }
   }
 
@@ -111,7 +127,7 @@ export function StockDetailClient({ symbol }: { symbol: string }) {
   function StatPrice({ value }: { value: number }) {
     if (value <= 0) return <>—</>;
     return (
-      <PriceDisplay value={value} currency={currency} size="sm" className="text-xs font-medium" />
+      <PriceDisplay value={value} currency={currency} size="sm" className="text-cell font-medium" />
     );
   }
 
@@ -138,51 +154,55 @@ export function StockDetailClient({ symbol }: { symbol: string }) {
               <h1 className="truncate text-base font-semibold text-[var(--text-primary)] sm:text-lg">
                 {detail.name}
               </h1>
-              <span className="font-mono text-[10px] text-[var(--text-muted)]">{detail.symbol}</span>
-              <Badge variant="default" className="text-[10px]">
+              <span className="font-num text-micro text-[var(--text-muted)]">{detail.symbol}</span>
+              <Badge variant="default" className="text-micro">
                 {detail.market}
               </Badge>
               {detail.isHeld && (
-                <Badge variant="info" className="text-[10px]">
+                <Badge variant="info" className="text-micro">
                   보유
                 </Badge>
               )}
-              <Badge variant="profit" className="animate-pulse text-[10px]">
+              <Badge variant="profit" className="animate-pulse text-micro">
                 실시간
               </Badge>
             </div>
-            <p className="mt-0.5 pl-8 text-[10px] text-[var(--text-muted)]">{updatedLabel} 기준</p>
+            <p className="mt-0.5 pl-8 text-micro text-[var(--text-muted)]">{updatedLabel} 기준</p>
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-            <Link
-              href={analysisSymbolHref(symbol, "company")}
-              className="rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[11px] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
-            >
-              종목 분석
-            </Link>
-            <button
-              type="button"
+            {/* 크기는 전부 공용 `<Button size="sm">` — 예전엔 이 줄만 px-2.5 py-1.5로 따로 컸다. */}
+            <Button variant="outline" size="sm" className={HEADER_ACTION_CLASS} asChild>
+              <Link href={analysisSymbolHref(symbol, "company")}>종목 분석</Link>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={toggleWatchlist}
-              className="rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[11px] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+              aria-pressed={watchlisted}
+              title={
+                gate.authed ? undefined : "로그인하면 이 종목을 관심 목록에 담을 수 있습니다"
+              }
+              className={HEADER_ACTION_CLASS}
             >
-              {watchlisted ? "관심 해제" : "관심 추가"}
-            </button>
+              {/* 비로그인이면 눌렀을 때 로그인으로 나간다 — 버튼이 그렇게 말한다. */}
+              {watchlisted ? "관심 해제" : gate.authed ? "관심 추가" : "로그인하고 관심 추가"}
+            </Button>
             <StampButton
               symbol={symbol}
-              size="md"
               price={detail.currentPrice}
               currency={detail.currency}
               week52High={detail.week52High}
               week52Low={detail.week52Low}
             />
-            <PublishCallButton symbol={symbol} className="px-2.5 py-1.5" />
+            <PublishCallButton symbol={symbol} />
           </div>
         </div>
 
         <div className="mt-2 flex flex-wrap items-end gap-x-5 gap-y-1 pl-8">
           <QuotePrice
             value={detail.currentPrice}
+            flashKey={detail.symbol}
             currency={detail.currency}
             exchangeRate={exchangeRate}
             size="hero"
@@ -217,15 +237,15 @@ export function StockDetailClient({ symbol }: { symbol: string }) {
               ? [{ label: "정규장 종가", price: detail.regularClose }]
               : []),
             {
-              label: quoteChangeBasisLabel(detail),
+              label: QUOTE_CHANGE_BASIS_LABEL,
               text: formatChangeRate(detail.changeRate, quoteChangeBaseline(detail) > 0),
             },
           ].map((stat) => (
             <div key={stat.label}>
-              <dt className="text-[10px] text-[var(--text-muted)]">{stat.label}</dt>
+              <dt className="text-micro text-[var(--text-muted)]">{stat.label}</dt>
               <dd
                 className={cn(
-                  "mt-0.5 text-xs font-medium",
+                  "mt-0.5 text-cell font-medium",
                   stat.label === "등락률"
                     ? cn("font-sans tabular-nums", trendTextClass(detail.changeRate))
                     : "text-[var(--text-primary)]",
@@ -242,7 +262,7 @@ export function StockDetailClient({ symbol }: { symbol: string }) {
         </dl>
 
         {detail.week52High > 0 && detail.week52Low > 0 && (
-          <div className="mt-2 flex items-center gap-2 pl-8 text-[10px] text-[var(--text-muted)]">
+          <div className="mt-2 flex items-center gap-2 pl-8 text-micro text-[var(--text-muted)]">
             <span className="shrink-0">52주</span>
             <StatPrice value={detail.week52Low} />
             <div className="relative h-1 min-w-[80px] flex-1 max-w-xs rounded-full bg-[var(--surface-elevated)]">
@@ -259,7 +279,7 @@ export function StockDetailClient({ symbol }: { symbol: string }) {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden xl:flex-row">
         <section className="flex min-h-[280px] min-w-0 flex-1 flex-col overflow-hidden">
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-1.5">
-            <h2 className="text-xs font-medium text-[var(--text-secondary)]">일봉 차트</h2>
+            <h2 className="text-cell font-medium text-[var(--text-secondary)]">일봉 차트</h2>
             <ChartZoomToolbar
               onZoomIn={() => chartRef.current?.zoomIn()}
               onZoomOut={() => chartRef.current?.zoomOut()}
@@ -278,6 +298,8 @@ export function StockDetailClient({ symbol }: { symbol: string }) {
               hasMore={hasMore}
               loadingMore={loadingMore}
               onLoadMore={loadMore}
+              /* 현재가 표는 위 헤더가 적는 값 그대로 — 사용자 지적 4 */
+              livePrice={detail.currentPrice}
             />
           </div>
         </section>

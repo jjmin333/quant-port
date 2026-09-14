@@ -7,14 +7,15 @@ import "time"
 //
 // Numbers and narrative are kept apart on purpose. Everything under Facts is
 // counted from data we already hold, so it is right whether or not the LLM ran;
-// Summary/Mood/Highlights/WatchPoints are the model's prose. When the LLM is
-// disabled or fails, Source falls back to "rules" and the prose comes from the
-// same rule-based assembly the front-end used to do inline — the card never
-// goes blank.
+// Summary/Mood/Highlights/WatchPoints are the model's prose. When this slot's
+// call cannot produce prose, Source steps down — first to llm_carry (an earlier
+// slot's narrative, this slot's numbers), then to rules (assembled from the
+// counts alone) — so the card never goes blank and never claims more than it
+// has.
 type NewsMarketBriefing struct {
 	Market      string    `json:"market"`
 	GeneratedAt time.Time `json:"generatedAt"`
-	Source      string    `json:"source"` // "llm" | "rules"
+	Source      string    `json:"source"` // BriefingSource*
 
 	// Summary is the full narrative. It is deliberately not truncated here —
 	// the card clamps it visually and the 전체 보기 modal shows all of it, so
@@ -27,18 +28,47 @@ type NewsMarketBriefing struct {
 	Highlights  []string `json:"highlights,omitempty"`
 	WatchPoints []string `json:"watchPoints,omitempty"`
 
+	// CarriedFrom is set only on BriefingSourceCarry rows: this slot's LLM call
+	// could not produce a narrative, so the sentences were inherited from an
+	// earlier slot and this is when *they* were written.
+	//
+	// GeneratedAt still moves forward on a carried row. A frozen timestamp
+	// reads as a stuck screen, and the number tiles beside the prose really are
+	// this slot's count — only the prose is inherited.
+	CarriedFrom *time.Time `json:"carriedFrom,omitempty"`
+
 	Facts NewsBriefingFacts `json:"facts"`
 }
+
+// Briefing sources, in descending order of what the row actually cost:
+//
+//   - llm       — this slot's own LLM call wrote the narrative.
+//   - llm_carry — the call failed; an earlier slot's narrative was carried
+//     forward with this slot's counted facts. See CarriedFrom.
+//   - rules     — no usable narrative anywhere, so the prose is assembled from
+//     the counts alone. Never wrong, just plainer.
+const (
+	BriefingSourceLLM   = "llm"
+	BriefingSourceCarry = "llm_carry"
+	BriefingSourceRules = "rules"
+)
 
 // NewsBriefingFacts is the counted, non-LLM half of a briefing. It is both the
 // prompt input and what the card's four number tiles display, so the sentence
 // and the tiles can never be reasoning from different figures.
 type NewsBriefingFacts struct {
-	Session       string                 `json:"session"` // 장중 | 장 마감 | 개장 전 | 휴장
-	ArticleCount  int                    `json:"articleCount"`
-	BreakingCount int                    `json:"breakingCount"`
-	Indices       []NewsBriefingIndex    `json:"indices,omitempty"`
-	TopMentioned  []NewsBriefingMention  `json:"topMentioned,omitempty"`
+	Session       string                `json:"session"` // 장중 | 장 마감 | 개장 전 | 휴장
+	ArticleCount  int                   `json:"articleCount"`
+	BreakingCount int                   `json:"breakingCount"`
+	Indices       []NewsBriefingIndex   `json:"indices,omitempty"`
+	TopMentioned  []NewsBriefingMention `json:"topMentioned,omitempty"`
+	// MentionSample is how many articles TopMentioned was actually counted over.
+	//
+	// ArticleCount 하나로는 못 적는다 — 그쪽은 프롬프트에 실은 기사 수(200)이고
+	// 언급 집계는 최근 1,000건을 본다. 각주가 「최근 1,000건 중 25건 이상」이라고
+	// 말하려면 그 1,000이 어디서 온 수인지가 응답에 있어야 한다. 요청한 표본이
+	// 아니라 **실제로 있었던 기사 수**다.
+	MentionSample int                    `json:"mentionSample,omitempty"`
 	Headlines     []NewsBriefingHeadline `json:"-"`
 	// LatestPublishedAt is the newest article the briefing saw. The scheduler
 	// compares it against the previous run to decide whether anything new has

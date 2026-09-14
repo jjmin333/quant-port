@@ -2,19 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   Globe,
   Briefcase,
-  Star,
+  Heart,
   Newspaper,
-  NotebookPen,
-  Target,
-  Settings,
+  NotepadText,
+  Crosshair,
   Shield,
-  Stamp,
   PenLine,
   Database,
   Table2,
+  Tags,
   Gauge,
   Sparkles,
   Calculator,
@@ -24,23 +24,45 @@ import {
   CalendarClock,
   CalendarRange,
 } from "lucide-react";
-import { isAdminNavVisible } from "@/lib/admin-features";
+import { isAdminNavVisible, isAdminSession } from "@/lib/admin-features";
+import { fetchAdminBatchHealth } from "@/lib/admin";
 import { useAuth } from "@/components/providers/auth-provider";
+import { useShellMode } from "@/components/providers/shell-mode-provider";
 import { cn } from "@/lib/utils";
 
+/*
+ * 메뉴 정의. `rail`은 **접힌 레일에서 아이콘 밑에 적을 이름**이다.
+ *
+ * # 레일에서 그룹 이름을 뺀 뒤의 규칙 (2026-09-03 사용자 결정)
+ *
+ * 예전에는 레일에도 그룹 이름(순위/뉴스/실적/…)이 남아 있었고, 그것이 「국내」·「해외」가
+ * 뉴스인지 실적인지 가르는 **유일한 단서**였다. 그래서 하위 이름을 두 글자로 줄여 쓸 수
+ * 있었다. 지금은 그 줄이 사라졌으므로 **하위 이름 자체가 스스로를 설명해야 한다** —
+ * 「국내」가 아니라 「국내 뉴스」, 「차트」가 아니라 「실시간 차트」다.
+ *
+ * 길어진 이름은 레일에서 **두 줄까지 접힌다**(`line-clamp-2`). 잘라 쓰면 「국내 뉴…」가
+ * 되어 옆 항목과 구분이 안 되는데, 이 칸에서 구분이 안 되는 것은 곧 못 쓰는 메뉴다.
+ * 「실시간 차트」는 한 줄에 들어간다 — 레일 폭을 그 글자에 맞춰 72px로 잡았다
+ * (`--sidebar-collapsed-width` 주석, 2026-09-04 사용자 요구).
+ *
+ * 2026-09-04부터는 **관리 그룹까지 포함해 레일에 그룹 이름이 하나도 없다**
+ * (사용자 결정 — 아래 `<p>`의 주석 참조).
+ *
+ * 전체 이름은 툴팁(`title`)과 펼친 상태가 그대로 들고 있다.
+ */
 const navGroups = [
   {
     label: "순위",
     items: [
-      { href: "/market", label: "실시간 차트", icon: LineChart },
-      { href: "/analysis", label: "AI 추천 랭킹", icon: Trophy },
+      { href: "/market", label: "실시간 차트", icon: LineChart, rail: "실시간 차트" },
+      { href: "/analysis", label: "AI 추천 랭킹", icon: Trophy, rail: "AI 랭킹" },
     ],
   },
   {
     label: "뉴스",
     items: [
-      { href: "/news/domestic", label: "국내 주식", icon: Newspaper },
-      { href: "/news/us", label: "해외 주식", icon: Globe },
+      { href: "/news/domestic", label: "국내 주식", icon: Newspaper, rail: "국내 뉴스" },
+      { href: "/news/us", label: "해외 주식", icon: Globe, rail: "해외 뉴스" },
     ],
   },
   {
@@ -49,18 +71,26 @@ const navGroups = [
     // 국내는 예정일이 없고 해외는 발표 시각이 있다.
     label: "실적",
     items: [
-      { href: "/earnings/domestic", label: "국내 실적 일정", icon: CalendarClock },
-      { href: "/earnings/us", label: "해외 실적 일정", icon: CalendarRange },
+      { href: "/earnings/domestic", label: "국내 실적 일정", icon: CalendarClock, rail: "국내 실적" },
+      { href: "/earnings/us", label: "해외 실적 일정", icon: CalendarRange, rail: "해외 실적" },
     ],
   },
   {
     label: "내 투자",
     items: [
-      { href: "/holdings", label: "내 포트폴리오", icon: Briefcase },
-      { href: "/watchlist", label: "관심 종목", icon: Star },
-      { href: "/stamps", label: "스탬프", icon: Stamp },
-      { href: "/journal", label: "메모장", icon: NotebookPen },
-      { href: "/targets", label: "목표가 관리", icon: Target },
+      { href: "/holdings", label: "내 포트폴리오", icon: Briefcase, rail: "보유" },
+      { href: "/watchlist", label: "관심 종목", icon: Heart, rail: "관심" },
+      /*
+       * 「목표가 예측」 = 옛 `스탬프` + `목표가 관리`.
+       *
+       * 두 메뉴는 같은 물건의 두 반쪽이었다 — 목표가는 「얼마까지」만 있어 채점이
+       * 안 됐고, 스탬프는 손절가·2차 목표가 없어 매매 계획이 못 됐다. 한 줄로
+       * 합치면서 사이드바에서도 한 자리만 쓴다. 옛 두 경로(`/stamps`·`/targets`)는
+       * 살아 있지만 메뉴에서는 내렸다 — 같은 기록이 세 군데에 나오면 어느 것이
+       * 진짜인지 사용자가 판단해야 한다.
+       */
+      { href: "/predictions", label: "목표가 예측", icon: Crosshair, rail: "목표가 예측" },
+      { href: "/journal", label: "메모장", icon: NotepadText, rail: "메모장" },
     ],
   },
   {
@@ -68,18 +98,22 @@ const navGroups = [
     // 순위표(리더보드)는 두지 않는다 — 작성자를 줄 세우면 리포트가 대회
     // 참가작이 되고, 대회는 보상 없이는 유지되지 않는다.
     label: "커뮤니티",
-    items: [{ href: "/reports", label: "투자 리포트", icon: PenLine }],
+    items: [{ href: "/reports", label: "투자 리포트", icon: PenLine, rail: "리포트" }],
   },
   {
+    // 그룹 이름이 레일에서 사라졌으므로 하위 이름이 스스로를 설명한다 — 앱 메뉴에
+    // 적용한 규칙(위 머리글)을 관리자 메뉴에도 그대로 편다. 「뉴스」 하나만 있으면
+    // 위쪽 「국내 뉴스」·「해외 뉴스」와 구분이 안 된다.
     label: "관리",
     items: [
-      { href: "/admin", label: "뉴스 관리", icon: Shield },
-      { href: "/admin/api", label: "API 관리", icon: Gauge },
-      { href: "/admin/llm", label: "LLM 모델 관리", icon: Sparkles },
-      { href: "/admin/score", label: "점수 관리", icon: Calculator },
-      { href: "/admin/batch", label: "배치 관리", icon: ListChecks },
-      { href: "/admin/cache", label: "캐시 관리", icon: Database },
-      { href: "/admin/database", label: "데이터베이스 관리", icon: Table2 },
+      { href: "/admin", label: "뉴스 관리", icon: Shield, rail: "뉴스 관리" },
+      { href: "/admin/api", label: "API 관리", icon: Gauge, rail: "API 관리" },
+      { href: "/admin/llm", label: "LLM 모델 관리", icon: Sparkles, rail: "LLM 관리" },
+      { href: "/admin/score", label: "점수 관리", icon: Calculator, rail: "점수 관리" },
+      { href: "/admin/batch", label: "배치 관리", icon: ListChecks, rail: "배치 관리" },
+      { href: "/admin/aliases", label: "별칭 관리", icon: Tags, rail: "별칭 관리" },
+      { href: "/admin/cache", label: "캐시 관리", icon: Database, rail: "캐시 관리" },
+      { href: "/admin/database", label: "데이터베이스 관리", icon: Table2, rail: "DB 관리" },
     ],
   },
 ];
@@ -104,31 +138,100 @@ function activeNavHref(pathname: string): string {
 
 type SidebarNavProps = {
   onNavigate?: () => void;
-  collapsed?: boolean;
 };
 
-function SidebarNav({ onNavigate, collapsed = false }: SidebarNavProps) {
+/*
+ * 접힘/펼침 스타일은 `collapsed` prop 대신 조상의 `data-sidebar-state`로만 분기한다.
+ * 데스크톱 레일(접힘)과 모바일 드로어(항상 펼침)가 동시에 DOM에 있을 때, 자식마다
+ * cn(collapsed ? … : …)을 쓰면 같은 태그에 서로 다른 className이 박혀 hydration이
+ * 깨진다. 자식 className은 고정하고 group-data로만 모양을 바꾼다.
+ */
+/*
+ * 배치 감시 뱃지 — 「배치 관리」 항목에 붙는 숫자.
+ *
+ * 콘솔 배너만으로는 **그 화면을 연 사람에게만** 닿는다. 실제로 놓친 사고는 아무도
+ * 그 화면을 열지 않아서 생겼으므로, 관리자가 어느 화면에 있든 보이는 자리가 하나는
+ * 있어야 한다.
+ *
+ * 관리자에게만, 5분마다. 실패는 삼킨다 — 뱃지 하나 때문에 사이드바가 시끄러워질
+ * 이유가 없고, 값이 없으면 그냥 안 그린다.
+ */
+const BATCH_ALERT_POLL_MS = 5 * 60 * 1000;
+
+function useBatchAlertCount(session: ReturnType<typeof useAuth>["session"]): number {
+  const [count, setCount] = useState(0);
+  const isAdmin = isAdminSession(session);
+
+  useEffect(() => {
+    // 관리자가 아니면 아무것도 하지 않는다 — 「배치 관리」 항목 자체가
+    // isAdminNavVisible에서 이미 걸러지므로 남은 값이 화면에 나갈 일이 없다.
+    if (!isAdmin) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const health = await fetchAdminBatchHealth();
+        if (cancelled) return;
+        // 감시 자체가 멈춘 것도 한 건으로 센다 — 그때의 「0건」은 정상이라는 뜻이
+        // 아니라 아무도 안 보고 있다는 뜻이다.
+        const unhealthy = health?.report?.unhealthy ?? 0;
+        setCount(unhealthy + (health?.watchdogStale ? 1 : 0));
+      } catch {
+        if (!cancelled) setCount(0);
+      }
+    };
+    void load();
+    const timer = setInterval(() => void load(), BATCH_ALERT_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [isAdmin]);
+
+  return count;
+}
+
+function SidebarNav({ onNavigate }: SidebarNavProps) {
   const pathname = usePathname();
   const { session } = useAuth();
   const activeHref = activeNavHref(pathname);
+  const batchAlerts = useBatchAlertCount(session);
 
   return (
-    <>
-      <nav className={cn("flex-1 overflow-y-auto py-3", collapsed ? "px-1" : "px-2")}>
-        {navGroups
-          .map((group) => ({
-            ...group,
-            items: group.items.filter((item) => isAdminNavVisible(item.href, session)),
-          }))
-          .filter((group) => group.items.length > 0)
-          .map((group) => (
-          <div key={group.label} className={cn(collapsed ? "mb-3" : "mb-4")}>
+    <nav
+      className={cn(
+        "flex-1 overflow-y-auto py-3",
+        "group-data-[sidebar-state=collapsed]/sidebar:px-1 group-data-[sidebar-state=open]/sidebar:px-2",
+      )}
+    >
+      {navGroups
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((item) => isAdminNavVisible(item.href, session)),
+        }))
+        .filter((group) => group.items.length > 0)
+        .map((group) => (
+          <div
+            key={group.label}
+            className="mb-4 group-data-[sidebar-state=collapsed]/sidebar:mb-3"
+          >
+            {/*
+              접힌 레일에서는 그룹 이름을 **하나도 남기지 않는다**
+              (2026-09-04 사용자 결정: 「상위 메뉴명은 모두 제거」).
+
+              2026-09-03에 앱 메뉴의 그룹 이름을 먼저 걷었고, 관리 그룹만
+              `railLabel`로 남겨 뒀다 — 하위가 「뉴스」·「API」처럼 짧은 관리자 용어라
+              그 줄이 「무엇의 관리인가」를 대신 말한다고 봤기 때문이다. 그런데 그
+              한 줄만 남으니 레일 중간에 홀로 선 제목이 되어, 걷어낸 이유(세로 공간과
+              시선의 단순함)를 그 자리에서 되돌리고 있었다. 관리자 메뉴가 무엇인지는
+              방패·게이지 같은 아이콘과 툴팁이 말한다.
+
+              전체 이름은 펼친 상태와 `title` 툴팁이 그대로 들고 있다.
+            */}
             <p
               className={cn(
                 "font-semibold text-muted-foreground",
-                collapsed
-                  ? "mb-1 text-center text-[9px] tracking-tight"
-                  : "mb-1.5 whitespace-nowrap px-1.5 text-[10px] uppercase tracking-wider",
+                "group-data-[sidebar-state=open]/sidebar:mb-1.5 group-data-[sidebar-state=open]/sidebar:block group-data-[sidebar-state=open]/sidebar:whitespace-nowrap group-data-[sidebar-state=open]/sidebar:px-1.5 group-data-[sidebar-state=open]/sidebar:text-micro group-data-[sidebar-state=open]/sidebar:uppercase group-data-[sidebar-state=open]/sidebar:tracking-wider",
+                "group-data-[sidebar-state=collapsed]/sidebar:hidden",
               )}
             >
               {group.label}
@@ -151,18 +254,47 @@ function SidebarNav({ onNavigate, collapsed = false }: SidebarNavProps) {
                         onNavigate?.();
                       }}
                       title={item.label}
+                      aria-label={item.label}
                       className={cn(
-                        "flex items-center rounded-lg text-sm transition-colors",
-                        collapsed
-                          ? "justify-center px-1 py-1.5"
-                          : "gap-2 whitespace-nowrap px-2 py-1.5",
+                        "flex rounded-lg text-sm transition-colors",
+                        "group-data-[sidebar-state=collapsed]/sidebar:flex-col group-data-[sidebar-state=collapsed]/sidebar:items-center group-data-[sidebar-state=collapsed]/sidebar:gap-0.5 group-data-[sidebar-state=collapsed]/sidebar:px-0.5 group-data-[sidebar-state=collapsed]/sidebar:py-1.5",
+                        "group-data-[sidebar-state=open]/sidebar:items-center group-data-[sidebar-state=open]/sidebar:gap-2 group-data-[sidebar-state=open]/sidebar:whitespace-nowrap group-data-[sidebar-state=open]/sidebar:px-2 group-data-[sidebar-state=open]/sidebar:py-1.5",
                         active
                           ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
                           : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
                       )}
                     >
                       <Icon className="h-4 w-4 shrink-0" />
-                      {!collapsed && item.label}
+                      {/*
+                        레일 이름은 **두 줄까지** 접는다. 그룹 이름이 사라진 뒤로 이
+                        글자가 메뉴를 가르는 유일한 단서라, 한 줄로 잘라 「국내 뉴…」가
+                        되면 옆 항목과 구분이 안 된다. `break-keep`은 한국어를 낱말
+                        단위로 끊어 「실시간 차트」가 「실시간 / 차트」로 나뉘게 한다
+                        (기본값은 글자 아무 데서나 끊어 「실시간 차 / 트」가 된다).
+                      */}
+                      <span
+                        className={cn(
+                          "line-clamp-2 w-full break-keep text-center text-[10px] leading-tight",
+                          "group-data-[sidebar-state=open]/sidebar:hidden",
+                        )}
+                      >
+                        {item.rail}
+                      </span>
+                      <span className="hidden group-data-[sidebar-state=open]/sidebar:inline">
+                        {item.label}
+                      </span>
+                      {item.href === "/admin/batch" && batchAlerts > 0 && (
+                        <span
+                          aria-label={`제때 돌지 않은 배치 ${batchAlerts}개`}
+                          className={cn(
+                            "ml-auto shrink-0 rounded-full bg-[var(--danger)] px-1.5 text-[10px] font-semibold leading-[18px] text-white",
+                            // 접힌 레일에서는 글자 옆 자리가 없다 — 아이콘 아래에 붙인다.
+                            "group-data-[sidebar-state=collapsed]/sidebar:ml-0",
+                          )}
+                        >
+                          {batchAlerts}
+                        </span>
+                      )}
                     </Link>
                   </li>
                 );
@@ -170,23 +302,7 @@ function SidebarNav({ onNavigate, collapsed = false }: SidebarNavProps) {
             </ul>
           </div>
         ))}
-      </nav>
-
-      <div className={cn("shrink-0 border-t border-sidebar-border", collapsed ? "p-1" : "p-2")}>
-        <Link
-          href="/settings"
-          onClick={onNavigate}
-          title="설정"
-          className={cn(
-            "flex items-center rounded-lg py-2 text-xs text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-            collapsed ? "justify-center px-1 py-1.5" : "gap-2 whitespace-nowrap px-2",
-          )}
-        >
-          <Settings className="h-4 w-4 shrink-0" />
-          {!collapsed && "설정"}
-        </Link>
-      </div>
-    </>
+    </nav>
   );
 }
 
@@ -196,26 +312,40 @@ type SidebarProps = {
 };
 
 export function Sidebar({ open, onClose }: SidebarProps) {
+  const { isCompact } = useShellMode();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const handleNavigate = () => {
     if (window.matchMedia("(max-width: 1023px)").matches) {
       onClose();
     }
   };
 
+  /*
+   * SSR·첫 페인트에는 모바일 드로어를 그대로 둔다(모바일에서 lg:hidden aside가 유일한
+   * 보이는 네비). hydration이 끝난 뒤 데스크톱이면 드로어 트리를 걷어 중복 nav를 없앤다.
+   */
+  const showMobileDrawer = !mounted || isCompact;
+
   return (
     <>
       <div
         className={cn(
-          "hidden h-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-300 ease-in-out lg:flex",
+          "group/sidebar hidden h-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-300 ease-in-out lg:flex",
           open ? "w-[var(--sidebar-width)]" : "w-[var(--sidebar-collapsed-width)]",
         )}
+        data-sidebar-state={open ? "open" : "collapsed"}
       >
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <SidebarNav collapsed={!open} />
+          <SidebarNav />
         </div>
       </div>
 
-      {open && (
+      {showMobileDrawer && open && (
         <button
           type="button"
           aria-label="메뉴 닫기"
@@ -224,19 +354,22 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         />
       )}
 
-      <aside
-        className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-[var(--sidebar-width)] min-w-[var(--sidebar-width)] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-300 ease-in-out lg:hidden",
-          open ? "translate-x-0" : "-translate-x-full",
-        )}
-      >
-        <div className="flex h-14 shrink-0 items-center border-b border-sidebar-border px-4">
-          <span className="whitespace-nowrap text-sm font-bold tracking-[0.18em] text-sidebar-foreground">
-            QUANT PORT
-          </span>
-        </div>
-        <SidebarNav onNavigate={handleNavigate} />
-      </aside>
+      {showMobileDrawer && (
+        <aside
+          className={cn(
+            "group/sidebar fixed inset-y-0 left-0 z-50 flex w-[var(--sidebar-width)] min-w-[var(--sidebar-width)] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-300 ease-in-out lg:hidden",
+            open ? "translate-x-0" : "-translate-x-full",
+          )}
+          data-sidebar-state="open"
+        >
+          <div className="flex h-14 shrink-0 items-center border-b border-sidebar-border px-4">
+            <span className="whitespace-nowrap text-sm font-bold tracking-[0.18em] text-sidebar-foreground">
+              QUANT PORT
+            </span>
+          </div>
+          <SidebarNav onNavigate={handleNavigate} />
+        </aside>
+      )}
     </>
   );
 }

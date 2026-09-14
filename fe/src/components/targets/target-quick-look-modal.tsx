@@ -87,7 +87,7 @@ export function TargetQuickLookModal({
             )}
             {target.note && (
               <QuickLookSection title="메모">
-                <p className="text-[11px] leading-relaxed text-muted-foreground">{target.note}</p>
+                <p className="text-cell leading-relaxed text-muted-foreground">{target.note}</p>
               </QuickLookSection>
             )}
           </>

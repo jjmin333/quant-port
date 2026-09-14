@@ -46,6 +46,48 @@ func newestTradePrice(trades []model.TradeTick) (float64, bool) {
 	return best.Price, true
 }
 
+/*
+newestTradePriceAt — `newestTradePrice`와 같은 값에 **그 체결의 시각**을 붙인다.
+
+시각이 필요한 곳은 하나다: 배치 가격 캐시와 체결 중 어느 쪽이 새것인지 고를 때
+(`resolveBestLivePrice`). 시각을 못 읽은 체결은 zero time으로 나가고, 호출부는
+그걸 「비교할 수 없다」로 다뤄 예전 순서(체결 우선)를 그대로 쓴다 — 시각이 없다는
+이유로 값을 버리면 시각 형식이 다른 상류 하나가 화면 전체를 멈춘다.
+*/
+func newestTradePriceAt(trades []model.TradeTick) (float64, time.Time, bool) {
+	if len(trades) == 0 {
+		return 0, time.Time{}, false
+	}
+	var best model.TradeTick
+	var bestT time.Time
+	found := false
+	for _, t := range trades {
+		if t.Price <= 0 {
+			continue
+		}
+		ts := parseQuoteCandleTime(t.Time)
+		if ts.IsZero() {
+			if !found {
+				best = t
+				found = true
+			}
+			continue
+		}
+		if !found || bestT.IsZero() || ts.After(bestT) {
+			best = t
+			bestT = ts
+			found = true
+		}
+	}
+	if !found {
+		return 0, time.Time{}, false
+	}
+	if bestT.IsZero() {
+		return best.Price, time.Time{}, true
+	}
+	return best.Price, bestT.UTC(), true
+}
+
 func orderBookMid(book model.OrderBook) (float64, bool) {
 	var bestBid, bestAsk float64
 	for _, b := range book.Bids {
@@ -102,20 +144,31 @@ func (s *QuotesService) cachedOrderBookForPrice(ctx context.Context, symbol stri
 	return &book
 }
 
+/*
+형성봉 종가만 필요한 자리 둘. **작은 키만 읽는다**(`cacheCandleSnapshot` 주석).
+
+예전에는 스냅샷을 통째로 받아 `Forming.Close` 하나만 꺼냈다. 이 둘은 현재가를
+해석하는 경로라 종목마다 매 틱 불리므로, 수백 봉짜리 JSON을 그때마다 왕복시킬
+이유가 없었다.
+*/
 func (s *QuotesService) lastIntradayFormingClose(ctx context.Context, symbol string) (float64, bool) {
-	snap, ok := s.loadCandleSnapshot(ctx, symbol, model.Interval1m)
-	if !ok || snap.Forming == nil || snap.Forming.Close <= 0 {
-		return 0, false
-	}
-	return snap.Forming.Close, true
+	return s.formingCloseFor(ctx, symbol, model.Interval1m)
 }
 
 func (s *QuotesService) lastDailyFormingClose(ctx context.Context, symbol string) (float64, bool) {
-	snap, ok := s.loadCandleSnapshot(ctx, symbol, model.Interval1d)
-	if !ok || snap.Forming == nil || snap.Forming.Close <= 0 {
+	return s.formingCloseFor(ctx, symbol, model.Interval1d)
+}
+
+func (s *QuotesService) formingCloseFor(
+	ctx context.Context,
+	symbol string,
+	interval model.CandleInterval,
+) (float64, bool) {
+	forming, ok := s.loadFormingCandle(ctx, symbol, interval)
+	if !ok || forming == nil || forming.Close <= 0 {
 		return 0, false
 	}
-	return snap.Forming.Close, true
+	return forming.Close, true
 }
 
 func newestCandleByTime(candles []model.Candle) (model.Candle, bool) {
@@ -255,8 +308,44 @@ func formatRankingPrice(v float64) string {
 	return strconv.FormatFloat(v, 'f', -1, 64)
 }
 
-// ensurePriceMicrostructure warms trades/orderbook caches for cold symbols during live sessions.
+/*
+ensurePriceMicrostructure — 캐시가 빈 종목의 체결·호가를 업스트림에서 미리 받아 둔다.
+
+# 목록에서는 아무것도 하지 않는다 (2026-09-11 사용자 요청 7)
+
+이 함수는 종목 하나에 `/trades` + `/orderbook` **2호출**을 쓴다. 상세 화면 한 종목에는
+맞지만, 목록은 항목 수만큼 이 경로를 타므로 호출이 **목록 길이에 그대로 비례**한다.
+
+같은 사고가 이미 한 번 있었고 `quotes_stocks.go`(`/stocks` 목록)에서 고쳤다 — 그 주석에
+실측이 남아 있다: limit 5/10/20/40에 0.18/1.9/6.4/**58초**(Toss 한도에 걸리며 초선형으로
+나빠진다). 그런데 그때 고친 것은 **그 호출 지점 하나**였고, `/quotes/batch`는 다른 문으로
+같은 방에 들어와 있었다:
+
+	BatchQuoteSummariesResult → EnsureQuoteDetail → ensureQuoteDetailCached
+	  → loadQuoteDetailPersisted → finalizeQuoteDetail → ensurePriceMicrostructure
+
+`ensureQuoteDetailCached`에는 `if !listMode(ctx)` 가드가 있는데, 그것이 막는 것은
+`refreshTerminalSnapshot` 한 분기뿐이다. **캐시·DB에서 찾은 흔한 경우**는 그 가드를
+지나 `finalizeQuoteDetail`로 가고, 거기서 이 함수가 불린다.
+
+실측(2026-09-11, 마감 후 국내 뉴스 화면 1회 진입): `/quotes/batch` 한 요청이
+`rate-limit exceeded`를 **90건**(orderbook 50 · trades 40) 만들었다. 그때 폴러의
+터미널 집합은 **0**이었다 — 폴러가 아니라 이 경로다. 호출 스택으로 확인했다.
+
+# 그래서 가드를 호출 지점이 아니라 **여기** 둔다
+
+호출 지점은 셋이고(`finalizeQuoteDetail` · `finalizeTerminalSnapshot` · 직접 호출)
+앞으로 늘어난다. 지점마다 가드를 복사하면 이번처럼 하나가 빠지고, 빠진 것은 화면이
+아니라 상류 한도에서만 드러난다. 목록이 체결·호가를 그리지 않는다는 사실은 이 함수가
+할 일 자체를 없애므로, 판단은 여기 한 곳에 있는 게 맞다.
+
+상세 화면은 영향이 없다 — `listMode`는 목록 경로(`BatchQuoteSummariesResult`·`/stocks`·
+`/rankings/prices`)만 켠다.
+*/
 func (s *QuotesService) ensurePriceMicrostructure(ctx context.Context, symbol string) {
+	if listMode(ctx) {
+		return
+	}
 	if !s.shouldLivePollSymbol(ctx, symbol) {
 		return
 	}
@@ -290,6 +379,36 @@ func (s *QuotesService) resolveBestLivePrice(
 ) float64 {
 	session := s.marketSessionFor(ctx, symbol)
 	if quoteSessionHasLiveMicrostructure(session) {
+		/*
+			**목록에서는 배치 가격 캐시로 끝낸다 — 체결·호가를 보지 않는다.**
+
+			아래 `cachedTradesForPrice`·`cachedOrderBookForPrice`는 Redis가 비면
+			**MySQL로 내려간다**(`loadTradesPersisted`·`loadOrderBookPersisted`).
+			그런데 랭킹 종목은 상세 화면을 여는 종목이 아니라 그 Redis 캐시가 늘
+			비어 있다 — 즉 목록 한 번이 종목마다 DB를 때린다. 실측(2026-09-02,
+			`/rankings/prices` 100종목): **마감 세션 2 SELECT vs 장중 43 SELECT.**
+			그 차이가 통째로 이 두 줄이다.
+
+			**목록에 그 정밀도는 필요 없다.** 배치 가격 캐시는 1초 주기 폴러가 채우고
+			웹소켓 체결도 같은 키에 쓰므로(`applyStreamPrice`), 구독 중인 종목은 체결
+			순간 값이 이미 여기 있다. 체결 목록을 따로 읽어도 **같은 프레임에서 나온
+			같은 값**이다.
+
+			상세 화면(`!listMode`)은 이 분기를 타지 않는다 — 거기서는 체결가가 현재가이자
+			형성봉의 재료라 아래 순서를 그대로 쓴다.
+		*/
+		if listMode(ctx) {
+			// 같은 요청이 이미 배치로 받아 둔 값이 있으면 그것부터 — Redis 왕복이
+			// 종목 수만큼 더 붙는 것을 막는다(withListPrices 참조).
+			if live, ok := listPrice(ctx, symbol); ok {
+				return live
+			}
+			if s.marketStore != nil {
+				if live, ok := s.marketStore.GetPrice(ctx, symbol); ok && live > 0 {
+					return live
+				}
+			}
+		}
 		if len(trades) == 0 {
 			trades = s.cachedTradesForPrice(ctx, symbol)
 		}
@@ -297,8 +416,61 @@ func (s *QuotesService) resolveBestLivePrice(
 			book = s.cachedOrderBookForPrice(ctx, symbol)
 		}
 
-		if price, ok := newestTradePrice(trades); ok {
+		/*
+			**배치 가격 캐시가 기준이고, 체결은 그보다 새로울 때만 이긴다**
+			(2026-09-04 사용자 지적 1 「데이터 통일성」).
+
+			# 무엇이 갈라져 있었나
+
+			증상은 「AI 랭킹 목록 $11.36 · 같은 종목 상세 $11.39」였다. 목록(listMode)은
+			위에서 배치 가격 캐시로 끝내는데, 상세는 여기서 **체결 → 호가중간 →
+			형성봉 → 배치 캐시** 순으로 내려갔다. 앞의 셋이 하나라도 값을 내면 배치
+			캐시는 읽히지도 않는다.
+
+			프리·애프터 세션에서 그 앞 셋이 전부 **정규장의 잔해**다. 체결 캐시에는
+			정규장 마지막 체결이 남아 있고, 형성봉도 정규장 봉이다. 배치 가격만 시간외
+			호가를 따라 계속 움직이므로, 상세는 낡은 값을 「현재가」로 붙잡고 다음
+			정규장까지 놓지 않았다.
+
+			실측(2026-09-04 21:13 KST, 미국 프리마켓): FDX 상세 323.17 · 목록 324.31이
+			**3회 표본 내내 고정**이었고 그 종목의 체결 목록은 비어 있었다 — 즉 그
+			갭은 체결이 아니라 그 아래 두 줄(호가중간·형성봉)이 만들고 있었다.
+
+			# 왜 순서를 뒤집는가
+
+			배치 가격 캐시는 **1초 주기 폴러가 채우고 웹소켓 체결도 같은 키에 쓴다**
+			(`applyStreamPrice`). 즉 이 캐시는 파생값이 아니라 **가격이 모이는 곳**이고,
+			목록 화면이 이미 그것 하나만 읽는다. 호가중간은 거래된 값이 아니라 매수·매도
+			호가의 산술 평균이고, 형성봉은 캔들에서 되짚은 값이다. 둘 다 「진짜 가격이
+			없을 때의 대용품」이지 캐시보다 나은 값이 아니다.
+
+			체결만은 캐시보다 앞설 수 있다. 정규장 중 구독이 살아 있는 종목은 체결
+			프레임이 먼저 도착하고 캐시 쓰기가 한 박자 뒤다. 그래서 체결은 **버리지
+			않고 시각으로 견준다** — 어느 쪽이 원천인지가 아니라 어느 쪽이 새것인지가
+			질문이다. 시각을 못 구하면(캐시 미스·봉투 없는 옛 값) 예전대로 체결이 이긴다.
+
+			# 남은 폴백의 순서
+
+			캐시가 아예 비었을 때만 호가중간·형성봉·랭킹 스냅샷으로 내려간다. 랭킹
+			스냅샷을 맨 뒤에 두는 이유는 그것이 **5분 주기**이기 때문이다(실측
+			2026-09-02: `/rankings/prices`가 6초 간격 두 번 모두 SPY 761.68인데 같은
+			순간 배치 캐시는 761.36 → 761.43로 움직이고 있었다).
+
+			`GetPriceAt`/`GetPrice`는 **읽기만 한다.** `EnsurePrice`와 달리 캐시가
+			비어도 업스트림으로 내려가지 않으므로 목록에서 호출해도 안전하다.
+		*/
+		cached, cachedAt, hasCached := 0.0, time.Time{}, false
+		if s.marketStore != nil {
+			cached, cachedAt, hasCached = s.marketStore.GetPriceAt(ctx, symbol)
+		}
+		if price, at, ok := newestTradePriceAt(trades); ok {
+			if hasCached && !at.IsZero() && cachedAt.After(at) {
+				return cached
+			}
 			return price
+		}
+		if hasCached {
+			return cached
 		}
 		if book != nil {
 			if mid, ok := orderBookMid(*book); ok {
@@ -336,11 +508,24 @@ func (s *QuotesService) resolveBestLivePrice(
 			return live
 		}
 	}
-	if price, ok := s.lastDailyBarClose(ctx, symbol); ok {
-		return price
-	}
+	/*
+		**마감 세션에서 그날의 값은 「시간외까지 끝난 뒤의 최종가」다.**
+
+		`fallback`은 호출부가 배치로 받아 둔 마지막 체결가다(목록은
+		`fetchPriceMap`, 상세는 위의 `EnsurePrice`). 저장된 1일봉보다 **뒤에**
+		두면 정규장 종가가 이기는데, 그 둘은 시간외에 거래가 있었던 날 갈린다 —
+		실측(2026-09-01 마감 후 SK하이닉스): 1일봉 1,692,000 vs 최종가
+		1,652,000이라 **목록은 +2.36%, 상세는 −0.06%**로 같은 종목이 두 값으로
+		보였다.
+
+		그래서 배치 가격을 먼저 본다. 1일봉은 그 값이 없을 때의 폴백으로 남는다
+		(가격 캐시가 비었고 업스트림도 못 부르는 목록 경로).
+	*/
 	if fallback > 0 {
 		return fallback
+	}
+	if price, ok := s.lastDailyBarClose(ctx, symbol); ok {
+		return price
 	}
 	return 0
 }

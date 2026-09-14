@@ -55,7 +55,7 @@ export function BulkRegisterDialog({
       <DialogContent className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
         <DialogHeader className="border-b px-4 py-3 pr-10 text-left">
           <DialogTitle className="text-base">평가금액 추이 일괄 등록</DialogTitle>
-          <DialogDescription className="text-xs leading-relaxed">
+          <DialogDescription className="text-cell leading-relaxed">
             보유 종목별 매수일을 지정해 매매 이력을 등록합니다. 평단·수량은 현재 보유
             정보를 사용하며, 이미 등록된 종목은 날짜만 수정됩니다.
           </DialogDescription>
@@ -63,15 +63,15 @@ export function BulkRegisterDialog({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
           {drafts.length === 0 ? (
-            <p className="py-6 text-center text-[11px] text-muted-foreground">
+            <p className="py-6 text-center text-cell text-muted-foreground">
               등록할 종목이 없습니다.
             </p>
           ) : (
             <ul className="space-y-2">
               {drafts.map((d) => (
                 <li key={d.symbol} className="rounded-lg border p-2.5">
-                  <p className="text-xs font-medium">{d.name || d.symbol}</p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                  <p className="text-cell font-medium">{d.name || d.symbol}</p>
+                  <p className="mt-0.5 text-micro text-muted-foreground">
                     {d.quantity}주 ·{" "}
                     {d.avgPrice != null
                       ? formatPrice(d.avgPrice, d.currency)
@@ -91,11 +91,11 @@ export function BulkRegisterDialog({
           )}
 
           {skipped.length > 0 && (
-            <p className="mt-3 text-[10px] text-muted-foreground">
+            <p className="mt-3 text-micro text-muted-foreground">
               평단이 없어 제외: {skipped.map((h) => h.name || h.symbol).join(", ")}
             </p>
           )}
-          {error && <p className="mt-2 text-[11px] text-[var(--danger)]">{error}</p>}
+          {error && <p className="mt-2 text-cell text-[var(--danger)]">{error}</p>}
         </div>
 
         <div className="flex gap-2 border-t px-4 py-3">

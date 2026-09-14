@@ -19,6 +19,8 @@ import {
 import { cn } from "@/lib/utils";
 import { StampSparkline } from "@/components/stamps/stamp-sparkline";
 import { StampTargetGauge } from "@/components/stamps/stamp-target-gauge";
+import { PriceDisplay } from "@/components/ui/price-display";
+import { buttonVariants } from "@/components/ui/button";
 
 function currencyOf(stamp: Stamp): "KRW" | "USD" {
   return stamp.currency === "USD" ? "USD" : "KRW";
@@ -71,7 +73,7 @@ export function StampDetail({
     <div className="space-y-4">
       {stamp.due && !stamp.opened && !readOnly && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--brand)] bg-[var(--brand-muted)] px-3 py-2">
-          <span className="text-xs text-[var(--text-primary)]">
+          <span className="text-cell text-[var(--text-primary)]">
             {stamp.targetHit
               ? `${formatDateKST(stamp.targetHit.date)} 장중 목표가에 도달해 적중으로 종료됐습니다.`
               : "검증 기간이 끝났습니다 — 결과를 확인하면 개봉 대기에서 사라집니다."}
@@ -79,7 +81,7 @@ export function StampDetail({
           <button
             type="button"
             onClick={onOpen}
-            className="ml-auto rounded-md bg-[var(--brand)] px-2.5 py-1 text-[11px] font-medium text-white"
+            className={cn(buttonVariants({ variant: "default", size: "xs" }), "ml-auto bg-[var(--brand)] text-white")}
           >
             개봉 확인
           </button>
@@ -128,7 +130,7 @@ export function StampDetail({
           </div>
           <StampTargetGauge stamp={stamp} showTargetPrice />
         </div>
-        <p className="mt-2 border-t border-[var(--border)] pt-1.5 text-[10px] text-[var(--text-muted)]">
+        <p className="mt-2 border-t border-[var(--border)] pt-1.5 text-micro text-[var(--text-muted)]">
           예상 주가와 검증 기간은 스탬프 직후에만 고칠 수 있습니다 — 결과를 보고 고칠 수 있으면
           적중률이 아무 뜻도 갖지 못합니다.
         </p>
@@ -137,7 +139,7 @@ export function StampDetail({
       {/* 당시 vs 현재 */}
       <div className="grid gap-3 md:grid-cols-2">
         <SidePanel title={`당시 · ${formatDateTimeKST(stamp.stampedAt)}`}>
-          <MetricRow label="주가" value={formatPrice(stamp.price, currency)} />
+          <MetricRow label="주가" value={<PriceDisplay value={stamp.price} currency={currency} size="inherit" />} />
           <MetricRow
             label="등락률"
             value={stamp.changeRate === undefined ? "—" : formatPercent(stamp.changeRate)}
@@ -201,7 +203,7 @@ export function StampDetail({
               const delta = then !== undefined && now !== undefined ? now - then : undefined;
               return (
                 <div key={axis} className="flex items-center gap-2">
-                  <span className="w-14 shrink-0 text-[11px] text-[var(--text-muted)]">
+                  <span className="w-14 shrink-0 text-cell text-[var(--text-muted)]">
                     {SCORE_AXIS_LABELS[axis]}
                   </span>
                   <div className="relative h-1.5 min-w-0 flex-1 rounded-full bg-[var(--surface-elevated)]">
@@ -218,7 +220,7 @@ export function StampDetail({
                       />
                     )}
                   </div>
-                  <span className="w-20 shrink-0 text-right text-[11px] tabular-nums text-[var(--text-secondary)]">
+                  <span className="w-20 shrink-0 text-right text-cell tabular-nums text-[var(--text-secondary)]">
                     {then === undefined ? "-" : Math.round(then)}
                     {" → "}
                     {now === undefined ? "-" : Math.round(now)}
@@ -246,7 +248,7 @@ export function StampDetail({
       {/* 기간별 수익률 */}
       <SidePanel title="기간별 수익률">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[420px] text-[11px]">
+          <table className="w-full min-w-[420px] text-cell">
             <thead>
               <tr className="text-left text-[var(--text-muted)]">
                 <th className="py-1 font-medium">구간</th>
@@ -283,11 +285,11 @@ export function StampDetail({
       <div className="grid gap-3 md:grid-cols-2">
         <SidePanel title="당시 뉴스">
           {stamp.context.news.length === 0 ? (
-            <p className="text-[11px] text-[var(--text-muted)]">기록된 뉴스가 없습니다.</p>
+            <p className="text-cell text-[var(--text-muted)]">기록된 뉴스가 없습니다.</p>
           ) : (
             <ul className="space-y-1.5">
               {stamp.context.news.map((n, i) => (
-                <li key={n.id ?? i} className="text-[11px]">
+                <li key={n.id ?? i} className="text-cell">
                   {n.url ? (
                     <a
                       href={n.url}
@@ -313,11 +315,11 @@ export function StampDetail({
 
         <SidePanel title="당시 시장">
           {stamp.context.indices.length === 0 ? (
-            <p className="text-[11px] text-[var(--text-muted)]">기록된 지수가 없습니다.</p>
+            <p className="text-cell text-[var(--text-muted)]">기록된 지수가 없습니다.</p>
           ) : (
             <ul className="space-y-1">
               {stamp.context.indices.map((idx) => (
-                <li key={idx.id} className="flex items-center justify-between text-[11px]">
+                <li key={idx.id} className="flex items-center justify-between text-cell">
                   <span className="text-[var(--text-muted)]">{idx.name || idx.id}</span>
                   <span className="tabular-nums text-[var(--text-secondary)]">
                     {idx.value.toLocaleString("ko-KR")}
@@ -332,7 +334,7 @@ export function StampDetail({
           {stamp.context.disclosures.length > 0 && (
             <ul className="mt-2 space-y-1 border-t border-[var(--border)] pt-2">
               {stamp.context.disclosures.map((d, i) => (
-                <li key={`${d.date}-${i}`} className="text-[11px] text-[var(--text-secondary)]">
+                <li key={`${d.date}-${i}`} className="text-cell text-[var(--text-secondary)]">
                   <span className="text-[var(--text-muted)]">{d.date} 공시 · </span>
                   {d.event}
                 </li>
@@ -344,14 +346,14 @@ export function StampDetail({
 
       {stamp.context.aiSummary && (
         <SidePanel title="당시 AI 요약">
-          <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-[var(--text-secondary)]">
+          <p className="whitespace-pre-wrap text-read text-[var(--text-secondary)]">
             {stamp.context.aiSummary}
           </p>
         </SidePanel>
       )}
 
       {stamp.context.dataGaps && stamp.context.dataGaps.length > 0 && (
-        <p className="text-[10px] text-[var(--text-muted)]">
+        <p className="text-micro text-[var(--text-muted)]">
           이 스탬프에 기록되지 않은 항목: {stamp.context.dataGaps.map(dataGapLabel).join(", ")} — 당시
           데이터가 없어 비워 두었습니다.
         </p>
@@ -361,13 +363,13 @@ export function StampDetail({
       {readOnly ? (
         stamp.note ? (
           <SidePanel title="메모">
-            <p className="text-[11px] text-[var(--text-secondary)]">{stamp.note}</p>
+            <p className="text-cell text-[var(--text-secondary)]">{stamp.note}</p>
           </SidePanel>
         ) : null
       ) : (
       <SidePanel title="메모와 확신도">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] text-[var(--text-muted)]">확신도</span>
+          <span className="text-micro text-[var(--text-muted)]">확신도</span>
           {[1, 2, 3, 4, 5].map((v) => (
             <button
               key={v}
@@ -375,7 +377,7 @@ export function StampDetail({
               disabled={saving}
               onClick={() => patch({ conviction: v })}
               className={cn(
-                "size-6 rounded-md border text-[11px]",
+                "size-6 rounded-md border text-cell",
                 stamp.conviction === v
                   ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--text-primary)]"
                   : "border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]",
@@ -395,13 +397,13 @@ export function StampDetail({
               if (e.key === "Enter") patch({ note });
             }}
             placeholder="투자 이유 / 메모"
-            className="h-8 min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-[11px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none"
+            className="h-8 min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-cell text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none"
           />
           <button
             type="button"
             disabled={saving || note === stamp.note}
             onClick={() => patch({ note })}
-            className="rounded-md bg-[var(--brand)] px-3 text-[11px] font-medium text-white disabled:opacity-40"
+            className="rounded-md bg-[var(--brand)] px-3 text-cell font-medium text-white disabled:opacity-40"
           >
             저장
           </button>
@@ -411,8 +413,8 @@ export function StampDetail({
 
       <div className="flex items-center gap-2">
         <Link
-          href={analysisSymbolHref(stamp.symbol, "ai")}
-          className="rounded-lg border border-[var(--border)] px-2.5 py-1 text-[11px] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+          href={analysisSymbolHref(stamp.symbol)}
+          className={cn(buttonVariants({ variant: "outline", size: "xs" }), "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]")}
         >
           종목 분석 보기
         </Link>
@@ -420,7 +422,7 @@ export function StampDetail({
           <button
             type="button"
             onClick={onDelete}
-            className="ml-auto inline-flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1 text-[11px] text-[var(--text-muted)] hover:text-rose-400"
+            className={cn(buttonVariants({ variant: "outline", size: "xs" }), "ml-auto border-[var(--border)] text-[var(--text-muted)] hover:text-rose-400")}
           >
             <Trash2 className="h-3.5 w-3.5" />
             삭제
@@ -434,7 +436,7 @@ export function StampDetail({
 function SidePanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
-      <h4 className="mb-2 text-[11px] font-semibold text-[var(--text-primary)]">{title}</h4>
+      <h4 className="mb-2 text-cell font-semibold text-[var(--text-primary)]">{title}</h4>
       {children}
     </section>
   );
@@ -446,11 +448,11 @@ function MetricRow({
   valueClass,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   valueClass?: string;
 }) {
   return (
-    <div className="flex items-center justify-between py-0.5 text-[11px]">
+    <div className="flex items-center justify-between py-0.5 text-cell">
       <span className="text-[var(--text-muted)]">{label}</span>
       <span className={cn("tabular-nums text-[var(--text-secondary)]", valueClass)}>{value}</span>
     </div>
@@ -460,7 +462,7 @@ function MetricRow({
 export function StanceBadge({ stance }: { stance: StampStance }) {
   const variant = stance === "bullish" ? "profit" : stance === "bearish" ? "loss" : "default";
   return (
-    <Badge variant={variant} className="px-1.5 py-0 text-[10px]">
+    <Badge variant={variant} className="px-1.5 py-0 text-micro">
       {STANCE_LABELS[stance]}
     </Badge>
   );

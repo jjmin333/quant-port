@@ -67,12 +67,21 @@ func (s *Server) routes() http.Handler {
 			auth.Post("/refresh", s.authHandler.Refresh)
 			auth.With(middleware.RequireAuth(s.auth)).Post("/logout", s.authHandler.Logout)
 			auth.With(middleware.RequireAuth(s.auth)).Get("/me", s.authHandler.Me)
+			// 계정 관리. 셋 다 현재 비밀번호를 다시 받으므로 IP 리미터 아래 둔다.
+			auth.With(middleware.RequireAuth(s.auth)).Post("/password", s.authHandler.ChangePassword)
+			auth.With(middleware.RequireAuth(s.auth)).Post("/display-name", s.authHandler.ChangeDisplayName)
+			auth.With(middleware.RequireAuth(s.auth)).Post("/delete", s.authHandler.DeleteAccount)
 		})
 
 		// Public market data (optional auth enriches watchlist/held flags)
 		api.Group(func(public chi.Router) {
 			public.Use(middleware.OptionalAuth(s.auth))
 			public.Use(limit)
+
+			// 브라우저에서 난 오류를 로그로만 받는다. 비로그인 화면에서도
+			// 나므로 공개 경로이고, 위의 `limit`이 IP 단위로 폭주를 막는다.
+			// 자세한 배경은 handler/client_error.go.
+			public.Post("/client-errors", s.clientError.Report)
 
 			public.Get("/quotes/indices", s.quotes.ListIndices)
 			public.Get("/quotes/batch", s.quotes.BatchQuotes)
@@ -86,13 +95,24 @@ func (s *Server) routes() http.Handler {
 			public.Get("/quotes/{symbol}/terminal-snapshot", s.quotes.GetTerminalSnapshot)
 			public.Get("/quotes/{symbol}/stream", s.quotes.Stream)
 			public.Get("/quotes/{symbol}/quote-stream", s.quotes.QuoteStream)
+			/*
+				목록 화면의 가격 스트림. `/quotes/{symbol}` 계열보다 **위에** 있을
+				필요는 없다 — chi는 같은 자리에서 정적 세그먼트(`prices`)를 파라미터
+				(`{symbol}`)보다 먼저 맞춘다. 그래도 이웃한 스트림 둘 옆에 둔다.
+
+				경로가 `/stream`으로 끝나므로 요청 타임아웃 미들웨어가 알아서 비켜난다
+				(`middleware/timeout.go`) — SSE는 응답이 안 끝나는 것이 정상이다.
+			*/
+			public.Get("/quotes/prices/stream", s.quotes.ListPriceStream)
 
 			public.Get("/exchange-rate", s.market.ExchangeRate)
 			public.Get("/market-calendar/KR", s.market.KrCalendar)
 			public.Get("/market-calendar/US", s.market.UsCalendar)
 			public.Get("/rankings", s.market.Rankings)
+			public.Get("/rankings/prices", s.market.RankingPrices)
 			public.Get("/rankings/history", s.market.RankingHistory)
 			public.Get("/market/data-settings", s.market.DataSettings)
+			public.Get("/market/clocks", s.market.MarketClocks)
 			public.Get("/market-indicators/prices", s.market.MarketIndicatorPrices)
 			public.Get("/stocks", s.market.ListStocks)
 			public.Get("/stocks/{symbol}", s.market.GetStock)
@@ -147,6 +167,8 @@ func (s *Server) routes() http.Handler {
 			public.Get("/news/us/demo", s.news.UsDemo)
 			public.Get("/news/{market}/briefing", s.news.Briefing)
 			public.Get("/news/{market}/dashboard", s.news.Dashboard)
+			public.Get("/news/{market}/keywords", s.news.Keywords)
+			public.Get("/news/{market}/symbols", s.news.Symbols)
 			public.Get("/news/reader", s.news.Reader)
 			public.Post("/news/view", s.news.RecordView)
 
@@ -211,6 +233,7 @@ func (s *Server) routes() http.Handler {
 			protected.Post("/research/calls/{id}/comments", s.research.AddComment)
 			protected.Put("/research/comments/{commentId}", s.research.UpdateComment)
 			protected.Delete("/research/comments/{commentId}", s.research.DeleteComment)
+			protected.Post("/research/comments/{commentId}/like", s.research.ToggleCommentLike)
 			protected.Post("/research/calls/{id}/ratings", s.research.Rate)
 
 			protected.Get("/user/holdings", s.userHoldings.List)
@@ -254,6 +277,9 @@ func (s *Server) routes() http.Handler {
 			admin.Get("/llm/batch", s.admin.LLMBatchStatus)
 			admin.Get("/llm/batch/targets", s.admin.LLMBatchTargets)
 			admin.Get("/batch/jobs", s.admin.GetBatchJobs)
+			// 사이드바 뱃지가 주기적으로 묻는 가벼운 입구 — 판정만 돌려준다.
+			admin.Get("/batch/health", s.admin.GetBatchHealth)
+			admin.Get("/ops/incidents", s.admin.GetOpsIncidents)
 			// 시간표·수동 실행 안내 문서. 화면이 코드를 대신 설명하지 않도록,
 			// 리포지터리의 그 문서를 그대로 내려준다.
 			admin.Get("/batch/schedule", s.admin.GetBatchSchedule)
@@ -267,6 +293,12 @@ func (s *Server) routes() http.Handler {
 			admin.Get("/score/status", s.admin.ScoreStatus)
 			admin.Get("/market-data/settings", s.admin.GetMarketDataSettings)
 			admin.Put("/market-data/settings", s.admin.UpdateMarketDataSettings)
+			// 종목 별칭 관리 (`handler/admin_aliases.go`). 쓰기는 이 프로세스의
+			// 스냅샷을 곧바로 다시 읽고, 워커들은 자기 TTL(10분)로 따라온다.
+			admin.Get("/aliases", s.admin.ListStockAliases)
+			admin.Post("/aliases", s.admin.CreateStockAlias)
+			admin.Put("/aliases/{id}", s.admin.UpdateStockAlias)
+			admin.Delete("/aliases/{id}", s.admin.DeleteStockAlias)
 			admin.Get("/cache/namespaces", s.admin.ListCacheNamespaces)
 			admin.Get("/cache/entries", s.admin.ListCacheEntries)
 			admin.Get("/cache/entry", s.admin.GetCacheEntry)

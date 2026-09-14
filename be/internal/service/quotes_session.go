@@ -25,6 +25,13 @@ func (s *QuotesService) loadClosedMarketQuoteDetail(ctx context.Context, symbol 
 		s.persistQuoteDetail(ctx, sym, detail, "db")
 		return detail, true
 	}
+	// 목록에서는 여기서 멈춘다 — backfill은 종목마다 시세·호가·체결·캔들을
+	// 업스트림에서 받아 오고, 목록은 그중 아무것도 그리지 않는다. 캐시·DB에
+	// 없으면 「지금은 없는 것」으로 두고, 호출부는 응답 meta의 missing으로 안다.
+	if listMode(ctx) {
+		return model.QuoteDetail{}, false
+	}
+
 	s.backfillClosedMarketFromToss(ctx, sym)
 	if detail, ok := s.loadQuoteDetailPersisted(ctx, sym); ok {
 		return detail, true

@@ -147,3 +147,71 @@ func refreshTokenFromRequest(r *http.Request) string {
 	}
 	return r.URL.Query().Get("refresh")
 }
+
+// ---------------------------------------------------------------- 계정 관리
+
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	userID, err := authctx.RequireUserID(r.Context())
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	var body struct {
+		CurrentPassword string `json:"currentPassword"`
+		NewPassword     string `json:"newPassword"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+	if err := h.auth.ChangePassword(r.Context(), userID, body.CurrentPassword, body.NewPassword); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	// 모든 세션을 끊었으므로 이 브라우저의 쿠키도 함께 지운다 — 남겨 두면
+	// 화면은 로그인 상태인데 요청은 전부 401이 되는 어정쩡한 상태가 된다.
+	clearAuthCookies(w, h.auth)
+	response.JSON(w, http.StatusOK, map[string]any{"data": map[string]bool{"ok": true}})
+}
+
+func (h *AuthHandler) ChangeDisplayName(w http.ResponseWriter, r *http.Request) {
+	userID, err := authctx.RequireUserID(r.Context())
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	var body struct {
+		DisplayName string `json:"displayName"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+	session, err := h.auth.ChangeDisplayName(r.Context(), userID, body.DisplayName)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]any{"data": session})
+}
+
+func (h *AuthHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
+	userID, err := authctx.RequireUserID(r.Context())
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	var body struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+	if err := h.auth.DeleteAccount(r.Context(), userID, body.Password); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	clearAuthCookies(w, h.auth)
+	response.JSON(w, http.StatusOK, map[string]any{"data": map[string]bool{"ok": true}})
+}

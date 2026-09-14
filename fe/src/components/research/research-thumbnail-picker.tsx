@@ -11,6 +11,7 @@ import {
 } from "@/lib/media-api";
 import type { QuoteCurrency } from "@/lib/quotes-types";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 
 /**
  * 리포트 표지 고르기.
@@ -85,8 +86,7 @@ export function ResearchThumbnailPicker({
               type="button"
               onClick={() => inputRef.current?.click()}
               disabled={uploading}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--brand)]",
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--brand)]",
                 uploading && "opacity-60",
               )}
             >
@@ -102,7 +102,7 @@ export function ResearchThumbnailPicker({
               <button
                 type="button"
                 onClick={() => onChange(bodyImage)}
-                className="rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--brand)]"
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--brand)]")}
               >
                 본문 첫 이미지 쓰기
               </button>
@@ -112,7 +112,7 @@ export function ResearchThumbnailPicker({
               <button
                 type="button"
                 onClick={() => onChange("")}
-                className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-[var(--text-muted)] hover:text-rose-400"
+                className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-cell text-[var(--text-muted)] hover:text-rose-400"
               >
                 <X className="size-3.5" />
                 제거
@@ -120,12 +120,12 @@ export function ResearchThumbnailPicker({
             )}
           </div>
 
-          <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
+          <p className="text-cell leading-relaxed text-[var(--text-muted)]">
             {value
               ? "목록 카드에 이 이미지가 표지로 쓰입니다."
               : "올리지 않으면 목록 카드에 종목 로고가 표지로 들어갑니다."}
           </p>
-          {error && <p className="text-[11px] text-rose-400">{error}</p>}
+          {error && <p className="text-cell text-rose-400">{error}</p>}
         </div>
       </div>
 

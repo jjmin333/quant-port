@@ -9,6 +9,7 @@ import { formatNewsDateTime, formatNewsDateTimeLong, formatRelativeTime } from "
 import { isArticleBreakingNews } from "@/lib/news-breaking";
 import { NewsBreakingBadge } from "@/components/news/news-breaking-badge";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 
 type NewsUsHeadlineModalProps = {
   article: NewsArticle | null;
@@ -91,15 +92,15 @@ function NewsUsHeadlineModalFrame({
               <div className="flex flex-wrap items-center gap-1.5">
                 <span
                   className={cn(
-                    "inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold",
+                    "inline-flex items-center rounded-md border px-2 py-0.5 text-cell font-semibold",
                     article.publisher.badgeClass,
                   )}
                 >
                   {article.publisher.name}
                 </span>
-                {isBreaking && <NewsBreakingBadge className="text-[11px]" />}
+                {isBreaking && <NewsBreakingBadge className="text-cell" />}
               </div>
-              <p className="text-[11px] text-[var(--text-muted)]">
+              <p className="text-cell text-[var(--text-muted)]">
                 {formatRelativeTime(article.publishedAt)}
                 <span className="mx-1.5">·</span>
                 {formatNewsDateTime(article.publishedAt)}
@@ -132,7 +133,7 @@ function NewsUsHeadlineModalFrame({
                 type="button"
                 onClick={() => setShowOriginal(false)}
                 className={cn(
-                  "rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors",
+                  "rounded-full px-4 py-1.5 text-note font-medium transition-colors",
                   !showOriginal
                     ? "bg-violet-500/20 text-violet-300"
                     : "text-[var(--text-muted)] hover:text-[var(--text-primary)]",
@@ -144,7 +145,7 @@ function NewsUsHeadlineModalFrame({
                 type="button"
                 onClick={() => setShowOriginal(true)}
                 className={cn(
-                  "rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors",
+                  "rounded-full px-4 py-1.5 text-note font-medium transition-colors",
                   showOriginal
                     ? "bg-violet-500/20 text-violet-300"
                     : "text-[var(--text-muted)] hover:text-[var(--text-primary)]",
@@ -156,8 +157,8 @@ function NewsUsHeadlineModalFrame({
           )}
 
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-8 sm:py-6">
-            <p className="text-[15px] leading-7 text-[var(--text-primary)]">{bodyText}</p>
-            <p className="mt-8 text-[12px] text-[var(--text-muted)]">
+            <p className="text-section leading-7 text-[var(--text-primary)]">{bodyText}</p>
+            <p className="mt-8 text-cell text-[var(--text-muted)]">
               기사 원문 등록 시간 {formatNewsDateTimeLong(article.publishedAt)}
             </p>
 
@@ -173,13 +174,13 @@ function NewsUsHeadlineModalFrame({
         </div>
 
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border)] px-4 py-3 sm:px-5">
-          <span className="text-[11px] text-[var(--text-muted)]">헤드라인 · {article.source.name}</span>
+          <span className="text-cell text-[var(--text-muted)]">헤드라인 · {article.source.name}</span>
           {link && (
             <a
               href={link}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--background)]"
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] hover:bg-[var(--background)]")}
             >
               원문 새 탭에서 열기
               <ExternalLink className="h-3.5 w-3.5" />

@@ -17,15 +17,15 @@ import { cn } from "@/lib/utils";
  *
  * # 왜 중요한가
  *
- * **미국 실적은 장 밖에서 나온다.** 장후 발표는 다음날 시가에, 장전 발표는 그날
- * 시가에 반영된다. 그 차이를 모르면 「발표 후 반응」을 하루 잘못 읽는다 —
+ * **미국 실적은 장 밖에서 나온다.** 장후 발표는 다음날 종가에, 장전·장중 발표는 그날
+ * 종가에 반영된다. 그 차이를 모르면 「발표 후 반응」을 하루 잘못 읽는다 —
  * 그래서 서버도 세션별로 다른 종가 쌍을 쓴다.
  */
 
 const LANES: { id: EarningsSession | "unknown"; label: string; hint: string }[] = [
-  { id: "bmo", label: "장전", hint: "개장 전 발표 · 그날 장에 반영" },
-  { id: "dmh", label: "장중", hint: "거래 시간 중 발표" },
-  { id: "amc", label: "장후", hint: "마감 후 발표 · 다음 거래일에 반영" },
+  { id: "bmo", label: "장전", hint: "개장 전 발표 · 그날 종가에 반영" },
+  { id: "dmh", label: "장중", hint: "거래 시간 중 발표 · 그날 종가에 반영" },
+  { id: "amc", label: "장후", hint: "마감 후 발표 · 다음 거래일 종가에 반영" },
   // 미공개를 따로 두는 이유: 장전·장후 중 하나로 찍으면 거짓말이다.
   { id: "unknown", label: "미공개", hint: "제공처가 발표 시각을 주지 않았습니다" },
 ];
@@ -70,8 +70,8 @@ export function EarningsSessionTimeline({
         return (
           <div key={lane.id} className="flex min-w-0 items-start gap-2">
             <div className="w-[52px] shrink-0 pt-1" title={lane.hint}>
-              <p className="text-[11px] font-semibold">{lane.label}</p>
-              <p className="text-[10px] text-muted-foreground">{rows.length}건</p>
+              <p className="text-cell font-semibold">{lane.label}</p>
+              <p className="text-micro text-muted-foreground">{rows.length}건</p>
             </div>
             <div className="flex min-w-0 flex-1 flex-wrap gap-1">
               {rows.map((ev) => (
@@ -79,7 +79,7 @@ export function EarningsSessionTimeline({
                   key={`${ev.symbol}-${ev.fiscalYear}-${ev.fiscalPeriod}`}
                   type="button"
                   onClick={() => onPickEvent(ev)}
-                  className="flex max-w-full items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] hover:bg-muted"
+                  className="flex max-w-full items-center gap-1 rounded-full border px-1.5 py-0.5 text-cell hover:bg-muted"
                 >
                   <StockAvatar
                     symbol={ev.symbol}
@@ -91,10 +91,10 @@ export function EarningsSessionTimeline({
                   />
                   <span className="max-w-[110px] truncate">{eventName(ev)}</span>
                   {ev.surprise ? (
-                    <SurpriseValue surprise={ev.surprise} className="text-[10px]" />
+                    <SurpriseValue surprise={ev.surprise} className="text-micro" />
                   ) : ev.eps.estimate != null ? (
                     // 아직 발표 전이면 무엇이 기대되는지를 적는다.
-                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                    <span className="shrink-0 font-num text-micro text-muted-foreground">
                       ${ev.eps.estimate.toFixed(2)}
                     </span>
                   ) : null}
@@ -104,7 +104,7 @@ export function EarningsSessionTimeline({
           </div>
         );
       })}
-      <p className={cn("mt-1 border-t pt-1.5 text-[10px] leading-relaxed text-muted-foreground")}>
+      <p className={cn("mt-1 border-t pt-1.5 text-micro leading-relaxed text-muted-foreground")}>
         미국 실적은 <b>장 밖에서</b> 나옵니다 — 장후 발표는 다음 거래일에, 장전 발표는 그날
         장에 반영됩니다. 발표 시각을 주지 않은 건은 <b>미공개</b>로 따로 둡니다.
       </p>

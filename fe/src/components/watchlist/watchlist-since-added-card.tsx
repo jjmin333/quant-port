@@ -92,7 +92,7 @@ export function WatchlistSinceAddedCard({
             label="평균 관심 기간"
             value={stats.avgHoldDays == null ? "—" : `${Math.round(stats.avgHoldDays)}일`}
           />
-          <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+          <p className="mt-1 text-micro leading-relaxed text-muted-foreground">
             {stats.count}종목 기준 · 담은 시점 가격 대비 단순 평균입니다. 실제 매매 손익이
             아닙니다.
           </p>

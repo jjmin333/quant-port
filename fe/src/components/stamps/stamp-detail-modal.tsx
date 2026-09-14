@@ -54,7 +54,7 @@ export function StampDetailModal({
                 <div className="min-w-0 flex-1">
                   <DialogTitle className="flex flex-wrap items-center gap-1.5 text-sm">
                     {stamp.symbolName || stamp.symbol}
-                    <span className="font-mono text-[11px] font-normal text-[var(--text-muted)]">
+                    <span className="font-num text-cell font-normal text-[var(--text-muted)]">
                       {stamp.symbol}
                     </span>
                     <StanceBadge stance={stamp.stance} />
@@ -66,12 +66,12 @@ export function StampDetailModal({
                             ? "loss"
                             : "default"
                       }
-                      className="px-1.5 py-0 text-[10px]"
+                      className="px-1.5 py-0 text-micro"
                     >
                       {VERDICT_LABELS[stamp.verdict]}
                     </Badge>
                   </DialogTitle>
-                  <DialogDescription className="text-[11px]">
+                  <DialogDescription className="text-cell">
                     {formatDateTimeKST(stamp.stampedAt)} 스탬프 ·{" "}
                     {HORIZON_LABELS[stamp.horizonKind]} · 개봉 {formatDateTimeKST(stamp.dueAt)}
                   </DialogDescription>

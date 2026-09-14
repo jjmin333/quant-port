@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/enact/quant-port/be/internal/authctx"
 	"github.com/enact/quant-port/be/internal/model"
@@ -31,7 +30,7 @@ func (s *UserCashBalancesService) Replace(ctx context.Context, balances model.Us
 		return err
 	}
 	if balances.KRW < 0 || balances.USD < 0 {
-		return fmt.Errorf("cash amount must be >= 0")
+		return invalidInput("cash amount must be >= 0")
 	}
 	return s.repo.Upsert(ctx, userID, balances)
 }

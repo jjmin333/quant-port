@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { LayoutGrid, List, X } from "lucide-react";
-import { PageHeader } from "@/components/layout/header";
 import { PageColumns } from "@/components/layout/page-columns";
-import { PageScrollShell } from "@/components/layout/page-content-shell";
+import { PageActions, PageScrollShell } from "@/components/layout/page-content-shell";
 import { StockCatalogSearchField } from "@/components/market/stock-catalog-search-field";
 import { StockAvatar } from "@/components/stocks/stock-avatar";
 import { PriceHistoryChart } from "@/components/charts/price-history-chart";
@@ -13,11 +12,13 @@ import { TargetQuickLookModal } from "@/components/targets/target-quick-look-mod
 import { TargetGapCell, TargetStatusBadge } from "@/components/targets/target-shared";
 import { TargetsSideRail } from "@/components/targets/targets-side-rail";
 import { MenuEmptyState } from "@/components/common/menu-empty-state";
+import { LoadErrorState } from "@/components/common/load-error-state";
 import { menuIcon } from "@/components/common/menu-icon";
 import {
   SampleModeButton,
   SampleRibbon,
   SampleWrap,
+  useAutoSample,
   useSampleMode,
 } from "@/components/common/sample-mode";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -37,7 +38,7 @@ import {
   inferTargetCurrency,
   removePriceTarget,
   savePriceTarget,
-  usePriceTargets,
+  usePriceTargetsState,
   type PriceTarget,
 } from "@/lib/price-targets";
 import {
@@ -52,6 +53,7 @@ import {
 import { setTargetsView, useTargetsView, type TargetsView } from "@/lib/targets-view";
 import type { UserHolding } from "@/lib/user-holdings-types";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const COPY = MENU_COPY.targets;
 
@@ -85,11 +87,24 @@ export function TargetsClient() {
    * 예시 데이터는 이 스토어를 거치지 않는다: 스토어를 공유하므로 여기에 예시를 밀어
    * 넣으면 다른 화면까지 예시로 물든다.
    */
-  const realTargets = usePriceTargets();
+  const { targets: realTargets, error: loadError, retry: retryLoad } = usePriceTargetsState();
   const [sampleTargets, setSampleTargets] = useState<PriceTarget[]>([]);
   const targets = sample ? sampleTargets : realTargets;
 
-  const isEmpty = !sample && realTargets.length === 0;
+  /*
+    **실패는 「없음」이 아니다.** 불러오지 못했을 때 0건 분기로 내려가면 온보딩
+    튜토리얼이 뜨고, 목표가를 등록해 둔 사용자는 자기 기록이 지워진 줄 안다.
+  */
+  const loadFailed = !sample && Boolean(loadError) && realTargets.length === 0;
+  /*
+    「내 것이 아직 없다」 — **`sample`을 빼고** 잰다 (2026-09-14 사용자 요청 4).
+    이 값이 `useAutoSample`로 가서 예시를 켠다. `!sample`이 섞이면 켜짐 → 0건 아님 →
+    꺼짐이 무한히 반복된다. 안내 카드는 그 위에 `!sample`을 얹은 `isEmpty`로 선다.
+  */
+  const hasNothingYet = !loadFailed && realTargets.length === 0;
+  useAutoSample(hasNothingYet);
+  const isEmpty = !sample && hasNothingYet;
+  const [retrying, setRetrying] = useState(false);
 
   const [stock, setStock] = useState<StockInfo | null>(null);
   const [targetPrice, setTargetPrice] = useState("");
@@ -127,8 +142,9 @@ export function TargetsClient() {
             createdAt: r.createdAt,
           })),
         );
-        // 현재가도 픽스처 값을 쓴다. 실시간 시세를 섞으면 "1차 목표 도달"이라고 적어둔
-        // 행이 실제 시세에 따라 미도달로 뒤집혀 설명과 화면이 어긋난다.
+        // 첫 화면은 서버가 준 시세로 바로 그린다(위 배치 요청이 곧 덮어쓴다).
+        // 메모 문구를 「1차 목표 도달 시…」처럼 조건형으로 바꾼 뒤로는 도달 여부가
+        // 시세를 따라 바뀌어도 설명과 어긋나지 않는다.
         setQuotes(
           Object.fromEntries(
             rows.map((r) => [
@@ -174,7 +190,9 @@ export function TargetsClient() {
   );
 
   useEffect(() => {
-    if (sample || !symbolKey) return;
+    // 예시도 실시간 시세를 받는다 — 목표가·등록가가 등록일의 실제 종가에서 나오므로
+    // 현재가만 진짜여도 축이 어긋나지 않는다.
+    if (!symbolKey) return;
     let alive = true;
     fetchQuotesBatchClient(symbolKey.split(","))
       .then((rows) => {
@@ -186,7 +204,7 @@ export function TargetsClient() {
     return () => {
       alive = false;
     };
-  }, [sample, symbolKey]);
+  }, [symbolKey]);
 
   /*
    * 보유 종목은 레일의 「목표가 없는 보유 종목」·「평단 대비」 두 카드에만 쓴다.
@@ -272,35 +290,78 @@ export function TargetsClient() {
     [quotes],
   );
 
+  /*
+    삭제 뒤 **실행 취소** (§A-2).
+
+    예전에는 「삭제」 한 번에 확인도 복구도 없이 사라졌다. 목표가는 등록 시점 주가
+    (`basePrice`·`baseDate`)를 함께 박제하는데 그건 서버가 등록 순간에 잰 값이라
+    다시 등록하면 **오늘 값으로 새로 찍힌다** — 「등록 후 등락」이 리셋된다는 뜻이다.
+    그래서 되돌리기가 확인 창보다 실질적으로 더 필요한 자리다.
+  */
   const removeTarget = useCallback(
     async (id: string) => {
+      const removed = realTargets.find((t) => t.id === id);
       await removePriceTarget(id);
       if (editingId === id) resetForm();
+      if (!removed) return;
+      toast(`${removed.symbol} 목표가를 삭제했습니다.`, {
+        action: {
+          label: "실행 취소",
+          onClick: () => {
+            void savePriceTarget({
+              symbol: removed.symbol,
+              targetPrice: removed.targetPrice,
+              targetPrice2: removed.targetPrice2,
+              stopPrice: removed.stopPrice,
+              currency: removed.currency,
+              note: removed.note,
+            });
+          },
+        },
+      });
     },
-    [editingId, resetForm],
+    [editingId, resetForm, realTargets],
   );
 
   return (
     <>
-      <PageHeader
-        title={COPY.title}
-        subtitle={COPY.subtitle}
-        actions={
-          <SampleModeButton active={sample} onToggle={setSample} emphasize={isEmpty || !session} />
-        }
-      />
       <PageScrollShell>
+        {/*
+          0건 안내 카드가 이미 같은 버튼을 들고 있다 (§R-2). 두 곳에 다 두면 한 화면에
+          「예시로 둘러보기」가 둘이 되어 무엇이 다른지 묻게 만든다 — 실측으로 빈
+          보유 화면의 보이는 버튼이 그 문구 ×2 였다.
+        */}
+        <PageActions>
+          {isEmpty ? null : (
+            <SampleModeButton active={sample} onToggle={setSample} emphasize={!session} />
+          )}
+        </PageActions>
         {sample && (
           <div className="mb-3">
             <SampleRibbon
               loggedIn={Boolean(session)}
               loginHref="/login?next=%2Ftargets"
               onDismiss={() => setSample(false)}
+              // 안내 카드가 들고 있던 첫 동작 — 카드가 예시 뒤로 물러났으니 여기 선다.
+              action={{ label: "종목 찾아보기", href: "/analysis" }}
             />
           </div>
         )}
 
-        {isEmpty ? (
+        {loadFailed ? (
+          <LoadErrorState
+            message={loadError ?? "목표가를 불러오지 못했습니다."}
+            retrying={retrying}
+            onRetry={async () => {
+              setRetrying(true);
+              try {
+                await retryLoad();
+              } finally {
+                setRetrying(false);
+              }
+            }}
+          />
+        ) : isEmpty ? (
           <MenuEmptyState
             icon={menuIcon("targets")}
             headline={COPY.emptyHeadline}
@@ -377,7 +438,7 @@ export function TargetsClient() {
                         type="button"
                         onClick={() => setStatusFilter(f.id)}
                         className={cn(
-                          "rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                          "rounded-full px-2.5 py-1 text-cell font-medium transition-colors",
                           statusFilter === f.id
                             ? "bg-[var(--brand-muted)] text-[var(--brand)]"
                             : "bg-[var(--surface-elevated)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]",
@@ -396,7 +457,7 @@ export function TargetsClient() {
                           type="button"
                           onClick={() => setSort(s.id)}
                           className={cn(
-                            "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                            "rounded-md px-2 py-1 text-cell font-medium transition-colors",
                             sort === s.id
                               ? "bg-[var(--surface)] text-[var(--text-primary)] shadow-sm"
                               : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]",
@@ -443,7 +504,6 @@ export function TargetsClient() {
                         <TargetCard
                           key={v.target.id}
                           view={v}
-                          sample={sample}
                           onOpen={() => setOpenId(v.target.id)}
                         />
                       ))}
@@ -539,9 +599,9 @@ function SummaryTiles({
               : "border-[var(--border)] hover:border-[var(--brand)]",
           )}
         >
-          <p className="text-[11px] text-[var(--text-muted)]">{t.label}</p>
-          <p className={cn("mt-0.5 font-mono text-xl font-bold tabular-nums", t.tone)}>{t.value}</p>
-          <p className="mt-0.5 truncate text-[10px] text-[var(--text-muted)]">{t.foot}</p>
+          <p className="text-cell text-[var(--text-muted)]">{t.label}</p>
+          <p className={cn("mt-0.5 font-num text-xl font-bold tabular-nums", t.tone)}>{t.value}</p>
+          <p className="mt-0.5 truncate text-micro text-[var(--text-muted)]">{t.foot}</p>
         </button>
       ))}
     </div>
@@ -620,15 +680,15 @@ function TargetRow({
             <p className="truncate text-sm font-medium text-[var(--text-primary)]">
               {quote?.name || target.symbol}
             </p>
-            <span className="shrink-0 text-[11px] text-[var(--text-muted)]">{target.symbol}</span>
+            <span className="shrink-0 text-cell text-[var(--text-muted)]">{target.symbol}</span>
             <TargetStatusBadge status={view.status} />
           </div>
           {(target.note || view.sinceBasePct !== null) && (
-            <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">
+            <p className="mt-0.5 truncate text-cell text-[var(--text-muted)]">
               {view.sinceBasePct !== null && (
                 <span
                   className={cn(
-                    "font-mono font-medium",
+                    "font-num font-medium",
                     view.sinceBasePct > 0 ? "text-[var(--profit)]" : "text-[var(--loss)]",
                   )}
                 >
@@ -647,16 +707,16 @@ function TargetRow({
         </div>
 
         <div className="hidden shrink-0 text-right sm:block">
-          <p className="text-[10px] text-[var(--text-muted)]">현재가</p>
+          <p className="text-micro text-[var(--text-muted)]">현재가</p>
           {current !== null ? (
             <PriceDisplay
               value={current}
               currency={target.currency}
               size="sm"
-              className="font-mono"
+              className="font-num"
             />
           ) : (
-            <span className="font-mono text-sm text-[var(--text-muted)]">—</span>
+            <span className="font-num text-sm text-[var(--text-muted)]">—</span>
           )}
         </div>
 
@@ -672,14 +732,14 @@ function TargetRow({
             <button
               type="button"
               onClick={onEdit}
-              className="text-xs text-[var(--text-muted)] hover:text-[var(--brand)]"
+              className="text-cell text-[var(--text-muted)] hover:text-[var(--brand)]"
             >
               수정
             </button>
             <button
               type="button"
               onClick={onRemove}
-              className="text-xs text-[var(--text-muted)] hover:text-rose-400"
+              className="text-cell text-[var(--text-muted)] hover:text-rose-400"
             >
               삭제
             </button>
@@ -694,11 +754,9 @@ function TargetRow({
 
 function TargetCard({
   view,
-  sample,
   onOpen,
 }: {
   view: TargetView;
-  sample: boolean;
   onOpen: () => void;
 }) {
   const { target, quote, current, status } = view;
@@ -706,11 +764,11 @@ function TargetCard({
    * 카드는 화면에 여섯 장 안팎이라 종목당 캔들 한 번이 감당된다. 행 보기에서는
    * 부르지 않는다 — 스무 줄이면 스무 요청이 된다.
    *
-   * **예시 모드에서는 아예 부르지 않는다.** 카드의 가격은 픽스처이고 캔들은 실제
-   * 시세라, 같이 그리면 「현재 214,500원」 옆에 1,359,000~2,959,000원짜리 차트가
-   * 붙는다. 한 카드가 서로 다른 두 종목을 말하는 셈이 된다.
+   * 예시에서도 부른다. 예전에는 막았는데, 그때는 카드의 가격이 픽스처라 실제 캔들과
+   * 같이 그리면 「현재 214,500원」 옆에 1,359,000원짜리 차트가 붙어 한 카드가 서로 다른
+   * 두 종목을 말했다. 지금은 가격도 캔들도 같은 시세에서 온다.
    */
-  const { points, times } = useSparklineCandles(target.symbol, !sample);
+  const { points, times } = useSparklineCandles(target.symbol, true);
 
   return (
     <button
@@ -741,15 +799,15 @@ function TargetCard({
 
       <div className="flex items-baseline justify-between gap-2">
         <span className="min-w-0">
-          <span className="block text-[10px] text-[var(--text-muted)]">현재</span>
-          <span className="block font-mono text-base font-bold tabular-nums">
+          <span className="block text-micro text-[var(--text-muted)]">현재</span>
+          <span className="block font-num text-base font-bold tabular-nums">
             {current !== null ? formatPrice(current, target.currency) : "—"}
           </span>
         </span>
         <span className="min-w-0 text-right">
-          <span className="block text-[10px] text-[var(--text-muted)]">목표</span>
-          <span className="block font-mono text-base font-bold tabular-nums text-[var(--profit)]">
-            {formatPrice(target.targetPrice, target.currency)}
+          <span className="block text-micro text-[var(--text-muted)]">목표</span>
+          <span className="block font-num text-base font-bold tabular-nums text-[var(--profit)]">
+            <PriceDisplay value={target.targetPrice} currency={target.currency} size="inherit" />
           </span>
         </span>
       </div>
@@ -768,13 +826,13 @@ function TargetCard({
 
       <TargetAxis view={view} />
 
-      <div className="flex items-center justify-between gap-2 text-[11px]">
+      <div className="flex items-center justify-between gap-2 text-cell">
         <span className="min-w-0 truncate text-[var(--text-muted)]">
           {target.note || (target.baseDate ? `${target.baseDate} 등록` : "메모 없음")}
         </span>
         <span
           className={cn(
-            "shrink-0 font-mono font-semibold tabular-nums",
+            "shrink-0 font-num font-semibold tabular-nums",
             status === "reached" ? "text-emerald-500" : "text-[var(--text-secondary)]",
           )}
         >
@@ -840,7 +898,7 @@ function TargetForm({
           <button
             type="button"
             onClick={onReset}
-            className="text-[11px] text-muted-foreground hover:text-foreground"
+            className="text-cell text-muted-foreground hover:text-foreground"
           >
             취소
           </button>
@@ -858,8 +916,8 @@ function TargetForm({
                 size="xs"
                 className="shrink-0"
               />
-              <span className="min-w-0 flex-1 truncate text-xs">{stock.name || stock.symbol}</span>
-              <span className="shrink-0 text-[10px] text-muted-foreground">{stock.symbol}</span>
+              <span className="min-w-0 flex-1 truncate text-cell">{stock.name || stock.symbol}</span>
+              <span className="shrink-0 text-micro text-muted-foreground">{stock.symbol}</span>
             </div>
             <button
               type="button"
@@ -876,7 +934,7 @@ function TargetForm({
             placeholder="종목명·코드 검색"
             suggestionsId="targets-add-suggestions"
             autoFocus={searchFocusKey > 0}
-            inputClassName="h-8 py-1 pl-9 pr-2.5 text-xs md:text-xs"
+            inputClassName="h-8 py-1 pl-9 pr-2.5 text-cell md:text-cell"
             onSelect={(picked) => {
               setStock(picked);
               onSearchFocus();
@@ -913,12 +971,12 @@ function TargetForm({
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="메모 (선택)"
-          className="h-8 w-full rounded-lg border bg-background px-2.5 text-xs placeholder:text-muted-foreground focus:border-[var(--brand)] focus:outline-none"
+          className="h-8 w-full rounded-lg border bg-background px-2.5 text-cell placeholder:text-muted-foreground focus:border-[var(--brand)] focus:outline-none"
         />
 
         {/* 등록가 박제는 새로 만들 때만 일어난다 — 수정에서는 그 자리가 이미 고정돼 있다. */}
         {stock && !editingId && (
-          <p className="text-[10px] leading-relaxed text-muted-foreground">
+          <p className="text-micro leading-relaxed text-muted-foreground">
             지금 주가({currentPrice ? formatPrice(currentPrice, currency) : "확인 중"})가 등록가로
             함께 기록됩니다. 이후 진행률은 이 값을 기준으로 그려집니다.
           </p>
@@ -928,7 +986,7 @@ function TargetForm({
           type="button"
           onClick={onSave}
           disabled={!stock || !(Number(targetPrice) > 0)}
-          className="h-8 w-full rounded-lg bg-[var(--brand)] text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+          className="h-8 w-full rounded-lg bg-[var(--brand)] text-cell font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
           {editingId ? "수정" : "추가"}
         </button>
@@ -955,11 +1013,11 @@ function LabeledPrice({
   return (
     <div className="space-y-0.5">
       <div className="flex items-baseline justify-between gap-2">
-        <label className="text-[10px] text-muted-foreground">
+        <label className="text-micro text-muted-foreground">
           {label}
           {required && <span className="ml-0.5 text-[var(--profit)]">*</span>}
         </label>
-        {hint && <span className="font-mono text-[10px] text-muted-foreground">{hint}</span>}
+        {hint && <span className="font-num text-micro text-muted-foreground">{hint}</span>}
       </div>
       <input
         type="number"
@@ -968,7 +1026,7 @@ function LabeledPrice({
         placeholder={placeholder}
         min="0"
         step="any"
-        className="h-8 w-full rounded-lg border bg-background px-2.5 text-xs placeholder:text-muted-foreground focus:border-[var(--brand)] focus:outline-none"
+        className="h-8 w-full rounded-lg border bg-background px-2.5 text-cell placeholder:text-muted-foreground focus:border-[var(--brand)] focus:outline-none"
       />
     </div>
   );

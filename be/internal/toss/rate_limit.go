@@ -45,25 +45,35 @@ func parseIntHeader(h http.Header, key string) (int, bool) {
 	return n, true
 }
 
+func (rl RateLimitStatus) isLow() bool {
+	if !rl.Present {
+		return false
+	}
+	if rl.Remaining == 0 {
+		return true
+	}
+	return rl.Limit > 0 && rl.Remaining*5 <= rl.Limit
+}
+
 // logRateLimitStatus surfaces bucket pressure before it turns into a 429: a
 // low-remaining warning on successful calls, or the full budget (including
-// the server's own Retry-After, which callers currently ignore in favor of
-// a fixed 60s backoff) on an actual rate-limit response.
-func logRateLimitStatus(method, path string, status int, rl RateLimitStatus) {
+// the server's own Retry-After) on an actual rate-limit response. key is
+// "primary" or "secondary" so logs show which credential paid for the call.
+func logRateLimitStatus(method, path, key string, status int, rl RateLimitStatus) {
 	if !rl.Present {
 		return
 	}
 	if status == http.StatusTooManyRequests {
 		log.Printf(
-			"toss api rate-limit exceeded: %s %s limit=%d remaining=%d resetSec=%d retryAfterSec=%d",
-			method, path, rl.Limit, rl.Remaining, rl.ResetSec, rl.RetryAfter,
+			"toss api rate-limit exceeded: %s %s key=%s limit=%d remaining=%d resetSec=%d retryAfterSec=%d",
+			method, path, key, rl.Limit, rl.Remaining, rl.ResetSec, rl.RetryAfter,
 		)
 		return
 	}
-	if rl.Limit > 0 && rl.Remaining*5 <= rl.Limit {
+	if rl.isLow() {
 		log.Printf(
-			"toss api rate-limit low: %s %s limit=%d remaining=%d resetSec=%d",
-			method, path, rl.Limit, rl.Remaining, rl.ResetSec,
+			"toss api rate-limit low: %s %s key=%s limit=%d remaining=%d resetSec=%d",
+			method, path, key, rl.Limit, rl.Remaining, rl.ResetSec,
 		)
 	}
 }

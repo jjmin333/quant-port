@@ -6,7 +6,9 @@ import { StockAvatar } from "@/components/stocks/stock-avatar";
 import {
   DateStatusBadge,
   DivergenceFlag,
+  EarningsHint,
   ReactionValue,
+  REACTION_COLUMN_HINT,
   SurpriseValue,
   earningsEventKey,
   eventName,
@@ -140,7 +142,7 @@ export function EarningsTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[900px] border-collapse text-xs">
+      <table className="w-full min-w-[900px] border-collapse text-cell">
         <thead>
           <tr>
             {columns.map((col) => (
@@ -148,7 +150,7 @@ export function EarningsTable({
                 key={col.key}
                 onClick={() => toggle(col.key)}
                 className={cn(
-                  "cursor-pointer select-none whitespace-nowrap border-b px-2 py-1.5 text-[11px] font-medium",
+                  "cursor-pointer select-none whitespace-nowrap border-b px-2 py-1.5 text-cell font-medium",
                   col.align === "left" ? "text-left" : "text-right",
                   sort.key === col.key
                     ? "font-bold text-foreground"
@@ -156,7 +158,11 @@ export function EarningsTable({
                 )}
               >
                 <span className="inline-flex items-center gap-0.5">
-                  {col.label}
+                  {col.key === "reaction" ? (
+                    <EarningsHint content={REACTION_COLUMN_HINT}>{col.label}</EarningsHint>
+                  ) : (
+                    col.label
+                  )}
                   {col.sub && (
                     <span className="font-normal text-muted-foreground">{col.sub}</span>
                   )}
@@ -212,7 +218,7 @@ function Row({
   onPick: (event: EarningsEvent) => void;
 }) {
   const currency = event.currency === "USD" ? "USD" : "KRW";
-  const metric = market === "us" ? event.eps : event.opIncome;
+  const metric = (market === "us" ? event.eps : event.opIncome) ?? {};
   const estimated = event.dateStatus === "estimated";
 
   return (
@@ -232,7 +238,7 @@ function Row({
           />
           <span className="min-w-0 truncate font-medium">{eventName(event)}</span>
           {/* 연결/개별은 **작은 글자**로. 배지로 만들면 다시 칩이 된다. */}
-          <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+          <span className="shrink-0 font-num text-micro text-muted-foreground">
             {event.fiscalPeriod === "FY" ? "연간" : event.fiscalPeriod}
             {event.basis ? `·${event.basis}` : ""}
           </span>
@@ -241,7 +247,7 @@ function Row({
       </td>
 
       <td className="whitespace-nowrap px-2 py-1.5 text-right">
-        <span className={cn("font-mono", estimated && "text-[var(--sample)]")}>
+        <span className={cn("font-num", estimated && "text-[var(--sample)]")}>
           {formatShortDate(event.date)}
         </span>
         {event.dateStatus !== "confirmed" && (
@@ -257,11 +263,11 @@ function Row({
         </td>
       )}
 
-      <td className="whitespace-nowrap px-2 py-1.5 text-right font-mono text-muted-foreground">
+      <td className="whitespace-nowrap px-2 py-1.5 text-right font-num text-muted-foreground">
         {event.marketCap != null ? formatFinancialAmount(event.marketCap, currency) : "—"}
       </td>
 
-      <td className="whitespace-nowrap px-2 py-1.5 text-right font-mono">
+      <td className="whitespace-nowrap px-2 py-1.5 text-right font-num">
         <MetricPairCell
           pair={metric}
           market={market}
@@ -270,10 +276,10 @@ function Row({
       </td>
 
       <td className="whitespace-nowrap px-2 py-1.5 text-right">
-        <SurpriseValue surprise={event.surprise} className="text-[11px]" />
+        <SurpriseValue surprise={event.surprise} className="text-cell" />
       </td>
 
-      <td className="whitespace-nowrap px-2 py-1.5 text-right font-mono">
+      <td className="whitespace-nowrap px-2 py-1.5 text-right font-num">
         <MetricPairCell
           pair={event.revenue}
           market={market}
@@ -282,16 +288,16 @@ function Row({
       </td>
 
       <td className="whitespace-nowrap px-2 py-1.5 text-right">
-        <SurpriseValue surprise={event.revenueSurprise} className="text-[11px]" />
+        <SurpriseValue surprise={event.revenueSurprise} className="text-cell" />
       </td>
 
-      <td className="whitespace-nowrap px-2 py-1.5 text-right font-mono">
+      <td className="whitespace-nowrap px-2 py-1.5 text-right font-num text-cell tabular-nums">
         {quote ? (
           <>
-            {quote.currentPrice.toLocaleString("ko-KR")}
+            <span className="font-semibold">{quote.currentPrice.toLocaleString("ko-KR")}</span>{" "}
             <span
               className={cn(
-                "ml-1 text-[10px]",
+                "font-semibold",
                 quote.changeRate >= 0 ? "text-[var(--profit)]" : "text-[var(--loss)]",
               )}
             >
@@ -304,11 +310,16 @@ function Row({
         )}
       </td>
 
-      <td className="whitespace-nowrap px-2 py-1.5 text-right">
+      <td
+        className="whitespace-nowrap px-2 py-1.5 text-right"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
         <ReactionValue
           reaction={event.reaction}
           status={event.dateStatus}
-          className="text-[11px]"
+          currency={currency}
+          className="text-cell"
         />
       </td>
     </tr>
@@ -333,38 +344,31 @@ function MetricPairCell({
 }) {
   const estimateFirst = market === "domestic";
 
-  if (pair.actual != null && pair.estimate != null) {
-    if (estimateFirst) {
-      return (
-        <>
-          <span className="text-muted-foreground">{format(pair.estimate)}</span>
-          {" / "}
-          <b>{format(pair.actual)}</b>
-        </>
-      );
-    }
+  if (pair.actual == null && pair.estimate == null) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+
+  const actualText = pair.actual != null ? format(pair.actual) : "—";
+  const estimateText = pair.estimate != null ? format(pair.estimate) : "—";
+
+  if (estimateFirst) {
     return (
       <>
-        <b>{format(pair.actual)}</b>
-        <span className="text-muted-foreground">
-          {" / "}
-          {format(pair.estimate)}
-        </span>
+        <span className="text-muted-foreground">{estimateText}</span>
+        {" / "}
+        <b>{actualText}</b>
       </>
     );
   }
-  if (pair.actual != null) {
-    return <b>{format(pair.actual)}</b>;
-  }
-  if (pair.estimate != null) {
-    return (
+  return (
+    <>
+      <b>{actualText}</b>
       <span className="text-muted-foreground">
-        {estimateFirst ? "" : "— / "}
-        {format(pair.estimate)}
+        {" / "}
+        {estimateText}
       </span>
-    );
-  }
-  return <span className="text-muted-foreground">—</span>;
+    </>
+  );
 }
 
 function sortValue(

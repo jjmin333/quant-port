@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
+	"github.com/enact/quant-port/be/internal/metrics"
 	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/repository"
 	"github.com/enact/quant-port/be/internal/toss"
@@ -39,6 +41,46 @@ type BatchAdminService struct {
 	syncState *repository.SyncStateRepo
 	// disclosures supplies 공시 스윕 커버리지 — 여기만 종목이 아니라 날짜가 축이다.
 	disclosures *repository.DisclosureRepo
+	// health judges 「돌았어야 했는데 안 돌았다」. 워커의 워치독과 같은 판정기를
+	// 쓰되 여기서는 **읽는 순간 다시 계산한다** — 화면이 15분 묵은 판정을 보여줄
+	// 이유가 없다(batch_health.go 머리글).
+	health *BatchHealthService
+}
+
+// SetHealth wires the batch health judge.
+func (s *BatchAdminService) SetHealth(h *BatchHealthService) { s.health = h }
+
+/*
+Health — 지금 이 순간의 판정과, **감시 자체가 살아 있는지**.
+
+워치독이 죽으면 판정이 조용히 멈추는데 화면은 그걸 알 방법이 없다. 그래서 저장된
+보고서의 나이를 함께 돌려준다 — 내용이 아니라 나이만 쓴다.
+*/
+func (s *BatchAdminService) Health(ctx context.Context) model.BatchHealthView {
+	now := time.Now()
+	view := model.BatchHealthView{
+		Report:        model.BatchHealthReport{ComputedAt: now, Jobs: []model.BatchJobHealth{}},
+		WatchdogStale: true,
+	}
+	if s == nil || s.health == nil {
+		return view
+	}
+	report, err := s.health.Report(ctx, now)
+	if err != nil {
+		log.Printf("batch health: %v", err)
+		return view
+	}
+	view.Report = report
+	watchdogAge := int64(-1)
+	if age, ok := s.health.WatchdogAge(ctx, now); ok {
+		seconds := int64(age.Seconds())
+		view.WatchdogAgeSeconds = &seconds
+		view.WatchdogStale = age > batchHealthStaleAfter
+		watchdogAge = seconds
+	}
+	// 화면 밖으로도 내보낸다 — 콘솔을 아무도 안 열어도 외부 모니터가 볼 수 있게.
+	metrics.SetBatchHealth(report.Unhealthy, watchdogAge)
+	return view
 }
 
 // SetResearch wires the 리서치 콜 verdict coverage source.
@@ -85,12 +127,44 @@ var batchJobCatalog = []model.BatchJobSpec{
 		AcceptsSince: true,
 	},
 	{
+		ID:       model.BatchTossUniverse,
+		Category: model.CategoryIngest,
+		Label:    "토스 유니버스",
+		Purpose: "토스가 거래를 지원하는 종목 집합을 마켓 단위로 받아(하루 7호출) 카탈로그에 표시합니다. " +
+			"그 집합에 없는 종목은 검색·목록에서 숨고, 수집 배치의 대상에서도 빠집니다 " +
+			"— 예전에는 그 사실을 종목마다 404를 맞아 가며 배웠습니다(경고 스윕 호출의 19%). " +
+			"같은 응답의 한국어 종목명으로 뉴스 검색 별칭도 갱신합니다(알파벳 A · 알파벳 C).",
+		Cost:     model.CostFree,
+		Schedule: "매일 01:00 KST (worker-filings)",
+	},
+	{
 		ID:       model.BatchStockScores,
 		Category: model.CategoryDerive,
 		Label:    "종목·지수 종합 점수",
 		Purpose:  "전 종목·전 지수 종합 점수를 재계산하고 일별 종가 행에 미러링합니다. 분포 검증까지 수행합니다.",
 		Cost:     model.CostFree,
 		Schedule: "매일 00:25 KST (worker-scores)",
+	},
+	{
+		ID:       model.BatchDataRetention,
+		Category: model.CategoryDerive,
+		Label:    "만료 데이터 정리",
+		Purpose: "쓰이지 않는데 계속 쌓이는 행을 지웁니다. 현재 대상은 만료된 리프레시 토큰입니다 " +
+			"— 로그인·갱신마다 한 행이 생기고 7일마다 회전하므로 활성 사용자당 연 365행씩 늘어납니다. " +
+			"만료 후 7일이 지난 것만 지웁니다(재발급 직후의 「없는 토큰」과 「만료된 토큰」을 구분해야 합니다).",
+		Cost:     model.CostFree,
+		Schedule: "매일 04:30 KST (worker-scores)",
+	},
+	{
+		ID:       model.BatchCandleRollup,
+		Category: model.CategoryDerive,
+		Label:    "캔들 계층 롤업",
+		Purpose: "오래된 인트라데이 봉의 해상도를 낮춰 보관합니다 " +
+			"(1분→3일→5분→7일→10분→14일→30분→30일→60분→60일 만료). " +
+			"삭제가 아니라 접기라 차트는 계속 그려지고 Toss 재호출도 늘지 않습니다. " +
+			"되돌릴 수 없습니다 — 접힌 1분봉은 사라집니다.",
+		Cost:     model.CostFree,
+		Schedule: "매일 05:30 KST (worker-scores)",
 	},
 	{
 		ID:           model.BatchIndexCloses,
@@ -138,7 +212,7 @@ var batchJobCatalog = []model.BatchJobSpec{
 		Label:    "AI 요약 배치 — 국내",
 		Purpose:  "마켓 레이더 1일 기준 상위 종목(파생상품 제외)의 AI 요약을 지금 즉시 생성합니다.",
 		Cost:     model.CostRateLimited,
-		Schedule: "KRX 개장 1시간 전 자동 (KR 08:00 KST) · 수동 실행 가능",
+		Schedule: "KRX 마감 후 자동 (16:30~18:30 KST) · 수동 실행 가능",
 		Note:     "LLM 일일/분당 호출·토큰 한도를 앱의 온디맨드 조회·/admin/llm 수동 생성과 공유합니다. 오늘 이미 자동 실행되었어도 다시 실행되며 한도를 다시 소모합니다. 휴장일에는 대상이 없어 실패로 기록됩니다.",
 	},
 	{
@@ -147,7 +221,7 @@ var batchJobCatalog = []model.BatchJobSpec{
 		Label:    "AI 요약 배치 — 해외",
 		Purpose:  "마켓 레이더 1일 기준 상위 종목(파생상품 제외)의 AI 요약을 지금 즉시 생성합니다.",
 		Cost:     model.CostRateLimited,
-		Schedule: "US 개장 1시간 전 자동 (US 08:30 ET) · 수동 실행 가능",
+		Schedule: "US 마감 후 자동 (18:00~20:00 ET) · 수동 실행 가능",
 		Note:     "LLM 일일/분당 호출·토큰 한도를 앱의 온디맨드 조회·/admin/llm 수동 생성과 공유합니다. 오늘 이미 자동 실행되었어도 다시 실행되며 한도를 다시 소모합니다. 휴장일에는 대상이 없어 실패로 기록됩니다.",
 	},
 	{
@@ -167,6 +241,26 @@ var batchJobCatalog = []model.BatchJobSpec{
 		Cost:     model.CostRateLimited,
 		Schedule: "장중 30분 · 그 외 1시간 자동 · 수동 실행 가능",
 		Note:     "자동 실행은 직전 생성 이후 새 기사가 없으면 건너뜁니다. 수동 실행은 새 기사가 없어도 무조건 생성하며 LLM 한도를 소모합니다. LLM이 꺼져 있으면 규칙 기반 브리핑으로 저장됩니다.",
+	},
+	{
+		ID:       model.BatchIndexNotes,
+		Category: model.CategoryLLM,
+		Label:    "AI 지수 해설",
+		Purpose:  "지수 13종이 각각 어떤 국면인지 한 문단으로 다시 씁니다.",
+		Cost:     model.CostRateLimited,
+		Schedule: "매일 00:25 자동 (점수 배치 직후, worker-scores) · 수동 실행 가능",
+		Note:     "지수당 1콜(최대 13콜)입니다. 자동 실행은 같은 거래일에 이미 해설이 있는 지수를 건너뛰지만, 수동 실행은 프롬프트를 고친 뒤 다시 보기 위한 것이라 무조건 덮어쓰며 한도를 다시 소모합니다. 숫자는 규칙이 계산해 넘기고 모델은 문장만 씁니다 — LLM이 꺼져 있으면 지표 나열 문장이 그대로 남습니다.",
+	},
+	{
+		ID:       model.BatchWatchdog,
+		Category: model.CategoryDerive,
+		Label:    "배치 감시",
+		Purpose: "모든 배치가 제 시각에 돌았는지 판정해 batch_health에 남깁니다. " +
+			"원장은 실행된 것만 알기 때문에, 실행되지 않은 것은 기대 시각을 따로 계산해야 보입니다 " +
+			"— 휴장이라 안 돈 것과 죽어서 안 돈 것을 가르는 것이 이 잡의 전부입니다.",
+		Cost:     model.CostFree,
+		Schedule: "15분마다 (worker-scores)",
+		Note:     "DB만 읽고 판정만 합니다. 늦은 잡은 로그에 한 줄씩 남고, 관리자 화면 상단 배너로도 나갑니다. 이 잡 자신도 감시 대상입니다 — 마지막 판정이 낡으면 감시가 멈춘 것입니다. 오래된 원장 행(90일 초과) 정리도 여기서 함께 합니다.",
 	},
 	{
 		ID:       model.BatchResearchVerdict,
@@ -224,7 +318,7 @@ var batchJobCatalog = []model.BatchJobSpec{
 		Cost:         model.CostRateLimited,
 		Schedule:     "매일 22:00 KST (worker-filings)",
 		AcceptsLimit: true,
-		Note:         "종목당 DART 호출이 20회를 넘습니다(연도 4벌 × 보고서 4종 + 누적 조회). 1초 간격이라 종목 하나에 20초 이상 걸리므로 기본 대상은 150종목(약 한 시간)입니다. 분기값과 누적값을 **둘 다** 담습니다 — 상세 모달은 분기, 국내 실적 탭은 누적을 봅니다.",
+		Note:         "종목당 DART 호출이 20회를 넘습니다(연도 4벌 × 보고서 4종 + 누적 조회). 1초 간격이라 종목 하나에 20초 이상 걸리므로 기본 대상은 400종목(약 2.5시간)입니다. 분기값과 누적값을 **둘 다** 담습니다 — 상세 모달은 분기, 국내 실적 탭은 누적을 봅니다.",
 	},
 	{
 		ID:           model.BatchFinancialsOverseas,
@@ -342,8 +436,19 @@ func (p BatchJobParams) toMap() map[string]any {
 	return m
 }
 
-// Catalog returns every job with its latest run and current coverage.
+// Catalog returns every job with its latest run, current coverage, and judged
+// health (see batch_expectation.go — 그 판정이 「휴장이라 안 돎」과 「죽어서 안 돎」을
+// 가른다).
 func (s *BatchAdminService) Catalog(ctx context.Context) []model.BatchJobStatus {
+	now := time.Now()
+	// 판정은 한 번의 질의로 모아 온다 — 잡마다 따로 물으면 화면 한 번에 40여 개다.
+	var ledger map[string]repository.BatchLedgerRow
+	if s.runs != nil {
+		if rows, err := s.runs.LedgerRows(ctx, batchLedgerLookback); err == nil {
+			ledger = rows
+		}
+	}
+
 	out := make([]model.BatchJobStatus, 0, len(batchJobCatalog))
 	for _, spec := range batchJobCatalog {
 		status := model.BatchJobStatus{Spec: spec}
@@ -352,6 +457,11 @@ func (s *BatchAdminService) Catalog(ctx context.Context) []model.BatchJobStatus 
 				status.LastRun = last
 				status.Running = last != nil && (last.Status == "running" || last.Status == "queued")
 			}
+		}
+		if ledger != nil {
+			health, expectedAt, _ := judgeBatchHealth(batchExpectations[spec.ID], ledger[string(spec.ID)], now)
+			status.Health = health
+			status.ExpectedAt = expectedAt
 		}
 		status.Coverage = s.coverageFor(ctx, spec.ID)
 		out = append(out, status)

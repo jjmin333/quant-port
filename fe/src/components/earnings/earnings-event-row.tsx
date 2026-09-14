@@ -47,13 +47,13 @@ export function EarningsEventRow({
         <div className="flex w-[52px] shrink-0 flex-col items-end gap-0.5 pt-0.5">
           <span
             className={cn(
-              "font-mono text-[11px] font-semibold tabular-nums",
+              "font-num text-cell font-semibold tabular-nums",
               estimated ? "text-[var(--sample)]" : "text-foreground",
             )}
           >
             {formatEarningsDateLabel(event.date)}
           </span>
-          <span className="font-mono text-[9px] tabular-nums text-muted-foreground">
+          <span className="font-num text-micro tabular-nums text-muted-foreground">
             {event.date.slice(5).replace("-", "/")}
           </span>
         </div>
@@ -69,8 +69,8 @@ export function EarningsEventRow({
 
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <span className="truncate text-xs font-medium text-foreground">{name}</span>
-            <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+            <span className="truncate text-cell font-medium text-foreground">{name}</span>
+            <span className="shrink-0 font-num text-micro text-muted-foreground">
               {periodLabel(event)}
             </span>
             <DateStatusBadge status={event.dateStatus} />
@@ -82,9 +82,9 @@ export function EarningsEventRow({
             {event.surprise ? (
               <EstimateActualPair surprise={event.surprise} currency={event.currency} />
             ) : estimated ? (
-              <span className="text-[10px] text-[var(--sample)]">{event.estimateBasis}</span>
+              <span className="text-micro text-[var(--sample)]">{event.estimateBasis}</span>
             ) : (
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-micro text-muted-foreground">
                 {/* 예정 행은 아직 비교할 실적이 없다. 컨센서스만 있으면 그것을
                     적어 "무엇이 기대되는가"를 알려 준다. */}
                 {expectationText(event)}
@@ -92,7 +92,7 @@ export function EarningsEventRow({
             )}
             {event.revisedAt && (
               <span
-                className="shrink-0 text-[10px] text-muted-foreground"
+                className="shrink-0 text-micro text-muted-foreground"
                 title={`${event.revisedAt}에 정정 공시됨 — 수치는 정정본, 날짜는 원 발표일입니다`}
               >
                 정정 {event.revisedAt.slice(5).replace("-", "/")}
@@ -102,7 +102,7 @@ export function EarningsEventRow({
                 열어야만 알 수 있으면 아무도 모른다. */}
             {event.alternates && event.alternates.length > 0 && (
               <span
-                className="shrink-0 text-[10px] text-muted-foreground"
+                className="shrink-0 text-micro text-muted-foreground"
                 title="같은 분기의 다른 기준(개별) 발표도 있습니다 — 눌러서 확인"
               >
                 +{event.alternates.map((a) => a.basis || "기타").join("·")}
@@ -112,11 +112,12 @@ export function EarningsEventRow({
         </div>
 
         <div className="flex shrink-0 flex-col items-end gap-0.5 pt-0.5">
-          <SurpriseValue surprise={event.surprise} className="text-xs" />
+          <SurpriseValue surprise={event.surprise} className="text-cell" />
           <ReactionValue
             reaction={event.reaction}
             status={event.dateStatus}
-            className="text-[11px]"
+            currency={event.currency}
+            className="text-cell"
           />
         </div>
       </button>
@@ -126,11 +127,11 @@ export function EarningsEventRow({
 
 /** 예정 행의 한 줄 — 컨센서스가 있으면 무엇이 기대되는지, 없으면 조용히 비운다. */
 function expectationText(event: EarningsEvent): string {
-  const eps = event.eps.estimate;
+  const eps = event.eps?.estimate;
   if (eps != null) {
     return `EPS 컨센서스 ${event.currency === "USD" ? "$" : ""}${eps.toFixed(2)}`;
   }
-  const op = event.opIncome.estimate;
+  const op = event.opIncome?.estimate;
   if (op != null) {
     return `영업이익 컨센서스 ${(op / 1e8).toLocaleString("ko-KR", { maximumFractionDigits: 0 })}억원`;
   }

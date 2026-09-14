@@ -235,7 +235,7 @@ func (s *QuotesService) buildQuoteSummaryForSymbol(
 	}
 
 	if s.TossEnabled() {
-		stock, err := s.toss.GetStock(ctx, sym)
+		stock, err := s.stockInfo(ctx, sym)
 		if err != nil || stock == nil {
 			q := zeroQuoteSummary(sym, watchSet, heldSet)
 			if s.marketStore != nil {
@@ -347,4 +347,40 @@ func withListMode(ctx context.Context) context.Context {
 func listMode(ctx context.Context) bool {
 	v, _ := ctx.Value(listModeKey).(bool)
 	return v
+}
+
+type listPriceMapKeyType struct{}
+
+var listPriceMapKey listPriceMapKeyType
+
+/*
+withListPrices — 목록이 **이미 배치로 받아 둔** 가격을 요청 안에서 공유한다.
+
+`LiveChanges`는 시작할 때 `fetchPriceMap`으로 전 종목 가격을 **MGET 한 번**에
+받는다. 그런데 종목별 가격 해석이 같은 값을 다시 `GetPrice`로 물으면 그것이
+**종목 수만큼의 Redis 왕복**이 된다 — 100종목 목록 한 번에 왕복 100회가 그냥
+더 붙는다(실측 2026-09-02: 요청당 Redis 명령 244개).
+
+같은 요청 안에서 같은 키를 두 번 읽을 이유가 없으므로 맵을 컨텍스트에 실어
+보낸다. 맵이 없으면(다른 호출 경로) 예전대로 Redis를 읽는다.
+
+**요청 범위다.** 오래 사는 캐시가 아니라 한 요청 동안의 중복 제거이므로
+신선도에 영향이 없다 — 어차피 그 요청이 쓰는 값은 전부 같은 MGET에서 나왔다.
+*/
+func withListPrices(ctx context.Context, prices map[string]float64) context.Context {
+	if len(prices) == 0 {
+		return ctx
+	}
+	return context.WithValue(ctx, listPriceMapKey, prices)
+}
+
+// listPrice는 요청 범위 가격 맵에서 값을 찾는다. 두 번째 값이 false면 맵이
+// 없거나 그 종목이 없다는 뜻이고, 호출부는 평소 경로로 간다.
+func listPrice(ctx context.Context, symbol string) (float64, bool) {
+	m, _ := ctx.Value(listPriceMapKey).(map[string]float64)
+	if len(m) == 0 {
+		return 0, false
+	}
+	v, ok := m[strings.ToUpper(strings.TrimSpace(symbol))]
+	return v, ok && v > 0
 }

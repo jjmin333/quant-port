@@ -1,33 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import {
-  Area,
-  AreaChart,
-  ResponsiveContainer,
-  Tooltip,
-  YAxis,
-} from "recharts";
-import { Card } from "@/components/ui/card";
+import { useMemo } from "react";
 import { FundamentalsIndicatorsPanel } from "@/components/analysis/fundamentals-section";
-import {
-  VALUATION_SUB_TABS,
-  type ValuationSubTabId,
-} from "@/lib/analysis-tabs";
-import { buildTrendSeries, medianOf, rangeLabel } from "@/lib/analysis-chart-utils";
-import type { FundamentalsData, StockFundamentalsPanel } from "@/lib/fundamentals-types";
+import { Card } from "@/components/ui/card";
+import type { FundamentalsData } from "@/lib/fundamentals-types";
 import { mapFundamentalsToPanel } from "@/lib/fundamentals-mapper";
 import type { QuoteDetail, StockInfo } from "@/lib/quotes-types";
-import {
-  applyLiveValuationMultiples,
-  computeLivePER,
-  computeLivePBR,
-} from "@/lib/valuation-multiples";
-import {
-  VALUATION_DATA_DISCLAIMER,
-  valuationMultipleDescription,
-} from "@/lib/valuation-labels";
-import { cn } from "@/lib/utils";
+import { applyLiveValuationMultiples } from "@/lib/valuation-multiples";
+
 type ValuationTabProps = {
   stock: StockInfo;
   fundamentals: FundamentalsData | null;
@@ -35,206 +15,53 @@ type ValuationTabProps = {
   loading: boolean;
 };
 
-type MultipleDef = {
-  id: string;
-  label: string;
-  value: number | null | undefined;
-};
-
-export function ValuationTab({ stock, fundamentals, quote, loading }: ValuationTabProps) {
-  const [subTab, setSubTab] = useState<ValuationSubTabId>("multiples");
-
+/**
+ * 밸류에이션 탭 — **한 화면이다.**
+ *
+ * 예전에는 「배수」와 「지표」 두 서브탭이 있었고 기본이 「배수」였다. 세어 보니
+ * 배수 화면의 지표 5개 중 4개(PER·PBR·FWD PER·CY PER)가 지표 화면과 그대로
+ * 중복이었고, 고유한 것은 PSR 하나뿐이었다 — 그건 지표 쪽으로 옮겼다.
+ *
+ * 나머지 콘텐츠는 전부 지어낸 값이라 함께 사라졌다: 스파크라인은
+ * `buildTrendSeries(value, `${symbol}-${label}`)`로 **심볼 문자열을 해시로 시드 삼은
+ * 의사난수** 12점이었고, 그 위에서 5년 중앙값·최소·최대를 구해 「과거 5년 대비
+ * Low/Mid/High」를 판정했다. 「산업 대비」의 업종 중앙값은 `med5y * 1.05`였고,
+ * 「NTM 추정」은 `value * 0.92`였다. 장식이 아니라 **판정**을 지어낸 숫자에서
+ * 뽑고 있었다는 점에서 재무제표 카드의 가짜 추세선보다 나빴다.
+ *
+ * 진짜 PER·PBR 분기 추이가 필요하면 재무제표 탭의 「PER · PBR (분기말 종가 기준)」
+ * 카드에 있다 — 서버가 일봉 × 분기 재무로 계산한 값이다.
+ */
+export function ValuationTab({
+  stock,
+  fundamentals,
+  quote,
+  loading,
+}: ValuationTabProps) {
+  // 주가만 실시간으로 갈아 끼운다 — 재무는 배치 주기, 주가는 5초라 배수가
+  // 하루 종일 어제 값에 묶여 있으면 안 된다.
   const liveFundamentals = useMemo(
     () => applyLiveValuationMultiples(fundamentals, quote),
-    [fundamentals, quote?.currentPrice],
+    [fundamentals, quote],
   );
 
-  const panel = useMemo(() => {
-    if (!liveFundamentals) return null;
-    return mapFundamentalsToPanel(liveFundamentals, stock);
-  }, [liveFundamentals, stock]);
+  const panel = useMemo(
+    () => (liveFundamentals ? mapFundamentalsToPanel(liveFundamentals, stock) : null),
+    [liveFundamentals, stock],
+  );
 
-  const multiples = useMemo(() => {
-    if (!liveFundamentals) return [];
-    const psr =
-      quote && liveFundamentals.revenue && liveFundamentals.revenue > 0 && quote.marketCap > 0
-        ? quote.marketCap / liveFundamentals.revenue
-        : null;
-
-    const livePer = computeLivePER(quote, liveFundamentals);
-    const livePbr = computeLivePBR(quote, liveFundamentals);
-
-    const list: MultipleDef[] = [
-      { id: "per", label: "PER", value: livePer },
-      { id: "pbr", label: "PBR", value: livePbr },
-      { id: "psr", label: "PSR", value: psr },
-      { id: "fwd", label: "FWD PER", value: liveFundamentals.fwdPer },
-      { id: "cy", label: "CY PER", value: liveFundamentals.cyPer },
-    ];
-    return list.filter((m) => m.value != null && m.value > 0);
-  }, [liveFundamentals, quote]);
   if (loading) {
     return (
-      <Card className="flex min-h-[200px] items-center justify-center p-6 text-xs text-[var(--text-muted)]">
+      <Card className="flex min-h-[200px] items-center justify-center p-6 text-cell text-[var(--text-muted)]">
         밸류에이션 데이터 로딩 중…
       </Card>
     );
   }
 
-  return (
-    <div className="space-y-3">
-      <p className="text-[10px] leading-relaxed text-[var(--text-muted)]">{VALUATION_DATA_DISCLAIMER}</p>
-      <div className="flex gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)]/40 p-0.5">
-        {VALUATION_SUB_TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setSubTab(t.id)}
-            className={cn(
-              "flex-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors",
-              subTab === t.id
-                ? "bg-[var(--surface)] text-[var(--brand)] shadow-sm"
-                : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {subTab === "indicators" ? (
-        <FundamentalsIndicatorsPanel
-          stock={stock}
-          data={liveFundamentals}
-          panel={panel}
-        />      ) : multiples.length === 0 ? (
-        <Card className="flex min-h-[160px] items-center justify-center p-6 text-xs text-[var(--text-muted)]">
-          표시할 밸류에이션 배수가 없습니다.
-        </Card>
-      ) : (
-        <div className="grid gap-2.5 sm:grid-cols-2">
-          {multiples.map((m) => (
-            <MultipleCard
-              key={m.id}
-              symbol={stock.symbol}
-              label={m.label}
-              value={m.value!}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function MultipleCard({
-  symbol,
-  label,
-  value,
-}: {
-  symbol: string;
-  label: string;
-  value: number;
-}) {
-  const series = useMemo(
-    () => buildTrendSeries(value, `${symbol}-${label}`),
-    [symbol, label, value],
-  );
-  const values = series.map((p) => p.value);
-  const med5y = medianOf(values);
-  const min5y = Math.min(...values);
-  const max5y = Math.max(...values);
-  const hist = rangeLabel(value, med5y);
-  const indMedian = med5y * 1.05;
-  const ind = rangeLabel(value, indMedian);
-
-  return (
-    <Card className="p-3">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-[11px] text-[var(--text-muted)]">{label}</p>
-          <p className="font-mono text-xl font-semibold tabular-nums text-[var(--text-primary)]">
-            {value.toFixed(2)}x
-          </p>
-          {valuationMultipleDescription(label) && (
-            <p className="mt-1 text-[10px] leading-snug text-[var(--text-muted)]">
-              {valuationMultipleDescription(label)}
-            </p>
-          )}
-        </div>
-      </div>
-      <div className="mt-2 h-[72px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={series} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id={`grad-${symbol}-${label}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--brand)" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="var(--brand)" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <YAxis hide domain={["auto", "auto"]} />
-            <Tooltip
-              formatter={(v) => [`${Number(v).toFixed(2)}x`, label]}
-              labelFormatter={(l) => `${l}년`}
-              contentStyle={{
-                background: "var(--surface)",
-                border: "1px solid var(--border)",
-                borderRadius: 8,
-                fontSize: 11,
-              }}
-            />
-            <Area
-              type="monotone"
-              dataKey="value"
-              stroke="var(--brand)"
-              fill={`url(#grad-${symbol}-${label})`}
-              strokeWidth={1.5}
-              dot={false}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-      <div className="mt-2 grid grid-cols-2 gap-2 text-[10px]">
-        <CompareChip title="과거 5년 대비" label={hist.label} tone={hist.tone} />
-        <CompareChip title="산업 대비" label={ind.label} tone={ind.tone} />
-      </div>
-      <dl className="mt-2 grid grid-cols-3 gap-1 text-[10px]">
-        <StatBox label="5Y 중앙" value={`${med5y.toFixed(1)}x`} />
-        <StatBox label="5Y 범위" value={`${min5y.toFixed(1)}–${max5y.toFixed(1)}`} />
-        <StatBox label="NTM 추정" value={`${(value * 0.92).toFixed(1)}x`} />
-      </dl>
-    </Card>
-  );
-}
-
-function CompareChip({
-  title,
-  label,
-  tone,
-}: {
-  title: string;
-  label: string;
-  tone: "low" | "mid" | "high";
-}) {
-  const color =
-    tone === "low"
-      ? "text-emerald-400"
-      : tone === "high"
-        ? "text-rose-400"
-        : "text-[var(--text-muted)]";
-  return (
-    <div className="rounded-md bg-[var(--surface-elevated)]/60 px-2 py-1.5">
-      <p className="text-[var(--text-muted)]">{title}</p>
-      <p className={cn("mt-0.5 font-semibold", color)}>{label}</p>
-    </div>
-  );
-}
-
-function StatBox({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded border border-[var(--border)] px-1.5 py-1 text-center">
-      <dt className="text-[var(--text-muted)]">{label}</dt>
-      <dd className="mt-0.5 font-mono tabular-nums text-[var(--text-primary)]">{value}</dd>
-    </div>
-  );
+  /*
+    「재무제표·발행주식수는 실시간이 아니며…」 각주는 뺐다(2026-09-03 사용자 결정 §10).
+    갱신 주기는 카드의 `FY…` 표기와 커버리지 등급 배지가 이미 말하고 있고, 그 한
+    줄은 모든 종목·모든 방문에 똑같이 붙어 아무도 읽지 않는 자리를 차지하고 있었다.
+  */
+  return <FundamentalsIndicatorsPanel stock={stock} data={liveFundamentals} panel={panel} />;
 }

@@ -87,11 +87,24 @@ export function useMySymbols(market: "domestic" | "us"): MySymbols {
   }, [session, mine, market, authLoading]);
 }
 
+export type SymbolQuotes = {
+  quotes: Map<string, QuoteSummary>;
+  /**
+   * 아직 배치가 돌아오지 않았다.
+   *
+   * 「시세를 못 찾은 종목」과 **구분되어야 한다.** 이 둘이 같은 빈 맵으로 보이던
+   * 동안, 화면은 시세가 오기 전 종목 칩에 `quote?.name || symbol`로 종목코드를
+   * 그렸다가 이름으로 바꿨다 — 사용자에게 그건 로딩이 아니라 「종목코드가 뜨는
+   * 버그」였다. 로딩 중에는 자리만 잡고, 정말 못 찾았을 때만 코드를 적는다.
+   */
+  loading: boolean;
+};
+
 /**
  * 심볼 → 시세. 목록이 바뀔 때만 다시 부르고, 5초 폴링에는 태우지 않는다 —
  * 뉴스 화면에서 시세는 맥락이지 감시 대상이 아니다.
  */
-export function useSymbolQuotes(symbols: string[]): Map<string, QuoteSummary> {
+export function useSymbolQuotesState(symbols: string[]): SymbolQuotes {
   const key = useMemo(() => [...symbols].sort().join(","), [symbols]);
   const [loaded, setLoaded] = useState<{ key: string; quotes: Map<string, QuoteSummary> }>({
     key: "",
@@ -120,5 +133,16 @@ export function useSymbolQuotes(symbols: string[]): Map<string, QuoteSummary> {
     };
   }, [key]);
 
-  return loaded.key === key ? loaded.quotes : new Map();
+  if (loaded.key === key) {
+    return { quotes: loaded.quotes, loading: false };
+  }
+  // 심볼이 하나도 없으면 받을 것도 없다 — 영원한 로딩으로 두지 않는다.
+  return { quotes: EMPTY_QUOTES, loading: key.length > 0 };
+}
+
+const EMPTY_QUOTES: Map<string, QuoteSummary> = new Map();
+
+/** 로딩 여부가 필요 없는 호출부용. */
+export function useSymbolQuotes(symbols: string[]): Map<string, QuoteSummary> {
+  return useSymbolQuotesState(symbols).quotes;
 }

@@ -162,19 +162,21 @@ func (s *QuotesService) warmRawCacheFromDB(ctx context.Context, symbol string) {
 		return
 	}
 	sym := strings.ToUpper(strings.TrimSpace(symbol))
-	var raw1m []model.Candle
-	if s.cacheGetJSON(ctx, fmt.Sprintf(mdRaw1mKeyFmt, sym), &raw1m) && len(raw1m) > 0 {
-		// already warm
-	} else if stored, _, err := s.candles.ListBefore(ctx, sym, model.Interval1m, "", tossCandlePageSize); err == nil && len(stored) > 0 {
-		s.cacheSetJSON(ctx, fmt.Sprintf(mdRaw1mKeyFmt, sym), stored,
-			time.Duration(model.MarketDataCandleHistCacheSec)*time.Second)
+	/*
+		「이미 채워져 있나」는 **있는지만** 물으면 된다. 예전에는 그 답을 얻자고
+		291KB(1분봉)·19KB(일봉) 배열을 통째로 받아 길이만 재고 버렸다.
+	*/
+	if !s.cacheKeyExists(ctx, fmt.Sprintf(mdRaw1mKeyFmt, sym)) {
+		if stored, _, err := s.candles.ListBefore(ctx, sym, model.Interval1m, "", tossCandlePageSize); err == nil && len(stored) > 0 {
+			s.storeRawCandles(ctx, fmt.Sprintf(mdRaw1mKeyFmt, sym), stored,
+				time.Duration(model.MarketDataCandleHistCacheSec)*time.Second)
+		}
 	}
-	var raw1d []model.Candle
-	if s.cacheGetJSON(ctx, fmt.Sprintf(mdRaw1dKeyFmt, sym), &raw1d) && len(raw1d) > 0 {
+	if s.cacheKeyExists(ctx, fmt.Sprintf(mdRaw1dKeyFmt, sym)) {
 		return
 	}
 	if stored, _, err := s.candles.ListBefore(ctx, sym, model.Interval1d, "", tossCandlePageSize); err == nil && len(stored) > 0 {
-		s.cacheSetJSON(ctx, fmt.Sprintf(mdRaw1dKeyFmt, sym), stored,
+		s.storeRawCandles(ctx, fmt.Sprintf(mdRaw1dKeyFmt, sym), stored,
 			time.Duration(model.MarketDataCandleHistCacheSec)*time.Second)
 	}
 }

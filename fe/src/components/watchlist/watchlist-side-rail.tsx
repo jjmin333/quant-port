@@ -5,8 +5,8 @@ import { StockAvatar } from "@/components/stocks/stock-avatar";
 import { useSymbolQuickLook } from "@/components/stocks/symbol-quick-look-modal";
 import { IndexPulseCard } from "@/components/market/index-pulse-card";
 import { StockCatalogSearchField } from "@/components/market/stock-catalog-search-field";
-import { WatchlistNewsCard } from "@/components/watchlist/watchlist-news-card";
-import { WatchlistScheduleCard } from "@/components/watchlist/watchlist-schedule-card";
+import { SymbolNewsCard } from "@/components/stocks/symbol-news-card";
+import { PersonalScheduleCard } from "@/components/earnings/personal-schedule-card";
 import { WatchlistSinceAddedCard } from "@/components/watchlist/watchlist-since-added-card";
 import {
   SectionCard,
@@ -96,7 +96,7 @@ export function WatchlistSideRail({
   return (
     <>
       <SectionCard title="종목 추가">
-        <p className="mb-1.5 text-[11px] text-muted-foreground">
+        <p className="mb-1.5 text-cell text-muted-foreground">
           종목명 또는 티커로 검색한 뒤 목록에서 선택하세요.
         </p>
         <StockCatalogSearchField
@@ -146,9 +146,13 @@ export function WatchlistSideRail({
         </SectionCard>
       )}
 
-      {rows.length > 0 && <WatchlistScheduleCard events={events} onPick={quickLook.open} />}
+      {/* 보유 화면·뉴스 레일과 같은 부품 — 2026-09-05 사용자 요청 7 */}
+      {rows.length > 0 && <PersonalScheduleCard events={events} onPick={quickLook.open} />}
       {rows.length > 0 && <WatchlistSinceAddedCard rows={rows} onPick={quickLook.open} />}
-      {newsTargets.length > 0 && <WatchlistNewsCard symbols={newsTargets} />}
+      {/* 보유 화면과 같은 부품 — 2026-09-05 사용자 요청 7 */}
+      {newsTargets.length > 0 && (
+        <SymbolNewsCard symbols={newsTargets} title="관심종목 뉴스" subjectLabel="관심종목 상위" />
+      )}
 
       <IndexPulseCard />
 
@@ -168,7 +172,7 @@ function MoverList({
 }) {
   return (
     <>
-      <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+      <p className="mb-0.5 text-micro font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
       <ul className="min-w-0">
@@ -177,7 +181,7 @@ function MoverList({
             <button
               type="button"
               onClick={() => onPick(q.symbol, q)}
-              className="flex h-[30px] w-full min-w-0 items-center gap-2 rounded-md px-1 text-xs hover:bg-accent"
+              className="flex h-[30px] w-full min-w-0 items-center gap-2 rounded-md px-1 text-cell hover:bg-accent"
             >
               <StockAvatar
                 symbol={q.symbol}
@@ -190,7 +194,7 @@ function MoverList({
               <span className="min-w-0 flex-1 truncate text-left">{q.name || q.symbol}</span>
               <span
                 className={cn(
-                  "shrink-0 font-mono text-xs tabular-nums",
+                  "shrink-0 font-num text-cell tabular-nums",
                   trendTextClass(q.changeRate),
                 )}
               >

@@ -1,0 +1,1738 @@
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>목표가 예측 — 기능 컴포넌트 카탈로그 v1</title>
+<style>
+/* ─────────────────────────────────────────────────────────────
+   「목표가 예측」 = 목표가 관리 + 스탬프 통합 메뉴
+   화면 배치가 아니라 **넣을 기능 조각**을 하나씩 실물로 그린 카탈로그.
+
+   토큰은 fe/src/app/globals.css 에서 그대로 옮겼다(눈대중 금지).
+   ───────────────────────────────────────────────────────────── */
+:root {
+  --background: oklch(0.97 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --surface-elevated: oklch(0.97 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.93 0 0);
+  --border: oklch(0.87 0 0);
+  --brand: #2563eb;
+  --brand-muted: rgba(37, 99, 235, 0.1);
+  --profit: #dc2626;
+  --loss: #2563eb;
+  --profit-muted: rgba(220, 38, 38, 0.1);
+  --loss-muted: rgba(37, 99, 235, 0.1);
+  --text-muted: oklch(0.65 0 0);
+  --sample: #7c3aed;
+  --sample-muted: rgba(124, 58, 237, 0.12);
+  --warn: #b45309;
+  --warn-muted: rgba(180, 83, 9, 0.12);
+  --reach: #059669;
+  --reach-muted: rgba(5, 150, 105, 0.12);
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --surface-elevated: oklch(0.269 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 16%);
+  --brand: #60a5fa;
+  --brand-muted: rgba(96, 165, 250, 0.15);
+  --profit: #f87171;
+  --loss: #60a5fa;
+  --profit-muted: rgba(248, 113, 113, 0.14);
+  --loss-muted: rgba(96, 165, 250, 0.14);
+  --text-muted: oklch(0.6 0 0);
+  --sample: #a78bfa;
+  --sample-muted: rgba(167, 139, 250, 0.14);
+  --warn: #fbbf24;
+  --warn-muted: rgba(251, 191, 36, 0.14);
+  --reach: #34d399;
+  --reach-muted: rgba(52, 211, 153, 0.16);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--background); color: var(--foreground);
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 12px; line-height: 1.5; padding: 18px 20px 120px;
+  -webkit-font-smoothing: antialiased; font-synthesis: none;
+}
+.wrap { max-width: 1280px; margin: 0 auto; }
+
+.t-micro { font-size: 11px; line-height: 1.35; }
+.t-cell { font-size: 12px; line-height: 1.35; }
+.t-note { font-size: 13px; line-height: 1.4; }
+.num { font-variant-numeric: tabular-nums; }
+.up { color: var(--profit); } .down { color: var(--loss); }
+.dim { color: var(--text-muted); } .sec { color: var(--muted-foreground); }
+.b { font-weight: 700; } .sb { font-weight: 600; }
+.reach { color: var(--reach); }
+
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.015em; }
+h2 { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+h3 { font-size: 13px; font-weight: 600; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em;
+  background: var(--muted); border-radius: 4px; padding: 1px 4px; }
+
+/* ── 문서 껍데기 ── */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 4px 0 11px; margin-bottom: 16px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--background); z-index: 60; }
+.topbar .who { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+button.tgl { font: inherit; font-size: 12px; cursor: pointer; border: 1px solid var(--border);
+  background: var(--card); color: var(--foreground); border-radius: 8px; padding: 5px 12px; }
+button.tgl:hover { background: var(--accent); }
+
+.lead { max-width: 940px; margin-bottom: 16px; color: var(--muted-foreground); font-size: 12px; line-height: 1.7; }
+.lead b { color: var(--foreground); font-weight: 600; }
+.kicker { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
+  color: var(--brand); background: var(--brand-muted); border-radius: 6px; padding: 2px 8px; margin-bottom: 8px; }
+
+/* 인덱스 */
+.index { border: 1px solid var(--border); background: var(--card); border-radius: 12px; padding: 12px 14px;
+  margin-bottom: 26px; }
+.index h3 { margin-bottom: 8px; }
+.index .grp { display: flex; gap: 6px; flex-wrap: wrap; align-items: baseline; margin-bottom: 7px; }
+.index .grp > b { font-size: 11px; color: var(--text-muted); flex: 0 0 176px; font-weight: 700; }
+.index a { font-size: 11px; text-decoration: none; color: var(--muted-foreground);
+  border: 1px solid var(--border); border-radius: 6px; padding: 2px 7px; background: var(--surface-elevated); }
+.index a:hover { border-color: var(--brand); color: var(--brand); }
+
+/* 그룹 헤더 */
+.grouphead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 40px 0 14px;
+  padding-bottom: 8px; border-bottom: 2px solid var(--border); }
+.grouphead .g { font-size: 11px; font-weight: 800; color: #fff; background: var(--foreground);
+  border-radius: 6px; padding: 3px 8px; letter-spacing: 0.04em; }
+.grouphead p { color: var(--muted-foreground); font-size: 11.5px; }
+
+/* 컴포넌트 카드 */
+.comp { border: 1px solid var(--border); background: var(--card); border-radius: 12px; margin-bottom: 16px;
+  overflow: hidden; }
+.comp > header { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; padding: 11px 14px;
+  border-bottom: 1px solid var(--border); background: var(--surface-elevated); }
+.comp > header .no { font-size: 11px; font-weight: 800; color: var(--brand); background: var(--brand-muted);
+  border-radius: 6px; padding: 2px 7px; letter-spacing: 0.02em; flex: none; }
+.comp > header h3 { font-size: 14px; }
+.comp > header .q { flex: 1 1 100%; font-size: 11.5px; color: var(--muted-foreground); line-height: 1.55; }
+.comp > header .q b { color: var(--foreground); font-weight: 600; }
+.comp > .demo { padding: 16px 14px; background:
+  repeating-linear-gradient(45deg, transparent, transparent 9px, color-mix(in oklab, var(--border) 22%, transparent) 9px, color-mix(in oklab, var(--border) 22%, transparent) 10px); }
+.comp > .demo.plain { background: none; }
+.comp > footer { padding: 9px 14px; border-top: 1px solid var(--border); font-size: 11px;
+  color: var(--muted-foreground); line-height: 1.7; display: flex; gap: 16px; flex-wrap: wrap; }
+.comp > footer .fl { flex: 1 1 260px; min-width: 0; }
+.comp > footer .fl b { color: var(--foreground); font-weight: 600; display: block; margin-bottom: 2px;
+  font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+.comp > footer code { font-size: 10.5px; }
+.newflag { font-size: 10px; font-weight: 800; color: var(--sample); background: var(--sample-muted);
+  border-radius: 5px; padding: 2px 6px; }
+.fromflag { font-size: 10px; font-weight: 700; border-radius: 5px; padding: 2px 6px;
+  background: var(--muted); color: var(--muted-foreground); }
+
+/* 무대 (실제 폭) */
+.stage { background: var(--card); border: 1px solid var(--border); border-radius: 10px; }
+.w-main { width: 900px; max-width: 100%; }
+.w-rail { width: 300px; }
+.w-mob { width: 375px; }
+.stagecap { font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted);
+  font-weight: 700; margin-bottom: 5px; }
+.row2 { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+
+/* ── 공통 UI 조각 ── */
+.badge { font-size: 10.5px; font-weight: 700; border-radius: 6px; padding: 2px 6px; flex: none;
+  line-height: 1.35; white-space: nowrap; }
+.badge.reached { background: var(--reach-muted); color: var(--reach); }
+.badge.hit { background: var(--profit-muted); color: var(--profit); }
+.badge.miss { background: var(--loss-muted); color: var(--loss); }
+.badge.pending { background: var(--muted); color: var(--muted-foreground); }
+.badge.due { background: var(--brand-muted); color: var(--brand); }
+.badge.warn { background: var(--warn-muted); color: var(--warn); }
+.badge.stop { background: var(--loss-muted); color: var(--loss); }
+.badge.hollow { background: transparent; border: 1px solid var(--border); color: var(--muted-foreground); font-weight: 600; }
+
+.btn { font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; border-radius: 8px;
+  padding: 6px 12px; border: 1px solid var(--border); background: var(--card); color: var(--foreground);
+  display: inline-flex; align-items: center; gap: 5px; }
+.btn:hover { background: var(--accent); }
+.btn.pri { background: var(--brand); border-color: var(--brand); color: #fff; }
+.btn.sm { font-size: 11px; padding: 4px 9px; }
+.btn.xs { font-size: 10.5px; padding: 3px 7px; }
+
+.chipbar { display: inline-flex; gap: 2px; background: var(--surface-elevated); border-radius: 9px; padding: 2px; }
+.chipbar button { font: inherit; font-size: 11.5px; font-weight: 500; cursor: pointer; border: 0;
+  background: transparent; color: var(--text-muted); border-radius: 7px; padding: 4px 10px; }
+.chipbar button.on { background: var(--card); color: var(--foreground); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+
+.av { flex: none; width: 24px; height: 24px; border-radius: 999px; display: grid; place-items: center;
+  font-size: 9px; font-weight: 700; color: #fff; letter-spacing: -0.02em; }
+.av.lg { width: 32px; height: 32px; font-size: 11px; }
+.av.sm { width: 18px; height: 18px; font-size: 7.5px; }
+.av-005930 { background: #1428a0; } .av-000660 { background: #e60012; }
+.av-042660 { background: #f47216; } .av-NVDA { background: #76b900; }
+.av-AAPL { background: #333; } .av-035720 { background: #fee500; color: #191600; }
+
+.card2 { border: 1px solid var(--border); border-radius: 11px; background: var(--card); }
+.hd2 { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+.hd2 h3 { flex: 1 1 auto; min-width: 0; }
+.bd2 { padding: 11px 12px; }
+
+.rowf { display: flex; align-items: center; }
+.wrapf { flex-wrap: wrap; }
+.grow { flex: 1 1 auto; min-width: 0; }
+.stack { display: flex; flex-direction: column; }
+.gap2{gap:2px}.gap4{gap:4px}.gap6{gap:6px}.gap8{gap:8px}.gap10{gap:10px}.gap12{gap:12px}.gap16{gap:16px}
+.mt2{margin-top:2px}.mt4{margin-top:4px}.mt6{margin-top:6px}.mt8{margin-top:8px}.mt10{margin-top:10px}.mt12{margin-top:12px}
+.trunc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+hr.hair { height: 1px; background: var(--border); border: 0; margin: 10px 0; }
+
+/* ── 가격 축 (가로) ── */
+.paxis { position: relative; height: 6px; border-radius: 999px; background: var(--surface-elevated); margin: 22px 0 20px; }
+.paxis .fill { position: absolute; top: 0; bottom: 0; border-radius: 999px; }
+.paxis .mk { position: absolute; top: 50%; transform: translate(-50%, -50%); }
+.paxis .mk .pin { display: block; width: 2px; height: 16px; border-radius: 1px; }
+.paxis .mk .lb { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap;
+  font-size: 9.5px; font-variant-numeric: tabular-nums; line-height: 1.2; text-align: center; }
+.paxis .mk .lb.above { bottom: 12px; }
+.paxis .mk .lb.below { top: 12px; }
+.paxis .mk .lb .t { display: block; font-size: 8.5px; letter-spacing: 0.02em; opacity: 0.85; }
+.paxis .dot { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 12px; height: 12px;
+  border-radius: 999px; border: 2.5px solid var(--card); z-index: 3; }
+
+/* ── 사다리 (세로) ── */
+.ladder { display: grid; grid-template-columns: 58px minmax(0,1fr) auto; gap: 4px 8px; align-items: center; }
+.ladder .lb { font-size: 11px; color: var(--text-muted); }
+.ladder .lb.now { color: var(--foreground); font-weight: 700; }
+.ladder .tr { height: 6px; border-radius: 999px; background: var(--surface-elevated); position: relative; }
+.ladder .tr > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; }
+.ladder .pv { font-size: 11.5px; font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
+
+/* ── 진행 게이지 ── */
+.pg { position: relative; height: 8px; border-radius: 999px; background: var(--surface-elevated); }
+.pg > i { position: absolute; top: 0; bottom: 0; border-radius: 999px; }
+.pg .zero { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--text-muted); opacity: .5; }
+
+/* ── 실링 ── */
+.seal { flex: none; width: 48px; height: 48px; border-radius: 999px; display: grid; place-items: center;
+  border: 2px solid currentColor; text-align: center; line-height: 1.1; font-weight: 800;
+  letter-spacing: -0.02em; transform: rotate(-8deg); }
+.seal .v { font-size: 11.5px; display: block; }
+.seal .d { font-size: 8px; font-weight: 600; display: block; opacity: 0.75; }
+.seal.reached { color: var(--reach); background: var(--reach-muted); }
+.seal.hit { color: var(--profit); background: var(--profit-muted); }
+.seal.miss { color: var(--loss); background: var(--loss-muted); }
+.seal.stop { color: var(--loss); background: var(--loss-muted); border-style: double; }
+.seal.live { color: var(--text-muted); background: var(--muted); border-style: dashed; }
+.seal.due { color: var(--brand); background: var(--brand-muted); }
+
+/* ── 목록 행 ── */
+.lrow { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0;
+  background: transparent; color: inherit; font: inherit; cursor: pointer; padding: 10px 12px;
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent); }
+.lrow:last-child { border-bottom: 0; }
+.lrow:hover { background: var(--accent); }
+
+/* ── 폼 ── */
+.field { margin-bottom: 10px; }
+.field > label { display: block; font-size: 11px; font-weight: 600; color: var(--muted-foreground); margin-bottom: 4px; }
+.field > label .opt { font-weight: 400; color: var(--text-muted); }
+.inp { width: 100%; font: inherit; font-size: 12.5px; font-variant-numeric: tabular-nums;
+  border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; background: var(--card);
+  color: var(--foreground); }
+.inp::placeholder { color: var(--text-muted); }
+.inp.ghost { color: var(--text-muted); }
+.presets { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 5px; }
+.presets button { font: inherit; font-size: 10.5px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface-elevated); color: var(--muted-foreground);
+  border-radius: 6px; padding: 3px 7px; }
+.presets button.on { border-color: var(--brand); color: var(--brand); background: var(--brand-muted); }
+
+.convdots { display: flex; gap: 4px; }
+.convdots button { width: 26px; height: 26px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface-elevated); color: var(--text-muted); font: inherit; font-size: 11px;
+  font-weight: 700; cursor: pointer; }
+.convdots button.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+
+/* ── 눈금자 (목표가 입력 보조) ── */
+.ruler { position: relative; height: 34px; margin: 16px 0 24px; }
+.ruler .line { position: absolute; left: 0; right: 0; top: 17px; height: 2px; background: var(--surface-elevated); border-radius: 2px; }
+.ruler .band { position: absolute; top: 13px; height: 10px; border-radius: 3px; }
+.ruler .m { position: absolute; top: 6px; width: 2px; height: 24px; border-radius: 1px; }
+.ruler .cap { position: absolute; white-space: nowrap; font-size: 9.5px; line-height: 1.15;
+  transform: translateX(-50%); text-align: center; font-variant-numeric: tabular-nums; }
+.ruler .cap.top { top: -12px; } .ruler .cap.bot { top: 32px; }
+.ruler .cap .t { display: block; font-size: 8.5px; opacity: .85; }
+
+/* ── 타임라인 ── */
+.tl { position: relative; padding-left: 18px; }
+.tl::before { content: ""; position: absolute; left: 4px; top: 5px; bottom: 5px; width: 1px; background: var(--border); }
+.tl .ev { position: relative; padding: 5px 0; }
+.tl .ev::before { content: ""; position: absolute; left: -18px; top: 10px; width: 9px; height: 9px;
+  border-radius: 999px; background: var(--card); border: 2px solid var(--text-muted); }
+.tl .ev.brand::before { border-color: var(--brand); background: var(--brand); }
+.tl .ev.warnd::before { border-color: var(--warn); }
+.tl .ev.reachd::before { border-color: var(--reach); background: var(--reach); }
+
+/* ── 조망 스트립 ── */
+.spread { position: relative; height: 74px; margin: 24px 0 8px; }
+.spread .zero { position: absolute; top: 0; bottom: 16px; width: 2px; background: var(--foreground); opacity: .55; }
+.spread .lane { position: absolute; left: 0; right: 0; top: 30px; height: 2px; background: var(--surface-elevated); }
+.spread .zoneL, .spread .zoneR { position: absolute; top: 22px; height: 18px; border-radius: 4px; }
+.spread .pt { position: absolute; top: 31px; transform: translate(-50%, -50%); width: 26px; height: 26px;
+  border-radius: 999px; border: 2px solid var(--card); display: grid; place-items: center;
+  font-size: 8.5px; font-weight: 700; color: #fff; cursor: pointer; }
+.spread .sc { position: absolute; top: 56px; transform: translateX(-50%); font-size: 9.5px; color: var(--text-muted);
+  font-variant-numeric: tabular-nums; }
+
+/* ── 5축 대조 ── */
+.axis5 { display: grid; grid-template-columns: 50px 1fr 1fr; gap: 4px 8px; align-items: center; }
+.axis5 .n { font-size: 10.5px; color: var(--text-muted); }
+.axis5 .track { position: relative; height: 14px; border-radius: 3px; background: var(--surface-elevated); }
+.axis5 .track > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; }
+.axis5 .track > i.then { background: color-mix(in oklab, var(--text-muted) 45%, transparent); }
+.axis5 .track > i.now { background: var(--brand); }
+.axis5 .track > span { position: absolute; right: 4px; top: 0; font-size: 9.5px; line-height: 14px;
+  font-variant-numeric: tabular-nums; font-weight: 700; }
+.axis5 .cap { font-size: 9.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--text-muted); }
+
+/* ── 습관 막대 ── */
+.hbar { position: relative; flex: 1 1 auto; height: 12px; border-radius: 4px; background: var(--surface-elevated); }
+.hbar > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--profit); }
+.hbar .thin { position: absolute; inset: 0; border-radius: 4px; border: 1px dashed color-mix(in oklab, var(--border) 90%, transparent); }
+
+/* ── 상태 기계 ── */
+.fsm { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.fsm .st { border: 1px solid var(--border); border-radius: 9px; padding: 7px 11px; background: var(--card); }
+.fsm .st .t { font-size: 12px; font-weight: 700; }
+.fsm .st .s { font-size: 10px; color: var(--text-muted); }
+.fsm .ar { color: var(--text-muted); font-size: 14px; }
+
+table.map { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+table.map th { text-align: left; font-size: 10.5px; font-weight: 700; color: var(--text-muted);
+  padding: 6px 8px; border-bottom: 1px solid var(--border); background: var(--surface-elevated); }
+table.map td { padding: 6px 8px; border-bottom: 1px solid color-mix(in oklab, var(--border) 55%, transparent);
+  vertical-align: top; }
+table.map tr:last-child td { border-bottom: 0; }
+
+.ask { border: 1px solid color-mix(in oklab, var(--brand) 35%, var(--border)); background: var(--brand-muted);
+  border-radius: 10px; padding: 11px 13px; margin-top: 28px; font-size: 11.5px; line-height: 1.8;
+  color: var(--muted-foreground); }
+.ask b { color: var(--foreground); font-weight: 700; }
+.ask ul { padding-left: 17px; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div class="who">
+    <h1>목표가 예측 — 기능 컴포넌트 카탈로그</h1>
+    <span class="badge due">v1 · 목표가 관리 + 스탬프 통합</span>
+  </div>
+  <button class="tgl" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'">다크/라이트</button>
+</div>
+
+<div class="lead">
+  <span class="kicker">이 문서가 하는 일</span><br />
+  화면 배치안이 아니라 <b>「새 메뉴에 넣을 기능 조각」을 하나씩 실물로 그린 목록</b>입니다.
+  22개를 그렸고, 각 조각마다 <b>어떤 질문에 답하는지</b> · <b>어떤 데이터를 쓰는지</b> ·
+  <b>기존 것을 옮겨오는지 새로 만드는지</b>를 붙였습니다.
+  고르신 것만 모아서 페이지를 짜겠습니다.<br /><br />
+  숫자는 전부 예시 픽스처(<code>be/internal/sample/</code>)의 값을 그대로 씁니다.
+</div>
+
+<!-- ═══ 통합 개념 ═══ -->
+<div class="comp">
+  <header>
+    <span class="no">개념</span>
+    <h3>두 기능은 사실 같은 물건의 두 반쪽이다</h3>
+    <p class="q">
+      <b>목표가</b>는 「얼마까지 갈 것인가」만 있고 <b>언제까지</b>가 없다 — 그래서 채점이 안 된다.
+      <b>스탬프</b>는 「언제까지 얼마」가 있지만 <b>손절가·2차 목표</b>가 없다 — 그래서 실제 매매 계획이 못 된다.
+      합치면 하나의 레코드가 된다: <b>「지금 74,200원인 삼성전자가, 1개월 안에 82,000원까지 간다. 아니면 70,500원에서 접는다.」</b>
+    </p>
+  </header>
+  <div class="demo plain">
+    <div class="stagecap">상태 흐름 — 하나의 예측이 지나가는 길</div>
+    <div class="fsm">
+      <div class="st"><div class="t">등록</div><div class="s">등록가 박제 · 스냅샷 저장</div></div>
+      <span class="ar">→</span>
+      <div class="st" style="border-color:var(--border)"><div class="t">진행 중</div><div class="s">목표까지 / 손절까지 추적</div></div>
+      <span class="ar">→</span>
+      <div class="st" style="border-color:color-mix(in oklab,var(--warn) 45%,var(--border))"><div class="t" style="color:var(--warn)">임박</div><div class="s">목표 5% 이내 · 손절 5% 이내 · 만기 D-3</div></div>
+      <span class="ar">→</span>
+      <div class="st" style="border-color:color-mix(in oklab,var(--reach) 45%,var(--border))"><div class="t reach">도달 / 손절 터치</div><div class="s">장중 고·저로 판정 (즉시 확정)</div></div>
+      <span class="ar">또는</span>
+      <div class="st" style="border-color:color-mix(in oklab,var(--brand) 45%,var(--border))"><div class="t" style="color:var(--brand)">만기 도래</div><div class="s">개봉 대기 — 열면 채점</div></div>
+      <span class="ar">→</span>
+      <div class="st" style="border-color:var(--foreground)"><div class="t">채점 완료</div><div class="s">적중 / 빗나감 + 오차 + 알파</div></div>
+    </div>
+
+    <div class="stagecap" style="margin-top:22px">레코드 하나 — 어디서 왔나</div>
+    <table class="map">
+      <thead>
+        <tr><th style="width:150px">필드</th><th style="width:88px">출처</th><th>비고</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>symbol</code> · <code>basePrice</code> · <code>baseDate</code></td><td><span class="fromflag">목표가</span></td><td>등록 시점 가격은 <b>측정값</b>이지 입력값이 아니다 (048 마이그레이션의 결론)</td></tr>
+        <tr><td><code>targetPrice</code> (1차)</td><td><span class="fromflag">둘 다</span></td><td>스탬프의 <code>targetPrice</code> = 목표가의 <code>target_price</code> — 이미 같은 값이다</td></tr>
+        <tr><td><code>targetPrice2</code> · <code>stopPrice</code></td><td><span class="fromflag">목표가</span></td><td>스탬프에 없던 것. 「여기서 절반 팔고, 여기서 접는다」</td></tr>
+        <tr><td><code>horizonKind</code> · <code>dueAt</code></td><td><span class="fromflag">스탬프</span></td><td><b><code>none</code>(무기한) 값을 새로 추가</b> — 기존 목표가가 그 자리로 들어온다</td></tr>
+        <tr><td><code>conviction</code> · <code>note</code> · <code>tags</code></td><td><span class="fromflag">스탬프</span></td><td>목표가의 <code>note</code>가 여기로</td></tr>
+        <tr><td><code>snapshot</code> · <code>context</code> · <code>chart</code></td><td><span class="fromflag">스탬프</span></td><td>등록 순간의 5축 점수·AI 요약·뉴스·지수·200봉 박제. <b>무기한 예측도 똑같이 박제한다</b></td></tr>
+        <tr><td><code>reachedDate</code> · <code>peak</code> · <code>trough</code></td><td><span class="fromflag">둘 다</span></td><td>둘 다 이미 일봉 고·저를 훑어 계산 중 — 같은 코드로 합친다</td></tr>
+        <tr><td>수정 이력</td><td><span class="newflag">새로</span></td><td>목표가는 자유 수정, 스탬프는 완전 잠금이었다. 합치려면 <b>「고쳤다는 사실을 남기는」</b> 제3의 답이 필요하다 (→ <b>B4</b>)</td></tr>
+        <tr><td>종목당 개수</td><td><span class="newflag">결정 필요</span></td><td>목표가는 <code>UNIQUE(user, symbol)</code> 1개, 스탬프는 무제한. <b>어느 쪽으로 갈지 정해야 한다</b> (→ 맨 아래 질문)</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══ 인덱스 ═══ -->
+<div class="index">
+  <h3>조각 22개</h3>
+  <div class="grp"><b>A · 예측 한 건 그리기</b>
+    <a href="#a1">A1 가격 사다리</a><a href="#a2">A2 가격 축(가로)</a><a href="#a3">A3 진행 게이지</a>
+    <a href="#a4">A4 판정 실링</a><a href="#a5">A5 경로 스파크</a><a href="#a6">A6 목록 행</a><a href="#a7">A7 예측 카드</a>
+  </div>
+  <div class="grp"><b>B · 만들고 고치기</b>
+    <a href="#b1">B1 등록 폼</a><a href="#b2">B2 목표가 눈금자</a><a href="#b3">B3 기한 선택기</a><a href="#b4">B4 수정 이력</a>
+  </div>
+  <div class="grp"><b>C · 지금 벌어지는 일</b>
+    <a href="#c1">C1 곧 결판납니다</a><a href="#c2">C2 개봉 대기</a><a href="#c3">C3 전체 조망</a><a href="#c4">C4 오늘의 변화</a>
+  </div>
+  <div class="grp"><b>D · 채점과 습관</b>
+    <a href="#d1">D1 성적 요약</a><a href="#d2">D2 목표가 버릇</a><a href="#d3">D3 판단 습관</a>
+  </div>
+  <div class="grp"><b>E · 우리 데이터로만 되는 것</b>
+    <a href="#e1">E1 등록 당시 vs 지금</a><a href="#e2">E2 그때의 근거</a><a href="#e3">E3 점수 급변 경고</a><a href="#e4">E4 보유·관심 연동</a>
+  </div>
+  <div class="grp"><b>F · 비어 있을 때</b>
+    <a href="#f1">F1 0건 안내</a><a href="#f2">F2 예측 제안</a>
+  </div>
+</div>
+
+
+<!-- ══════════════ A ══════════════ -->
+<div class="grouphead">
+  <span class="g">A</span>
+  <h2>예측 한 건을 그리는 방법</h2>
+  <p>같은 레코드를 어느 밀도로 보여줄지. 아래 조각들이 목록·카드·모달·레일에서 재조합된다.</p>
+</div>
+
+<!-- A1 -->
+<div class="comp" id="a1">
+  <header>
+    <span class="no">A1</span><h3>가격 사다리 (세로)</h3>
+    <span class="fromflag">목표가에서 가져옴</span>
+    <p class="q">답하는 질문: <b>「내 계획이 가격 위에 어떻게 놓여 있나」</b> — 손절 · 등록가 · 현재가 · 1차 · 2차를 가격 순으로 세운다. 손익비까지 한 칸.</p>
+  </header>
+  <div class="demo">
+    <div class="row2">
+      <div>
+        <div class="stagecap">모달·레일용 · 300px</div>
+        <div class="stage w-rail"><div class="bd2">
+          <div class="ladder">
+            <span class="lb">2차 목표</span>
+            <span class="tr"><i style="width:100%;background:color-mix(in oklab,var(--profit) 45%,transparent)"></i></span>
+            <span class="pv up">88,000</span>
+
+            <span class="lb">1차 목표</span>
+            <span class="tr"><i style="width:93%;background:color-mix(in oklab,var(--profit) 45%,transparent)"></i></span>
+            <span class="pv up">82,000</span>
+
+            <span class="lb now">현재가</span>
+            <span class="tr"><i style="width:92%;background:color-mix(in oklab,var(--foreground) 45%,transparent)"></i></span>
+            <span class="pv">81,300</span>
+
+            <span class="lb">등록가</span>
+            <span class="tr"><i style="width:84%;background:color-mix(in oklab,var(--text-muted) 40%,transparent)"></i></span>
+            <span class="pv dim">74,200</span>
+
+            <span class="lb">손절가</span>
+            <span class="tr"><i style="width:80%;background:color-mix(in oklab,var(--loss) 55%,transparent)"></i></span>
+            <span class="pv down">70,500</span>
+          </div>
+          <hr class="hair" />
+          <div class="rowf" style="justify-content:space-between"><span class="t-cell dim">손익비 (R:R)</span><span class="t-cell b num">0.06 : 1</span></div>
+          <div class="rowf mt4" style="justify-content:space-between"><span class="t-cell dim">목표까지 / 손절까지</span>
+            <span class="t-cell num"><span class="up">+0.9%</span> <span class="dim">/</span> <span class="down">-13.3%</span></span></div>
+          <p class="t-micro" style="color:var(--warn);margin-top:6px;line-height:1.6">
+            목표 코앞인데 손절은 멀다 — <b>손익비가 0.06</b>입니다. 지금 새로 들어갈 자리는 아니라는 뜻입니다.
+          </p>
+        </div></div>
+      </div>
+      <div style="flex:1 1 300px;max-width:420px">
+        <p class="t-micro sec" style="line-height:1.8">
+          현재 <code>TargetLadder</code>(target-shared.tsx)가 이미 이 모양입니다. 통합에서 바뀌는 것은 두 가지뿐:<br />
+          ① 막대 길이를 <b>0부터가 아니라 축 범위(min~max) 기준</b>으로 — 지금은 가격이 다 비슷하면 막대가 전부 꽉 차 보입니다.<br />
+          ② 손익비 아래에 <b>한 줄 해석</b>을 붙임 — 「0.06 : 1」만 적으면 그게 나쁜 건지 모릅니다.
+        </p>
+      </div>
+    </div>
+  </div>
+  <footer>
+    <span class="fl"><b>쓰는 데이터</b><code>stopPrice</code> <code>basePrice</code> <code>current</code> <code>targetPrice</code> <code>targetPrice2</code> <code>riskReward</code></span>
+    <span class="fl"><b>재사용</b><code>TargetLadder</code> · <code>PriceDisplay</code> — 손익비 해석 문구만 추가</span>
+  </footer>
+</div>
+
+<!-- A2 -->
+<div class="comp" id="a2">
+  <header>
+    <span class="no">A2</span><h3>가격 축 (가로)</h3>
+    <span class="fromflag">목표가에서 가져옴</span>
+    <p class="q">답하는 질문: <b>「지금 어디쯤 와 있나」</b> — 같은 정보를 한 줄로 압축한 것. 목록 행에 들어간다. 눈이 <b>거리를 먼저</b> 읽고 숫자는 확인용이 된다.</p>
+  </header>
+  <div class="demo">
+    <div class="stagecap">목록 행 안 · 380px</div>
+    <div class="stage" style="width:420px"><div class="bd2" style="padding:6px 16px 4px">
+
+      <div class="paxis">
+        <span class="fill" style="left:20%;width:62%;background:color-mix(in oklab,var(--brand) 55%,transparent)"></span>
+        <span class="mk" style="left:6%"><span class="pin" style="background:var(--loss)"></span>
+          <span class="lb below down"><span class="t">손절</span>70,500</span></span>
+        <span class="mk" style="left:20%"><span class="pin" style="background:var(--text-muted)"></span>
+          <span class="lb below dim"><span class="t">등록</span>74,200</span></span>
+        <span class="dot" style="left:82%;background:var(--foreground)"></span>
+        <span class="mk" style="left:82%"><span class="lb above b"><span class="t dim">현재</span>81,300</span></span>
+        <span class="mk" style="left:88%"><span class="pin" style="background:var(--profit)"></span>
+          <span class="lb below up"><span class="t">1차</span>82,000</span></span>
+        <span class="mk" style="left:97%"><span class="pin" style="background:color-mix(in oklab,var(--profit) 55%,transparent)"></span>
+          <span class="lb above up" style="transform:translateX(-72%)"><span class="t">2차</span>88,000</span></span>
+      </div>
+
+    </div></div>
+
+    <div class="stagecap" style="margin-top:18px">반대 방향(하방 목표)일 때 · 목표를 이미 넘어섰을 때</div>
+    <div class="row2">
+      <div class="stage" style="width:420px"><div class="bd2" style="padding:6px 16px 4px">
+        <div class="paxis">
+          <span class="fill" style="left:22%;width:66%;background:color-mix(in oklab,var(--loss) 45%,transparent)"></span>
+          <span class="mk" style="left:6%"><span class="pin" style="background:var(--profit)"></span>
+            <span class="lb below up" style="transform:translateX(-32%)"><span class="t">1차 목표</span>185,000</span></span>
+          <span class="mk" style="left:22%"><span class="pin" style="background:var(--text-muted)"></span>
+            <span class="lb below dim"><span class="t">등록</span>198,000</span></span>
+          <span class="dot" style="left:88%;background:var(--foreground)"></span>
+          <span class="mk" style="left:88%"><span class="lb above b"><span class="t dim">현재</span>214,500</span></span>
+          <span class="mk" style="left:97%"><span class="pin" style="background:var(--loss)"></span>
+            <span class="lb below down" style="transform:translateX(-72%)"><span class="t">손절</span>218,000</span></span>
+        </div>
+      </div></div>
+      <p class="t-micro sec" style="flex:1 1 260px;max-width:360px;line-height:1.8">
+        하방 목표는 축의 <b>왼쪽</b>이 목표가 됩니다. 채움 색이 파랑(손실 방향)이라
+        「예상과 반대로 가 있다」가 색만으로 읽힙니다. 손절이 <b>위</b>에 있는 것도 자연스럽게 그려집니다.
+      </p>
+    </div>
+  </div>
+  <footer>
+    <span class="fl"><b>쓰는 데이터</b>A1과 동일 — 축 범위는 min~max +8% 여백</span>
+    <span class="fl"><b>재사용</b><code>TargetAxis</code>(125줄, 이미 구현됨) — <b>2차 목표 핀과 방향 색만 추가</b></span>
+  </footer>
+</div>
+
+<!-- A3 -->
+<div class="comp" id="a3">
+  <header>
+    <span class="no">A3</span><h3>진행 게이지 — 목표까지 몇 %</h3>
+    <span class="fromflag">스탬프에서 가져옴</span>
+    <p class="q">답하는 질문: <b>「등록가에서 목표까지, 얼마나 왔나」</b> — 가격이 아니라 <b>진척률</b>. 종목마다 가격 단위가 달라도 서로 비교된다.</p>
+  </header>
+  <div class="demo">
+    <div class="stage" style="width:420px"><div class="bd2 stack gap12">
+      <div>
+        <div class="rowf gap6 t-micro"><span class="grow sb">삼성전자</span><span class="num b reach">목표의 92%</span></div>
+        <div class="pg mt4"><i style="left:0;width:92%;background:var(--reach)"></i></div>
+      </div>
+      <div>
+        <div class="rowf gap6 t-micro"><span class="grow sb">한화오션</span><span class="num b reach">도달 후 되돌림 · 최고 100%</span></div>
+        <div class="pg mt4"><i style="left:0;width:59%;background:color-mix(in oklab,var(--reach) 60%,transparent)"></i>
+          <span style="position:absolute;left:100%;top:-3px;bottom:-3px;width:2px;background:var(--reach);transform:translateX(-2px)"></span></div>
+      </div>
+      <div>
+        <div class="rowf gap6 t-micro"><span class="grow sb">애플</span><span class="num b">목표의 75%</span></div>
+        <div class="pg mt4"><i style="left:0;width:75%;background:var(--brand)"></i></div>
+      </div>
+      <div>
+        <div class="rowf gap6 t-micro"><span class="grow sb">NVIDIA</span><span class="num b down">반대로 21%</span></div>
+        <div class="pg mt4"><span class="zero" style="left:30%"></span><i style="left:23.4%;width:6.6%;background:var(--loss)"></i></div>
+      </div>
+      <div>
+        <div class="rowf gap6 t-micro"><span class="grow sb">카카오</span><span class="num b down">손절선 넘음</span></div>
+        <div class="pg mt4"><span class="zero" style="left:30%"></span><i style="left:6%;width:24%;background:var(--loss)"></i>
+          <span style="position:absolute;left:6%;top:-3px;bottom:-3px;width:2px;background:var(--loss)"></span></div>
+      </div>
+      <p class="t-micro dim" style="line-height:1.6">
+        0선(등록가)이 게이지 안에 있어야 <b>반대로 간 예측</b>이 그려집니다. 현재 스탬프 게이지는
+        음수를 오른쪽으로 그려서 「진행했다」처럼 보였습니다.
+      </p>
+    </div></div>
+  </div>
+  <footer>
+    <span class="fl"><b>쓰는 데이터</b><code>progress</code>(목표가) / <code>targetProgress</code>(스탬프) — <b>같은 계산이 두 벌 있다. 하나로 합친다</b></span>
+    <span class="fl"><b>재사용</b><code>StampTargetGauge</code> + <code>buildTargetView.progress</code></span>
+  </footer>
+</div>
+
+<!-- A4 -->
+<div class="comp" id="a4">
+  <header>
+    <span class="no">A4</span><h3>판정 실링 — 상태 하나를 도장으로</h3>
+    <span class="fromflag">스탬프에서 가져옴</span>
+    <p class="q">답하는 질문: <b>「이 예측은 지금 어떤 상태인가」</b> — 목록 맨 왼쪽에 놓여 스캔할 때 색만으로 갈린다. 통합하면서 상태가 <b>4개 → 6개</b>로 늘어난다.</p>
+  </header>
+  <div class="demo">
+    <div class="rowf gap16 wrapf">
+      <div class="stack gap6" style="align-items:center"><span class="seal live"><span class="v">진행</span><span class="d">D-60</span></span><span class="t-micro dim">진행 중</span></div>
+      <div class="stack gap6" style="align-items:center"><span class="seal due"><span class="v">임박</span><span class="d">2.4%</span></span><span class="t-micro dim">도달 임박</span></div>
+      <div class="stack gap6" style="align-items:center"><span class="seal reached"><span class="v">도달</span><span class="d">8/10</span></span><span class="t-micro dim">목표 도달</span></div>
+      <div class="stack gap6" style="align-items:center"><span class="seal stop"><span class="v">손절</span><span class="d">터치</span></span><span class="t-micro dim">손절 터치</span></div>
+      <div class="stack gap6" style="align-items:center"><span class="seal hit"><span class="v">적중</span><span class="d">1개월</span></span><span class="t-micro dim">채점 · 적중</span></div>
+      <div class="stack gap6" style="align-items:center"><span class="seal miss"><span class="v">빗나감</span><span class="d">1개월</span></span><span class="t-micro dim">채점 · 빗나감</span></div>
+    </div>
+    <p class="t-micro sec mt12" style="line-height:1.8;max-width:640px">
+      <b>「도달」과 「적중」은 다릅니다.</b> 도달은 <b>가격 사건</b>(장중 고·저가 목표를 찍음)이고,
+      적중은 <b>기한 채점</b>(만기 종가가 방향을 맞춤)입니다. 무기한 예측은 도달까지만 있고 적중은 없습니다 —
+      기한이 없으면 채점 시점이 없으니까요. 이게 두 기능을 합칠 때 가장 헷갈릴 지점이라 색을
+      <b>초록(도달) / 빨강·파랑(채점)</b>으로 아예 갈랐습니다.
+    </p>
+  </div>
+  <footer>
+    <span class="fl"><b>쓰는 데이터</b><code>status</code>(목표가 4종) + <code>verdict</code>(스탬프 4종) → 통합 6종</span>
+    <span class="fl"><b>재사용</b><code>StampSeal</code> + <code>TargetStatusBadge</code> — <b>두 어휘를 하나로 정리해야 함</b></span>
+  </footer>
+</div>
+
+<!-- A5 -->
+<div class="comp" id="a5">
+  <header>
+    <span class="no">A5</span><h3>경로 스파크 — 등록 이후 실제로 지나온 길</h3>
+    <span class="fromflag">스탬프에서 가져옴</span>
+    <p class="q">답하는 질문: <b>「곱게 올랐나, 버티다 올랐나」</b> — 종가만 보면 <b>도중에 -6%를 견뎌야 했다</b>는 사실이 통째로 사라진다.</p>
+  </header>
+  <div class="demo">
+    <div class="row2">
+      <div>
+        <div class="stagecap">모달용 큰 것 · 400×150</div>
+        <div class="stage" style="width:420px"><div class="bd2">
+          <div class="rowf gap8 t-micro" style="margin-bottom:6px">
+            <span class="rowf gap4"><i style="width:10px;height:2px;background:var(--profit);display:inline-block"></i>실제 경로</span>
+            <span class="rowf gap4"><i style="width:10px;height:0;border-top:2px dashed var(--profit);display:inline-block"></i>1차 82,000</span>
+            <span class="rowf gap4"><i style="width:10px;height:0;border-top:2px dashed var(--loss);display:inline-block"></i>손절 70,500</span>
+          </div>
+          <svg viewBox="0 0 392 150" style="display:block;width:100%;height:150px" role="img" aria-label="등록 이후 주가 경로">
+            <rect x="20" y="18" width="352" height="104" fill="var(--profit)" opacity="0.045" />
+            <line x1="20" y1="30" x2="382" y2="30" stroke="var(--profit)" stroke-width="1.5" stroke-dasharray="4 3" />
+            <line x1="20" y1="18" x2="382" y2="18" stroke="var(--profit)" stroke-width="1" stroke-dasharray="2 3" opacity=".5" />
+            <line x1="20" y1="126" x2="382" y2="126" stroke="var(--loss)" stroke-width="1.5" stroke-dasharray="4 3" />
+            <line x1="20" y1="98" x2="382" y2="98" stroke="var(--border)" stroke-width="1" />
+            <polyline fill="none" stroke="var(--profit)" stroke-width="1.9" stroke-linejoin="round"
+              points="20,98 52,110 84,82 116,66 148,76 180,46 212,56 244,32 276,18 308,26 340,36 372,25" />
+            <circle cx="20" cy="98" r="4.2" fill="var(--text-muted)" stroke="var(--card)" stroke-width="1.5" />
+            <circle cx="276" cy="18" r="3.6" fill="var(--reach)" stroke="var(--card)" stroke-width="1.5" />
+            <circle cx="372" cy="25" r="4.2" fill="var(--profit)" stroke="var(--card)" stroke-width="1.5" />
+            <text x="20" y="145" font-size="8.5" fill="var(--text-muted)">7/30 등록 · 74,200</text>
+            <text x="276" y="12" font-size="8.5" fill="var(--reach)" text-anchor="middle">최고 82,362</text>
+            <text x="372" y="145" font-size="8.5" fill="var(--text-muted)" text-anchor="end">현재 81,300</text>
+          </svg>
+          <div class="rowf gap12 t-micro mt6">
+            <span><span class="dim">최고 </span><b class="up num">+11.0%</b></span>
+            <span><span class="dim">최저 </span><b class="down num">-1.2%</b></span>
+            <span><span class="dim">손절까지 여유 </span><b class="num">12.1%p</b></span>
+          </div>
+        </div></div>
+      </div>
+      <div>
+        <div class="stagecap">목록 행용 미니 · 84×28</div>
+        <div class="stage" style="width:160px"><div class="bd2 stack gap10">
+          <svg viewBox="0 0 84 28" style="display:block;width:84px;height:28px" preserveAspectRatio="none">
+            <line x1="0" y1="6" x2="84" y2="6" stroke="var(--profit)" stroke-width="1" stroke-dasharray="2 2" opacity=".55" vector-effect="non-scaling-stroke" />
+            <polyline fill="none" stroke="var(--profit)" stroke-width="1.5" vector-effect="non-scaling-stroke"
+              points="0,21 12,24 24,17 36,13 48,9 60,4 72,7 84,5" />
+            <circle cx="0" cy="21" r="2" fill="var(--text-muted)" />
+          </svg>
+          <svg viewBox="0 0 84 28" style="display:block;width:84px;height:28px" preserveAspectRatio="none">
+            <line x1="0" y1="4" x2="84" y2="4" stroke="var(--profit)" stroke-width="1" stroke-dasharray="2 2" opacity=".55" vector-effect="non-scaling-stroke" />
+            <line x1="0" y1="24" x2="84" y2="24" stroke="var(--loss)" stroke-width="1" stroke-dasharray="2 2" opacity=".55" vector-effect="non-scaling-stroke" />
+            <polyline fill="none" stroke="var(--loss)" stroke-width="1.5" vector-effect="non-scaling-stroke"
+              points="0,12 12,10 24,15 36,14 48,19 60,22 72,25 84,26" />
+            <circle cx="0" cy="12" r="2" fill="var(--text-muted)" />
+          </svg>
+        </div></div>
+      </div>
+    </div>
+  </div>
+  <footer>
+    <span class="fl"><b>쓰는 데이터</b><code>chart.bars</code>(박제 200봉) + 등록 이후 <code>candle_bars</code> 이어붙임 · <code>peakReturn</code> <code>troughReturn</code></span>
+    <span class="fl"><b>재사용</b><code>StampSparkline</code> — 손절 파선과 최고점 마커 추가</span>
+  </footer>
+</div>
+
+<!-- A6 -->
+<div class="comp" id="a6">
+  <header>
+    <span class="no">A6</span><h3>목록 행 — 위 조각들의 조합</h3>
+    <span class="newflag">새로 조합</span>
+    <p class="q">답하는 질문: <b>「내 예측들을 훑을 때 무엇이 먼저 눈에 들어와야 하나」</b> — 실링(상태) → 종목·계획 문장 → 가격 축 → 결론 숫자. <b>밀도 두 종류</b>를 그렸습니다.</p>
+  </header>
+  <div class="demo">
+    <div class="stagecap">밀도 A — 축을 행 안에 넣음 (권장) · 900px</div>
+    <div class="stage w-main">
+      <button class="lrow">
+        <span class="seal reached"><span class="v">도달</span><span class="d">D+10</span></span>
+        <span class="grow" style="max-width:260px">
+          <span class="rowf gap5" style="gap:5px"><span class="av av-005930">삼성</span>
+            <span class="t-note sb trunc">삼성전자</span>
+            <span class="badge hollow">확신 4</span></span>
+          <span class="t-micro dim" style="display:block;margin-top:3px">
+            7/30 등록 · <b style="color:var(--foreground)">1개월</b> · 8/29 만기 지남
+          </span>
+          <span class="t-micro sec trunc" style="display:block;margin-top:2px">“HBM 수주 기대 + 외국인 순매수 전환”</span>
+        </span>
+        <span style="flex:0 0 320px">
+          <span class="paxis" style="margin:20px 0 18px;display:block">
+            <span class="fill" style="left:20%;width:62%;background:color-mix(in oklab,var(--reach) 50%,transparent)"></span>
+            <span class="mk" style="left:6%"><span class="pin" style="background:var(--loss)"></span><span class="lb below down"><span class="t">손절</span>70,500</span></span>
+            <span class="mk" style="left:20%"><span class="pin" style="background:var(--text-muted)"></span><span class="lb below dim"><span class="t">등록</span>74,200</span></span>
+            <span class="dot" style="left:82%;background:var(--foreground)"></span>
+            <span class="mk" style="left:82%"><span class="lb above b"><span class="t dim">현재</span>81,300</span></span>
+            <span class="mk" style="left:88%"><span class="pin" style="background:var(--profit)"></span><span class="lb below up"><span class="t">1차</span>82,000</span></span>
+            <span class="mk" style="left:97%"><span class="pin" style="background:color-mix(in oklab,var(--profit) 55%,transparent)"></span><span class="lb above up" style="transform:translateX(-70%)"><span class="t">2차</span>88,000</span></span>
+          </span>
+        </span>
+        <span style="flex:0 0 74px;text-align:right">
+          <span class="t-micro dim" style="display:block">등록 후</span>
+          <span class="b num up" style="font-size:15px">+9.6%</span>
+          <span class="t-micro dim num" style="display:block">알파 +6.1%p</span>
+        </span>
+        <span style="flex:0 0 62px;text-align:right">
+          <span class="t-micro dim" style="display:block">목표까지</span>
+          <span class="b num reach" style="font-size:15px">도달</span>
+          <span class="t-micro dim num" style="display:block">오차 0.9%</span>
+        </span>
+      </button>
+
+      <button class="lrow">
+        <span class="seal live"><span class="v">진행</span><span class="d">D-60</span></span>
+        <span class="grow" style="max-width:260px">
+          <span class="rowf gap5" style="gap:5px"><span class="av av-NVDA">NV</span>
+            <span class="t-note sb trunc">NVIDIA</span>
+            <span class="badge hollow">확신 5</span>
+            <span class="badge warn">점수 82→76</span></span>
+          <span class="t-micro dim" style="display:block;margin-top:3px">8/14 등록 · <b style="color:var(--foreground)">3개월</b> · 11/7 만기</span>
+          <span class="t-micro sec trunc" style="display:block;margin-top:2px">“실적 발표 앞두고 눌림목이라 판단”</span>
+        </span>
+        <span style="flex:0 0 320px">
+          <span class="paxis" style="margin:20px 0 18px;display:block">
+            <span class="fill" style="left:23%;width:19%;background:color-mix(in oklab,var(--loss) 45%,transparent)"></span>
+            <span class="mk" style="left:6%"><span class="pin" style="background:var(--loss)"></span><span class="lb below down"><span class="t">손절</span>$165</span></span>
+            <span class="dot" style="left:23%;background:var(--foreground)"></span>
+            <span class="mk" style="left:23%"><span class="lb above b"><span class="t dim">현재</span>$171.40</span></span>
+            <span class="mk" style="left:42%"><span class="pin" style="background:var(--text-muted)"></span><span class="lb below dim"><span class="t">등록</span>$178.20</span></span>
+            <span class="mk" style="left:94%"><span class="pin" style="background:var(--profit)"></span><span class="lb below up" style="transform:translateX(-64%)"><span class="t">1차</span>$210</span></span>
+          </span>
+        </span>
+        <span style="flex:0 0 74px;text-align:right">
+          <span class="t-micro dim" style="display:block">등록 후</span>
+          <span class="b num down" style="font-size:15px">-3.8%</span>
+          <span class="t-micro dim num" style="display:block">알파 —</span>
+        </span>
+        <span style="flex:0 0 62px;text-align:right">
+          <span class="t-micro dim" style="display:block">목표까지</span>
+          <span class="b num" style="font-size:15px">+22.5%</span>
+          <span class="t-micro down num" style="display:block">반대로 21%</span>
+        </span>
+      </button>
+    </div>
+
+    <div class="stagecap" style="margin-top:20px">밀도 B — 축 대신 게이지 하나 (많이 쌓였을 때) · 900px</div>
+    <div class="stage w-main">
+      <button class="lrow" style="padding:8px 12px">
+        <span class="badge stop" style="width:52px;text-align:center">손절</span>
+        <span class="av av-035720">kk</span>
+        <span class="t-cell sb" style="flex:0 0 92px">카카오</span>
+        <span class="t-micro dim num" style="flex:0 0 150px">41,300 → <b style="color:var(--foreground)">47,000</b> · 1개월</span>
+        <span class="grow"><span class="pg"><span class="zero" style="left:30%"></span><i style="left:6%;width:24%;background:var(--loss)"></i></span></span>
+        <span class="t-micro num down sb" style="flex:0 0 74px;text-align:right">-7.8%</span>
+        <span class="t-micro num" style="flex:0 0 62px;text-align:right">오차 18.9%</span>
+        <span class="t-micro dim" style="flex:0 0 54px;text-align:right">40일 전</span>
+      </button>
+      <button class="lrow" style="padding:8px 12px">
+        <span class="badge due" style="width:52px;text-align:center">임박</span>
+        <span class="av av-AAPL">AA</span>
+        <span class="t-cell sb" style="flex:0 0 92px">애플</span>
+        <span class="t-micro dim num" style="flex:0 0 150px">228.40 → <b style="color:var(--foreground)">232.00</b> · 무기한</span>
+        <span class="grow"><span class="pg"><span class="zero" style="left:6%"></span><i style="left:6%;width:70%;background:var(--brand)"></i></span></span>
+        <span class="t-micro num up sb" style="flex:0 0 74px;text-align:right">+1.2%</span>
+        <span class="t-micro num" style="flex:0 0 62px;text-align:right">+0.4% 남음</span>
+        <span class="t-micro dim" style="flex:0 0 54px;text-align:right">3일 전</span>
+      </button>
+    </div>
+  </div>
+  <footer>
+    <span class="fl"><b>의견 주실 것</b>밀도 A와 B 중 <b>기본을 무엇으로</b>? (토글로 둘 다 줄 수도 있습니다)</span>
+    <span class="fl"><b>참고</b>축을 넣으면 행 높이가 ~78px, 게이지만 넣으면 ~36px입니다</span>
+  </footer>
+</div>
+
+<!-- A7 -->
+<div class="comp" id="a7">
+  <header>
+    <span class="no">A7</span><h3>예측 카드 (그리드용)</h3>
+    <span class="newflag">새로 조합</span>
+    <p class="q">답하는 질문: <b>「모바일과 「곧 결판납니다」 영역에서 한 건을 어떻게 보여줄까」</b> — 목록 행이 375px에서는 성립하지 않는다.</p>
+  </header>
+  <div class="demo">
+    <div class="row2">
+      <div class="stage" style="width:280px"><div class="bd2 stack gap8">
+        <div class="rowf gap6">
+          <span class="av av-042660">한화</span>
+          <span class="grow"><span class="t-note sb">한화오션</span>
+            <span class="t-micro dim" style="display:block">7/8 등록 · 3개월 · D-29</span></span>
+          <span class="badge reached">도달</span>
+        </div>
+        <div class="t-note num" style="letter-spacing:-.01em">
+          <span class="dim">58,400</span> → <b class="up">68,000원</b> <span class="t-micro dim">(+16.4%)</span>
+        </div>
+        <div class="pg"><i style="left:0;width:59%;background:color-mix(in oklab,var(--reach) 60%,transparent)"></i>
+          <span style="position:absolute;left:100%;top:-3px;bottom:-3px;width:2px;background:var(--reach);transform:translateX(-2px)"></span></div>
+        <div class="rowf gap8 t-micro">
+          <span><span class="dim">현재 </span><b class="num">64,100</b></span>
+          <span class="grow"><span class="dim">최고 </span><b class="num reach">68,400</b></span>
+          <span class="dim">8/10 도달</span>
+        </div>
+        <div class="t-micro sec" style="border-left:2px solid var(--border);padding-left:8px">“특수선 수주 모멘텀”</div>
+        <div class="rowf gap6">
+          <button class="btn sm grow" style="justify-content:center">채점 보기</button>
+          <button class="btn sm">목표 올리기</button>
+        </div>
+      </div></div>
+
+      <div class="stage" style="width:280px"><div class="bd2 stack gap8">
+        <div class="rowf gap6">
+          <span class="av av-000660">SK</span>
+          <span class="grow"><span class="t-note sb">SK하이닉스</span>
+            <span class="t-micro dim" style="display:block">7/30 등록 · 1개월 · 만기 지남</span></span>
+          <span class="badge due">개봉</span>
+        </div>
+        <div class="t-note num" style="letter-spacing:-.01em">
+          <span class="dim">198,000</span> → <b class="down">185,000원</b> <span class="t-micro dim">(-6.6% · 하방)</span>
+        </div>
+        <div class="pg"><span class="zero" style="left:70%"></span><i style="left:70%;width:26%;background:var(--loss)"></i></div>
+        <div class="rowf gap8 t-micro">
+          <span><span class="dim">현재 </span><b class="num">214,500</b></span>
+          <span class="grow badge hollow">보유중 · 평단 180,180</span>
+        </div>
+        <div class="t-micro sec" style="border-left:2px solid var(--border);padding-left:8px">“고점 부담 — 단기 조정 예상”</div>
+        <button class="btn pri sm" style="justify-content:center">열어서 채점 보기</button>
+      </div></div>
+    </div>
+  </div>
+  <footer>
+    <span class="fl"><b>의견 주실 것</b>카드 안에 <b>행동 버튼</b>을 넣을지 (「목표 올리기」 · 「채점 보기」 · 「메모」)</span>
+    <span class="fl"><b>쓰이는 곳</b>375px 목록 · C1 「곧 결판납니다」 · C2 개봉 대기 덱</span>
+  </footer>
+</div>
+
+
+<!-- ══════════════ B ══════════════ -->
+<div class="grouphead">
+  <span class="g">B</span>
+  <h2>예측을 만들고 고치기</h2>
+  <p>통합의 실제 난점이 여기 있다 — 목표가는 자유 수정이었고 스탬프는 완전 잠금이었다.</p>
+</div>
+
+<!-- B1 -->
+<div class="comp" id="b1">
+  <header>
+    <span class="no">B1</span><h3>예측 등록 폼</h3>
+    <span class="newflag">둘을 합친 새 폼</span>
+    <p class="q">답하는 질문: <b>「무엇을 물어봐야 예측이 채점 가능해지나」</b> — 필수는 <b>목표가 하나</b>뿐. 나머지는 전부 선택이고, 안 채워도 유효한 예측이 된다.</p>
+  </header>
+  <div class="demo">
+    <div class="row2">
+      <div class="stage" style="width:340px"><div class="bd2">
+        <div class="rowf gap6" style="margin-bottom:10px">
+          <span class="av lg av-005930">삼성</span>
+          <div class="grow"><div class="t-note sb">삼성전자 <span class="t-micro dim num">005930</span></div>
+            <div class="t-micro dim num">현재 <b style="color:var(--foreground)">74,200원</b> <span class="up">+1.4%</span> · KOSPI</div></div>
+        </div>
+
+        <div class="field">
+          <label>1차 목표가 <span class="opt">· 필수</span></label>
+          <input class="inp" value="82,000" />
+          <div class="presets">
+            <button>-10%</button><button>-5%</button><button>+5%</button><button class="on">+10%</button><button>+20%</button><button>52주 고가</button>
+          </div>
+          <p class="t-micro dim mt4">현재가 대비 <b class="up" style="font-weight:700">+10.5%</b> · 상방 예측으로 저장됩니다</p>
+        </div>
+
+        <div class="field">
+          <label>검증 기한 <span class="opt">· 없으면 채점하지 않고 추적만 합니다</span></label>
+          <div class="chipbar" style="display:flex;flex-wrap:wrap">
+            <button>무기한</button><button>당일 종가</button><button>1주</button><button class="on">1개월</button><button>3개월</button><button>날짜</button>
+          </div>
+          <p class="t-micro dim mt4">2026년 8월 29일 (토) → <b style="color:var(--foreground)">8월 28일 금요일 종가</b>에 정산</p>
+        </div>
+
+        <div class="rowf gap8">
+          <div class="field grow"><label>2차 목표 <span class="opt">· 선택</span></label><input class="inp ghost" placeholder="88,000" /></div>
+          <div class="field grow"><label>손절가 <span class="opt">· 선택</span></label><input class="inp" value="70,500" /></div>
+        </div>
+        <p class="t-micro mt2" style="color:var(--warn);line-height:1.6;margin-bottom:10px">
+          손익비 <b>2.1 : 1</b> — 목표까지 +10.5%, 손절까지 -5.0%
+        </p>
+
+        <div class="field">
+          <label>확신 <span class="opt">· 나중에 「확신이 실제로 맞았는지」를 봅니다</span></label>
+          <div class="convdots">
+            <button>1</button><button>2</button><button>3</button><button class="on">4</button><button>5</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>왜 그렇게 보는가 <span class="opt">· 선택</span></label>
+          <input class="inp" value="HBM 수주 기대 + 외국인 순매수 전환" />
+        </div>
+
+        <div class="t-micro dim" style="line-height:1.7;border-top:1px solid var(--border);padding-top:8px;margin-bottom:9px">
+          저장할 때 <b style="color:var(--foreground)">지금 이 순간</b>도 같이 박제됩니다 —
+          시세·종합점수 5축·AI 요약·뉴스 5건·지수. 나중에 「그때 뭘 보고 그랬지」를 되짚을 수 있습니다.
+        </div>
+        <button class="btn pri" style="width:100%;justify-content:center">예측 저장</button>
+      </div></div>
+
+      <p class="t-micro sec" style="flex:1 1 280px;max-width:400px;line-height:1.85">
+        <b>설계 원칙 — 마찰을 목표가 한 칸으로 줄인다.</b><br />
+        현재 스탬프 폼(<code>StampPredictionForm</code> 371줄)은 목표가·기한·확신·메모를 다 물어보고,
+        목표가 폼(<code>TargetPriceDialog</code> 234줄)은 목표·2차·손절·메모를 물어봅니다.
+        합치면 칸이 여섯 개가 되는데, 그대로 두면 <b>등록 자체가 줄어듭니다.</b><br /><br />
+        그래서 <b>1차 목표가만 필수</b>로 두고 나머지는 접힌 상태로 시작하는 안도 가능합니다
+        (「자세히 ▾」). 어느 쪽이 좋을지 의견 주세요.<br /><br />
+        <b>기한 「무기한」이 기존 목표가와 같은 것</b>입니다 — 기존 목표가 데이터는 전부
+        <code>horizonKind: "none"</code>으로 그대로 들어옵니다.
+      </p>
+    </div>
+  </div>
+  <footer>
+    <span class="fl"><b>의견 주실 것</b>여섯 칸을 <b>한 번에 다 보여줄지</b>, 「목표가 + 기한」만 두고 나머지는 접을지</span>
+    <span class="fl"><b>재사용</b><code>StampPredictionForm</code> + <code>TargetPriceDialog</code> + <code>StockCatalogSearchField</code></span>
+  </footer>
+</div>
+
+<!-- B2 -->
+<div class="comp" id="b2">
+  <header>
+    <span class="no">B2</span><h3>목표가 눈금자 — 「82,000이 말이 되는 숫자인가」</h3>
+    <span class="newflag">새로</span>
+    <p class="q">답하는 질문: <b>「내가 방금 적은 목표가는 어느 정도로 공격적인가」</b> — 빈 칸에 숫자를 적을 때 기준이 없다. 우리가 이미 가진 값들을 눈금으로 깔아준다.</p>
+  </header>
+  <div class="demo">
+    <div class="stage" style="width:520px"><div class="bd2">
+      <div class="ruler">
+        <div class="line"></div>
+        <div class="band" style="left:14%;width:44%;background:color-mix(in oklab,var(--brand) 14%,transparent)"></div>
+        <div class="m" style="left:6%;background:var(--loss)"></div>
+        <div class="cap bot down" style="left:6%"><span class="t">52주 저가</span>68,900</div>
+        <div class="m" style="left:14%;background:var(--text-muted)"></div>
+        <div class="cap top dim" style="left:14%"><span class="t">3개월 저점</span>71,800</div>
+        <div class="m" style="left:32%;height:30px;top:3px;background:var(--foreground);width:2.5px"></div>
+        <div class="cap bot b" style="left:32%"><span class="t dim">현재가</span>74,200</div>
+        <div class="m" style="left:58%;background:var(--text-muted)"></div>
+        <div class="cap top dim" style="left:58%"><span class="t">3개월 고점</span>79,400</div>
+        <div class="m" style="left:70%;height:30px;top:3px;background:var(--brand);width:2.5px"></div>
+        <div class="cap bot" style="left:70%;color:var(--brand);font-weight:700"><span class="t">내 목표</span>82,000</div>
+        <div class="m" style="left:86%;background:var(--profit)"></div>
+        <div class="cap top up" style="left:86%"><span class="t">52주 고가</span>86,200</div>
+      </div>
+      <p class="t-micro sec" style="line-height:1.7">
+        내 목표 <b style="color:var(--brand)">82,000원</b>은 <b>3개월 고점(79,400)보다 위</b>이고
+        <b>52주 고가(86,200)보다는 아래</b>입니다 — 신고가를 요구하지는 않는 목표입니다.
+      </p>
+      <div class="rowf gap6 wrapf mt8">
+        <span class="badge hollow">현재가 +10.5%</span>
+        <span class="badge hollow">3개월 고점 +3.3%</span>
+        <span class="badge hollow">52주 고가 -4.9%</span>
+        <span class="badge hollow">등록 후 필요 상승 +10.5%</span>
+      </div>
+    </div></div>
+  </div>
+  <footer>
+    <span class="fl"><b>쓰는 데이터</b><code>snapshot.week52High/Low</code> · <code>candle_bars</code> 3개월 고·저 — <b>전부 이미 있음, 외부 호출 0</b></span>
+    <span class="fl"><b>의견 주실 것</b>눈금에 <b>무엇을 더</b> 올릴까요? (동종 평균 PER 환산가 · 최근 실적 기반 밸류 · 이전 내 예측들의 목표가)</span>
+  </footer>
+</div>
+
+<!-- B3 -->
+<div class="comp" id="b3">
+  <header>
+    <span class="no">B3</span><h3>기한 선택기 — 무기한을 1급 시민으로</h3>
+    <span class="fromflag">스탬프 + 무기한 추가</span>
+    <p class="q">답하는 질문: <b>「이 예측을 언제 채점할까」</b> — 그리고 <b>「채점 안 받는 선택지」</b>가 반드시 있어야 기존 목표가 사용자가 이 메뉴로 넘어온다.</p>
+  </header>
+  <div class="demo">
+    <div class="stage" style="width:420px"><div class="bd2">
+      <div class="stack gap6">
+        <label class="rowf gap8" style="border:1px solid var(--brand);background:var(--brand-muted);border-radius:9px;padding:8px 10px;cursor:pointer">
+          <span style="flex:none;width:14px;height:14px;border-radius:999px;border:4px solid var(--brand);background:var(--card)"></span>
+          <span class="grow"><b class="t-cell">1개월</b>
+            <span class="t-micro dim" style="display:block">2026년 8월 28일 (금) 종가에 정산 · 29일이 토요일이라 앞당김</span></span>
+          <span class="badge due">채점됨</span>
+        </label>
+        <label class="rowf gap8" style="border:1px solid var(--border);border-radius:9px;padding:8px 10px;cursor:pointer">
+          <span style="flex:none;width:14px;height:14px;border-radius:999px;border:1.5px solid var(--border)"></span>
+          <span class="grow"><b class="t-cell">무기한</b>
+            <span class="t-micro dim" style="display:block">목표에 닿거나 손절에 닿을 때까지 계속 추적합니다</span></span>
+          <span class="badge hollow">채점 안 함</span>
+        </label>
+      </div>
+      <div class="chipbar mt8" style="display:flex;flex-wrap:wrap;width:100%">
+        <button>당일 종가</button><button>다음 장 종가</button><button>1주</button>
+        <button class="on">1개월</button><button>3개월</button><button>날짜 지정</button><button>무기한</button>
+      </div>
+      <p class="t-micro sec mt8" style="line-height:1.7">
+        만기는 <b>저장하는 순간 시장 캘린더로 확정</b>해서 박아둡니다. 나중에 휴장일 정보가 바뀌어도
+        과거 예측의 채점일이 움직이지 않습니다.
+      </p>
+    </div></div>
+  </div>
+  <footer>
+    <span class="fl"><b>쓰는 데이터</b><code>HorizonKind</code> + <code>calendar</code> 패키지 — <code>none</code> 값만 추가</span>
+    <span class="fl"><b>의견 주실 것</b>기본값을 <b>무기한</b>으로 할지 <b>1개월</b>로 할지. 기본이 채점을 결정합니다</span>
+  </footer>
+</div>
+
+<!-- B4 -->
+<div class="comp" id="b4">
+  <header>
+    <span class="no">B4</span><h3>수정 이력 — 통합의 가장 어려운 지점</h3>
+    <span class="newflag">새로 · 필수</span>
+    <p class="q">
+      목표가는 <b>언제든 고칠 수 있었고</b> 스탬프는 <b>못 고쳤습니다</b>. 합치면 답을 정해야 합니다.
+      제안: <b>고치는 것은 허용하되, 고쳤다는 사실이 남는다.</b> 원본 예측은 원본대로 채점되고, 수정본은 새 예측이 됩니다.
+    </p>
+  </header>
+  <div class="demo">
+    <div class="row2">
+      <div class="stage" style="width:400px"><div class="bd2">
+        <h3 style="margin-bottom:9px">이 예측이 지나온 길</h3>
+        <div class="tl">
+          <div class="ev brand">
+            <div class="t-cell sb">등록 · 목표 78,000원</div>
+            <div class="t-micro dim num">7/30 03:00 · 등록가 74,200 · 확신 3</div>
+          </div>
+          <div class="ev warnd">
+            <div class="t-cell sb">목표 상향 78,000 → <b style="color:var(--warn)">82,000원</b></div>
+            <div class="t-micro dim num">8/6 · 당시가 77,400 · “HBM 계약 규모가 예상보다 큼”</div>
+            <div class="t-micro" style="color:var(--warn);margin-top:2px">
+              원본(78,000)은 <b>8/6에 도달로 확정</b>되고, 여기서 새 예측이 시작됩니다
+            </div>
+          </div>
+          <div class="ev">
+            <div class="t-cell sb">손절 추가 · 70,500원</div>
+            <div class="t-micro dim num">8/6 · 손익비 2.1 : 1</div>
+          </div>
+          <div class="ev reachd">
+            <div class="t-cell sb reach">목표 도달 · 장중 82,362원</div>
+            <div class="t-micro dim num">8/21 · 등록가 대비 +11.0%</div>
+          </div>
+          <div class="ev">
+            <div class="t-cell sb">만기 정산 · 81,300원</div>
+            <div class="t-micro dim num">8/29 · <b class="up">적중</b> · 오차 0.9% · 알파 +6.1%p</div>
+          </div>
+        </div>
+      </div></div>
+
+      <div style="flex:1 1 280px;max-width:400px">
+        <p class="t-micro sec" style="line-height:1.85">
+          <b>왜 이게 필요한가.</b> 목표가를 자유롭게 고칠 수 있으면 <b>적중률 통계가 무의미</b>해집니다 —
+          안 맞을 것 같으면 목표를 내리면 되니까요. 반대로 완전히 잠그면 <b>실제 매매를 못 따라갑니다</b> —
+          계획은 원래 바뀝니다.<br /><br />
+          가운데 답이 <b>「고칠 수 있되 원본이 남는다」</b>입니다. 수정하는 순간 원본은 그 시점 가격으로 정산되고,
+          새 목표가 새 예측으로 시작합니다. 성적표에는 <b>원본과 수정본이 각각 한 건</b>으로 들어갑니다.<br /><br />
+          <b>대안 두 가지</b>도 있습니다 — ① 등록 후 <b>몇 분 안에만</b> 수정 허용(현재 스탬프의
+          <code>stampPredictionGrace</code> 방식), ② 무기한 예측만 자유 수정하고 기한 있는 것은 잠금.
+          어느 쪽이 좋을지 정해 주세요.
+        </p>
+      </div>
+    </div>
+  </div>
+  <footer>
+    <span class="fl"><b>필요한 것</b>새 테이블 <code>prediction_revisions</code> 또는 예측 레코드의 <code>parentId</code> 체인</span>
+    <span class="fl"><b>의견 주실 것</b><b>수정 정책 3안 중 하나를 골라 주세요</b> — 이게 정해져야 나머지가 다 정해집니다</span>
+  </footer>
+</div>
+
+
+<!-- ══════════════ C ══════════════ -->
+<div class="grouphead">
+  <span class="g">C</span>
+  <h2>지금 벌어지고 있는 일</h2>
+  <p>매일 들어올 이유를 만드는 조각들. 「내 예측 중 오늘 무슨 일이 생겼나」에 답한다.</p>
+</div>
+
+<!-- C1 -->
+<div class="comp" id="c1">
+  <header>
+    <span class="no">C1</span><h3>곧 결판납니다 — 세 종류의 임박을 한 큐에</h3>
+    <span class="fromflag">목표가 레일에서 확장</span>
+    <p class="q">답하는 질문: <b>「오늘 내가 봐야 할 예측은 무엇인가」</b> — 목표 임박 · 손절 근접 · 만기 임박은 <b>서로 다른 이유로 급한</b> 세 가지인데, 사용자에게는 하나의 「봐야 할 것」이다.</p>
+  </header>
+  <div class="demo">
+    <div class="row2">
+      <div class="stage w-rail"><div class="hd2"><h3>곧 결판납니다</h3><span class="badge warn">4</span></div>
+        <div class="bd2 stack gap10">
+          <div class="rowf gap8">
+            <span class="badge stop" style="flex:0 0 46px;text-align:center">손절</span>
+            <span class="grow"><span class="t-cell sb">카카오</span>
+              <span class="t-micro dim" style="display:block">38,100 · 손절 38,500 <b class="down">넘어섰음</b></span></span>
+            <span class="t-micro num down b">-0.4%</span>
+          </div>
+          <div class="rowf gap8">
+            <span class="badge due" style="flex:0 0 46px;text-align:center">만기</span>
+            <span class="grow"><span class="t-cell sb">애플</span>
+              <span class="t-micro dim" style="display:block">내일 05:30 정산 · 목표의 75%</span></span>
+            <span class="t-micro num b" style="color:var(--brand)">D-1</span>
+          </div>
+          <div class="rowf gap8">
+            <span class="badge warn" style="flex:0 0 46px;text-align:center">목표</span>
+            <span class="grow"><span class="t-cell sb">삼성전자</span>
+              <span class="t-micro dim" style="display:block">81,300 · 1차 82,000</span></span>
+            <span class="t-micro num b up">+0.9%</span>
+          </div>
+          <div class="rowf gap8">
+            <span class="badge warn" style="flex:0 0 46px;text-align:center">점수</span>
+            <span class="grow"><span class="t-cell sb">NVIDIA</span>
+              <span class="t-micro dim" style="display:block">등록 후 종합점수 82 → 76</span></span>
+            <span class="t-micro num b down">-6</span>
+          </div>
+          <hr class="hair" />
+          <p class="t-micro dim" style="line-height:1.6">
+            목표·손절 5% 이내, 만기 3일 이내, 점수 5점 이상 변동 — <b style="color:var(--foreground)">네 가지 기준</b>을 한 목록에 섞습니다.
+          </p>
+        </div>
+      </div>
+      <p class="t-micro sec" style="flex:1 1 280px;max-width:400px;line-height:1.85">
+        현재 목표가 레일의 <code>「곧 결판납니다」</code>는 <b>목표·손절 근접 두 가지</b>만 봅니다.
+        스탬프를 합치면 <b>만기 임박</b>이 들어오고, 스탬프가 저장해 둔 점수 스냅샷 덕분에
+        <b>「등록 후 점수가 크게 변한 것」</b>까지 같은 큐에 넣을 수 있습니다.<br /><br />
+        네 가지를 섞을지, 아니면 <b>탭으로 나눌지</b> 의견 주세요. 섞으면 「오늘 볼 것」이 한 곳이 되고,
+        나누면 각 기준의 개수가 정확히 보입니다.
+      </p>
+    </div>
+  </div>
+  <footer>
+    <span class="fl"><b>쓰는 데이터</b><code>toTargetPct</code> <code>toStopPct</code> <code>dueAt</code> <code>snapshot.breakdown</code> vs <code>current.breakdown</code></span>
+    <span class="fl"><b>재사용</b><code>TargetsSideRail</code>의 「곧 결판납니다」 섹션 확장</span>
+  </footer>
+</div>
+
+<!-- C2 -->
+<div class="comp" id="c2">
+  <header>
+    <span class="no">C2</span><h3>개봉 대기 — 만기가 지난 것</h3>
+    <span class="fromflag">스탬프에서 가져옴</span>
+    <p class="q">답하는 질문: <b>「채점받을 것이 쌓여 있나」</b> — 이게 이 메뉴에 <b>다시 들어올 이유</b>입니다. 결과를 가려두고 「열기」로 뒤집을지, 바로 보여줄지는 아래 참고.</p>
+  </header>
+  <div class="demo">
+    <div class="stage" style="width:620px"><div class="hd2"><h3>개봉할 때가 됐습니다</h3><span class="badge due">2건</span>
+      <span class="grow"></span><button class="btn xs">모두 열기</button></div>
+      <div class="bd2">
+        <div class="rowf gap10 wrapf">
+          <div style="flex:1 1 260px;border:1px solid var(--border);border-radius:11px;padding:11px">
+            <div class="rowf gap6"><span class="av av-005930">삼성</span><span class="t-note sb grow">삼성전자</span>
+              <span class="badge hollow">확신 4</span></div>
+            <div class="t-note num mt6"><span class="dim">74,200</span> → <b class="up">82,000원</b></div>
+            <div class="t-micro dim mt2">1개월 · 만기 10일 지남</div>
+            <div class="t-micro sec mt6" style="border-left:2px solid var(--border);padding-left:8px">“HBM 수주 기대 + 외국인 순매수 전환”</div>
+            <button class="btn pri sm mt8" style="width:100%;justify-content:center">열어서 채점 보기</button>
+          </div>
+          <div style="flex:1 1 260px;border:1px solid color-mix(in oklab,var(--brand) 40%,var(--border));border-radius:11px;padding:11px;background:var(--brand-muted)">
+            <div class="rowf gap8">
+              <span class="seal hit" style="width:44px;height:44px"><span class="v" style="font-size:11px">적중</span><span class="d">1개월</span></span>
+              <div class="grow"><div class="b up" style="font-size:17px">＋9.6%</div>
+                <div class="t-micro dim">81,300원 마감 · 목표 82,000</div></div>
+            </div>
+            <div class="rowf gap12 mt8 t-micro">
+              <span><span class="dim">알파 </span><b class="up num">+6.1%p</b></span>
+              <span><span class="dim">오차 </span><b class="num">0.9%</b></span>
+              <span><span class="dim">점수 </span><b class="num">64→68</b></span>
+            </div>
+            <div class="t-micro dim mt6">↑ 열었을 때의 모습</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="t-micro sec mt12" style="line-height:1.8;max-width:660px">
+      <b>가려둘까 말까.</b> 가려두면 「그때 나는 뭐라고 했지」를 먼저 떠올리게 되어 개봉이 사건이 됩니다.
+      대신 클릭이 한 번 더 듭니다. <b>절충안</b>: 목록에서는 결과를 바로 보여주고,
+      <b>이 「개봉 대기」 덱에서만</b> 가려둡니다.
+    </p>
+  </div>
+  <footer>
+    <span class="fl"><b>쓰는 데이터</b><code>due</code> <code>opened</code> <code>verdict</code> <code>horizon.return/alpha</code> <code>targetAccuracy</code></span>
+    <span class="fl"><b>의견 주실 것</b>결과를 <b>가려둘지</b> · 개봉 대기가 0건일 때 이 자리에 무엇을 둘지</span>
+  </footer>
+</div>
+
+<!-- C3 -->
+<div class="comp" id="c3">
+  <header>
+    <span class="no">C3</span><h3>전체 조망 — 모든 예측을 거리 축에 올린 한 줄</h3>
+    <span class="newflag">새로</span>
+    <p class="q">답하는 질문: <b>「내 예측 전체가 지금 어디에 몰려 있나」</b> — 목록은 한 번에 5~6건만 보입니다. 20건이 되면 「대체로 잘 가고 있나」를 아무도 대답 못 합니다.</p>
+  </header>
+  <div class="demo">
+    <div class="stage" style="width:760px"><div class="bd2">
+      <div class="spread">
+        <span class="zoneL" style="left:0;width:26%;background:var(--loss-muted)"></span>
+        <span class="zoneR" style="left:74%;width:26%;background:var(--reach-muted)"></span>
+        <span class="lane"></span>
+        <span class="zero" style="left:26%"></span>
+        <span class="sc" style="left:26%;color:var(--loss)">손절선</span>
+        <span class="sc" style="left:87%;color:var(--reach)">목표 도달</span>
+        <span class="sc" style="left:50%">등록가</span>
+        <span style="position:absolute;left:50%;top:20px;bottom:16px;width:1px;background:var(--border)"></span>
+
+        <span class="pt av-035720" style="left:22%;background:#fee500;color:#191600" title="카카오 -7.8%">kk</span>
+        <span class="pt av-NVDA" style="left:43%;background:#76b900" title="NVIDIA -3.8%">NV</span>
+        <span class="pt av-000660" style="left:57%;background:#e60012" title="SK하이닉스 +8.3% (하방 목표라 반대)">SK</span>
+        <span class="pt av-AAPL" style="left:78%;background:#333" title="애플 목표의 75%">AA</span>
+        <span class="pt av-005930" style="left:85%;background:#1428a0" title="삼성전자 목표의 92%">삼성</span>
+        <span class="pt av-042660" style="left:90%;background:#f47216" title="한화오션 목표 도달">한화</span>
+      </div>
+      <div class="rowf gap12 wrapf t-micro dim" style="line-height:1.7">
+        <span>6건 중 <b style="color:var(--reach)">3건</b>이 목표 쪽 40% 구간에 있고, <b style="color:var(--loss)">1건</b>이 손절선을 넘었습니다.</span>
+        <span class="grow"></span>
+        <span class="chipbar" style="font-size:10px"><button class="on">전체</button><button>기한 있는 것</button><button>무기한</button></span>
+      </div>
+    </div></div>
+    <p class="t-micro sec mt12" style="line-height:1.8;max-width:680px">
+      점 하나가 예측 하나이고, 가로 위치는 <b>손절 ← 등록가 → 목표</b> 사이의 진척률입니다.
+      가격 단위가 다른 종목들이 <b>같은 축 위에서 비교</b>됩니다. 점을 누르면 그 예측으로 이동합니다.<br />
+      스탬프의 상단 4타일(총 6건 / 적중률 / 알파 / 개봉대기)보다 <b>지금 상태</b>를 훨씬 많이 말합니다.
+    </p>
+  </div>
+  <footer>
+    <span class="fl"><b>쓰는 데이터</b><code>progress</code> 하나로 전부 그려짐 — 계산 비용 0</span>
+    <span class="fl"><b>의견 주실 것</b>이걸 <b>페이지 최상단</b>에 둘지, 접히는 위젯으로 둘지. 예측 20건 넘으면 점이 겹칩니다(세로로 흩뿌리면 해결)</span>
+  </footer>
+</div>
+
+<!-- C4 -->
+<div class="comp" id="c4">
+  <header>
+    <span class="no">C4</span><h3>오늘의 변화</h3>
+    <span class="newflag">새로</span>
+    <p class="q">답하는 질문: <b>「어제와 무엇이 달라졌나」</b> — 상태가 바뀐 것만 추립니다. 아무 일도 없었으면 <b>아무것도 안 뜹니다.</b></p>
+  </header>
+  <div class="demo">
+    <div class="stage w-rail"><div class="hd2"><h3>오늘의 변화</h3><span class="badge hollow">9/7</span></div>
+      <div class="bd2 stack gap8">
+        <div class="rowf gap6">
+          <span style="flex:none;width:3px;align-self:stretch;border-radius:2px;background:var(--reach)"></span>
+          <span class="grow"><span class="t-cell"><b>한화오션</b> 목표 도달</span>
+            <span class="t-micro dim" style="display:block">장중 68,400 · 목표 68,000</span></span>
+        </div>
+        <div class="rowf gap6">
+          <span style="flex:none;width:3px;align-self:stretch;border-radius:2px;background:var(--loss)"></span>
+          <span class="grow"><span class="t-cell"><b>카카오</b> 손절선 통과</span>
+            <span class="t-micro dim" style="display:block">38,100 · 손절 38,500</span></span>
+        </div>
+        <div class="rowf gap6">
+          <span style="flex:none;width:3px;align-self:stretch;border-radius:2px;background:var(--brand)"></span>
+          <span class="grow"><span class="t-cell"><b>애플</b> 내일 만기</span>
+            <span class="t-micro dim" style="display:block">목표의 75%까지 왔습니다</span></span>
+        </div>
+        <p class="t-micro dim mt4" style="line-height:1.6">
+          나머지 3건은 어제와 같은 상태입니다.
+        </p>
+      </div>
+    </div>
+  </div>
+  <footer>
+    <span class="fl"><b>필요한 것</b>전날 상태를 알아야 「바뀌었다」를 말할 수 있음 — <b>일 1회 스냅샷</b>이 필요하거나, 도달일·만기일만으로 근사</span>
+    <span class="fl"><b>의견 주실 것</b>이건 <b>비용이 드는 유일한 조각</b>입니다. 넣을 가치가 있는지 판단이 필요합니다</span>
+  </footer>
+</div>
+
+
+<!-- ══════════════ D ══════════════ -->
+<div class="grouphead">
+  <span class="g">D</span>
+  <h2>채점과 습관</h2>
+  <p>「내 적중률 50%」로는 아무 행동도 안 바뀐다. 어떤 종류의 판단에서 틀리는지를 말한다.</p>
+</div>
+
+<!-- D1 -->
+<div class="comp" id="d1">
+  <header>
+    <span class="no">D1</span><h3>성적 요약</h3>
+    <span class="fromflag">스탬프에서 가져옴</span>
+    <p class="q">답하는 질문: <b>「전체적으로 어떤가」</b> — 한 줄로. 통합하면 <b>기한 있는 것만</b> 적중률에 들어가고, 무기한은 <b>도달률</b>이라는 다른 숫자가 됩니다.</p>
+  </header>
+  <div class="demo">
+    <div class="row2">
+      <div class="stage" style="width:420px"><div class="bd2">
+        <div class="rowf gap12">
+          <div style="flex:none;width:66px;height:66px;border-radius:999px;background:conic-gradient(var(--profit) 0 50%, var(--surface-elevated) 50% 100%);display:grid;place-items:center;position:relative">
+            <span style="position:absolute;inset:9px;border-radius:999px;background:var(--card)"></span>
+            <span style="position:relative;font-size:15px;font-weight:800">50%</span>
+          </div>
+          <div class="grow">
+            <div class="t-note sb">기한 예측 적중률 <span class="dim t-micro">4건 중 2건</span></div>
+            <div class="rowf gap12 mt6">
+              <div><div class="t-micro dim">평균 알파</div><div class="b num up" style="font-size:15px">+1.68%</div></div>
+              <div><div class="t-micro dim">목표가 오차</div><div class="b num" style="font-size:15px">8.9%</div></div>
+              <div><div class="t-micro dim">폭까지 맞춤</div><div class="b num" style="font-size:15px">2건</div></div>
+            </div>
+          </div>
+        </div>
+        <hr class="hair" />
+        <div class="rowf gap12 wrapf">
+          <div class="grow"><div class="t-micro dim">무기한 예측 도달률</div>
+            <div class="rowf gap6 mt2"><span class="b num" style="font-size:15px">1 / 2</span>
+              <span class="t-micro dim">평균 89일 걸림</span></div></div>
+          <div class="grow"><div class="t-micro dim">손절 터치</div>
+            <div class="rowf gap6 mt2"><span class="b num down" style="font-size:15px">1건</span>
+              <span class="t-micro dim">전체의 17%</span></div></div>
+        </div>
+      </div></div>
+      <p class="t-micro sec" style="flex:1 1 260px;max-width:380px;line-height:1.85">
+        <b>두 숫자를 섞으면 안 됩니다.</b> 무기한 예측은 기다리면 언젠가 도달할 수도 있으니
+        기한 예측과 같은 적중률에 넣으면 숫자가 부풀어 오릅니다. 그래서
+        <b>적중률(기한 있는 것)</b>과 <b>도달률(무기한)</b>을 나란히 놓되 합치지 않습니다.
+      </p>
+    </div>
+  </div>
+  <footer>
+    <span class="fl"><b>쓰는 데이터</b><code>StampSummary</code> 전부 + 무기한용 도달률·평균 소요일 <span class="newflag">새로</span></span>
+    <span class="fl"><b>재사용</b><code>StampScorecardModal</code>의 계산 — 화면으로 승격</span>
+  </footer>
+</div>
+
+<!-- D2 -->
+<div class="comp" id="d2">
+  <header>
+    <span class="no">D2</span><h3>목표가 버릇 — 예상(◇) 대비 실제(●)</h3>
+    <span class="fromflag">스탬프 데이터 · 새 시각화</span>
+    <p class="q">답하는 질문: <b>「나는 목표를 얼마나 높게/낮게 잡는가」</b> — 방향은 맞아도 폭을 크게 잡으면 「적중인데 실망스러운」 결과가 반복됩니다.</p>
+  </header>
+  <div class="demo">
+    <div class="stage" style="width:620px"><div class="bd2 stack gap8">
+      <div class="rowf gap8">
+        <span style="flex:0 0 84px" class="t-cell sb">삼성전자</span>
+        <span style="position:relative;flex:1 1 auto;height:24px">
+          <span style="position:absolute;left:0;right:0;top:50%;height:1px;background:var(--border)"></span>
+          <span style="position:absolute;left:20%;top:50%;transform:translate(-50%,-50%);width:9px;height:9px;rotate:45deg;background:var(--card);border:2px solid var(--text-muted)"></span>
+          <span style="position:absolute;left:20.4%;top:50%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:999px;background:var(--profit);border:2px solid var(--card)"></span>
+        </span>
+        <span style="flex:0 0 190px;text-align:right" class="t-micro num"><span class="dim">예상 +10.5% →</span> <b class="up">실제 +9.6%</b> <span class="dim">· 오차 0.9%</span></span>
+      </div>
+      <div class="rowf gap8">
+        <span style="flex:0 0 84px" class="t-cell sb">한화오션</span>
+        <span style="position:relative;flex:1 1 auto;height:24px">
+          <span style="position:absolute;left:0;right:0;top:50%;height:1px;background:var(--border)"></span>
+          <span style="position:absolute;left:26.4%;top:50%;transform:translate(-50%,-50%);width:9px;height:9px;rotate:45deg;background:var(--card);border:2px solid var(--text-muted)"></span>
+          <span style="position:absolute;left:26.4%;top:50%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:999px;background:var(--profit);border:2px solid var(--card)"></span>
+        </span>
+        <span style="flex:0 0 190px;text-align:right" class="t-micro num"><span class="dim">예상 +16.4% →</span> <b class="up">실제 +16.4%</b> <span class="dim">· 오차 0.6%</span></span>
+      </div>
+      <div class="rowf gap8">
+        <span style="flex:0 0 84px" class="t-cell sb">SK하이닉스</span>
+        <span style="position:relative;flex:1 1 auto;height:24px">
+          <span style="position:absolute;left:0;right:0;top:50%;height:1px;background:var(--border)"></span>
+          <span style="position:absolute;left:13.4%;top:50%;width:24.9%;height:2px;transform:translateY(-50%);background:color-mix(in oklab,var(--warn) 60%,transparent)"></span>
+          <span style="position:absolute;left:13.4%;top:50%;transform:translate(-50%,-50%);width:9px;height:9px;rotate:45deg;background:var(--card);border:2px solid var(--text-muted)"></span>
+          <span style="position:absolute;left:38.3%;top:50%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:999px;background:var(--profit);border:2px solid var(--card)"></span>
+        </span>
+        <span style="flex:0 0 190px;text-align:right" class="t-micro num"><span class="dim">예상 -6.6% →</span> <b class="up">실제 +8.3%</b> <span class="dim">· 오차 15.9%</span></span>
+      </div>
+      <div class="rowf gap8">
+        <span style="flex:0 0 84px" class="t-cell sb">카카오</span>
+        <span style="position:relative;flex:1 1 auto;height:24px">
+          <span style="position:absolute;left:0;right:0;top:50%;height:1px;background:var(--border)"></span>
+          <span style="position:absolute;left:10.6%;top:50%;width:22.4%;height:2px;transform:translateY(-50%);background:color-mix(in oklab,var(--warn) 60%,transparent)"></span>
+          <span style="position:absolute;left:33.0%;top:50%;transform:translate(-50%,-50%);width:9px;height:9px;rotate:45deg;background:var(--card);border:2px solid var(--text-muted)"></span>
+          <span style="position:absolute;left:10.6%;top:50%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:999px;background:var(--loss);border:2px solid var(--card)"></span>
+        </span>
+        <span style="flex:0 0 190px;text-align:right" class="t-micro num"><span class="dim">예상 +13.8% →</span> <b class="down">실제 -7.8%</b> <span class="dim">· 오차 18.9%</span></span>
+      </div>
+      <p class="t-micro sec mt4" style="line-height:1.75">
+        <b>결론 한 줄:</b> 상방으로 볼 때 평균 <b>+13.6%</b>를 예상했고 실제는 <b>+6.1%</b>였습니다 —
+        <b style="color:var(--warn)">목표를 평균 7.5%p 높게</b> 잡습니다.
+      </p>
+    </div></div>
+  </div>
+  <footer>
+    <span class="fl"><b>쓰는 데이터</b><code>expectedReturn</code> vs <code>horizon.return</code> · <code>targetAccuracy</code> · <code>withinBand</code> — 전부 이미 계산됨</span>
+    <span class="fl"><b>의견 주실 것</b>「목표를 평균 7.5%p 높게 잡는다」 같은 <b>단정 문장</b>을 써도 될지 (표본이 적을 때의 표현)</span>
+  </footer>
+</div>
+
+<!-- D3 -->
+<div class="comp" id="d3">
+  <header>
+    <span class="no">D3</span><h3>판단 습관 — 어떤 종류의 예측에서 틀리나</h3>
+    <span class="fromflag">스탬프에서 가져옴</span>
+    <p class="q">답하는 질문: <b>「내 확신은 믿을 만한가 · 어떤 기한에서 약한가 · 우리 점수는 도움이 됐나」</b> — 표본이 적으면 <b>적다고 말하고 결론을 쓰지 않습니다.</b></p>
+  </header>
+  <div class="demo">
+    <div class="row2">
+      <div class="stage" style="width:280px"><div class="bd2">
+        <h3 style="margin-bottom:8px">확신이 실제로 맞습니까</h3>
+        <div class="rowf gap8" style="padding:3px 0"><span style="flex:0 0 52px" class="t-micro sec">확신 5</span><span class="hbar"><i style="width:100%"></i></span><span style="flex:0 0 46px;text-align:right" class="t-micro num b">1/1</span></div>
+        <div class="rowf gap8" style="padding:3px 0"><span style="flex:0 0 52px" class="t-micro sec">확신 4</span><span class="hbar"><i style="width:100%"></i></span><span style="flex:0 0 46px;text-align:right" class="t-micro num b">1/1</span></div>
+        <div class="rowf gap8" style="padding:3px 0"><span style="flex:0 0 52px" class="t-micro sec">확신 3</span><span class="hbar"><span class="thin"></span></span><span style="flex:0 0 46px;text-align:right" class="t-micro num b">0/1</span></div>
+        <div class="rowf gap8" style="padding:3px 0"><span style="flex:0 0 52px" class="t-micro sec">확신 2</span><span class="hbar"><span class="thin"></span></span><span style="flex:0 0 46px;text-align:right" class="t-micro num b">0/1</span></div>
+        <p class="t-micro mt8" style="color:var(--warn);background:var(--warn-muted);border-radius:6px;padding:6px 8px;line-height:1.55">
+          각 칸 표본이 <b>1건</b>입니다. 「확신이 높을수록 맞았다」로 보이지만 아직 <b>결론을 쓰지 않습니다</b> —
+          칸마다 3건이 쌓이면 문장으로 바꿉니다.
+        </p>
+      </div></div>
+
+      <div class="stage" style="width:280px"><div class="bd2">
+        <h3 style="margin-bottom:8px">기한·방향별</h3>
+        <div class="rowf gap8" style="padding:3px 0"><span style="flex:0 0 52px" class="t-micro sec">1개월</span><span class="hbar"><i style="width:33%"></i></span><span style="flex:0 0 46px;text-align:right" class="t-micro num b">1/3</span></div>
+        <div class="rowf gap8" style="padding:3px 0"><span style="flex:0 0 52px" class="t-micro sec">3개월</span><span class="hbar"><i style="width:100%"></i></span><span style="flex:0 0 46px;text-align:right" class="t-micro num b">1/1</span></div>
+        <div class="rowf gap8" style="padding:3px 0"><span style="flex:0 0 52px" class="t-micro sec">무기한</span><span class="hbar"><i style="width:50%;background:var(--reach)"></i></span><span style="flex:0 0 46px;text-align:right" class="t-micro num b">1/2</span></div>
+        <hr class="hair" />
+        <div class="rowf gap8" style="padding:3px 0"><span style="flex:0 0 52px" class="t-micro sec">상방</span><span class="hbar"><i style="width:67%"></i></span><span style="flex:0 0 46px;text-align:right" class="t-micro num b">2/3</span></div>
+        <div class="rowf gap8" style="padding:3px 0"><span style="flex:0 0 52px" class="t-micro sec">하방</span><span class="hbar"><span class="thin"></span></span><span style="flex:0 0 46px;text-align:right" class="t-micro num b">0/1</span></div>
+        <p class="t-micro dim mt8" style="line-height:1.6">
+          <b style="color:var(--foreground)">하방 예측이 6건 중 1건</b>뿐입니다. 오르는 쪽만 찍고 있다면
+          적중률이 시장 방향에 딸려 갑니다.
+        </p>
+      </div></div>
+
+      <div class="stage" style="width:280px"><div class="bd2">
+        <h3 style="margin-bottom:8px">우리 점수는 도움이 됐습니까</h3>
+        <div class="rowf gap8" style="padding:3px 0"><span style="flex:0 0 52px" class="t-micro sec">점수 70+</span><span class="hbar"><span class="thin"></span></span><span style="flex:0 0 46px;text-align:right" class="t-micro num b">0/1</span></div>
+        <div class="rowf gap8" style="padding:3px 0"><span style="flex:0 0 52px" class="t-micro sec">60–69</span><span class="hbar"><i style="width:100%"></i></span><span style="flex:0 0 46px;text-align:right" class="t-micro num b">1/1</span></div>
+        <div class="rowf gap8" style="padding:3px 0"><span style="flex:0 0 52px" class="t-micro sec">50–59</span><span class="hbar"><i style="width:100%"></i></span><span style="flex:0 0 46px;text-align:right" class="t-micro num b">1/1</span></div>
+        <div class="rowf gap8" style="padding:3px 0"><span style="flex:0 0 52px" class="t-micro sec">50 미만</span><span class="hbar"><span class="thin"></span></span><span style="flex:0 0 46px;text-align:right" class="t-micro num b">0/1</span></div>
+        <hr class="hair" />
+        <div class="rowf gap8" style="padding:3px 0"><span style="flex:0 0 52px" class="t-micro sec">보유 종목</span><span class="hbar"><span class="thin"></span></span><span style="flex:0 0 46px;text-align:right" class="t-micro num b">0/1</span></div>
+        <div class="rowf gap8" style="padding:3px 0"><span style="flex:0 0 52px" class="t-micro sec">비보유</span><span class="hbar"><i style="width:67%"></i></span><span style="flex:0 0 46px;text-align:right" class="t-micro num b">2/3</span></div>
+        <p class="t-micro dim mt8" style="line-height:1.6">
+          「점수가 높은 종목에 세운 목표가 실제로 더 잘 맞았는가」를 언젠가 대답하기 위한 자리입니다.
+        </p>
+      </div></div>
+    </div>
+  </div>
+  <footer>
+    <span class="fl"><b>쓰는 데이터</b><code>conviction</code> · <code>horizonKind</code> · <code>stance</code> · <code>snapshot.score</code> · <code>snapshot.held</code> × <code>verdict</code></span>
+    <span class="fl"><b>의견 주실 것</b>세 칸 중 <b>뺄 것</b>이 있는지 · 「우리 점수」 칸을 사용자에게 보여줘도 될지</span>
+  </footer>
+</div>
+
+
+<!-- ══════════════ E ══════════════ -->
+<div class="grouphead">
+  <span class="g">E</span>
+  <h2>우리 데이터로만 되는 것</h2>
+  <p>다른 앱의 「목표가 알림」과 갈리는 지점. 등록 순간을 통째로 박제해 뒀기 때문에 가능한 것들.</p>
+</div>
+
+<!-- E1 -->
+<div class="comp" id="e1">
+  <header>
+    <span class="no">E1</span><h3>등록 당시 vs 지금 — 종합점수 5축 대조</h3>
+    <span class="fromflag">스탬프에서 가져옴</span>
+    <p class="q">답하는 질문: <b>「가격 말고, 이 회사 자체가 어떻게 변했나」</b> — 가격만 저장하면 「올랐다/내렸다」밖에 못 말합니다.</p>
+  </header>
+  <div class="demo">
+    <div class="row2">
+      <div class="stage" style="width:320px"><div class="bd2">
+        <div class="rowf gap8" style="margin-bottom:9px">
+          <span class="b num" style="font-size:22px">64</span><span class="badge hollow">C</span>
+          <span class="dim">→</span>
+          <span class="b num up" style="font-size:22px">68</span><span class="badge hit">B</span>
+          <span class="grow t-micro dim" style="text-align:right">동종 상위 22%</span>
+        </div>
+        <div class="axis5" style="margin-bottom:5px"><span class="cap"></span><span class="cap">등록 당시</span><span class="cap" style="color:var(--brand)">지금</span></div>
+        <div class="axis5">
+          <span class="n">추세</span><span class="track"><i class="then" style="width:58%"></i><span>58</span></span><span class="track"><i class="now" style="width:74%"></i><span>74</span></span>
+          <span class="n">수익성</span><span class="track"><i class="then" style="width:71%"></i><span>71</span></span><span class="track"><i class="now" style="width:73%"></i><span>73</span></span>
+          <span class="n">성장</span><span class="track"><i class="then" style="width:66%"></i><span>66</span></span><span class="track"><i class="now" style="width:69%"></i><span>69</span></span>
+          <span class="n">가치</span><span class="track"><i class="then" style="width:62%"></i><span>62</span></span><span class="track"><i class="now" style="width:55%"></i><span>55</span></span>
+          <span class="n">심리</span><span class="track"><i class="then" style="width:61%"></i><span>61</span></span><span class="track"><i class="now" style="width:70%"></i><span>70</span></span>
+        </div>
+        <p class="t-micro sec mt8" style="line-height:1.7">
+          <b style="color:var(--foreground)">추세 +16 · 심리 +9</b>가 올랐고 <b style="color:var(--foreground)">가치는 -7</b> 내렸습니다 —
+          주가가 오르면서 밸류가 비싸졌다는 뜻입니다.
+        </p>
+      </div></div>
+      <p class="t-micro sec" style="flex:1 1 260px;max-width:380px;line-height:1.85">
+        기존 <b>목표가</b> 화면에는 이게 통째로 없습니다 — 목표가 테이블에 스냅샷이 없으니까요.
+        통합하면 <b>기존 목표가에도 이 대조가 생깁니다</b>(등록 시점부터).<br /><br />
+        이게 「목표가 예측」이 다른 앱의 목표가 알림과 갈리는 지점입니다:
+        <i>「주가는 +9.6%인데 가치 축은 -7 빠졌다」</i>까지 말할 수 있습니다.
+      </p>
+    </div>
+  </div>
+  <footer>
+    <span class="fl"><b>쓰는 데이터</b><code>snapshot.breakdown</code> vs <code>current.breakdown</code> · <code>peerPct</code> · <code>grade</code></span>
+    <span class="fl"><b>재사용</b><code>StampDetail</code> 안에 이미 있음 — 그대로 옮김</span>
+  </footer>
+</div>
+
+<!-- E2 -->
+<div class="comp" id="e2">
+  <header>
+    <span class="no">E2</span><h3>그때의 근거 — AI 요약 · 키워드 · 뉴스 · 시장</h3>
+    <span class="fromflag">스탬프에서 가져옴</span>
+    <p class="q">답하는 질문: <b>「그때 나는 무엇을 보고 그렇게 판단했나」</b> — 메모 한 줄로는 몇 달 뒤에 아무것도 기억나지 않습니다.</p>
+  </header>
+  <div class="demo">
+    <div class="stage" style="width:420px"><div class="bd2">
+      <h3 style="margin-bottom:7px">2026년 7월 30일 · 등록 당시 화면에 있던 것</h3>
+      <p class="t-micro sec" style="line-height:1.7">
+        메모리 반도체 업황 회복 국면에서 HBM 공급 계약 기대가 커지고 있으며, 외국인 수급이
+        4거래일 연속 순매수로 전환됐다.
+      </p>
+      <div class="rowf gap4 wrapf mt6">
+        <span class="badge hollow" style="border-radius:999px">HBM4</span>
+        <span class="badge hollow" style="border-radius:999px">외국인 순매수</span>
+        <span class="badge hollow" style="border-radius:999px">메모리 업황</span>
+      </div>
+      <hr class="hair" />
+      <div class="rowf gap6" style="padding:5px 0">
+        <span style="flex:none;width:5px;height:5px;border-radius:999px;background:var(--brand)"></span>
+        <span class="grow"><span class="t-micro sb">삼성전자, HBM4 양산 준비 본격화</span>
+          <span class="t-micro dim" style="display:block">연합뉴스 · 7/30 08:12</span></span>
+      </div>
+      <div class="rowf gap6" style="padding:5px 0;border-top:1px dashed color-mix(in oklab,var(--border) 70%,transparent)">
+        <span style="flex:none;width:5px;height:5px;border-radius:999px;background:var(--text-muted)"></span>
+        <span class="grow"><span class="t-micro sb">반도체 수출 3개월 연속 증가</span>
+          <span class="t-micro dim" style="display:block">머니투데이 · 7/29 17:40</span></span>
+      </div>
+      <hr class="hair" />
+      <div class="rowf gap10 t-micro wrapf">
+        <span class="dim">그때 시장</span>
+        <span class="num">KOSPI 2,714 <span class="up">+0.4%</span></span>
+        <span class="num">USD/KRW 1,382</span>
+        <span class="num">VIX 14.2</span>
+      </div>
+      <p class="t-micro mt6" style="color:var(--warn)">공시는 저장되지 않았습니다 <span class="dim">(등록 시점 캐시가 비어 있었음 — 없는 데이터를 나중에 지어내지 않습니다)</span></p>
+    </div></div>
+  </div>
+  <footer>
+    <span class="fl"><b>쓰는 데이터</b><code>context.aiSummary</code> <code>aiKeywords</code> <code>news[]</code> <code>disclosures[]</code> <code>indices[]</code> <code>dataGaps</code> — <b>외부 호출 0</b></span>
+    <span class="fl"><b>재사용</b><code>StampDetail</code> — 그대로</span>
+  </footer>
+</div>
+
+<!-- E3 -->
+<div class="comp" id="e3">
+  <header>
+    <span class="no">E3</span><h3>전제가 무너졌습니다 — 등록 후 점수 급변 경고</h3>
+    <span class="newflag">새로 · 파생만으로 가능</span>
+    <p class="q">답하는 질문: <b>「내 예측의 전제가 아직 유효한가」</b> — 가격은 아직 안 움직였는데 <b>회사 쪽 숫자가 먼저 바뀐</b> 경우를 잡아냅니다.</p>
+  </header>
+  <div class="demo">
+    <div class="stage" style="width:460px"><div class="bd2" style="border-left:3px solid var(--warn);border-radius:0 11px 11px 0">
+      <div class="rowf gap8">
+        <span class="av av-NVDA">NV</span>
+        <span class="grow"><span class="t-note sb">NVIDIA</span>
+          <span class="t-micro dim" style="display:block">8/14 등록 · 목표 $210 · 만기까지 60일</span></span>
+        <span class="badge warn">전제 변화</span>
+      </div>
+      <p class="t-note mt8" style="line-height:1.55">
+        등록 뒤 종합점수가 <b class="num">82 → 76</b>으로 떨어졌습니다
+        <span class="t-micro dim">(성장 -9 · 심리 -7)</span>.
+      </p>
+      <p class="t-micro sec mt6" style="line-height:1.7">
+        가격은 <b>-3.8%</b>로 크게 안 움직였지만, <b>「실적 발표 앞두고 눌림목」</b>이라던 등록 당시 메모의
+        전제는 점수 쪽에서 먼저 흔들렸습니다.
+      </p>
+      <div class="rowf gap6 mt8">
+        <button class="btn sm">등록 당시와 대조</button>
+        <button class="btn sm">목표 수정</button>
+        <button class="btn sm">이 경고 숨기기</button>
+      </div>
+    </div></div>
+    <p class="t-micro sec mt12" style="line-height:1.8;max-width:640px">
+      <b>주의:</b> 이건 「팔아라」가 아니라 <b>「다시 보라」</b>입니다. 문구를 사실 서술에 묶어 두어야
+      매매 조언이 되지 않습니다 (설계안 §7의 원칙과 같은 선).
+    </p>
+  </div>
+  <footer>
+    <span class="fl"><b>쓰는 데이터</b><code>snapshot.breakdown/score</code> vs 오늘 <code>stock_scores</code> — 조회 시 계산, 배치 불필요</span>
+    <span class="fl"><b>의견 주실 것</b>임계값을 <b>몇 점</b>으로 할지 (5점? 10점?) · 등급 변화(C→B)만 볼지</span>
+  </footer>
+</div>
+
+<!-- E4 -->
+<div class="comp" id="e4">
+  <header>
+    <span class="no">E4</span><h3>보유·관심 연동 — 「실제로 들고 있는 것」과 잇기</h3>
+    <span class="fromflag">목표가 레일에서 확장</span>
+    <p class="q">답하는 질문: <b>「이 예측이 내 계좌와 무슨 상관인가」</b> — 보유 중이면 평단 대비가, 관심이면 추가 시점 가격이 같이 보여야 합니다.</p>
+  </header>
+  <div class="demo">
+    <div class="row2">
+      <div class="stage w-rail"><div class="hd2"><h3>보유 중인 예측</h3><span class="badge hollow">평단 대비</span></div>
+        <div class="bd2 stack gap10">
+          <div>
+            <div class="rowf gap6"><span class="av sm av-000660">SK</span><span class="t-cell sb grow">SK하이닉스</span>
+              <span class="t-micro num up b">+19.0%</span></div>
+            <div class="t-micro dim num mt2">평단 180,180 · 현재 214,500 · 12주</div>
+            <div class="t-micro mt2" style="color:var(--warn)">
+              하방 목표(185,000)를 세워뒀는데 <b>계좌는 +19%</b>입니다 — 예측과 포지션이 반대입니다
+            </div>
+          </div>
+          <hr class="hair" />
+          <div>
+            <div class="rowf gap6"><span class="av sm av-005930">삼성</span><span class="t-cell sb grow">삼성전자</span>
+              <span class="t-micro num up b">+20.4%</span></div>
+            <div class="t-micro dim num mt2">평단 67,522 · 현재 81,300 · 40주 · <b class="reach" style="font-weight:700">1차 목표 도달</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage w-rail"><div class="hd2"><h3>예측 없는 보유 종목</h3><span class="badge hollow">3</span></div>
+        <div class="bd2 stack gap8">
+          <div class="rowf gap6"><span class="av sm av-042660">한화</span>
+            <span class="grow"><span class="t-cell sb">현대차</span><span class="t-micro dim" style="display:block">28주 · 평단 대비 +4.2%</span></span>
+            <button class="btn xs">예측 세우기</button></div>
+          <div class="rowf gap6"><span class="av sm" style="background:#0068b7">기아</span>
+            <span class="grow"><span class="t-cell sb">기아</span><span class="t-micro dim" style="display:block">40주 · 평단 대비 -2.1%</span></span>
+            <button class="btn xs">예측 세우기</button></div>
+          <p class="t-micro dim mt2" style="line-height:1.6">
+            들고 있는데 목표가 없으면 <b style="color:var(--foreground)">언제 팔지</b>가 매번 즉흥이 됩니다.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <footer>
+    <span class="fl"><b>쓰는 데이터</b><code>snapshot.held</code> <code>holdingAvgPrice</code> <code>holdingQuantity</code> <code>watchlisted</code> + <code>user_holdings</code></span>
+    <span class="fl"><b>재사용</b><code>TargetsSideRail</code>의 「보유 중인 목표가」·「목표가 없는 보유 종목」 두 섹션</span>
+  </footer>
+</div>
+
+
+<!-- ══════════════ F ══════════════ -->
+<div class="grouphead">
+  <span class="g">F</span>
+  <h2>비어 있을 때</h2>
+  <p>새 메뉴는 대부분의 사용자에게 처음에 0건이다. 0건 화면이 이 메뉴의 첫인상 전부다.</p>
+</div>
+
+<!-- F1 -->
+<div class="comp" id="f1">
+  <header>
+    <span class="no">F1</span><h3>0건 안내</h3>
+    <span class="fromflag">기존 패턴 재사용</span>
+    <p class="q">답하는 질문: <b>「이 메뉴는 뭐 하는 곳인가」</b> — 지금 두 메뉴의 0건 화면은 각각 다른 이야기를 합니다. 하나로 합쳐야 합니다.</p>
+  </header>
+  <div class="demo">
+    <div class="stage" style="width:620px"><div class="bd2" style="text-align:center;padding:26px 20px">
+      <div style="width:40px;height:40px;border-radius:999px;background:var(--surface-elevated);display:grid;place-items:center;margin:0 auto 10px">
+        <span style="font-size:17px">◎</span>
+      </div>
+      <h3 style="font-size:15px">얼마까지, 언제까지 갈 거라고 보십니까</h3>
+      <p class="t-micro sec mt6" style="line-height:1.75;max-width:440px;margin:8px auto 0">
+        목표가를 적어두면 도달했을 때 알려주고, 기한을 함께 적어두면
+        <b style="color:var(--foreground)">그때의 판단이 맞았는지 우리 데이터로 채점해</b> 드립니다.
+      </p>
+      <div class="rowf gap8 wrapf mt12" style="justify-content:center">
+        <div style="flex:1 1 160px;max-width:180px;border:1px solid var(--border);border-radius:10px;padding:10px;text-align:left">
+          <div class="t-micro b" style="color:var(--brand)">1</div>
+          <div class="t-cell sb mt2">목표가를 적는다</div>
+          <div class="t-micro dim mt2">손절가와 2차 목표는 선택입니다</div>
+        </div>
+        <div style="flex:1 1 160px;max-width:180px;border:1px solid var(--border);border-radius:10px;padding:10px;text-align:left">
+          <div class="t-micro b" style="color:var(--brand)">2</div>
+          <div class="t-cell sb mt2">기한을 정한다</div>
+          <div class="t-micro dim mt2">무기한이면 채점 없이 추적만 합니다</div>
+        </div>
+        <div style="flex:1 1 160px;max-width:180px;border:1px solid var(--border);border-radius:10px;padding:10px;text-align:left">
+          <div class="t-micro b" style="color:var(--brand)">3</div>
+          <div class="t-cell sb mt2">닿거나, 기한이 지나면</div>
+          <div class="t-micro dim mt2">수익률·벤치마크 대비·목표가 오차까지 계산됩니다</div>
+        </div>
+      </div>
+      <div class="rowf gap8 mt12" style="justify-content:center">
+        <button class="btn pri">예측 세우기</button>
+        <button class="btn" style="border-color:var(--sample);color:var(--sample)">예시로 둘러보기</button>
+      </div>
+      <p class="t-micro dim mt8">기존 목표가 5건과 스탬프 6건은 <b style="color:var(--foreground)">그대로 옮겨져 있습니다</b></p>
+    </div></div>
+  </div>
+  <footer>
+    <span class="fl"><b>재사용</b><code>MenuEmptyState</code> · <code>SampleModeButton</code> · <code>MENU_COPY</code></span>
+    <span class="fl"><b>의견 주실 것</b>마지막 줄(이관 안내)이 필요한지 — 기존 사용자는 이 메뉴가 <b>어디서 왔는지</b> 알아야 합니다</span>
+  </footer>
+</div>
+
+<!-- F2 -->
+<div class="comp" id="f2">
+  <header>
+    <span class="no">F2</span><h3>예측 제안 — 「지금 세워둘 만한 것」</h3>
+    <span class="newflag">새로</span>
+    <p class="q">답하는 질문: <b>「무엇부터 시작하지」</b> — 빈 검색창을 주면 아무도 안 씁니다. 우리가 이미 아는 것으로 후보를 만들어 줍니다. <b>자동 저장은 하지 않습니다.</b></p>
+  </header>
+  <div class="demo">
+    <div class="stage w-rail"><div class="hd2"><h3>지금 세워둘 만한 것</h3><span class="badge hollow">4</span></div>
+      <div class="bd2 stack gap10">
+        <div class="rowf gap6">
+          <span class="av sm av-000660">SK</span>
+          <span class="grow"><span class="t-cell sb">SK하이닉스</span>
+            <span class="t-micro dim" style="display:block">종합점수 71 → 78 · 이번 주 급변</span></span>
+          <button class="btn xs">세우기</button>
+        </div>
+        <div class="rowf gap6">
+          <span class="av sm av-042660">한화</span>
+          <span class="grow"><span class="t-cell sb">한화오션</span>
+            <span class="t-micro dim" style="display:block">실적 발표 D-3</span></span>
+          <button class="btn xs">세우기</button>
+        </div>
+        <div class="rowf gap6">
+          <span class="av sm av-005930">삼성</span>
+          <span class="grow"><span class="t-cell sb">삼성전자</span>
+            <span class="t-micro dim" style="display:block">40주 보유 중인데 목표가 없음</span></span>
+          <button class="btn xs">세우기</button>
+        </div>
+        <div class="rowf gap6">
+          <span class="av sm av-AAPL">AA</span>
+          <span class="grow"><span class="t-cell sb">애플</span>
+            <span class="t-micro dim" style="display:block">관심 추가 후 +12% · 목표 재설정 시점</span></span>
+          <button class="btn xs">세우기</button>
+        </div>
+        <p class="t-micro dim mt2" style="line-height:1.6">
+          힌트일 뿐입니다 — 누르기 전에는 아무것도 저장되지 않습니다.
+        </p>
+      </div>
+    </div>
+  </div>
+  <footer>
+    <span class="fl"><b>쓰는 데이터</b>보유·관심 중 예측 없는 종목 · 점수 급변 · 실적 발표 임박 — 전부 DB 조회</span>
+    <span class="fl"><b>의견 주실 것</b>네 가지 제안 근거 중 <b>넣을 것</b>을 골라 주세요 (설계안 §8의 확장 항목이었습니다)</span>
+  </footer>
+</div>
+
+
+<!-- ═══ 정해야 할 것 ═══ -->
+<div class="ask">
+  <b>고르실 것 · 정해 주실 것</b>
+  <ul>
+    <li><b>넣을 조각</b> — 22개 중 어떤 것을 넣을지. 번호로 말씀해 주시면 됩니다(예: 「A1·A2·A6·B1·B3·C1·C2·D1·E1·E2·F1」).</li>
+    <li><b>B4 수정 정책</b> — ① 고치면 원본이 정산되고 새 예측이 시작(권장) · ② 등록 후 몇 분만 수정 가능 · ③ 무기한만 자유 수정, 기한 있는 것은 잠금. <b>이게 정해져야 나머지가 정해집니다.</b></li>
+    <li><b>종목당 예측 개수</b> — 목표가는 종목당 1개(<code>UNIQUE</code>), 스탬프는 무제한이었습니다. 통합 후에는? <b>무제한을 권합니다</b>(같은 종목의 예측을 시간순으로 비교하는 것이 이 메뉴의 값어치입니다).</li>
+    <li><b>메뉴 이름과 위치</b> — 화면 이름은 「목표가 예측」. 사이드바에서 기존 <code>스탬프</code>·<code>목표가</code> 두 항목을 없애고 한 자리로 합칩니까? 코드·API 이름은 <code>predictions</code>를 제안합니다.</li>
+    <li><b>기본 기한</b> — 등록 폼의 기본값을 <b>무기한</b>으로 할지 <b>1개월</b>로 할지. 기본값이 채점 여부를 결정합니다.</li>
+    <li><b>A6 목록 행 밀도</b> — 축을 넣은 밀도 A(78px) vs 게이지만 넣은 밀도 B(36px).</li>
+  </ul>
+</div>
+
+</div>
+</body>
+</html>

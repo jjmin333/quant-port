@@ -3,13 +3,25 @@
 import * as React from "react"
 import { AlertDialog as AlertDialogPrimitive } from "radix-ui"
 
+import { useModalHistory } from "@/hooks/use-modal-history"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
+/** 확인 창도 뒤로가기로 닫힌다 — 그 경우는 「취소」와 같다 (`Dialog` 주석 참고). */
 function AlertDialog({
+  open,
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
-  return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />
+  useModalHistory(open === true, React.useCallback(() => onOpenChange?.(false), [onOpenChange]))
+  return (
+    <AlertDialogPrimitive.Root
+      data-slot="alert-dialog"
+      open={open}
+      onOpenChange={onOpenChange}
+      {...props}
+    />
+  )
 }
 
 function AlertDialogTrigger({

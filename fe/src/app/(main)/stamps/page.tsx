@@ -1,7 +1,13 @@
 import { Suspense } from "react";
 import { AuthRequiredShell } from "@/components/auth/auth-required-shell";
 import { StampsClient } from "@/components/stamps/stamps-client";
-import { MENU_COPY } from "@/lib/menu-copy";
+import { pageMetadata } from "@/lib/seo";
+
+export const metadata = pageMetadata({
+  title: "스탬프",
+  description: "봉인해 둔 예측과 채점 결과입니다.",
+  noindex: true,
+});
 
 /**
  * 스탬프만 `AuthRequiredShell` 밖에 있어서, 로그인하지 않으면 목록이 401을 받고
@@ -18,8 +24,6 @@ export default function StampsPage() {
       }
     >
       <AuthRequiredShell
-        title={MENU_COPY.stamps.title}
-        subtitle={MENU_COPY.stamps.subtitle}
         loginNext="/stamps"
         menu="stamps"
       >

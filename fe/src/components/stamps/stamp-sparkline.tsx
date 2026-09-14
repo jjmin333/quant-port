@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo } from "react";
-import { formatPrice } from "@/lib/format";
+
 import type { Stamp } from "@/lib/stamp-types";
+import { PriceDisplay } from "@/components/ui/price-display";
 
 const W = 300;
 const H = 64;
@@ -88,12 +89,12 @@ export function StampSparkline({ stamp }: { stamp: Stamp }) {
           <circle key={model.labels[i]} cx={x} cy={y} r="2" fill="var(--brand)" fillOpacity="0.7" />
         ))}
       </svg>
-      <div className="mt-1 flex justify-between text-[10px] text-[var(--text-muted)]">
-        <span>{formatPrice(model.min, currency)}</span>
+      <div className="mt-1 flex justify-between text-micro text-[var(--text-muted)]">
+        <span><PriceDisplay value={model.min} currency={currency} size="inherit" /></span>
         <span>
           실선 = 스탬프 시점까지 · 점선 = 이후 {model.labels.join("/") || "구간 없음"}
         </span>
-        <span>{formatPrice(model.max, currency)}</span>
+        <span><PriceDisplay value={model.max} currency={currency} size="inherit" /></span>
       </div>
     </div>
   );

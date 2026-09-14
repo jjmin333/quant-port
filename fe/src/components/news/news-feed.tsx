@@ -11,6 +11,8 @@ type NewsFeedProps = {
   onArticleClick?: (article: NewsArticle) => void;
   /** C1 — 종목·지수 칩 시세. 목록 전체가 한 배치 요청을 공유한다. */
   quotes?: Map<string, QuoteSummary>;
+  /** 그 배치가 아직 돌아오지 않았다 — 칩이 종목코드를 대신 그리지 않게. */
+  quotesLoading?: boolean;
   indices?: MarketIndex[];
   /** C2 — 시간 구분선. 검색 결과처럼 시간순이 아닌 목록에서는 끈다. */
   grouped?: boolean;
@@ -21,6 +23,7 @@ export function NewsFeed({
   emptyMessage = "표시할 뉴스가 없습니다.",
   onArticleClick,
   quotes,
+  quotesLoading,
   indices,
   grouped = false,
 }: NewsFeedProps) {
@@ -41,6 +44,7 @@ export function NewsFeed({
             article={article}
             onClick={onArticleClick}
             quotes={quotes}
+            quotesLoading={quotesLoading}
             indices={indices}
           />
         ))}
@@ -67,11 +71,11 @@ export function NewsFeed({
       {sections.map((section, i) => (
         <section key={`${section.group}-${i}`}>
           <div className="flex items-center gap-2 pb-0.5 pt-3 first:pt-1">
-            <span className="shrink-0 text-[11px] font-bold text-[var(--text-muted)]">
+            <span className="shrink-0 text-cell font-bold text-[var(--text-muted)]">
               {newsTimeGroupLabel(section.group)}
             </span>
             <span className="h-px flex-1 bg-[var(--border)]" />
-            <span className="shrink-0 text-[10px] text-[var(--text-muted)]">
+            <span className="shrink-0 text-micro text-[var(--text-muted)]">
               {section.items.length}건
             </span>
           </div>
@@ -82,6 +86,7 @@ export function NewsFeed({
                 article={article}
                 onClick={onArticleClick}
                 quotes={quotes}
+            quotesLoading={quotesLoading}
             indices={indices}
               />
             ))}

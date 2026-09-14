@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { HelpCircle } from "lucide-react";
+import { ANCHORED_POPOVER_MOBILE } from "@/lib/anchored-popover";
 import { analysisSymbolHref } from "@/lib/analysis-tabs";
 import {
   SCORE_AXIS_LABELS,
@@ -65,10 +66,10 @@ export function StockScoreChip({
           SCORE_TONE_BADGE[tone],
         )}
       >
-        <span className="text-[10px] font-semibold">종합점수</span>
-        <span className="font-mono text-[12px] font-bold tabular-nums">{Math.round(score)}</span>
-        <span className="font-mono text-[9px] opacity-70">/100</span>
-        {grade && <span className="text-[10px] font-bold">{grade}</span>}
+        <span className="text-micro font-semibold">종합점수</span>
+        <span className="font-num text-cell font-bold tabular-nums">{Math.round(score)}</span>
+        <span className="font-num text-micro opacity-70">/100</span>
+        {grade && <span className="text-micro font-bold">{grade}</span>}
         <HelpCircle className="size-3 opacity-70" />
       </button>
 
@@ -85,13 +86,18 @@ export function StockScoreChip({
             }}
           />
           <span
-            className="absolute right-0 top-full z-30 mt-1.5 block w-[248px] rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-3 text-left shadow-xl"
+            /* 좁은 화면에서는 화면에 매단다 — `lib/anchored-popover` 참고.
+               이 칩은 카드 오른쪽 끝에 서는 일이 잦아 248px 패널의 왼쪽이 넘친다. */
+            className={cn(
+              "absolute right-0 top-full z-30 mt-1.5 block w-[248px] rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-3 text-left shadow-xl",
+              ANCHORED_POPOVER_MOBILE,
+            )}
             onClick={(e) => e.stopPropagation()}
           >
-            <span className="block text-xs font-bold text-[var(--text-primary)]">
+            <span className="block text-cell font-bold text-[var(--text-primary)]">
               종합점수란?
             </span>
-            <span className="mt-1 block text-[11px] leading-relaxed text-[var(--text-secondary)]">
+            <span className="mt-1 block text-cell leading-relaxed text-[var(--text-secondary)]">
               아래 5개 축을 <b className="text-[var(--text-primary)]">0~100점</b>으로 환산해 합친
               자체 점수입니다. 높을수록 지표가 양호하다는 뜻이며,{" "}
               <b className="text-[var(--text-primary)]">매매 신호가 아닙니다.</b>
@@ -100,21 +106,22 @@ export function StockScoreChip({
               {SCORE_AXIS_ORDER.map((axis) => (
                 <span
                   key={axis}
-                  className="rounded border border-[var(--border)] px-1.5 py-px text-[10px] text-[var(--text-muted)]"
+                  className="rounded border border-[var(--border)] px-1.5 py-px text-micro text-[var(--text-muted)]"
                 >
                   {SCORE_AXIS_LABELS[axis]}
                 </span>
               ))}
             </span>
             {tradeDate && (
-              <span className="mt-1.5 block text-[10px] text-[var(--text-muted)]">
+              <span className="mt-1.5 block text-micro text-[var(--text-muted)]">
                 {tradeDate} 기준
               </span>
             )}
+            {/* 축별 점수 카드는 **개요 탭**에 있다(2026-09-03에 AI 분석에서 옮겼다). */}
             <Link
-              href={analysisSymbolHref(symbol, "ai")}
+              href={analysisSymbolHref(symbol, "overview")}
               onClick={onNavigate}
-              className="mt-2 block rounded-lg bg-[var(--brand)] px-2 py-1.5 text-center text-[11px] font-semibold text-white hover:opacity-90"
+              className="mt-2 block rounded-lg bg-[var(--brand)] px-2 py-1.5 text-center text-cell font-semibold text-white hover:opacity-90"
             >
               축별 점수 자세히 보기
             </Link>

@@ -25,11 +25,28 @@ be/var/
 
 # Testing
 coverage/
+e2e/node_modules/
+e2e/test-results/
+e2e/playwright-report/
+e2e/blob-report/
 
 # Env
 .env*
 !.env.example
 !be/.env.example
+# 로컬 TLS (자체 서명·Let's Encrypt 복사본)
+deploy/certs/
+
+# 배포 VM 별 compose 변수 — 실제 값(deploy/.env.app, deploy/.env.batch)은 커밋하지
+# 않지만 템플릿은 리포에 있어야 한다. `.env*` 는 경로 어디서든 basename 에 걸린다.
+!deploy/*.env.example
+!deploy/.env.*.example
+
+# 워치독 — 웹훅 URL 이 든 설정과 런타임 상태·로그는 커밋하지 않는다.
+# 템플릿(deploy/watchdog.config.example.json)만 리포에 둔다.
+deploy/watchdog.config.json
+deploy/watchdog.paused
+deploy/logs/
 
 # OS / IDE
 .DS_Store
@@ -46,3 +63,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+be/backups/
+
+# Windows가 파일 이름으로 못 쓰는 DOS 장치 이름 — 그런데 실제 미국 티커다.
+# 저장소에 두면 Windows 체크아웃이 통째로 실패한다(git add가 여기서 멈춘다).
+# 이 둘은 화면에서 원격 URL로 떨어진다 — be/internal/stocklogo/client_index.go 참고.
+fe/public/logos/us/CON.png
+fe/public/logos/us/PRN.png

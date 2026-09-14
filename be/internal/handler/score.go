@@ -15,10 +15,15 @@ import (
 type ScoreHandler struct {
 	svc         *service.ScoreService
 	indexScores *service.IndexScoreService
+	rankings    *service.ScoreRankingService
 }
 
-func NewScoreHandler(svc *service.ScoreService, indexScores *service.IndexScoreService) *ScoreHandler {
-	return &ScoreHandler{svc: svc, indexScores: indexScores}
+func NewScoreHandler(
+	svc *service.ScoreService,
+	indexScores *service.IndexScoreService,
+	rankings *service.ScoreRankingService,
+) *ScoreHandler {
+	return &ScoreHandler{svc: svc, indexScores: indexScores, rankings: rankings}
 }
 
 // Get serves GET /stocks/{symbol}/score — the latest stored score with its
@@ -98,27 +103,70 @@ func (h *ScoreHandler) History(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, map[string]any{"data": rows})
 }
 
-// TopScores serves GET /stocks/scores/top?market=domestic|overseas&limit=N —
-// the 종목 분석 랭킹 list, sorted by composite score for the latest scored date.
+/*
+TopScores serves GET /stocks/scores/top —
+`?market=domestic|overseas&axis=composite|technical|…&duration=realtime|1d|1w|1mo&limit=N`.
+
+# 두 갈래
+
+`axis=composite&duration=realtime`(기본값)은 예전 그대로 `ScoreService.TopScores`가
+그 자리에서 계산한다. 최신 점수일 한 날의 종합 점수 순이라 인덱스가 정확히 맞고,
+실측 0.07초로 요청 경로에 두어도 되는 유일한 조합이다.
+
+나머지 조합은 **배치가 미리 만들어 둔 목록**을 읽는다(`ScoreRankingService`). 기간
+창을 훑는 계산은 운영 DB에서 수 초라 여기서 할 수 없다.
+
+배치가 아직 그 조합을 만들지 않았으면(설치 직후, 또는 축을 새로 추가한 뒤 첫 배치
+전) 목록 대신 **빈 배열**을 준다 — 오류가 아니라 「아직 없음」이고, 화면은 그 상태를
+이미 그릴 줄 안다.
+*/
 func (h *ScoreHandler) TopScores(w http.ResponseWriter, r *http.Request) {
 	if h.svc == nil {
 		response.JSON(w, http.StatusOK, map[string]any{"data": []any{}})
 		return
 	}
-	market := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("market")))
+	q := r.URL.Query()
+	market := strings.ToLower(strings.TrimSpace(q.Get("market")))
 	if market != "overseas" {
 		market = "domestic"
 	}
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	axis := model.ParseScoreRankingAxis(strings.TrimSpace(q.Get("axis")))
+	duration := model.ParseScoreRankingDuration(strings.TrimSpace(q.Get("duration")))
+	limit, _ := strconv.Atoi(q.Get("limit"))
 	if limit <= 0 {
 		limit = 20
 	}
-	items, _, err := h.svc.TopScores(r.Context(), market, limit)
+
+	if axis == model.RankAxisComposite && duration == model.RankDurationRealtime {
+		items, _, err := h.svc.TopScores(r.Context(), market, limit)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		// 종합·최신일에서는 순위 값이 곧 종합 점수다 — 화면이 한 자리만 그리면
+		// 되도록 여기서도 같은 규약으로 채워 보낸다.
+		for i := range items {
+			score := items[i].Score
+			items[i].RankValue = &score
+		}
+		response.JSON(w, http.StatusOK, map[string]any{"data": items})
+		return
+	}
+
+	if h.rankings == nil {
+		response.JSON(w, http.StatusOK, map[string]any{"data": []any{}})
+		return
+	}
+	view, err := h.rankings.Get(r.Context(), market, axis, duration, limit)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	response.JSON(w, http.StatusOK, map[string]any{"data": items})
+	if view == nil {
+		response.JSON(w, http.StatusOK, map[string]any{"data": []any{}})
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]any{"data": view.Items})
 }
 
 // IndexScores serves GET /indices/scores — every index's latest score and

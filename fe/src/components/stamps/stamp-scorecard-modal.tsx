@@ -21,6 +21,7 @@ import {
 } from "@/lib/stamp-stats";
 import { HORIZON_LABELS, type Stamp, type StampSummary } from "@/lib/stamp-types";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 
 /**
  * 성적표 — 목록 위 적중률 타일을 누르면 열린다.
@@ -97,7 +98,7 @@ export function StampScorecardModal({
         <div className="grid gap-3 sm:grid-cols-[132px_1fr] sm:items-center">
           <div className="text-center">
             <HitRateRing value={hitRate} />
-            <p className="mt-1.5 text-[10.5px] text-[var(--text-muted)]">
+            <p className="mt-1.5 text-micro text-[var(--text-muted)]">
               적중 {summary?.hits ?? 0} / 판정 {summary?.judged ?? 0}
             </p>
           </div>
@@ -153,7 +154,7 @@ export function StampScorecardModal({
               type="button"
               onClick={() => setTab(t.id)}
               className={cn(
-                "flex-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors",
+                "flex-1 rounded-md px-2 py-1 text-cell font-medium transition-colors",
                 tab === t.id
                   ? "bg-[var(--surface)] text-[var(--text-primary)] shadow-sm"
                   : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]",
@@ -191,7 +192,7 @@ export function StampScorecardModal({
         </Panel>
 
         <div className="flex items-center gap-2 border-t border-[var(--border)] pt-3">
-          <p className="text-[10.5px] text-[var(--text-muted)]">
+          <p className="text-micro text-[var(--text-muted)]">
             매매 신호가 아닙니다 · 적중/빗나감은 방향, 오차는 목표가 기준
           </p>
           {dueCount > 0 && (
@@ -201,7 +202,7 @@ export function StampScorecardModal({
                 onOpenChange(false);
                 onOpenReveal();
               }}
-              className="ml-auto shrink-0 rounded-lg bg-[var(--brand)] px-3 py-1.5 text-[11px] font-medium text-white"
+              className={cn(buttonVariants({ variant: "default", size: "sm" }), "ml-auto bg-[var(--brand)] text-white")}
             >
               개봉 대기 {dueCount}건 열기 →
             </button>
@@ -244,9 +245,9 @@ function Tile({
 }) {
   return (
     <div className="rounded-lg border border-[var(--border)] p-2.5">
-      <p className="text-[10.5px] text-[var(--text-muted)]">{label}</p>
+      <p className="text-micro text-[var(--text-muted)]">{label}</p>
       <p className={cn("mt-0.5 text-lg font-bold tabular-nums", valueClass)}>{value}</p>
-      <p className="mt-0.5 truncate text-[10px] text-[var(--text-muted)]">{foot}</p>
+      <p className="mt-0.5 truncate text-micro text-[var(--text-muted)]">{foot}</p>
     </div>
   );
 }
@@ -255,7 +256,7 @@ function Panel({ title, children }: { title?: string; children: React.ReactNode 
   return (
     <section className="rounded-lg border border-[var(--border)] p-3">
       {title && (
-        <h4 className="mb-2 text-[10.5px] font-semibold text-[var(--text-muted)]">{title}</h4>
+        <h4 className="mb-2 text-micro font-semibold text-[var(--text-muted)]">{title}</h4>
       )}
       {children}
     </section>
@@ -266,7 +267,7 @@ function BucketBars({ buckets }: { buckets: Bucket[] }) {
   const shown = buckets.filter((b) => b.judged > 0);
   if (shown.length === 0) {
     return (
-      <p className="text-center text-[11px] text-[var(--text-muted)]">
+      <p className="text-center text-cell text-[var(--text-muted)]">
         아직 판정이 끝난 스탬프가 없습니다.
       </p>
     );
@@ -276,7 +277,7 @@ function BucketBars({ buckets }: { buckets: Bucket[] }) {
       {shown.map((b) => {
         const rate = b.hitRate ?? 0;
         return (
-          <li key={b.key} className="flex items-center gap-2 text-[11px]">
+          <li key={b.key} className="flex items-center gap-2 text-cell">
             <span className="w-14 shrink-0 truncate text-[var(--text-muted)]">{b.label}</span>
             <span className="flex h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-[var(--surface-elevated)]">
               <span className="block h-full bg-[var(--profit)]" style={{ width: `${rate}%` }} />
@@ -308,7 +309,7 @@ function AccuracyBreakdown({ stamps }: { stamps: Stamp[] }) {
   const rows = stamps.filter((s) => s.targetAccuracy !== undefined);
   if (rows.length === 0) {
     return (
-      <p className="text-center text-[11px] text-[var(--text-muted)]">
+      <p className="text-center text-cell text-[var(--text-muted)]">
         아직 정산된 스탬프가 없습니다.
       </p>
     );
@@ -326,7 +327,7 @@ function AccuracyBreakdown({ stamps }: { stamps: Stamp[] }) {
           const n = rows.filter((s) => band.test(s.targetAccuracy as number)).length;
           const pct = (n / rows.length) * 100;
           return (
-            <li key={band.label} className="flex items-center gap-2 text-[11px]">
+            <li key={band.label} className="flex items-center gap-2 text-cell">
               <span className="w-16 shrink-0 text-[var(--text-muted)]">{band.label}</span>
               <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-[var(--surface-elevated)]">
                 <span className="block h-full bg-[var(--brand)]" style={{ width: `${pct}%` }} />
@@ -352,7 +353,7 @@ function AccuracyFootnote({ rows }: { rows: Stamp[] }) {
     (s) => s.verdict === "hit" && (s.targetAccuracy as number) > 20,
   ).length;
   return (
-    <p className="mt-2 border-t border-[var(--border)] pt-2 text-[10.5px] text-[var(--text-muted)]">
+    <p className="mt-2 border-t border-[var(--border)] pt-2 text-micro text-[var(--text-muted)]">
       {wideHits > 0
         ? `방향은 맞췄지만 폭이 20% 넘게 빗나간 스탬프가 ${wideHits}건 있습니다 — 적중률과 정확도는 다른 이야기입니다.`
         : "적중/빗나감은 방향으로만 가립니다. 여기 오차는 폭까지 맞췄는지를 따로 보는 축입니다."}
@@ -393,7 +394,7 @@ function CumulativeAlphaChart({ values }: { values: number[] }) {
         />
         <circle cx={x(values.length - 1)} cy={y(last)} r="3" fill="var(--brand)" />
       </svg>
-      <div className="flex justify-between text-[10px] text-[var(--text-muted)]">
+      <div className="flex justify-between text-micro text-[var(--text-muted)]">
         <span>0%p</span>
         <span className={toneClass(last)}>
           누적 {last > 0 ? "+" : ""}
@@ -412,7 +413,7 @@ function HorizonComparison({
   const values = rows.flatMap((r) => [r.mine, r.benchmark]).filter((v): v is number => v !== undefined);
   if (values.length === 0) {
     return (
-      <p className="text-center text-[11px] text-[var(--text-muted)]">
+      <p className="text-center text-cell text-[var(--text-muted)]">
         아직 구간 수익률이 없습니다.
       </p>
     );
@@ -438,7 +439,7 @@ function HorizonComparison({
           </div>
         ))}
       </div>
-      <div className="mt-1 grid grid-cols-4 gap-3 text-center text-[10px] text-[var(--text-muted)]">
+      <div className="mt-1 grid grid-cols-4 gap-3 text-center text-micro text-[var(--text-muted)]">
         {rows.map((r) => (
           <span key={r.horizon}>
             {r.horizon}
@@ -448,7 +449,7 @@ function HorizonComparison({
           </span>
         ))}
       </div>
-      <div className="mt-2 flex gap-3 text-[10px] text-[var(--text-muted)]">
+      <div className="mt-2 flex gap-3 text-micro text-[var(--text-muted)]">
         <span className="flex items-center gap-1">
           <span className="size-2 rounded-sm bg-[var(--brand)]" />내 스탬프
         </span>

@@ -82,15 +82,31 @@ func (h *QuotesHandler) BatchQuotes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parts := parseSymbolList(raw, service.BatchQuoteSummariesMax)
-	summaries := h.svc.BatchQuoteSummaries(r.Context(), parts)
-	response.JSON(w, http.StatusOK, map[string]any{
-		"data":   summaries,
+	res := h.svc.BatchQuoteSummariesResult(r.Context(), parts)
+	payload := map[string]any{
+		"data":   res.Summaries,
 		"source": h.source(),
 		// 서버가 한 번에 풀어 주는 심볼 수. 보유·메모·목표가처럼 사용자 데이터에서
 		// 심볼을 만드는 화면은 이 수를 넘길 수 있는데, 지금까지는 넘겼다는 사실이
 		// 응답 어디에도 없어 화면이 조용히 일부만 그렸다.
 		"limit": service.BatchQuoteSummariesMax,
-	})
+	}
+	// **못 푼 심볼을 조용히 버리지 않는다.**
+	//
+	// 예전에는 `data`가 짧아지는 것이 전부였다. 호출부는 「없는 종목」과 「서버가
+	// 시간 안에 못 푼 종목」을 구분할 수 없어, 뉴스 칩이 이름 대신 종목코드를
+	// 그리는 것으로 나타났다. deadline=true면 재요청이 값어치가 있고,
+	// false면 그 심볼은 다시 물어도 같은 답이다.
+	if len(res.Missing) > 0 {
+		payload["missing"] = res.Missing
+	}
+	if res.Truncated > 0 {
+		payload["truncated"] = res.Truncated
+	}
+	if res.Deadline {
+		payload["deadline"] = true
+	}
+	response.JSON(w, http.StatusOK, payload)
 }
 
 func (h *QuotesHandler) GetQuote(w http.ResponseWriter, r *http.Request) {
@@ -158,6 +174,11 @@ func (h *QuotesHandler) GetCandles(w http.ResponseWriter, r *http.Request) {
 
 func (h *QuotesHandler) GetTerminalSnapshot(w http.ResponseWriter, r *http.Request) {
 	symbol := chi.URLParam(r, "symbol")
+	// 화면이 호가를 **실제로 그릴 때만** book=1 을 붙인다. 그 종목만 웹소켓에서
+	// 호가를 구독한다(planTopics 참조) — 상세 화면 진입만으로는 붙지 않는다.
+	if wantsBook, _ := strconv.ParseBool(r.URL.Query().Get("book")); wantsBook {
+		h.svc.TouchOrderBookInterest(symbol)
+	}
 	snap, ok := h.svc.GetTerminalSnapshot(r.Context(), symbol)
 	if !ok {
 		response.Error(w, http.StatusNotFound, "quote not found")
@@ -199,6 +220,21 @@ func (h *QuotesHandler) Stream(w http.ResponseWriter, r *http.Request) {
 func (h *QuotesHandler) QuoteStream(w http.ResponseWriter, r *http.Request) {
 	symbol := chi.URLParam(r, "symbol")
 	h.svc.ServeQuoteStream(w, r, symbol)
+}
+
+/*
+ListPriceStream serves GET /quotes/prices/stream?symbols=A,B,C&assetType=us —
+목록 화면 여러 줄의 가격을 **연결 하나로** 밀어 준다.
+
+폴링을 대신하는 자리라 실패는 조용해야 한다: 화면은 스트림이 안 붙으면 폴링으로
+버티도록 만들어져 있으므로, 여기서 오류를 내도 목록이 비지 않는다.
+*/
+func (h *QuotesHandler) ListPriceStream(w http.ResponseWriter, r *http.Request) {
+	symbols := service.ParseListStreamSymbols(r.URL.Query().Get("symbols"))
+	h.svc.ServeListPriceStream(w, r, service.ListPriceStreamParams{
+		Symbols:   symbols,
+		AssetType: r.URL.Query().Get("assetType"),
+	})
 }
 
 func (h *QuotesHandler) source() string {

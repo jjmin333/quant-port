@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -30,12 +31,20 @@ func (h *WatchlistHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *WatchlistHandler) Add(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Symbol string `json:"symbol"`
+		// 실행 취소로 되담을 때 원래의 담은 가격을 되살린다 (0이면 현재가를 찍는다).
+		AddedPrice float64 `json:"addedPrice"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid json body")
 		return
 	}
-	if err := h.svc.Add(r.Context(), body.Symbol); err != nil {
+	if err := h.svc.Add(r.Context(), body.Symbol, body.AddedPrice); err != nil {
+		// 「없는 종목」과 「빈 심볼」은 다른 답이다. 나머지는 예전처럼 400 —
+		// 여기서 writeServiceError로 통째로 넘기면 매핑 안 된 오류가 502가 된다.
+		if errors.Is(err, service.ErrUnknownSymbol) {
+			response.Error(w, http.StatusNotFound, err.Error())
+			return
+		}
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}

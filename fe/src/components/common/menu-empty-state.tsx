@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 
 /**
  * 「내 투자」 메뉴가 비었을 때 화면을 대신 채우는 한 장.
@@ -48,8 +49,8 @@ export function MenuEmptyState({
         <div className="mx-auto mb-2.5 grid size-10 place-items-center rounded-full bg-[var(--surface-elevated)] text-[var(--text-secondary)]">
           {icon}
         </div>
-        <h2 className="text-[13.5px] font-semibold text-[var(--text-primary)]">{headline}</h2>
-        <p className="mx-auto mt-1 max-w-[430px] text-[11.5px] leading-relaxed text-[var(--text-muted)]">
+        <h2 className="text-note font-semibold text-[var(--text-primary)]">{headline}</h2>
+        <p className="mx-auto mt-1 max-w-[430px] text-cell leading-relaxed text-[var(--text-muted)]">
           {description}
         </p>
 
@@ -60,13 +61,13 @@ export function MenuEmptyState({
                 key={step.title}
                 className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2"
               >
-                <span className="grid size-4 place-items-center rounded-full bg-[var(--brand)] text-[9px] font-bold text-white">
+                <span className="grid size-4 place-items-center rounded-full bg-[var(--brand)] text-micro font-bold text-white">
                   {idx + 1}
                 </span>
-                <p className="mt-1.5 text-[11px] font-semibold text-[var(--text-primary)]">
+                <p className="mt-1.5 text-cell font-semibold text-[var(--text-primary)]">
                   {step.title}
                 </p>
-                <p className="mt-0.5 text-[10.5px] leading-snug text-[var(--text-muted)]">
+                <p className="mt-0.5 text-micro leading-snug text-[var(--text-muted)]">
                   {step.detail}
                 </p>
               </li>
@@ -78,7 +79,7 @@ export function MenuEmptyState({
           {"href" in primary ? (
             <Link
               href={primary.href}
-              className="rounded-lg bg-[var(--brand)] px-3.5 py-1.5 text-[11px] font-semibold text-white hover:opacity-90"
+              className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-white hover:opacity-90")}
             >
               {primary.label}
             </Link>
@@ -86,7 +87,7 @@ export function MenuEmptyState({
             <button
               type="button"
               onClick={primary.onClick}
-              className="rounded-lg bg-[var(--brand)] px-3.5 py-1.5 text-[11px] font-semibold text-white hover:opacity-90"
+              className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-white hover:opacity-90")}
             >
               {primary.label}
             </button>
@@ -95,7 +96,7 @@ export function MenuEmptyState({
         </div>
 
         {footnote && (
-          <p className="mt-3.5 text-[10.5px] text-[var(--text-muted)]">{footnote}</p>
+          <p className="mt-3.5 text-micro text-[var(--text-muted)]">{footnote}</p>
         )}
       </div>
     </Card>

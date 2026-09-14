@@ -1,14 +1,17 @@
 {
   "name": "quant-port",
-  "version": "0.9.0",
+  "version": "1.13.3",
   "private": true,
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
     "dev:external": "powershell -ExecutionPolicy Bypass -File ./scripts/dev-external.ps1",
     "dev:urls": "powershell -ExecutionPolicy Bypass -File ./scripts/show-access-urls.ps1",
+    "deploy": "powershell -ExecutionPolicy Bypass -File ./scripts/deploy.ps1",
+    "deploy:dev": "powershell -ExecutionPolicy Bypass -File ./scripts/deploy-dev.ps1",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
@@ -35,6 +38,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   }
 }

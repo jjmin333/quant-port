@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { DailyCloseMiniTable } from "@/components/charts/daily-close-mini-table";
+import { DailyCloseRangeToggle } from "@/components/charts/daily-close-range-toggle";
 import { PriceHistoryChart } from "@/components/charts/price-history-chart";
 import { useNewsArticleModal } from "@/components/news/news-article-modal-host";
 import { QuickLookSection } from "@/components/stocks/stock-quick-look-modal";
@@ -14,10 +16,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { IndexStanceBadge, IndexTagChips } from "@/components/market/index-tag-chips";
 import { useIndexScores, type IndexScoreSummary } from "@/hooks/use-index-scores";
 import { fetchIndexDailyCloses } from "@/lib/daily-close-api";
 import type { DailyCloseRow } from "@/lib/daily-close-types";
+import {
+  availableBarSteps,
+  DAILY_CLOSE_MAX_BARS,
+  resolveBarStep,
+} from "@/lib/daily-close-window";
 import { formatPercent, formatRelativeTime } from "@/lib/format";
+import { leaveModal } from "@/lib/modal-history";
 import { fetchDomesticNews, fetchUsNews } from "@/lib/news-api";
 import {
   articleMatchesDashboardIndex,
@@ -46,24 +55,13 @@ import { cn } from "@/lib/utils";
  * 열 때 나가는 요청은 둘이다 — 일별 종가 1, 뉴스 1. 목록에 지수가 열 개여도 연 것 하나뿐.
  */
 
-/**
- * 기간 버튼은 **거래일 수**로 말한다 — 「1개월」이 아니라 「20일」.
+/*
+ * 기간 버튼(20일 · 60일 · 전체)의 규칙은 `lib/daily-close-window`에 있다 —
+ * 종목 퀵룩 모달이 같은 토글을 쓰게 되면서 한 벌로 모았다(2026-09-05 요청 7-1).
  *
- * 실측(08-16): 코스피에 `limit=66`을 줘도 31행만 온다(07-02부터). 지수 일별 종가는
- * 이제 막 쌓이는 중이고 종목마다 깊이가 다르다. 캘린더 기간으로 이름을 붙이면
- * 「3개월」과 「1년」이 **똑같은 차트**를 그리게 되고, 화면이 없는 기간을 있다고 말한다.
- *
- * 그래서 ① 한 번에 최대치를 받아 **클라이언트에서 자르고**(토글할 때마다 요청이 나가지
- * 않는다) ② 앞 버튼보다 실제로 더 많은 봉을 보여주는 버튼만 남긴다. 31행짜리 지수에는
- * 「20일」과 「전체」 둘만 뜨고, 하나뿐이면 토글 자체를 그리지 않는다.
- * 실제 구간은 차트 아래 양옆 날짜가 답한다.
+ * 한 번에 최대치를 받아 **클라이언트에서 자른다**. 토글할 때마다 요청이 나가지 않는다.
  */
-const MAX_BARS = 250;
-const BAR_STEPS = [20, 60, MAX_BARS];
-
-function barStepLabel(step: number): string {
-  return step >= MAX_BARS ? "전체" : `${step}일`;
-}
+const MAX_BARS = DAILY_CLOSE_MAX_BARS;
 
 /**
  * 이 지수 이야기가 실리는 뉴스 목록.
@@ -177,20 +175,10 @@ export function IndexQuickLookModal({
   const usingSparkFallback = rows != null && chrono.length < 2;
 
   /* 앞 버튼보다 실제로 더 많은 봉을 그리는 단계만 남긴다. */
-  const steps = useMemo(() => {
-    const seen = new Set<number>();
-    const out: number[] = [];
-    for (const step of BAR_STEPS) {
-      const effective = Math.min(step, chrono.length);
-      if (effective < 2 || seen.has(effective)) continue;
-      seen.add(effective);
-      out.push(step);
-    }
-    return out;
-  }, [chrono.length]);
+  const steps = useMemo(() => availableBarSteps(chrono.length), [chrono.length]);
 
   // 고른 단계가 사라졌으면(지수를 바꿔 이력이 얕아졌다) 남은 것 중 가장 긴 것으로 떨어진다.
-  const activeStep = steps.includes(bars) ? bars : (steps[steps.length - 1] ?? MAX_BARS);
+  const activeStep = resolveBarStep(steps, bars);
 
   const windowed = chrono.slice(-activeStep);
   const chartPoints = usingSparkFallback
@@ -215,17 +203,17 @@ export function IndexQuickLookModal({
               <DialogHeader className="shrink-0 border-b px-4 py-3 pr-10 text-left">
                 <DialogTitle className="flex min-w-0 items-center gap-2 text-sm">
                   <span className="min-w-0 flex-1 truncate">{index.name}</span>
-                  <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                  <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-micro font-semibold text-muted-foreground">
                     지수
                   </span>
                   <span className="shrink-0 text-right">
-                    <span className="block font-mono text-base font-bold tabular-nums">
+                    <span className="block font-num text-base font-bold tabular-nums">
                       {index.value > 0 ? formatIndexValue(index.value) : "—"}
                     </span>
                     {index.value > 0 && (
                       <span
                         className={cn(
-                          "block font-mono text-[11px] tabular-nums",
+                          "block font-num text-cell tabular-nums",
                           trendTextClass(index.changeRate),
                         )}
                       >
@@ -235,7 +223,18 @@ export function IndexQuickLookModal({
                     )}
                   </span>
                 </DialogTitle>
-                <DialogDescription className="text-[11px]">
+                {/*
+                  키워드는 헤더에 둔다 — 값·등락률 바로 아래가 「지금 이 지수에 무슨
+                  일이 있나」를 읽는 자리다. 홈 스트립은 폭이 좁아 하나만 내지만
+                  여기서는 걸린 것을 다 편다.
+                */}
+                <IndexTagChips
+                  tags={score?.tags}
+                  changeRate={index.changeRate}
+                  max={3}
+                  className="mt-1.5"
+                />
+                <DialogDescription className="text-cell">
                   {index.dataKind === "eod" ? "최근 거래일 종가" : "실시간"}
                   {index.updatedAt
                     ? ` · ${new Date(index.updatedAt).toLocaleTimeString("ko-KR", {
@@ -252,25 +251,7 @@ export function IndexQuickLookModal({
                 <QuickLookSection
                   title={usingSparkFallback ? "최근 흐름" : "일별 종가"}
                   action={
-                    steps.length > 1 && (
-                      <div className="flex shrink-0 gap-0.5 rounded-lg bg-muted p-0.5">
-                        {steps.map((step) => (
-                          <button
-                            key={step}
-                            type="button"
-                            onClick={() => setBars(step)}
-                            className={cn(
-                              "rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors",
-                              activeStep === step
-                                ? "bg-card text-foreground shadow-sm"
-                                : "text-muted-foreground hover:text-foreground",
-                            )}
-                          >
-                            {barStepLabel(step)}
-                          </button>
-                        ))}
-                      </div>
-                    )
+                    <DailyCloseRangeToggle steps={steps} active={activeStep} onChange={setBars} />
                   }
                 >
                   {rows === null ? (
@@ -285,7 +266,7 @@ export function IndexQuickLookModal({
                         title=""
                       />
                       {usingSparkFallback && (
-                        <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+                        <p className="mt-1 text-micro leading-relaxed text-muted-foreground">
                           이 지수는 일별 종가 이력이 아직 쌓이는 중입니다 — 실시간 스냅샷으로
                           그린 최근 흐름입니다.
                         </p>
@@ -301,7 +282,7 @@ export function IndexQuickLookModal({
                       {score?.score != null && tone && (
                         <span
                           className={cn(
-                            "rounded-full border px-1.5 text-[10px] font-semibold tabular-nums",
+                            "rounded-full border px-1.5 text-micro font-semibold tabular-nums",
                             SCORE_TONE_TEXT[tone],
                             SCORE_TONE_BORDER[tone],
                           )}
@@ -318,24 +299,30 @@ export function IndexQuickLookModal({
                     점수 공식이 이 둘에는 적용되지 않는다). 점수 유무로 블록을 통째로
                     감추면 있는 문장까지 같이 사라진다.
                   */}
-                  {score?.aiSummary ? (
+                  {score?.llmNote || score?.aiSummary ? (
                     <div className="rounded-lg border px-2.5 py-2">
-                      <p className="text-[11px] leading-relaxed">{score.aiSummary}</p>
                       {/*
-                        「AI」라고 부르되 무엇으로 만든 값인지는 정확히 적는다 — 이 점수와
-                        위 문장은 20일선·RSI·최근 등락으로 계산한 것이지 LLM이 쓴 것이
-                        아니다(`be/internal/service/index_score.go`: "no LLM").
+                        **해설이 있으면 그것만 보여준다.** 예전에는 규칙이 만든 지표 나열
+                        (「최근 5거래일 -1.7%, 20거래일 +20.5%, 20일선 위, RSI 69.0 …」)을
+                        문단 위에 회색으로 깔고 아래에 또 회색 각주를 달았다. 그 지표들은
+                        **해설 문단이 이미 말로 풀어 놓은 것과 같은 값**이라, 같은 이야기가
+                        회색 글씨로 두 번 감싸인 꼴이었고 정작 읽을 문단이 그 사이에 파묻혔다.
+
+                        지표 나열은 해설이 없을 때만 나온다 — 모델이 꺼져 있거나 실패했거나
+                        이력이 얕은 지수(금)가 그렇고, 그때는 그것이 가진 전부다.
                       */}
-                      <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">
-                        {score.tradeDate} 기준 ·{" "}
-                        {score.score == null
-                          ? "이 지수는 추세 점수가 산출되지 않습니다."
-                          : "지수에는 재무제표가 없어 20일선·RSI 등 추세만 봅니다."}{" "}
-                        정보이지 매매 신호가 아닙니다.
+                      <IndexStanceBadge stance={score.llmStance} />
+                      <p
+                        className={cn(
+                          "whitespace-pre-line text-read",
+                          score.llmStance && "mt-1.5",
+                        )}
+                      >
+                        {score.llmNote || score.aiSummary}
                       </p>
                     </div>
                   ) : (
-                    <p className="py-2 text-center text-[11px] text-muted-foreground">
+                    <p className="py-2 text-center text-cell text-muted-foreground">
                       산출된 점수가 없습니다
                     </p>
                   )}
@@ -343,49 +330,21 @@ export function IndexQuickLookModal({
 
                 {rows !== null && rows.length > 0 && (
                   <QuickLookSection title="최근 일별">
-                    <div className="flex h-[22px] items-center gap-2 border-b px-1 text-[10px] text-muted-foreground">
-                      <span className="flex-1">날짜</span>
-                      <span className="w-[76px] text-right">종가</span>
-                      <span className="w-[56px] text-right">전일비</span>
-                      <span className="w-[34px] text-right">점수</span>
-                    </div>
-                    <ul className="min-w-0">
-                      {rows.slice(0, 6).map((r) => (
-                        <li
-                          key={r.tradeDate}
-                          className="flex h-[26px] items-center gap-2 px-1 text-[11px]"
-                        >
-                          <span className="min-w-0 flex-1 truncate">
-                            {r.tradeDate.slice(5)}{" "}
-                            <span className="text-[10px] text-muted-foreground">({r.weekday})</span>
-                          </span>
-                          <span className="w-[76px] text-right font-mono tabular-nums">
-                            {formatIndexValue(r.close)}
-                          </span>
-                          <span
-                            className={cn(
-                              "w-[56px] text-right font-mono tabular-nums",
-                              r.changeRate == null
-                                ? "text-muted-foreground"
-                                : trendTextClass(r.changeRate),
-                            )}
-                          >
-                            {r.changeRate == null ? "—" : formatPercent(r.changeRate)}
-                          </span>
-                          {/* 점수가 없는 날은 "—". 0으로 적으면 그날이 바닥이었다는 없는 사실이 된다. */}
-                          <span
-                            className={cn(
-                              "w-[34px] text-right font-mono tabular-nums",
-                              r.score == null
-                                ? "text-muted-foreground"
-                                : SCORE_TONE_TEXT[scoreTone(r.score)],
-                            )}
-                          >
-                            {r.score ?? "—"}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
+                    {/*
+                      해설이 붙은 날은 줄을 눌러 그날 문장을 편다 — 오늘 해설이 믿을
+                      만한지는 어제 뭐라고 했는지를 봐야 알 수 있는데, 그 값이 이미
+                      날짜별로 쌓이고 있으면서 화면에는 오늘 것만 나와 있었다.
+
+                      지수는 규칙 문장(`aiSummary`)과 해설(`llmNote`)이 **따로**다.
+                      표에 펴는 것은 해설 쪽이다.
+                    */}
+                    <DailyCloseMiniTable
+                      rows={rows}
+                      formatValue={formatIndexValue}
+                      noteOf={(r) =>
+                        r.llmNote?.trim() ? { text: r.llmNote, stance: r.llmStance } : null
+                      }
+                    />
                   </QuickLookSection>
                 )}
 
@@ -395,10 +354,10 @@ export function IndexQuickLookModal({
                       {peers.map((p) => (
                         <span
                           key={p.id}
-                          className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px]"
+                          className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-micro"
                         >
                           <span className="text-muted-foreground">{p.name}</span>
-                          <b className={cn("font-mono tabular-nums", trendTextClass(p.changeRate))}>
+                          <b className={cn("font-num tabular-nums", trendTextClass(p.changeRate))}>
                             {formatPercent(p.changeRate)}
                           </b>
                         </span>
@@ -412,7 +371,7 @@ export function IndexQuickLookModal({
                     <span className="flex items-center gap-1.5">
                       이 지수를 다룬 뉴스
                       {news != null && news.length > 0 && (
-                        <span className="rounded bg-muted px-1 text-[10px] font-normal text-muted-foreground">
+                        <span className="rounded bg-muted px-1 text-micro font-normal text-muted-foreground">
                           {news.length}건
                         </span>
                       )}
@@ -426,7 +385,7 @@ export function IndexQuickLookModal({
                       ))}
                     </div>
                   ) : news.length === 0 ? (
-                    <p className="py-2 text-center text-[11px] text-muted-foreground">
+                    <p className="py-2 text-center text-cell text-muted-foreground">
                       이 지수를 다룬 기사가 아직 없습니다
                     </p>
                   ) : (
@@ -438,10 +397,10 @@ export function IndexQuickLookModal({
                             onClick={() => newsModal.open(a)}
                             className="block w-full rounded-md px-1 py-0.5 text-left hover:bg-accent"
                           >
-                            <p className="line-clamp-2 text-[11px] leading-snug">
+                            <p className="line-clamp-2 text-cell leading-snug">
                               {a.headlineKo || a.headline}
                             </p>
-                            <p className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                            <p className="mt-0.5 flex items-center gap-1.5 text-micro text-muted-foreground">
                               <span className={a.publisher.badgeClass}>{a.publisher.name}</span>
                               {formatRelativeTime(a.publishedAt)}
                             </p>
@@ -455,13 +414,18 @@ export function IndexQuickLookModal({
 
               <div className="flex shrink-0 flex-wrap items-center gap-2 border-t px-4 py-3">
                 <Button asChild size="sm" className="min-w-32 flex-1">
-                  <Link href={market === "us" ? "/news/us" : "/news/domestic"} onClick={onClose}>
+                  {/* `leaveModal` — 그냥 닫으면 모달이 걷어내는 히스토리 항목이 이 이동을
+                      밀어내 아무 일도 일어나지 않는다. 까닭은 `lib/modal-history`. */}
+                  <Link
+                    href={market === "us" ? "/news/us" : "/news/domestic"}
+                    onClick={() => leaveModal(onClose)}
+                  >
                     관련 뉴스 더보기
                     <ArrowRight className="size-3.5" />
                   </Link>
                 </Button>
                 <Button asChild size="sm" variant="outline" className="shrink-0">
-                  <Link href="/market" onClick={onClose}>
+                  <Link href="/market" onClick={() => leaveModal(onClose)}>
                     실시간 차트
                   </Link>
                 </Button>
@@ -471,7 +435,7 @@ export function IndexQuickLookModal({
             <div className="p-6">
               <DialogHeader>
                 <DialogTitle className="text-sm">지수</DialogTitle>
-                <DialogDescription className="text-xs">지수를 불러오는 중…</DialogDescription>
+                <DialogDescription className="text-cell">지수를 불러오는 중…</DialogDescription>
               </DialogHeader>
             </div>
           )}
@@ -520,3 +484,4 @@ export function useIndexQuickLook(allIndices: MarketIndex[]): {
     ),
   };
 }
+

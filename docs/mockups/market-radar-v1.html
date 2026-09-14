@@ -1,0 +1,966 @@
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>실시간 차트 개편 — v1</title>
+<style>
+/* ── 토큰: fe/src/app/globals.css 에서 그대로 옮김 (눈대중 금지 — v1.0.1 ① 참조) ── */
+:root {
+  --background: oklch(0.97 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.93 0 0);
+  --border: oklch(0.87 0 0);
+  --brand: #2563EB;
+  --brand-muted: rgba(37, 99, 235, 0.1);
+  --profit: #DC2626;
+  --loss: #2563EB;
+  --text-muted: oklch(0.65 0 0);
+  --sample: #7C3AED;
+  --sample-muted: rgba(124, 58, 237, 0.12);
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 16%);
+  --brand: #60A5FA;
+  --brand-muted: rgba(96, 165, 250, 0.15);
+  --profit: #F87171;
+  --loss: #60A5FA;
+  --text-muted: oklch(0.6 0 0);
+  --sample: #A78BFA;
+  --sample-muted: rgba(167, 139, 250, 0.14);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--background); color: var(--foreground);
+  /* 앱과 같은 스택 (globals.css:35) */
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 12px; line-height: 1.5; padding: 24px 20px 80px;
+  -webkit-font-smoothing: antialiased; font-synthesis: none;
+}
+.wrap { max-width: 1180px; margin: 0 auto; }
+
+/* 앱 타입 계단 (globals.css @theme inline) */
+.t-micro { font-size: 11px; line-height: 1.35; }
+.t-cell  { font-size: 12px; line-height: 1.35; }
+.t-note  { font-size: 13px; line-height: 1.4; }
+.num { font-variant-numeric: tabular-nums; }
+.up { color: var(--profit); } .down { color: var(--loss); }
+.dim { color: var(--text-muted); } .sec { color: var(--muted-foreground); }
+
+h1 { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
+h2 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+h3 { font-size: 13px; font-weight: 600; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92em;
+  background: var(--muted); border-radius: 4px; padding: 1px 4px; }
+
+.topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  padding-bottom:14px; margin-bottom:22px; border-bottom:1px solid var(--border);
+  position:sticky; top:0; background:var(--background); z-index:20; }
+button.tgl { font:inherit; font-size:12px; cursor:pointer; border:1px solid var(--border); background:var(--card);
+  color:var(--foreground); border-radius:8px; padding:5px 12px; }
+button.tgl:hover { background: var(--accent); }
+button.tgl:focus-visible { outline:2px solid var(--brand); outline-offset:2px; }
+
+section { margin-bottom: 44px; }
+.sechead { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:14px;
+  padding-bottom:8px; border-bottom:1px solid var(--border); }
+.sechead .no { font-size:11px; font-weight:700; color:var(--brand); background:var(--brand-muted);
+  border-radius:6px; padding:2px 7px; flex:none; letter-spacing:.02em; }
+.sechead p { color: var(--muted-foreground); font-size:12px; }
+
+.tag { font-size:11px; font-weight:700; border-radius:6px; padding:2px 7px; flex:none; letter-spacing:.01em; }
+.tag.rec { background: var(--brand-muted); color: var(--brand); }
+.tag.cur { background: var(--muted); color: var(--muted-foreground); }
+.tag.alt { background: var(--sample-muted); color: var(--sample); }
+
+.grid { display:flex; gap:22px; flex-wrap:wrap; align-items:flex-start; }
+.opt { flex: 0 0 auto; }
+.opt-head { display:flex; align-items:baseline; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+.note { color: var(--muted-foreground); font-size:11px; line-height:1.6; margin-top:8px; max-width:340px; }
+.note b { color: var(--foreground); font-weight:600; }
+.note.wide { max-width: 100%; }
+
+/* ── 실제 폭의 무대 ── */
+/* 데스크톱 좌측 레일: fe/src/app/(main)/market/page.tsx 의 w-[min(100%,20rem)] = 320px */
+.stage { background: var(--card); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+.stage.desk { width: 320px; }
+.stage.mob  { width: 375px; }
+.stage-cap { font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--text-muted);
+  margin-bottom:6px; font-weight:600; }
+
+/* ── 행 공통 ── */
+.row { display:flex; align-items:center; width:100%; text-align:left; border:0;
+  border-bottom:1px solid color-mix(in oklab, var(--border) 70%, transparent);
+  background:transparent; color:inherit; font:inherit; cursor:pointer; position:relative; }
+.row:last-child { border-bottom:0; }
+.row:hover { background: var(--accent); }
+.row.on { background: var(--brand-muted); }
+.desk .row { gap:8px; padding:7px 8px; }
+.mob  .row { gap:10px; padding:9px 12px; }
+
+.rk { flex:none; text-align:right; font-weight:600; font-variant-numeric:tabular-nums; color:var(--foreground); }
+.desk .rk { width:16px; font-size:12px; }
+.mob  .rk { width:18px; font-size:13px; }
+.rk .d { font-size:9px; font-weight:600; display:block; line-height:1; margin-top:1px; }
+
+.av { flex:none; border-radius:999px; display:grid; place-items:center; overflow:hidden;
+  background: var(--muted); color: var(--muted-foreground); font-weight:700; }
+.desk .av { width:24px; height:24px; font-size:9px; }
+.mob  .av { width:30px; height:30px; font-size:10px; }
+.av.s0 { background:#1428A0; color:#fff; } .av.s1 { background:#E60012; color:#fff; }
+.av.s2 { background:#00A0E9; color:#fff; } .av.s4 { background:#A50034; color:#fff; }
+
+.mid { min-width:0; flex:1 1 auto; }
+.nm { display:flex; align-items:center; gap:4px; min-width:0; }
+.nm .t { font-weight:600; letter-spacing:-.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  line-height:1.25; }
+.desk .nm .t { font-size:13px; } .mob .nm .t { font-size:14px; }
+.mini { font-size:9px; font-weight:700; border-radius:4px; padding:1px 4px; flex:none; line-height:1.3;
+  background: var(--brand-muted); color: var(--brand); }
+
+.sub { display:flex; align-items:baseline; gap:6px; margin-top:2px; font-variant-numeric:tabular-nums;
+  line-height:1.3; }
+.desk .sub { font-size:12px; } .mob .sub { font-size:13px; }
+.sub .p { color: var(--foreground); font-weight:500; }
+.sub .p .u { font-size:.85em; color: var(--text-muted); }
+
+.pill { font-variant-numeric:tabular-nums; font-weight:600; border-radius:5px; padding:1px 5px;
+  font-size:.92em; line-height:1.35; }
+.pill.up { background: color-mix(in oklab, var(--profit) 13%, transparent); }
+.pill.down { background: color-mix(in oklab, var(--loss) 13%, transparent); }
+
+.acts { flex:none; display:flex; align-items:center; gap:2px; }
+.ic { display:grid; place-items:center; border-radius:8px; border:0; background:transparent; cursor:pointer;
+  color: var(--text-muted); padding:0; }
+.desk .ic { width:26px; height:26px; } .mob .ic { width:32px; height:32px; }
+.ic:hover { background: color-mix(in oklab, var(--foreground) 8%, transparent); color: var(--foreground); }
+.ic:focus-visible { outline:2px solid var(--brand); outline-offset:1px; }
+.ic svg { width:15px; height:15px; }
+.mob .ic svg { width:17px; height:17px; }
+.ic.on { color:#F43F5E; }
+.ic.on svg { fill:#F43F5E; }
+.ic.memo.has { color: var(--brand); }
+
+/* 현재 행 (비교용) — market-radar-list.tsx 의 데스크톱 분기를 그대로 옮김 */
+.row.now .code { display:block; font-size:11px; line-height:1.35; color:var(--text-muted);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.row.now .rt { flex:none; text-align:right; line-height:1.35; font-variant-numeric:tabular-nums; }
+.row.now .rt .p { display:block; font-size:12px; font-weight:400; }
+.row.now .rt .num { display:block; font-size:11px; }
+.row.now .rt .mt { color:var(--text-muted); }
+
+/* 거래대금 비율 막대 (R3) */
+.row.bar::before { content:""; position:absolute; inset:0 auto 0 0; width:var(--w,0%);
+  background: color-mix(in oklab, var(--brand) 7%, transparent); pointer-events:none; }
+.row.bar > * { position:relative; }
+
+/* hover 노출형 (R4) */
+.row.reveal .acts { opacity:0; transition:opacity .12s; }
+.row.reveal:hover .acts, .row.reveal:focus-within .acts { opacity:1; }
+
+/* 로딩 자리 (#5) */
+.sk { display:inline-block; border-radius:4px; background:
+  linear-gradient(90deg, color-mix(in oklab, var(--foreground) 8%, transparent) 25%,
+  color-mix(in oklab, var(--foreground) 14%, transparent) 37%,
+  color-mix(in oklab, var(--foreground) 8%, transparent) 63%);
+  background-size:400% 100%; animation: shim 1.4s ease infinite; height:12px; vertical-align:middle; }
+@keyframes shim { 0%{background-position:100% 0} 100%{background-position:0 0} }
+
+/* 틱 플래시 (#3) */
+@keyframes flashUp { from { background: color-mix(in oklab, var(--profit) 22%, transparent); } to { background: transparent; } }
+@keyframes flashDown { from { background: color-mix(in oklab, var(--loss) 22%, transparent); } to { background: transparent; } }
+.tick-up { animation: flashUp .7s ease-out; border-radius:4px; }
+.tick-down { animation: flashDown .7s ease-out; border-radius:4px; }
+.blink { animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) {
+  .tick-up, .tick-down, .blink, .sk { animation: none !important; }
+}
+
+/* ── 컨트롤 후보 ── */
+.ctrlbar { padding:10px; border-bottom:1px solid var(--border); }
+.seg { display:inline-flex; border:1px solid var(--border); border-radius:9px; padding:2px; gap:2px; background:var(--card); }
+.seg button { font:inherit; font-size:12px; font-weight:500; border:0; background:transparent; cursor:pointer;
+  color: var(--muted-foreground); border-radius:7px; padding:4px 10px; line-height:1.35; }
+.seg button[aria-pressed="true"] { background: var(--brand-muted); color: var(--brand); font-weight:600; }
+
+.chips { display:flex; gap:5px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; }
+.chips::-webkit-scrollbar { display:none; }
+.chip { font:inherit; font-size:12px; font-weight:500; border:1px solid var(--border); background:var(--card);
+  color: var(--muted-foreground); border-radius:999px; padding:4px 11px; cursor:pointer; white-space:nowrap; line-height:1.35; }
+.chip[aria-pressed="true"] { background: var(--foreground); border-color: var(--foreground); color: var(--card); font-weight:600; }
+.chip.ghost[aria-pressed="true"] { background: var(--brand-muted); border-color: color-mix(in oklab, var(--brand) 40%, transparent); color: var(--brand); }
+
+.utabs { display:flex; gap:16px; border-bottom:1px solid var(--border); padding:0 10px; }
+.utabs button { font:inherit; font-size:13px; font-weight:600; border:0; background:transparent; cursor:pointer;
+  color: var(--muted-foreground); padding:8px 0 7px; border-bottom:2px solid transparent; margin-bottom:-1px; }
+.utabs button[aria-selected="true"] { color: var(--foreground); border-bottom-color: var(--foreground); }
+
+.dropbtn { font:inherit; font-size:12px; height:28px; display:inline-flex; align-items:center; gap:5px;
+  border:1px solid var(--border); background:var(--card); color:var(--foreground); border-radius:8px;
+  padding:0 8px; cursor:pointer; }
+.dropbtn:hover { background: var(--accent); }
+.dropbtn .cap { color: var(--text-muted); }
+select.native { font:inherit; font-size:12px; height:32px; border:1px solid var(--border); border-radius:6px;
+  background: var(--background); color: var(--foreground); padding:0 6px; }
+
+.live { display:inline-flex; align-items:center; gap:4px; font-size:11px; color: var(--text-muted);
+  font-variant-numeric: tabular-nums; }
+.dot { width:6px; height:6px; border-radius:999px; background:#22C55E; flex:none; }
+
+.ba { display:grid; grid-template-columns: 1fr; gap:10px; }
+.box { border:1px solid var(--border); border-radius:10px; padding:12px 14px; background:var(--card); }
+.box.before { border-style:dashed; }
+.box h3 { margin-bottom:6px; }
+.strike { text-decoration: line-through; text-decoration-color: color-mix(in oklab, var(--profit) 70%, transparent);
+  text-decoration-thickness:1.5px; color: var(--muted-foreground); }
+
+table.cmp { border-collapse: collapse; width:100%; font-size:12px; min-width:560px; }
+table.cmp th, table.cmp td { border-bottom:1px solid var(--border); padding:7px 8px; text-align:left; vertical-align:top; }
+table.cmp th { font-size:11px; color: var(--text-muted); font-weight:600; letter-spacing:.02em; }
+table.cmp td.n { font-variant-numeric: tabular-nums; white-space:nowrap; }
+.scrollx { overflow-x:auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div>
+    <h1>실시간 차트 개편 — 후보 v1</h1>
+    <p class="sec t-cell" style="margin-top:3px">
+      무대 폭은 실물과 같다 — 데스크톱 좌측 레일 <b>320px</b>(<code>w-[min(100%,20rem)]</code>), 모바일 <b>375px</b>.
+      색·글자 크기는 <code>globals.css</code>에서 그대로 옮겼다.
+    </p>
+  </div>
+  <button class="tgl" id="themeBtn" type="button">라이트 / 다크</button>
+</div>
+
+<!-- ══════════ 1. 지우는 것 ══════════ -->
+<section>
+  <div class="sechead">
+    <span class="no">정리</span>
+    <h2>지우는 것 — 요청 1 · 2 · 7</h2>
+    <p>셋 다 삭제만 하면 된다. 대체물이 필요한 것은 ⑦뿐이다.</p>
+  </div>
+  <div class="ba">
+    <div class="box before">
+      <h3 class="sec">지금</h3>
+      <div style="margin-top:8px">
+        <div style="font-size:19px;font-weight:700;letter-spacing:-.01em">실시간 차트</div>
+        <div class="t-cell strike" style="margin-top:2px">실시간 순위 · 차트 · 시세</div>
+      </div>
+      <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <span class="t-micro strike">전일 대비 등락률 · 실시간 거래대금/거래량 순</span>
+        <span class="t-micro sec num">21:59:46 갱신 · 5분 주기</span>
+      </div>
+      <div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--border);text-align:center">
+        <span class="t-micro strike">TOP5 차트 보기</span>
+      </div>
+    </div>
+    <div class="box">
+      <h3>바꾼 뒤</h3>
+      <div style="margin-top:8px">
+        <div style="font-size:19px;font-weight:700;letter-spacing:-.01em">실시간 차트</div>
+      </div>
+      <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:flex-end">
+        <span class="live" title="전일 종가 대비"><span class="dot"></span>실시간 · 21:59:46</span>
+      </div>
+      <p class="note wide">
+        ① 부제 <b>“실시간 순위 · 차트 · 시세”</b> 삭제 — 제목이 이미 같은 말을 한다.<br />
+        ⑦ 안내 문단 삭제. 다만 <b>“무엇 대비 등락률인가”</b>는 어딘가 남아야 오해가 없다 →
+        갱신 시각 칩의 <code>title</code>(툴팁)로 “전일 종가 대비”를 넘긴다. 상시 문장이 아니라 물었을 때만 답한다.<br />
+        ② <b>TOP5 차트 보기</b> 버튼과 <code>market-radar-top5-chart.tsx</code>(240줄)를 통째로 삭제 — 다른 화면에서 쓰지 않는다.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 2. 행 디자인 ══════════ -->
+<section>
+  <div class="sechead">
+    <span class="no">행</span>
+    <h2>랭킹 행 — 요청 4 · 6</h2>
+    <p>이름 아래 <b>종목코드·거래대금</b>을 빼고 <b>가격·등락률</b>을, 오른쪽에 <b>관심·메모</b> 아이콘을.</p>
+  </div>
+
+  <div class="grid">
+    <!-- 지금 -->
+    <div class="opt">
+      <div class="opt-head"><span class="tag cur">지금</span><h3>현재 행</h3></div>
+      <div class="stage-cap">데스크톱 레일 320px</div>
+      <div class="stage desk">
+        <div class="row now on">
+          <span class="rk">1</span><span class="av s2">SK</span>
+          <span class="mid"><span class="nm"><span class="t">SK하이닉스</span></span>
+            <span class="code">000660</span></span>
+          <span class="rt"><span class="p num">1,652,000<span class="u">원</span></span>
+            <span class="down num">-1.31%</span><span class="mt num">1,448억</span></span>
+        </div>
+        <div class="row now">
+          <span class="rk">2<span class="d up">↑1</span></span><span class="av s0">SE</span>
+          <span class="mid"><span class="nm"><span class="t">삼성전자</span><span class="mini">보유</span></span>
+            <span class="code">005930</span></span>
+          <span class="rt"><span class="p num">255,000<span class="u">원</span></span>
+            <span class="down num">-1.92%</span><span class="mt num">1,297억</span></span>
+        </div>
+        <div class="row now">
+          <span class="rk">3</span><span class="av s0">SE</span>
+          <span class="mid"><span class="nm"><span class="t">삼성전기</span></span>
+            <span class="code">009150</span></span>
+          <span class="rt"><span class="p num">1,401,000<span class="u">원</span></span>
+            <span class="down num">-3.91%</span><span class="mt num">328억</span></span>
+        </div>
+        <div class="row now">
+          <span class="rk">7</span><span class="av s1">SK</span>
+          <span class="mid"><span class="nm"><span class="t">SK이노베이션</span></span>
+            <span class="code">096770</span></span>
+          <span class="rt"><span class="p num">135,600<span class="u">원</span></span>
+            <span class="up num">+8.05%</span><span class="mt num">71억</span></span>
+        </div>
+      </div>
+      <p class="note">오른쪽이 <b>세 줄</b>(가격·등락률·거래대금)이라 행 높이를 그쪽이 정한다 —
+        왼쪽은 두 줄뿐인데도 행이 그만큼 높다. 아래 후보들은 오른쪽 세 줄을 없애므로
+        <b>행이 오히려 낮아진다</b>(이 파일 하단의 실측 표 참조).</p>
+    </div>
+
+    <!-- R1 -->
+    <div class="opt">
+      <div class="opt-head"><span class="tag cur">R1</span><h3>정석</h3></div>
+      <div class="stage-cap">데스크톱 레일 320px</div>
+      <div class="stage desk">
+        <div class="row on">
+          <span class="rk">1</span><span class="av s2">SK</span>
+          <span class="mid"><span class="nm"><span class="t">SK하이닉스</span></span>
+            <span class="sub"><span class="p num">1,652,000<span class="u">원</span></span><span class="down num">-1.31%</span></span></span>
+          <span class="acts">
+            <button class="ic on" type="button" title="관심 해제" aria-label="관심 해제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+            <button class="ic memo" type="button" title="메모" aria-label="메모"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          </span>
+        </div>
+        <div class="row">
+          <span class="rk">2<span class="d up">↑1</span></span><span class="av s0">SE</span>
+          <span class="mid"><span class="nm"><span class="t">삼성전자</span><span class="mini">보유</span></span>
+            <span class="sub"><span class="p num">255,000<span class="u">원</span></span><span class="down num">-1.92%</span></span></span>
+          <span class="acts">
+            <button class="ic" type="button" title="관심 등록" aria-label="관심 등록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+            <button class="ic memo has" type="button" title="메모 1개" aria-label="메모 1개"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          </span>
+        </div>
+        <div class="row">
+          <span class="rk">3</span><span class="av s0">SE</span>
+          <span class="mid"><span class="nm"><span class="t">삼성전기</span></span>
+            <span class="sub"><span class="p num">1,401,000<span class="u">원</span></span><span class="down num">-3.91%</span></span></span>
+          <span class="acts">
+            <button class="ic" type="button" aria-label="관심 등록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+            <button class="ic memo" type="button" aria-label="메모"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          </span>
+        </div>
+        <div class="row">
+          <span class="rk">7</span><span class="av s1">SK</span>
+          <span class="mid"><span class="nm"><span class="t">SK이노베이션</span></span>
+            <span class="sub"><span class="p num">135,600<span class="u">원</span></span><span class="up num">+8.05%</span></span></span>
+          <span class="acts">
+            <button class="ic" type="button" aria-label="관심 등록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+            <button class="ic memo" type="button" aria-label="메모"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          </span>
+        </div>
+      </div>
+      <p class="note">요청 ⑥ 그대로. 등락률은 <b>맨색 글자</b> — 토스도 목록에서는 배지를 쓰지 않는다.
+        오른쪽 세 줄이 사라지므로 <b>행이 지금보다 낮아진다</b> — 값은 하단 실측 표에 있다.</p>
+    </div>
+
+    <!-- R2 -->
+    <div class="opt">
+      <div class="opt-head"><span class="tag alt">R2</span><h3>등락 배지</h3></div>
+      <div class="stage-cap">데스크톱 레일 320px</div>
+      <div class="stage desk">
+        <div class="row on">
+          <span class="rk">1</span><span class="av s2">SK</span>
+          <span class="mid"><span class="nm"><span class="t">SK하이닉스</span></span>
+            <span class="sub"><span class="p num">1,652,000<span class="u">원</span></span><span class="pill down num">-1.31%</span></span></span>
+          <span class="acts">
+            <button class="ic on" type="button" aria-label="관심 해제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+            <button class="ic memo" type="button" aria-label="메모"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          </span>
+        </div>
+        <div class="row">
+          <span class="rk">2<span class="d up">↑1</span></span><span class="av s0">SE</span>
+          <span class="mid"><span class="nm"><span class="t">삼성전자</span><span class="mini">보유</span></span>
+            <span class="sub"><span class="p num">255,000<span class="u">원</span></span><span class="pill down num">-1.92%</span></span></span>
+          <span class="acts">
+            <button class="ic" type="button" aria-label="관심 등록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+            <button class="ic memo has" type="button" aria-label="메모 1개"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          </span>
+        </div>
+        <div class="row">
+          <span class="rk">3</span><span class="av s0">SE</span>
+          <span class="mid"><span class="nm"><span class="t">삼성전기</span></span>
+            <span class="sub"><span class="p num">1,401,000<span class="u">원</span></span><span class="pill down num">-3.91%</span></span></span>
+          <span class="acts">
+            <button class="ic" type="button" aria-label="관심 등록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+            <button class="ic memo" type="button" aria-label="메모"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          </span>
+        </div>
+        <div class="row">
+          <span class="rk">7</span><span class="av s1">SK</span>
+          <span class="mid"><span class="nm"><span class="t">SK이노베이션</span></span>
+            <span class="sub"><span class="p num">135,600<span class="u">원</span></span><span class="pill up num">+8.05%</span></span></span>
+          <span class="acts">
+            <button class="ic" type="button" aria-label="관심 등록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+            <button class="ic memo" type="button" aria-label="메모"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          </span>
+        </div>
+      </div>
+      <p class="note">등락률에 옅은 바탕. 급등·급락이 멀리서 보인다. 대신 <b>100줄이 얼룩진다</b> —
+        이 목록은 거의 전부가 ±3% 안이라 배지 대부분이 “의미 없는 색칠”이 된다.</p>
+    </div>
+
+    <!-- R3 -->
+    <div class="opt">
+      <div class="opt-head"><span class="tag alt">R3</span><h3>정석 + 거래대금 막대</h3><span class="tag rec">추천</span></div>
+      <div class="stage-cap">데스크톱 레일 320px</div>
+      <div class="stage desk">
+        <div class="row bar on" style="--w:100%">
+          <span class="rk">1</span><span class="av s2">SK</span>
+          <span class="mid"><span class="nm"><span class="t">SK하이닉스</span></span>
+            <span class="sub"><span class="p num">1,652,000<span class="u">원</span></span><span class="down num">-1.31%</span></span></span>
+          <span class="acts">
+            <button class="ic on" type="button" aria-label="관심 해제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+            <button class="ic memo" type="button" aria-label="메모"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          </span>
+        </div>
+        <div class="row bar" style="--w:90%">
+          <span class="rk">2<span class="d up">↑1</span></span><span class="av s0">SE</span>
+          <span class="mid"><span class="nm"><span class="t">삼성전자</span><span class="mini">보유</span></span>
+            <span class="sub"><span class="p num">255,000<span class="u">원</span></span><span class="down num">-1.92%</span></span></span>
+          <span class="acts">
+            <button class="ic" type="button" aria-label="관심 등록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+            <button class="ic memo has" type="button" aria-label="메모 1개"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          </span>
+        </div>
+        <div class="row bar" style="--w:23%">
+          <span class="rk">3</span><span class="av s0">SE</span>
+          <span class="mid"><span class="nm"><span class="t">삼성전기</span></span>
+            <span class="sub"><span class="p num">1,401,000<span class="u">원</span></span><span class="down num">-3.91%</span></span></span>
+          <span class="acts">
+            <button class="ic" type="button" aria-label="관심 등록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+            <button class="ic memo" type="button" aria-label="메모"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          </span>
+        </div>
+        <div class="row bar" style="--w:5%">
+          <span class="rk">7</span><span class="av s1">SK</span>
+          <span class="mid"><span class="nm"><span class="t">SK이노베이션</span></span>
+            <span class="sub"><span class="p num">135,600<span class="u">원</span></span><span class="up num">+8.05%</span></span></span>
+          <span class="acts">
+            <button class="ic" type="button" aria-label="관심 등록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+            <button class="ic memo" type="button" aria-label="메모"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          </span>
+        </div>
+      </div>
+      <p class="note">R1과 글자는 <b>완전히 같다</b>. 다른 것은 행 배경에 깔린 <b>거래대금 비율 막대</b>(1위 대비)뿐.
+        “왜 이 종목이 여기 있나”를 글자 없이 남긴다 — 지금 코드의 주석이 지키려던 그 정보다
+        (막대 폭은 실제 값: 1위 1,448억 → 7위 71억).</p>
+    </div>
+  </div>
+
+  <div class="grid" style="margin-top:26px">
+    <div class="opt">
+      <div class="opt-head"><span class="tag cur">R1</span><h3>모바일 375px</h3></div>
+      <div class="stage mob">
+        <div class="row">
+          <span class="rk">1</span><span class="av s2">SK</span>
+          <span class="mid"><span class="nm"><span class="t">SK하이닉스</span></span>
+            <span class="sub"><span class="p num">1,652,000<span class="u">원</span></span><span class="down num">-1.31%</span></span></span>
+          <span class="acts">
+            <button class="ic on" type="button" aria-label="관심 해제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+            <button class="ic memo" type="button" aria-label="메모"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          </span>
+        </div>
+        <div class="row">
+          <span class="rk">2<span class="d up">↑1</span></span><span class="av s0">SE</span>
+          <span class="mid"><span class="nm"><span class="t">삼성전자</span><span class="mini">보유</span></span>
+            <span class="sub"><span class="p num">255,000<span class="u">원</span></span><span class="down num">-1.92%</span></span></span>
+          <span class="acts">
+            <button class="ic" type="button" aria-label="관심 등록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+            <button class="ic memo has" type="button" aria-label="메모 1개"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          </span>
+        </div>
+        <div class="row">
+          <span class="rk">8<span class="d down">↓2</span></span><span class="av s4">LG</span>
+          <span class="mid"><span class="nm"><span class="t">LG이노텍</span></span>
+            <span class="sub"><span class="p num">580,000<span class="u">원</span></span><span class="down num">-9.66%</span></span></span>
+          <span class="acts">
+            <button class="ic" type="button" aria-label="관심 등록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+            <button class="ic memo" type="button" aria-label="메모"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          </span>
+        </div>
+      </div>
+      <p class="note">아이콘 탭 영역 <b>32px</b>. 행 전체가 “종목 선택”이므로 아이콘은
+        별도 <code>&lt;button&gt;</code>이고 <code>stopPropagation</code>이 필요하다 —
+        지금 행은 <code>&lt;button&gt;</code> 하나라 <b>구조를 <code>div</code>로 바꿔야 한다</b>(버튼 중첩은 무효 HTML).</p>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag alt">R4</span><h3>hover 노출 (참고용)</h3></div>
+      <div class="stage-cap">데스크톱 레일 320px — 마우스를 올려보세요</div>
+      <div class="stage desk">
+        <div class="row reveal">
+          <span class="rk">1</span><span class="av s2">SK</span>
+          <span class="mid"><span class="nm"><span class="t">SK하이닉스</span></span>
+            <span class="sub"><span class="p num">1,652,000<span class="u">원</span></span><span class="down num">-1.31%</span></span></span>
+          <span class="acts">
+            <button class="ic" type="button" aria-label="관심 등록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+            <button class="ic memo" type="button" aria-label="메모"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          </span>
+        </div>
+        <div class="row reveal">
+          <span class="rk">2</span><span class="av s0">SE</span>
+          <span class="mid"><span class="nm"><span class="t">삼성전자</span></span>
+            <span class="sub"><span class="p num">255,000<span class="u">원</span></span><span class="down num">-1.92%</span></span></span>
+          <span class="acts">
+            <button class="ic" type="button" aria-label="관심 등록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+            <button class="ic memo" type="button" aria-label="메모"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          </span>
+        </div>
+        <div class="row reveal">
+          <span class="rk">3</span><span class="av s0">SE</span>
+          <span class="mid"><span class="nm"><span class="t">삼성전기</span></span>
+            <span class="sub"><span class="p num">1,401,000<span class="u">원</span></span><span class="down num">-3.91%</span></span></span>
+          <span class="acts">
+            <button class="ic" type="button" aria-label="관심 등록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+            <button class="ic memo" type="button" aria-label="메모"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          </span>
+        </div>
+      </div>
+      <p class="note"><b>권하지 않는다.</b> 아이콘 200개가 깔리면 시끄럽다는 걱정은 맞지만,
+        숨기면 <b>“여기서 관심 등록이 된다”</b>는 사실 자체가 보이지 않는다. 이미 관심·메모가 있는 행은
+        상시 표시해야 하므로 결국 절반은 보이고, 규칙만 복잡해진다. 터치에서는 hover가 없어 어차피 상시다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 3. 컨트롤 ══════════ -->
+<section>
+  <div class="sechead">
+    <span class="no">컨트롤</span>
+    <h2>시장 · 정렬 · 기간 — 요청 8</h2>
+    <p>지금은 <b>OS 기본 <code>&lt;select&gt;</code> 두 개</b>. 앱의 다른 버튼과 높이·모서리·글꼴이 다르다.</p>
+  </div>
+
+  <div class="grid">
+    <div class="opt">
+      <div class="opt-head"><span class="tag cur">지금</span><h3>세그먼트 + native select</h3></div>
+      <div class="stage desk" id="cnow">
+        <div class="ctrlbar">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <span class="seg"><button type="button" aria-pressed="true">국내</button><button type="button" aria-pressed="false">해외</button></span>
+            <select class="native" aria-label="정렬 기준"><option>거래대금</option><option>거래량</option></select>
+            <select class="native" aria-label="기간"><option>실시간</option><option>1일</option></select>
+          </div>
+          <p class="t-micro sec" style="margin-top:7px">전일 대비 등락률 · 실시간 거래대금/거래량 순</p>
+        </div>
+      </div>
+      <p class="note">문제 셋: ① select 32px vs 세그먼트 28px, ② 다크에서 화살표가 OS 색,
+        ③ 기간 7개가 <b>펼쳐야만 보인다</b> — 가장 많이 쓰는 “실시간/1일/1주”가 한눈에 없다.</p>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag alt">C1</span><h3>세그먼트 2단 + 기간 칩</h3></div>
+      <div class="stage desk" id="c1">
+        <div class="ctrlbar">
+          <div style="display:flex;gap:6px;align-items:center;justify-content:space-between">
+            <span class="seg"><button type="button" aria-pressed="true">국내</button><button type="button" aria-pressed="false">해외</button></span>
+            <span class="seg"><button type="button" aria-pressed="true">거래대금</button><button type="button" aria-pressed="false">거래량</button></span>
+          </div>
+          <div class="chips" style="margin-top:7px">
+            <button class="chip" type="button" aria-pressed="true">실시간</button>
+            <button class="chip" type="button" aria-pressed="false">1일</button>
+            <button class="chip" type="button" aria-pressed="false">1주</button>
+            <button class="chip" type="button" aria-pressed="false">1개월</button>
+            <button class="chip" type="button" aria-pressed="false">3개월</button>
+            <button class="chip" type="button" aria-pressed="false">6개월</button>
+            <button class="chip" type="button" aria-pressed="false">1년</button>
+          </div>
+        </div>
+      </div>
+      <p class="note">두 줄 고정. 기간 칩은 가로 스크롤(스크롤바 숨김).
+        모든 컨트롤이 <b>한 체계</b>(28px · r8~999) 안에 든다.</p>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag alt">C2</span><h3>칩 한 줄 (토스형)</h3></div>
+      <div class="stage desk" id="c2">
+        <div class="ctrlbar">
+          <div class="chips">
+            <button class="chip" type="button" aria-pressed="true">국내</button>
+            <button class="chip" type="button" aria-pressed="false">해외</button>
+            <span style="width:1px;background:var(--border);flex:none;margin:2px 3px"></span>
+            <button class="chip" type="button" aria-pressed="true">거래대금</button>
+            <button class="chip" type="button" aria-pressed="false">거래량</button>
+            <span style="width:1px;background:var(--border);flex:none;margin:2px 3px"></span>
+            <button class="chip" type="button" aria-pressed="true">실시간</button>
+            <button class="chip" type="button" aria-pressed="false">1일</button>
+            <button class="chip" type="button" aria-pressed="false">1주</button>
+          </div>
+        </div>
+      </div>
+      <p class="note">가장 토스에 가깝고 가장 얇다. 대신 320px 레일에서는
+        <b>세 종류가 한 줄에 섞여</b> “해외”를 보려면 스크롤해야 하고, 어디까지가 시장이고
+        어디부터가 기간인지 구분선 하나에 기댄다. <b>모바일에서는 좋고 데스크톱 레일에서는 위험하다.</b></p>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag alt">C3</span><h3>탭 + 칩</h3><span class="tag rec">추천</span></div>
+      <div class="stage desk" id="c3">
+        <div class="utabs">
+          <button type="button" aria-selected="true">국내</button>
+          <button type="button" aria-selected="false">해외</button>
+        </div>
+        <div class="ctrlbar">
+          <div style="display:flex;gap:6px;align-items:center;justify-content:space-between">
+            <span class="seg"><button type="button" aria-pressed="true">거래대금</button><button type="button" aria-pressed="false">거래량</button></span>
+            <span class="live" title="전일 종가 대비"><span class="dot"></span>21:59:46</span>
+          </div>
+          <div class="chips" style="margin-top:7px">
+            <button class="chip ghost" type="button" aria-pressed="true">실시간</button>
+            <button class="chip ghost" type="button" aria-pressed="false">1일</button>
+            <button class="chip ghost" type="button" aria-pressed="false">1주</button>
+            <button class="chip ghost" type="button" aria-pressed="false">1개월</button>
+            <button class="chip ghost" type="button" aria-pressed="false">3개월</button>
+            <button class="chip ghost" type="button" aria-pressed="false">6개월</button>
+            <button class="chip ghost" type="button" aria-pressed="false">1년</button>
+          </div>
+        </div>
+      </div>
+      <p class="note">국내/해외는 <b>다른 목록</b>이지 필터가 아니다 — 탭이 그 사실을 말한다.
+        아래 한 판은 “이 목록을 어떻게 자를까”만 담는다. 삭제한 안내 문단 자리에는
+        <b>라이브 칩</b>이 들어가 ⑦의 정보를 툴팁으로 승계한다. 넷 중 가장 높다.</p>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag alt">C4</span><h3>세그먼트 + 앱 드롭다운</h3></div>
+      <div class="stage desk" id="c4">
+        <div class="ctrlbar">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <span class="seg"><button type="button" aria-pressed="true">국내</button><button type="button" aria-pressed="false">해외</button></span>
+            <button class="dropbtn" type="button"><span class="cap">정렬</span> 거래대금 <span class="dim">▾</span></button>
+            <button class="dropbtn" type="button"><span class="cap">기간</span> 실시간 <span class="dim">▾</span></button>
+          </div>
+        </div>
+      </div>
+      <p class="note">구조는 그대로 두고 native select만 앱 <code>Button</code> 체계로 갈아끼운다.
+        <b>가장 적게 고치는 안</b>(높이 28px 통일 · 다크 대응). 다만 기간은 여전히 눌러야 보이고,
+        <b>320px 레일에서는 드롭다운 두 개가 두 줄로 접힌다</b>(실측 표 참조) — 얇을 거라 기대했는데
+        지금과 별 차이가 없다.</p>
+    </div>
+  </div>
+
+  <div class="opt" style="margin-top:22px">
+    <div class="opt-head"><span class="tag rec">C3</span><h3>모바일 375px — 컨트롤 + 목록</h3></div>
+    <div class="stage mob">
+      <div class="utabs" style="padding:0 12px">
+        <button type="button" aria-selected="true">국내</button>
+        <button type="button" aria-selected="false">해외</button>
+      </div>
+      <div class="ctrlbar" style="padding:10px 12px">
+        <div style="display:flex;gap:6px;align-items:center;justify-content:space-between">
+          <span class="seg"><button type="button" aria-pressed="true">거래대금</button><button type="button" aria-pressed="false">거래량</button></span>
+          <span class="live" title="전일 종가 대비"><span class="dot"></span>21:59:46</span>
+        </div>
+        <div class="chips" style="margin-top:8px">
+          <button class="chip ghost" type="button" aria-pressed="true">실시간</button>
+          <button class="chip ghost" type="button" aria-pressed="false">1일</button>
+          <button class="chip ghost" type="button" aria-pressed="false">1주</button>
+          <button class="chip ghost" type="button" aria-pressed="false">1개월</button>
+          <button class="chip ghost" type="button" aria-pressed="false">3개월</button>
+        </div>
+      </div>
+      <div class="row">
+        <span class="rk">1</span><span class="av s2">SK</span>
+        <span class="mid"><span class="nm"><span class="t">SK하이닉스</span></span>
+          <span class="sub"><span class="p num">1,652,000<span class="u">원</span></span><span class="down num">-1.31%</span></span></span>
+        <span class="acts">
+          <button class="ic on" type="button" aria-label="관심 해제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+          <button class="ic memo" type="button" aria-label="메모"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+        </span>
+      </div>
+      <div class="row">
+        <span class="rk">2<span class="d up">↑1</span></span><span class="av s0">SE</span>
+        <span class="mid"><span class="nm"><span class="t">삼성전자</span><span class="mini">보유</span></span>
+          <span class="sub"><span class="p num">255,000<span class="u">원</span></span><span class="down num">-1.92%</span></span></span>
+        <span class="acts">
+          <button class="ic" type="button" aria-label="관심 등록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+          <button class="ic memo has" type="button" aria-label="메모 1개"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 4. 실시간 ══════════ -->
+<section>
+  <div class="sechead">
+    <span class="no">실시간</span>
+    <h2>가격·등락률을 실제로 실시간으로 — 요청 3</h2>
+    <p>서버는 이미 <b>1초마다</b> 가격을 갱신하고 있다. 화면이 <b>60초에 한 번만</b> 물어볼 뿐이다.</p>
+  </div>
+
+  <div class="scrollx">
+  <table class="cmp">
+    <thead><tr><th style="width:150px">구간</th><th style="width:110px">지금 주기</th><th>근거 (코드·실측)</th></tr></thead>
+    <tbody>
+      <tr><td>상류 → 서버 (폴링)</td><td class="n">1초</td>
+        <td><code>marketPricePollInterval = 1s</code> · <code>/prices</code>는 200종목당 1호출.
+          랭킹을 한 번 부르면 그 100종목이 <code>Touch</code>되어 이 틱의 대상이 된다.</td></tr>
+      <tr><td>상류 → 서버 (구독)</td><td class="n">체결 즉시</td>
+        <td>Toss 웹소켓. 슬롯 <b>400</b>(앱 2 × 연결 2 × 100). 지금은 <b>상세 화면을 여는 종목</b>만 쓴다.</td></tr>
+      <tr><td>서버 → 화면 (랭킹)</td><td class="n">60초</td>
+        <td><code>rankingsClientPollSeconds</code> 기본 60. <b>여기가 병목이다.</b></td></tr>
+      <tr><td>서버 → 화면 (상세)</td><td class="n">즉시(SSE)</td>
+        <td><code>GET /quotes/:symbol/quote-stream</code>이 이미 있다. 다만 <b>한 종목씩</b>.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="grid" style="margin-top:18px">
+    <div class="opt">
+      <div class="opt-head"><span class="tag alt">L1</span><h3>보이는 행만 3초 폴링</h3><span class="tag rec">추천</span></div>
+      <div class="stage desk">
+        <div class="row">
+          <span class="rk">1</span><span class="av s2">SK</span>
+          <span class="mid"><span class="nm"><span class="t">SK하이닉스</span></span>
+            <span class="sub"><span class="p num" id="p1">1,652,000<span class="u">원</span></span><span class="down num" id="c1">-1.31%</span></span></span>
+          <span class="acts"><button class="ic on" type="button" aria-label="관심 해제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button></span>
+        </div>
+        <div class="row">
+          <span class="rk">2</span><span class="av s0">SE</span>
+          <span class="mid"><span class="nm"><span class="t">삼성전자</span></span>
+            <span class="sub"><span class="p num" id="p2">255,000<span class="u">원</span></span><span class="down num" id="c2">-1.92%</span></span></span>
+          <span class="acts"><button class="ic" type="button" aria-label="관심 등록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button></span>
+        </div>
+        <div class="row">
+          <span class="rk">3</span><span class="av s0">SE</span>
+          <span class="mid"><span class="nm"><span class="t">삼성전기</span></span>
+            <span class="sub"><span class="p num" id="p3">1,401,000<span class="u">원</span></span><span class="down num" id="c3">-3.91%</span></span></span>
+          <span class="acts"><button class="ic" type="button" aria-label="관심 등록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button></span>
+        </div>
+      </div>
+      <p class="note">이 무대는 실제로 재생 중이다(가짜 틱 3초).
+        <b>순위는 그대로 두고 숫자만</b> 바꾼다 — 3초마다 줄이 튀어오르면 누르려던 종목을 놓친다.
+        비용: 화면에 보이는 <b>20행</b> × Redis 7회 = 폴당 약 140 명령, <b>상류 호출 0</b>.</p>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag alt">L2</span><h3>다종목 SSE (푸시)</h3></div>
+      <div class="stage desk">
+        <div class="ctrlbar" style="display:flex;justify-content:space-between;align-items:center">
+          <span class="t-cell sec">거래대금 · 실시간</span>
+          <span class="live"><span class="dot blink"></span>LIVE</span>
+        </div>
+        <div class="row">
+          <span class="rk">1</span><span class="av s2">SK</span>
+          <span class="mid"><span class="nm"><span class="t">SK하이닉스</span></span>
+            <span class="sub"><span class="p num" id="p4">1,652,000<span class="u">원</span></span><span class="down num" id="c4">-1.31%</span></span></span>
+          <span class="acts"><button class="ic on" type="button" aria-label="관심 해제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button></span>
+        </div>
+        <div class="row">
+          <span class="rk">2</span><span class="av s0">SE</span>
+          <span class="mid"><span class="nm"><span class="t">삼성전자</span></span>
+            <span class="sub"><span class="p num" id="p5">255,000<span class="u">원</span></span><span class="down num" id="c5">-1.92%</span></span></span>
+          <span class="acts"><button class="ic" type="button" aria-label="관심 등록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button></span>
+        </div>
+      </div>
+      <p class="note">체결 순간 그대로 온다. <code>quoteStreamHub</code>·SSE 배관이 이미 있어
+        <b>다종목 구독 엔드포인트</b>만 새로 만들면 된다. 대신 ⓐ 탭마다 연결 1개(서버는 2 OCPU 한 대),
+        ⓑ 랭킹 종목을 웹소켓에 올리면 <b>상세 화면 구독과 400슬롯을 다툰다</b>.
+        <b>L1을 먼저 하고, 부족하면 올라가는 순서</b>를 권한다.</p>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag alt">L3</span><h3>무엇을 반짝일까</h3></div>
+      <div class="stage desk">
+        <div style="padding:10px 12px;border-bottom:1px solid var(--border)">
+          <div class="t-micro sec" style="margin-bottom:5px">가) 가격 전체 플래시</div>
+          <div class="sub"><span class="p num tick-down" style="animation-iteration-count:infinite;animation-duration:2.4s">1,652,000<span class="u">원</span></span><span class="down num">-1.31%</span></div>
+        </div>
+        <div style="padding:10px 12px;border-bottom:1px solid var(--border)">
+          <div class="t-micro sec" style="margin-bottom:5px">나) 등락률만 플래시</div>
+          <div class="sub"><span class="p num">1,652,000<span class="u">원</span></span><span class="down num tick-down" style="animation-iteration-count:infinite;animation-duration:2.4s">-1.31%</span></div>
+        </div>
+        <div style="padding:10px 12px">
+          <div class="t-micro sec" style="margin-bottom:5px">다) 행 왼쪽 얇은 띠</div>
+          <div class="sub" style="position:relative;padding-left:6px">
+            <span style="position:absolute;left:0;top:0;bottom:0;width:2px;border-radius:2px;background:var(--loss);animation:blink 2.4s steps(2) infinite"></span>
+            <span class="p num">1,652,000<span class="u">원</span></span><span class="down num">-1.31%</span></div>
+        </div>
+      </div>
+      <p class="note">추천은 <b>가)</b>. 사람이 보는 것은 가격이고, 등락률만 깜빡이면
+        <b>가격은 그대로인데 등락률만 변한 것처럼</b> 읽힌다.
+        <code>prefers-reduced-motion</code>에서는 전부 끈다(이 파일도 그렇게 해 뒀다).</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 5. 종목명 ══════════ -->
+<section>
+  <div class="sechead">
+    <span class="no">이름</span>
+    <h2>종목코드가 먼저 보였다가 이름으로 바뀌는 것 — 요청 5</h2>
+    <p>원인 확정. <b>버그가 아니라 구조</b>다 — 이름을 <b>두 번째 요청</b>으로 받는다.</p>
+  </div>
+
+  <div class="grid">
+    <div class="opt">
+      <div class="opt-head"><span class="tag cur">지금</span><h3>코드 → 이름 (깜빡임)</h3></div>
+      <div class="stage desk">
+        <div class="row"><span class="rk">1</span><span class="av">?</span>
+          <span class="mid"><span class="nm"><span class="t">000660</span></span>
+            <span class="sub"><span class="p num">1,652,000<span class="u">원</span></span><span class="down num">-1.31%</span></span></span></div>
+        <div class="row"><span class="rk">2</span><span class="av">?</span>
+          <span class="mid"><span class="nm"><span class="t">005930</span></span>
+            <span class="sub"><span class="p num">255,000<span class="u">원</span></span><span class="down num">-1.92%</span></span></span></div>
+      </div>
+      <p class="note"><code>use-market-rankings.ts</code>의
+        <code>name: stock?.name ?? row.symbol</code> — 이름 맵이 비면 <b>코드를 그린다</b>.
+        그 맵은 <code>fetchStocksBatchClient</code>가 채우는데, 그 호출이
+        <code>scheduleIdle</code>(requestIdleCallback 최대 2초 / 폴백 300ms) 뒤에 나간다.
+        <b>랭킹 응답에 이름이 없어서</b> 생긴 두 번째 왕복이다(실측: 응답에 <code>name</code> 필드 없음).</p>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag rec">A안</span><h3>서버가 이름을 같이 준다</h3><span class="tag rec">추천</span></div>
+      <div class="stage desk">
+        <div class="row"><span class="rk">1</span><span class="av s2">SK</span>
+          <span class="mid"><span class="nm"><span class="t">SK하이닉스</span></span>
+            <span class="sub"><span class="p num">1,652,000<span class="u">원</span></span><span class="down num">-1.31%</span></span></span></div>
+        <div class="row"><span class="rk">2</span><span class="av s0">SE</span>
+          <span class="mid"><span class="nm"><span class="t">삼성전자</span></span>
+            <span class="sub"><span class="p num">255,000<span class="u">원</span></span><span class="down num">-1.92%</span></span></span></div>
+      </div>
+      <p class="note"><code>MarketService.Rankings</code>가 이미 쓰는
+        <code>stocks.ListBySymbols</code>(DB 1회, 상류 0회)로 <code>name</code>·<code>assetType</code>을 붙여 내려준다.
+        <b>왕복이 하나 사라지고</b>, 카탈로그에 없는 심볼은 자연히 걸러진다.
+        v1.0.2에서 뉴스 종목 칩이 같은 방법으로 같은 증상을 고쳤다.</p>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="tag alt">B안</span><h3>이름 자리를 비워 둔다</h3></div>
+      <div class="stage desk">
+        <div class="row"><span class="rk">1</span><span class="av">&nbsp;</span>
+          <span class="mid"><span class="nm"><span class="sk" style="width:76px"></span></span>
+            <span class="sub"><span class="p num">1,652,000<span class="u">원</span></span><span class="down num">-1.31%</span></span></span></div>
+        <div class="row"><span class="rk">2</span><span class="av">&nbsp;</span>
+          <span class="mid"><span class="nm"><span class="sk" style="width:58px"></span></span>
+            <span class="sub"><span class="p num">255,000<span class="u">원</span></span><span class="down num">-1.92%</span></span></span></div>
+      </div>
+      <p class="note">FE만 고치는 안. <b>아직 안 온 것</b>과 <b>정말 못 찾은 것</b>을 가른다
+        (v1.0.2 ③이 뉴스 칩에서 쓴 방법). 왕복은 그대로 둘이라
+        네트워크가 느리면 회색 자리가 오래 남는다. <b>A안과 배타적이지 않다</b> —
+        함께 넣으면 캐시 미스일 때의 안전망이 된다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 실측 ══════════ -->
+<section>
+  <div class="sechead">
+    <span class="no">실측</span>
+    <h2>이 파일이 스스로 잰 값</h2>
+    <p>아래 숫자는 <b>이 페이지가 로드될 때 실제로 잰 것</b>이다 — 내가 적어 넣은 값이 아니다.</p>
+  </div>
+  <div class="scrollx">
+    <table class="cmp" id="measured">
+      <thead><tr><th style="width:200px">항목</th><th style="width:120px">실측</th><th>뜻</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</section>
+
+<p class="note wide" style="margin-top:30px;padding-top:14px;border-top:1px solid var(--border)">
+  <b>이 파일은 판단용 무대이지 실물이 아니다.</b> 색·글자 크기·레일 폭은 앱 소스에서 옮겼지만
+  로고는 색 원으로 대신했고(실물은 <code>StockAvatar</code>), 값은 2026-09-01 마감 후의 실제 랭킹이다.
+</p>
+
+</div>
+<script>
+(function () {
+  var root = document.documentElement;
+  document.getElementById("themeBtn").addEventListener("click", function () {
+    root.setAttribute("data-theme", root.getAttribute("data-theme") === "dark" ? "light" : "dark");
+  });
+
+  // 스스로 재서 표를 채운다 — 목업의 숫자를 손으로 적으면 실물과 어긋난다(v1.0.1 ①).
+  function h(sel) {
+    var el = document.querySelector(sel);
+    return el ? el.getBoundingClientRect().height.toFixed(1) + "px" : "—";
+  }
+  var rows = [
+    ["현재 행 높이 (데스크톱)", h(".row.now"), "오른쪽 3줄이 높이를 정한다"],
+    ["R1 행 높이 (데스크톱)", h(".stage.desk .row:not(.now):not(.reveal)"), "오른쪽 3줄을 없앤 결과"],
+    ["R1 행 높이 (모바일)", h(".stage.mob .row"), "터치 탭 영역 44px 이상"],
+    ["아이콘 버튼 (데스크톱)", h(".desk .ic"), "26px — 촘촘한 레일용"],
+    ["아이콘 버튼 (모바일)", h(".mob .ic"), "32px"],
+    ["컨트롤 높이 — 지금", h("#cnow"), "세그먼트 + native select + 안내 문단"],
+    ["컨트롤 높이 — C1", h("#c1"), "세그먼트 2단 + 기간 칩"],
+    ["컨트롤 높이 — C2", h("#c2"), "칩 한 줄"],
+    ["컨트롤 높이 — C3", h("#c3"), "탭 + 필터 두 줄"],
+    ["컨트롤 높이 — C4", h("#c4"), "세그먼트 + 드롭다운"],
+    ["종목명 글자 크기", (function () {
+      var el = document.querySelector(".desk .nm .t");
+      return el ? getComputedStyle(el).fontSize : "—";
+    })(), "앱 text-note = 13px 와 같아야 한다"],
+    ["가격 줄 글자 크기", (function () {
+      var el = document.querySelector(".desk .sub");
+      return el ? getComputedStyle(el).fontSize : "—";
+    })(), "앱 text-cell = 12px 와 같아야 한다"],
+    ["데스크톱 레일 폭", (function () {
+      var el = document.querySelector(".stage.desk");
+      return el ? getComputedStyle(el).width : "—";
+    })(), "page.tsx 의 20rem = 320px"]
+  ];
+  var tb = document.querySelector("#measured tbody");
+  rows.forEach(function (r) {
+    var tr = document.createElement("tr");
+    tr.innerHTML = "<td>" + r[0] + '</td><td class="n">' + r[1] + "</td><td class=\"sec\">" + r[2] + "</td>";
+    tb.appendChild(tr);
+  });
+
+  // L1/L2 무대의 가짜 틱 — 실제 폴링이 어떻게 보이는지만 재현한다.
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  var live = [
+    { p: "p1", c: "c1", base: 1674000, last: 1652000, step: 1000 },
+    { p: "p2", c: "c2", base: 260000, last: 255000, step: 100 },
+    { p: "p3", c: "c3", base: 1458000, last: 1401000, step: 1000 },
+    { p: "p4", c: "c4", base: 1674000, last: 1652000, step: 1000 },
+    { p: "p5", c: "c5", base: 260000, last: 255000, step: 100 }
+  ];
+  setInterval(function () {
+    live.forEach(function (row) {
+      if (Math.random() > 0.55) return;
+      var dir = Math.random() > 0.5 ? 1 : -1;
+      row.last += dir * row.step;
+      var pel = document.getElementById(row.p);
+      var cel = document.getElementById(row.c);
+      if (!pel || !cel) return;
+      pel.innerHTML = row.last.toLocaleString("ko-KR") + '<span class="u">원</span>';
+      var rate = ((row.last - row.base) / row.base) * 100;
+      cel.textContent = (rate >= 0 ? "+" : "") + rate.toFixed(2) + "%";
+      cel.className = "num " + (rate >= 0 ? "up" : "down");
+      pel.classList.remove("tick-up", "tick-down");
+      void pel.offsetWidth;
+      pel.classList.add(dir > 0 ? "tick-up" : "tick-down");
+    });
+  }, 3000);
+})();
+</script>
+</body>
+</html>

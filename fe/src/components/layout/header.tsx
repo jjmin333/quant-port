@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut, Settings } from "lucide-react";
+import { useState } from "react";
+import { LogOut, Search, UserCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ColorModeToggle } from "@/components/layout/color-mode-toggle";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,7 +58,8 @@ function HeaderActions({ compact }: { compact?: boolean }) {
      * 헤더 우측은 아바타 하나로 통합했다 (docs/UI_SPEC.md §4).
      *  - 알림 🔔: 미구현이었다. 배지 숫자 3이 하드코딩이고 클릭해도 아무 동작이 없었다.
      *    동작하지 않는 버튼을 상시 노출하지 않는다 — 실제로 만들 때 다시 넣는다.
-     *  - 설정 ⚙: 사이드바 하단과 진입점이 중복이었다. 드롭다운 안으로 넣는다.
+     *  - 색상 모드: 헤더 우측 아이콘 버튼으로 전환한다.
+     *  - 계정: 드롭다운에서 /settings(계정 전용)로 연다.
      * 예전 메뉴는 group-hover CSS라 키보드로 열 수 없었다. DropdownMenu가 이를 해결한다.
      */
     return (
@@ -64,7 +67,7 @@ function HeaderActions({ compact }: { compact?: boolean }) {
         <DropdownMenuTrigger
           className={cn(
             "flex shrink-0 cursor-pointer items-center justify-center rounded-full bg-muted font-medium text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-            compact ? "size-7 text-[11px]" : "size-8 text-xs",
+            compact ? "size-7 text-cell" : "size-8 text-cell",
           )}
           aria-label="계정 메뉴"
         >
@@ -72,14 +75,14 @@ function HeaderActions({ compact }: { compact?: boolean }) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuLabel className="font-normal">
-            <p className="truncate text-xs font-medium">{session.user.displayName}</p>
-            <p className="truncate text-[11px] text-muted-foreground">{session.user.email}</p>
+            <p className="truncate text-cell font-medium">{session.user.displayName}</p>
+            <p className="truncate text-cell text-muted-foreground">{session.user.email}</p>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild>
             <Link href="/settings">
-              <Settings />
-              설정
+              <UserCircle />
+              계정
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => void logout()}>
@@ -107,7 +110,7 @@ function BrandLink({ compact }: { compact?: boolean }) {
         className={cn(
           "font-bold text-[var(--text-primary)]",
           compact
-            ? "text-[10px] tracking-[0.12em]"
+            ? "text-micro tracking-[0.12em]"
             : "text-sm tracking-[0.18em]",
         )}
       >
@@ -126,6 +129,24 @@ export function Header({
   const { isCompact } = useShellMode();
   const showSearch = config.mode !== "hidden";
 
+  /*
+    접히는 검색 (`config.collapsible`) — 지금은 종목 상세뿐이다.
+
+    화면을 옮기면 다시 접는다. 종목 A에서 펼쳐 둔 입력줄이 종목 B로 넘어가서도
+    펼쳐져 있으면, 접기로 되찾은 43px이 실제로는 안 돌아온다.
+  */
+  const collapsibleSearch = showSearch && Boolean(config.collapsible);
+  const [searchOpen, setSearchOpen] = useState(false);
+  // `config`는 경로마다 새로 만들어지므로(useMemo[pathname]) 이것이 곧 「화면이
+  // 바뀌었나」다. 이펙트가 아니라 렌더 중에 되돌린다 — 이펙트로 하면 접힌 헤더가
+  // 한 프레임 펼쳐졌다 닫힌다.
+  const [searchConfigSeen, setSearchConfigSeen] = useState(config);
+  if (searchConfigSeen !== config) {
+    setSearchConfigSeen(config);
+    setSearchOpen(false);
+  }
+  const searchRowVisible = showSearch && (!collapsibleSearch || searchOpen);
+
   if (isCompact) {
     return (
       <header className="shrink-0 border-b border-[var(--border)] bg-[var(--background)] px-3 py-2">
@@ -136,13 +157,37 @@ export function Header({
           <BrandLink compact />
           <div className="flex-1" />
           <div className="flex shrink-0 items-center gap-1.5">
+            {/* 색상 모드 버튼을 대체하지 않는다 — 그 왼쪽에 선다. */}
+            {collapsibleSearch && (
+              <button
+                type="button"
+                onClick={() => setSearchOpen((open) => !open)}
+                aria-label={searchOpen ? "검색 닫기" : "종목 검색"}
+                aria-expanded={searchOpen}
+                aria-controls="header-stock-search-row"
+                className={cn(
+                  "flex size-7 shrink-0 items-center justify-center rounded-full border transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                  // 선택 상태는 중립색이다 (UI_SPEC §5) — 이 앱에서 파랑은 하락이다.
+                  searchOpen
+                    ? "border-transparent bg-accent text-accent-foreground"
+                    : "border-border bg-background text-foreground shadow-xs hover:bg-muted",
+                )}
+              >
+                <Search className="size-3.5" strokeWidth={1.75} />
+              </button>
+            )}
+            <ColorModeToggle compact />
             <HeaderActions compact />
           </div>
         </div>
-        {showSearch && (
-          <div className="mt-2 flex w-full min-w-0 justify-center">
+        {searchRowVisible && (
+          <div
+            id="header-stock-search-row"
+            className="mt-2 flex w-full min-w-0 justify-center"
+          >
             <StockSearchField
               compact
+              autoFocus={collapsibleSearch}
               className="w-full min-w-0 max-w-md"
               suggestionsId="header-stock-suggestions"
             />
@@ -171,6 +216,7 @@ export function Header({
       </div>
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        <ColorModeToggle />
         <HeaderActions />
       </div>
     </header>
@@ -207,9 +253,9 @@ export function PageHeader({
         )}
       >
         <div className="min-w-0 flex-1">
-          <h1 className="text-base font-semibold sm:text-lg">{title}</h1>
+          <h1 className="text-page font-semibold">{title}</h1>
           {subtitle && (
-            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground sm:whitespace-nowrap">
+            <p className="mt-0.5 text-cell leading-relaxed text-muted-foreground sm:whitespace-nowrap">
               {subtitle}
             </p>
           )}

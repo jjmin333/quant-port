@@ -26,7 +26,24 @@ func (s *QuotesService) expandSearchWithRelatedProducts(
 		return items
 	}
 
-	s.ensureRelatedCatalogFromToss(ctx, primary)
+	/*
+		관련 상품 카탈로그 보강은 **요청 경로에서 빼고 배경으로 보낸다.**
+
+		이 함수는 후보 중 `stocks`에 없는 것을 Toss에서 받아 채운다. 그 호출이
+		요청 안에 있으면 `/stocks/search` 한 번이 외부 API 왕복 하나를 포함하게
+		되는데, 이 경로는 **비로그인도 부를 수 있는 공개 엔드포인트**다. 게다가
+		그 호출은 `STOCK` 한도를 `tickFast`의 `prefetchStockInfo`와 나눠 쓰므로
+		검색 트래픽이 시세 갱신을 밀어낼 수 있었다(실측 178.7ms → 60~67ms).
+
+		대가는 **미국 종목을 처음 검색할 때 관련 ETF가 한 박자 늦게 보이는 것**뿐이다
+		(국내 종목은 애초에 추측 후보가 허구라 보강할 것이 없다 —
+		`relatedSymbolCandidates` 헤더 참조). 관련 ETF는 부가 정보이지 검색의
+		본질이 아니고, 두 번째 검색부터는 DB에 있어 정상적으로 나온다.
+
+		`runOnce`가 같은 심볼의 중복 보강을 접는다 — 같은 종목을 여럿이 동시에
+		검색해도 상류 호출은 하나다.
+	*/
+	s.triggerRelatedCatalogBackfill(primary)
 
 	exclude := make([]string, 0, len(items))
 	for _, st := range items {
@@ -97,6 +114,24 @@ func dedupeStocks(items []model.Stock) []model.Stock {
 }
 
 // ensureRelatedCatalogFromToss upserts guessed related ETF symbols via Toss when missing locally.
+/*
+triggerRelatedCatalogBackfill — 관련 상품 보강을 배경에서 한 번만 돌린다.
+
+`triggerCatalogBackfill`과 같은 패턴이다(`quotes_background.go`). 요청의
+컨텍스트를 쓰지 않는 것이 핵심 — 그 컨텍스트는 응답을 쓰는 순간 취소되므로,
+그대로 넘기면 보강이 시작하자마자 끊긴다.
+*/
+func (s *QuotesService) triggerRelatedCatalogBackfill(primary model.Stock) {
+	sym := strings.ToUpper(strings.TrimSpace(primary.Symbol))
+	if sym == "" {
+		return
+	}
+	s.initQuoteRefresh()
+	s.quoteRefresh.runOnce("related-catalog:"+sym, func(ctx context.Context) {
+		s.ensureRelatedCatalogFromToss(ctx, primary)
+	})
+}
+
 func (s *QuotesService) ensureRelatedCatalogFromToss(ctx context.Context, primary model.Stock) {
 	if !s.TossEnabled() || s.toss == nil || s.stocks == nil {
 		return

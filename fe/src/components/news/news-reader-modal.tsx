@@ -13,6 +13,8 @@ import {
   useNewsPreviewZoom,
 } from "@/components/news/news-preview-zoom";
 import { cn } from "@/lib/utils";
+import { toUserMessage } from "@/lib/error-message";
+import { buttonVariants } from "@/components/ui/button";
 
 type NewsReaderModalProps = {
   article: NewsArticle | null;
@@ -87,7 +89,7 @@ function NewsReaderModalFrame({
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "본문을 불러오지 못했습니다");
+          setError(toUserMessage(err, "본문을 불러오지 못했습니다"));
         }
       })
       .finally(() => {
@@ -107,7 +109,7 @@ function NewsReaderModalFrame({
   const isUs = article.market === "us";
   const loadingLabel = isUs ? "본문 추출 및 번역 중…" : "본문 추출 중…";
   const footerLabel = content?.translated
-    ? `${content.siteName ? `${content.siteName} · ` : ""}Papago 번역 · Reader`
+    ? `${content.siteName ? `${content.siteName} · ` : ""}번역본 · Reader`
     : `${content?.siteName ? `${content.siteName} · ` : ""}Reader 추출`;
 
   if (!link) {
@@ -146,21 +148,21 @@ function NewsReaderModalFrame({
             <div className="flex flex-wrap items-center gap-2">
               <span
                 className={cn(
-                  "inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold",
+                  "inline-flex items-center rounded-md border px-2 py-0.5 text-cell font-semibold",
                   article.publisher.badgeClass,
                 )}
               >
                 {article.publisher.name}
               </span>
-              <span className="rounded-md bg-violet-500/15 px-2 py-0.5 text-[11px] font-semibold text-violet-300">
+              <span className="rounded-md bg-violet-500/15 px-2 py-0.5 text-cell font-semibold text-violet-300">
                 Reader
               </span>
               {isUs && (
-                <span className="rounded-md bg-sky-500/15 px-2 py-0.5 text-[11px] font-semibold text-sky-300">
+                <span className="rounded-md bg-sky-500/15 px-2 py-0.5 text-cell font-semibold text-sky-300">
                   한국어
                 </span>
               )}
-              <time dateTime={article.publishedAt} className="text-[11px] text-[var(--text-muted)]">
+              <time dateTime={article.publishedAt} className="text-cell text-[var(--text-muted)]">
                 {formatRelativeTime(article.publishedAt)}
               </time>
             </div>
@@ -171,13 +173,13 @@ function NewsReaderModalFrame({
               {title}
             </h2>
             {content?.originalTitle && content.originalTitle !== title && (
-              <p className="text-xs leading-relaxed text-[var(--text-muted)]">{content.originalTitle}</p>
+              <p className="text-cell leading-relaxed text-[var(--text-muted)]">{content.originalTitle}</p>
             )}
             {content?.byline && (
-              <p className="text-xs text-[var(--text-muted)]">{content.byline}</p>
+              <p className="text-cell text-[var(--text-muted)]">{content.byline}</p>
             )}
             {content?.excerpt && (
-              <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{content.excerpt}</p>
+              <p className="text-read text-[var(--text-secondary)]">{content.excerpt}</p>
             )}
           </div>
 
@@ -218,11 +220,11 @@ function NewsReaderModalFrame({
                   ) : null}
                   {content.contentHtml ? (
                     <article
-                      className="prose prose-invert max-w-none text-[15px] leading-7 text-[var(--text-primary)] [&_a]:text-[var(--brand)] [&_img]:max-w-full [&_p]:mb-4"
+                      className="prose prose-invert max-w-none text-article text-[var(--text-primary)] [&_a]:text-[var(--brand)] [&_img]:max-w-full [&_p]:mb-4"
                       dangerouslySetInnerHTML={{ __html: content.contentHtml }}
                     />
                   ) : (
-                    <article className="whitespace-pre-wrap text-[15px] leading-7 text-[var(--text-primary)]">
+                    <article className="whitespace-pre-wrap text-article text-[var(--text-primary)]">
                       {content.textContent}
                     </article>
                   )}
@@ -239,13 +241,13 @@ function NewsReaderModalFrame({
         </div>
 
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border)] px-4 py-3 sm:px-5">
-          <span className="text-[11px] text-[var(--text-muted)]">{footerLabel}</span>
+          <span className="text-cell text-[var(--text-muted)]">{footerLabel}</span>
           {hasUrl && (
             <a
               href={link}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--background)]"
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] hover:bg-[var(--background)]")}
             >
               원문 새 탭에서 열기
               <ExternalLink className="h-3.5 w-3.5" />

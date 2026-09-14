@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/enact/quant-port/be/internal/model"
@@ -86,9 +87,9 @@ func (s *EarningsCalendarService) AttachReactions(ctx context.Context, events []
 
 // reactionFor picks the right pair of closes for one announcement.
 //
-// **세션을 보지 않으면 하루를 잘못 읽는다.** 장전(bmo) 발표는 그날 장에 반영되고,
-// 장후(amc) 발표는 다음 거래일에 반영된다. 국내 잠정실적은 통상 마감 후 공시되고
-// 시각 데이터 자체가 없어 장후와 같게 본다.
+// **세션을 보지 않으면 하루를 잘못 읽는다.** 장전(bmo)·장중(dmh) 발표는 그날 장에
+// 반영되고, 장후(amc) 발표는 다음 거래일에 반영된다. 국내 잠정실적은 통상 마감 후
+// 공시되고 시각 데이터 자체가 없어 장후와 같게 본다.
 func reactionFor(event model.EarningsEvent, points []repository.DailyClose) *model.EarningsReaction {
 	if len(points) < 2 {
 		return nil
@@ -98,7 +99,7 @@ func reactionFor(event model.EarningsEvent, points []repository.DailyClose) *mod
 		return nil
 	}
 
-	if event.Session == model.EarningsSessionBeforeOpen {
+	if event.Session == model.EarningsSessionBeforeOpen || event.Session == model.EarningsSessionDuringHours {
 		// 기준 = 발표일 **이전** 마지막 종가, 반응 = 발표일 종가.
 		base, okBase := lastCloseBefore(points, day)
 		reaction, okReaction := closeOn(points, day)
@@ -124,17 +125,36 @@ func buildReaction(
 	}
 	return &model.EarningsReaction{
 		BaseClose: base.Close,
-		BaseDate:  base.Date.Format("2006-01-02"),
+		BaseDate:  calendarDay(base.Date),
 		Close:     reaction.Close,
-		Date:      reaction.Date.Format("2006-01-02"),
+		Date:      calendarDay(reaction.Date),
 		Pct:       (reaction.Close/base.Close - 1) * 100,
 		Basis:     basis,
 	}
 }
 
+// calendarDay is the civil YYYY-MM-DD of t in t's own location.
+//
+// **시각이 아니라 달력일을 비교해야 한다.** MySQL DATE는 DSN loc=Asia/Seoul
+// 때문에 KST 0시로 스캔되고, 발표일 문자열은 UTC 0시로 파싱된다. 같은 8/12라도
+// Equal/Before/After는 9시간 차이로 불일치한다 — 장전·장중은 당일 종가를 못
+// 찾고, lastCloseBefore는 발표일 종가를 기준으로 집어 0%가 나간다.
+func calendarDay(t time.Time) string {
+	return t.Format("2006-01-02")
+}
+
+func cmpDay(a, b time.Time) int {
+	return strings.Compare(calendarDay(a), calendarDay(b))
+}
+
 // gapDays is the absolute calendar-day distance between two dates.
 func gapDays(a, b time.Time) int {
-	d := int(a.Sub(b).Hours() / 24)
+	da, err1 := time.Parse("2006-01-02", calendarDay(a))
+	db, err2 := time.Parse("2006-01-02", calendarDay(b))
+	if err1 != nil || err2 != nil {
+		return maxReactionGapDays + 1
+	}
+	d := int(da.Sub(db).Hours() / 24)
 	if d < 0 {
 		return -d
 	}
@@ -145,7 +165,7 @@ func gapDays(a, b time.Time) int {
 
 func lastCloseOnOrBefore(points []repository.DailyClose, day time.Time) (repository.DailyClose, bool) {
 	for i := len(points) - 1; i >= 0; i-- {
-		if !points[i].Date.After(day) {
+		if cmpDay(points[i].Date, day) <= 0 {
 			return points[i], true
 		}
 	}
@@ -154,7 +174,7 @@ func lastCloseOnOrBefore(points []repository.DailyClose, day time.Time) (reposit
 
 func lastCloseBefore(points []repository.DailyClose, day time.Time) (repository.DailyClose, bool) {
 	for i := len(points) - 1; i >= 0; i-- {
-		if points[i].Date.Before(day) {
+		if cmpDay(points[i].Date, day) < 0 {
 			return points[i], true
 		}
 	}
@@ -163,7 +183,7 @@ func lastCloseBefore(points []repository.DailyClose, day time.Time) (repository.
 
 func closeOn(points []repository.DailyClose, day time.Time) (repository.DailyClose, bool) {
 	for _, p := range points {
-		if p.Date.Equal(day) {
+		if cmpDay(p.Date, day) == 0 {
 			return p, true
 		}
 	}
@@ -172,7 +192,7 @@ func closeOn(points []repository.DailyClose, day time.Time) (repository.DailyClo
 
 func firstCloseAfter(points []repository.DailyClose, day time.Time) (repository.DailyClose, bool) {
 	for _, p := range points {
-		if p.Date.After(day) {
+		if cmpDay(p.Date, day) > 0 {
 			return p, true
 		}
 	}

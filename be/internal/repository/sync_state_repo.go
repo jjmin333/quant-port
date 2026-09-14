@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/enact/quant-port/be/internal/model"
+	"github.com/enact/quant-port/be/internal/textutil"
 )
 
 // syncNotFoundCooldown is how long a symbol the upstream simply does not carry
@@ -45,10 +46,9 @@ func (r *SyncStateRepo) Mark(ctx context.Context, out SyncOutcome) error {
 	if r == nil || r.db == nil {
 		return nil
 	}
-	message := out.Message
-	if len(message) > 255 {
-		message = message[:255]
-	}
+	// message 컬럼은 VARCHAR(255) — MySQL도 여기도 **문자**로 센다. 바이트로 자르면
+	// 상한에 걸린 한글이 반쪽만 저장돼 관리자 화면과 로그에서 깨진다(textutil 참조).
+	message := textutil.TruncateRunes(out.Message, 255)
 	success := out.Status == model.SyncOK || out.Status == model.SyncEmpty
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO symbol_sync_state
@@ -135,6 +135,19 @@ func (r *SyncStateRepo) SelectTargets(
 	}
 	args = append(args, limit)
 
+	/*
+		**토스가 취급하지 않는 종목은 수집하지 않는다** (2026-09-12 사용자 결정).
+
+		그 종목은 검색에서도 빠지므로(`TossTradableFilter`) 화면에 설 자리가 없는데,
+		예전에는 배치가 계속 그것을 받으려 했다 — 실측으로 경고 스윕 호출의 19%
+		(17,918 중 3,388)가 그 종목들의 `404 stock-not-found`였다.
+
+		이 한 줄이 종목 단위 적재 **전부**에 걸린다(경고·내부자·분기 재무) — 이 함수가
+		「누구를 다음에 받을까」의 유일한 자리이기 때문이다(이 파일 머리글).
+
+		조건이 `= 1`이 아니라 `IS NULL OR = 1`인 이유는 NULL이 「아직 확인 안 했다」라서다.
+		유니버스 배치가 처음 돌기 전에 전부 건너뛰면 그날 수집이 통째로 멈춘다.
+	*/
 	query := `
 		SELECT s.symbol
 		FROM stocks s
@@ -142,6 +155,7 @@ func (r *SyncStateRepo) SelectTargets(
 		       ON st.symbol = s.symbol AND st.kind = ?
 		WHERE s.status = 'NORMAL'
 		  AND s.asset_type IN (` + placeholders + `)
+		  AND ` + TossTradableFilter("s") + `
 		  AND (st.status IS NULL OR st.status <> 'not_found' OR st.last_synced_at < ?)
 		ORDER BY` + priority + `
 		  st.last_synced_at ASC,

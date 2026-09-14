@@ -25,6 +25,7 @@ import {
   type MediaUpload,
 } from "@/lib/media-api";
 import { cn } from "@/lib/utils";
+import { toUserMessage } from "@/lib/error-message";
 
 /**
  * The report body editor.
@@ -209,7 +210,7 @@ export function MarkdownEditor({
           const alt = (file.name || "이미지").replace(/\.[^.]+$/, "").replace(/[[\]]/g, "");
           insertAtCursor(`\n![${alt}](${uploaded.url})\n`);
         } catch (err) {
-          setUploadError(err instanceof Error ? err.message : "이미지 업로드에 실패했습니다.");
+          setUploadError(toUserMessage(err, "이미지 업로드에 실패했습니다."));
         } finally {
           setUploading((n) => Math.max(0, n - 1));
         }
@@ -230,7 +231,7 @@ export function MarkdownEditor({
             미리보기
           </TabButton>
         </div>
-        <span className="shrink-0 text-[10px] tabular-nums text-[var(--text-muted)]">
+        <span className="shrink-0 text-micro tabular-nums text-[var(--text-muted)]">
           {showingHint ? 0 : value.length.toLocaleString()}자
         </span>
       </div>
@@ -323,7 +324,7 @@ export function MarkdownEditor({
             disabled={disabled}
             placeholder={placeholder}
             className={cn(
-              "w-full resize-y rounded-xl border bg-[var(--surface-elevated)] px-3.5 py-3 text-[15px] leading-[1.85] outline-none transition-colors focus:border-[var(--brand)] disabled:opacity-60",
+              "w-full resize-y rounded-xl border bg-[var(--surface-elevated)] px-3.5 py-3 text-section leading-[1.85] outline-none transition-colors focus:border-[var(--brand)] disabled:opacity-60",
               dragging ? "border-[var(--brand)]" : "border-[var(--border)]",
               // The suggestion reads as a placeholder because that is what it
               // is — real content should not look like guidance.
@@ -331,7 +332,7 @@ export function MarkdownEditor({
             )}
           />
 
-          {uploadError && <p className="text-[11px] text-[var(--loss)]">{uploadError}</p>}
+          {uploadError && <p className="text-cell text-[var(--loss)]">{uploadError}</p>}
         </>
       ) : (
         <div className="min-h-[12rem] rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] px-3.5 py-3">
@@ -344,10 +345,10 @@ export function MarkdownEditor({
       )}
 
       {hint ?? (
-        <p className="text-[10px] leading-relaxed text-[var(--text-muted)]">
-          마크다운으로 작성됩니다 — <code className="font-mono">## 제목</code>,{" "}
-          <code className="font-mono">**굵게**</code>, <code className="font-mono">- 목록</code>,{" "}
-          <code className="font-mono">&gt; 인용</code>. 사진은 버튼·붙여넣기·끌어놓기로 넣을 수
+        <p className="text-micro leading-relaxed text-[var(--text-muted)]">
+          마크다운으로 작성됩니다 — <code className="font-code">## 제목</code>,{" "}
+          <code className="font-code">**굵게**</code>, <code className="font-code">- 목록</code>,{" "}
+          <code className="font-code">&gt; 인용</code>. 사진은 버튼·붙여넣기·끌어놓기로 넣을 수
           있습니다.
         </p>
       )}
@@ -371,7 +372,7 @@ function TabButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+        "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-cell font-medium transition-colors",
         active
           ? "bg-[var(--surface)] text-[var(--text-primary)] shadow-sm"
           : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]",

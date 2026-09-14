@@ -15,7 +15,7 @@ function SparklineInner({ symbol, changeRate }: { symbol: string; changeRate: nu
   const { points, loading } = useSparklineCandles(symbol, true);
 
   if (points.length < 2) {
-    return <span className="text-[10px] text-[var(--text-muted)]">{loading ? "…" : ""}</span>;
+    return <span className="text-micro text-[var(--text-muted)]">{loading ? "…" : ""}</span>;
   }
 
   return <IndexSparkline points={points} changeRate={changeRate} />;

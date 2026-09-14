@@ -32,6 +32,18 @@ func main() {
 	etpOnly := flag.Bool("etp-only", false, "with -from-db, load ETF/ETN rows only")
 	naverDelay := flag.Duration("naver-delay", 120*time.Millisecond, "delay between Naver logo fetches")
 	fmpWorkers := flag.Int("fmp-workers", 12, "parallel FMP HEAD workers")
+	// 해외 로고를 확인만 하지 말고 내려받아 저장한다. 국내가 이미 그렇게 하고 있고
+	// (`fe/public/logos/kr`), 그림이 우리 것이 되면 FMP CDN이 URL 규칙을 바꾸거나
+	// 그 종목을 내려도 화면이 그대로다. 대신 저장소가 커진다 — 종목당 ~8KB.
+	storeUS := flag.Bool("store-us", false, "download overseas logos into {out}/us/*.png instead of only probing FMP")
+	/*
+		이미 받아 둔 파일의 **밝기만** 다시 재고 끝낸다 — 네트워크를 전혀 쓰지 않는다.
+
+		흰 아트워크 로고(SOXL·QQQ·SOXS 등)가 밝은 카드에서 안 보이던 것을 고치면서
+		매니페스트에 `tone`을 넣었는데, 그 전에 내려받은 15,000여 개에는 그 값이 없다.
+		이 플래그가 없으면 표시 하나 때문에 100MB를 다시 끌어와야 한다.
+	*/
+	retone := flag.Bool("retone", false, "re-measure logo brightness for already-downloaded files and exit (no network)")
 	flag.Parse()
 
 	if *deltaOnly {
@@ -41,6 +53,24 @@ func main() {
 		if *fmpWorkers == 12 {
 			*fmpWorkers = 4
 		}
+	}
+
+	if *retone {
+		path := filepath.Join(*outDir, "manifest.json")
+		if err := stocklogo.LoadManifest(path); err != nil {
+			log.Fatalf("load manifest: %v", err)
+		}
+		m := stocklogo.GetManifest()
+		if m == nil {
+			log.Fatalf("manifest is empty: %s", path)
+		}
+		checked, light := stocklogo.RetoneManifest(m, *outDir)
+		m.RefreshedAt = time.Now().UTC().Format(time.RFC3339)
+		if err := stocklogo.SaveManifest(path, m); err != nil {
+			log.Fatalf("save manifest: %v", err)
+		}
+		log.Printf("retone: %d개 측정 · 밝은 로고 %d개 (%s)", checked, light, path)
+		return
 	}
 
 	resolve := func(explicit, name string) string {
@@ -58,7 +88,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("config: %v", err)
 		}
-		mysql, err := repository.NewMySQL(cfg.MySQLDSN)
+		mysql, err := repository.NewMySQLForCLI(cfg.MySQLDSN)
 		if err != nil {
 			log.Fatalf("mysql: %v", err)
 		}
@@ -144,7 +174,7 @@ func main() {
 	}
 	if *deltaOnly {
 		before := len(stocks)
-		stocks = stocklogo.FilterDeltaLogoStocks(stocks, existing, filepath.Join(*outDir, "kr"), true)
+		stocks = stocklogo.FilterDeltaLogoStocks(stocks, existing, filepath.Join(*outDir, "kr"), filepath.Join(*outDir, "us"), true, *storeUS)
 		log.Printf("delta-only: %d symbols need migration (skipped %d)", len(stocks), before-len(stocks))
 	}
 
@@ -156,6 +186,7 @@ func main() {
 		SkipDomestic: *skipDomestic,
 		DeltaOnly:    *deltaOnly,
 		Existing:     existing,
+		StoreUS:      *storeUS,
 	})
 	if err != nil {
 		log.Fatalf("migrate: %v", err)

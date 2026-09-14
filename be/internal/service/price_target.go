@@ -9,6 +9,7 @@ import (
 	"github.com/enact/quant-port/be/internal/authctx"
 	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/repository"
+	"github.com/enact/quant-port/be/internal/textutil"
 )
 
 type PriceTargetService struct {
@@ -208,10 +209,7 @@ func validatePriceTargetInput(in PriceTargetInput, requireSymbol bool) (reposito
 	if cur != "KRW" && cur != "USD" {
 		return repository.PriceTargetWrite{}, fmt.Errorf("currency must be KRW or USD")
 	}
-	note := in.Note
-	if len([]rune(note)) > 500 {
-		note = string([]rune(note)[:500])
-	}
+	note := textutil.TruncateRunes(in.Note, 500)
 	return repository.PriceTargetWrite{
 		Symbol:       sym,
 		TargetPrice:  in.TargetPrice,

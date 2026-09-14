@@ -26,16 +26,39 @@ import {
   fetchAdminBatchSchedule,
   runAdminBatchJob,
   saveAdminBatchSchedule,
+  batchHealthNeedsAttention,
+  BATCH_HEALTH_LABELS,
+  type BatchHealthView,
   type BatchJobCategory,
   type BatchJobRun,
   type BatchJobStatus,
   type BatchScheduleDoc,
 } from "@/lib/admin";
 import { cn } from "@/lib/utils";
+import { toUserMessage } from "@/lib/error-message";
+import { buttonVariants } from "@/components/ui/button";
 
 function formatDateTime(value: string | undefined): string {
   if (!value) return "-";
   return formatDateTimeKST(value);
+}
+
+/**
+ * 실행이 어디서 왔는지. 「재처리」를 따로 두는 이유는, 다운으로 놓친 슬롯을
+ * 워치독이 채운 것을 「수동」으로 보이면 누른 적 없는 실행을 보고 원인을 잘못
+ * 짚기 때문이다. 모르는 값은 그대로 보여준다 — 조용히 「수동」으로 접지 않는다.
+ */
+function triggerKindLabel(kind: string): string {
+  switch (kind) {
+    case "schedule":
+      return "스케줄";
+    case "manual":
+      return "수동";
+    case "catchup":
+      return "재처리";
+    default:
+      return kind;
+  }
 }
 
 function duration(run: BatchJobRun | undefined): string {
@@ -83,7 +106,7 @@ function CoverageRow({ coverage }: { coverage: Record<string, unknown> }) {
   const entries = Object.entries(coverage).filter(([, v]) => v != null && v !== "");
   if (entries.length === 0) return null;
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] tabular-nums text-[var(--text-muted)]">
+    <div className="flex flex-wrap gap-x-4 gap-y-1 text-cell tabular-nums text-[var(--text-muted)]">
       {entries.map(([key, value]) => (
         <span key={key}>
           {LABELS[key] ?? key}{" "}
@@ -123,7 +146,7 @@ function JobCard({
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">{job.spec.label}</h3>
           <span
             className={cn(
-              "rounded-full px-1.5 py-0.5 text-[10px]",
+              "rounded-full px-1.5 py-0.5 text-micro",
               rateLimited
                 ? "bg-[var(--danger)]/10 text-[var(--danger)]"
                 : "bg-[var(--success)]/10 text-[var(--success)]",
@@ -132,24 +155,24 @@ function JobCard({
             {rateLimited ? "외부 API 호출" : "DB 전용"}
           </span>
           {job.running && (
-            <span className="flex items-center gap-1 text-[10px] text-[var(--brand)]">
+            <span className="flex items-center gap-1 text-micro text-[var(--brand)]">
               <Loader2 className="h-3 w-3 animate-spin" />
               실행 중
             </span>
           )}
         </div>
-        <span className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
+        <span className="flex items-center gap-1 text-micro text-[var(--text-muted)]">
           <Clock className="h-3 w-3" />
           {job.spec.schedule}
         </span>
       </div>
 
-      <p className="mb-2 text-[11px] leading-relaxed text-[var(--text-secondary)]">
+      <p className="mb-2 text-cell leading-relaxed text-[var(--text-secondary)]">
         {job.spec.purpose}
       </p>
 
       {job.spec.note && (
-        <p className="mb-2 flex items-start gap-1.5 rounded-md border border-dashed border-[var(--border)] px-2 py-1.5 text-[10px] leading-relaxed text-[var(--text-muted)]">
+        <p className="mb-2 flex items-start gap-1.5 rounded-md border border-dashed border-[var(--border)] px-2 py-1.5 text-micro leading-relaxed text-[var(--text-muted)]">
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
           {job.spec.note}
         </p>
@@ -159,18 +182,18 @@ function JobCard({
 
       <div className="mb-2 flex flex-wrap items-end gap-2">
         {job.spec.acceptsSince && (
-          <label className="text-[10px] text-[var(--text-muted)]">
+          <label className="text-micro text-[var(--text-muted)]">
             <span className="mb-0.5 block">기준일</span>
             <input
               type="date"
               value={since}
               onChange={(e) => setSince(e.target.value)}
-              className="rounded border border-[var(--border)] bg-[var(--surface)] px-1.5 py-1 text-xs"
+              className="rounded border border-[var(--border)] bg-[var(--surface)] px-1.5 py-1 text-cell"
             />
           </label>
         )}
         {job.spec.acceptsLimit && (
-          <label className="text-[10px] text-[var(--text-muted)]">
+          <label className="text-micro text-[var(--text-muted)]">
             <span className="mb-0.5 block">{limitMeansDays ? "거슬러 받을 일수" : "최대 종목"}</span>
             <input
               type="number"
@@ -178,7 +201,7 @@ function JobCard({
               max={limitMeansDays ? 90 : 20000}
               value={limit}
               onChange={(e) => setLimit(Number(e.target.value))}
-              className="w-24 rounded border border-[var(--border)] bg-[var(--surface)] px-1.5 py-1 text-right text-xs"
+              className="w-24 rounded border border-[var(--border)] bg-[var(--surface)] px-1.5 py-1 text-right text-cell"
             />
           </label>
         )}
@@ -186,7 +209,7 @@ function JobCard({
           type="button"
           onClick={() => onRun(since, limit)}
           disabled={busy}
-          className="flex items-center gap-1.5 rounded-lg border border-[var(--brand)] px-2.5 py-1.5 text-xs font-medium text-[var(--brand)] disabled:opacity-50"
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--brand)] text-[var(--brand)] disabled:opacity-50")}
         >
           <Play className="h-3.5 w-3.5" />
           실행
@@ -194,13 +217,13 @@ function JobCard({
       </div>
 
       {job.lastRun ? (
-        <div className="border-t border-[var(--border)] pt-2 text-[11px]">
+        <div className="border-t border-[var(--border)] pt-2 text-cell">
           <div className="flex flex-wrap items-center gap-2">
             <StatusIcon status={job.lastRun.status} />
             <span className="text-[var(--text-muted)]">
               {formatDateTime(job.lastRun.startedAt)}
               {duration(job.lastRun) && ` · ${duration(job.lastRun)}`}
-              {job.lastRun.triggerKind === "schedule" ? " · 스케줄" : " · 수동"}
+              {` · ${triggerKindLabel(job.lastRun.triggerKind)}`}
             </span>
           </div>
           {job.lastRun.message && (
@@ -217,7 +240,7 @@ function JobCard({
           )}
         </div>
       ) : (
-        <p className="border-t border-[var(--border)] pt-2 text-[11px] text-[var(--text-muted)]">
+        <p className="border-t border-[var(--border)] pt-2 text-cell text-[var(--text-muted)]">
           실행 기록 없음
         </p>
       )}
@@ -262,7 +285,7 @@ function ScheduleDoc() {
     setError(null);
     fetchAdminBatchSchedule()
       .then(setDoc)
-      .catch((e) => setError(e instanceof Error ? e.message : "문서를 불러오지 못했습니다"));
+      .catch((e) => setError(toUserMessage(e, "문서를 불러오지 못했습니다")));
   }, [open, editing]);
 
   function startEdit() {
@@ -287,7 +310,7 @@ function ScheduleDoc() {
       setEditing(false);
       setDraft("");
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "저장에 실패했습니다");
+      setSaveError(toUserMessage(e, "저장에 실패했습니다"));
     } finally {
       setSaving(false);
     }
@@ -304,7 +327,7 @@ function ScheduleDoc() {
         <span className="text-sm font-semibold text-[var(--text-primary)]">
           시간표 · 수동 실행 안내
         </span>
-        <span className="text-[11px] text-[var(--text-muted)]">
+        <span className="text-cell text-[var(--text-muted)]">
           어느 잡이 몇 시에 어느 한도를 쓰는지, 오른쪽 메모는 여기서 고친다
         </span>
         <ChevronDown
@@ -316,9 +339,9 @@ function ScheduleDoc() {
       </button>
       {open && (
         <div className="border-t border-[var(--border)] px-3 py-3">
-          {error && <p className="text-xs text-[var(--danger)]">{error}</p>}
+          {error && <p className="text-cell text-[var(--danger)]">{error}</p>}
           {!error && !doc && (
-            <p className="text-xs text-[var(--text-muted)]">불러오는 중…</p>
+            <p className="text-cell text-[var(--text-muted)]">불러오는 중…</p>
           )}
           {doc && (
             <>
@@ -329,7 +352,7 @@ function ScheduleDoc() {
                       type="button"
                       onClick={cancelEdit}
                       disabled={saving}
-                      className="rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs disabled:opacity-50"
+                      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] disabled:opacity-50")}
                     >
                       취소
                     </button>
@@ -337,7 +360,7 @@ function ScheduleDoc() {
                       type="button"
                       onClick={() => void save()}
                       disabled={saving || draft.trim() === ""}
-                      className="flex items-center gap-1.5 rounded-lg border border-[var(--brand)] px-2.5 py-1.5 text-xs font-medium text-[var(--brand)] disabled:opacity-50"
+                      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--brand)] text-[var(--brand)] disabled:opacity-50")}
                     >
                       {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                       저장
@@ -353,7 +376,7 @@ function ScheduleDoc() {
                         ? "시간표와 메모를 고칩니다. 저장하면 리포 파일이 바뀝니다."
                         : "이 환경에서는 파일을 쓸 수 없습니다. Docker 볼륨·BATCH_SCHEDULE_PATH를 확인하세요."
                     }
-                    className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs hover:bg-[var(--surface-elevated)] disabled:cursor-not-allowed disabled:opacity-50"
+                    className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] hover:bg-[var(--surface-elevated)] disabled:cursor-not-allowed disabled:opacity-50")}
                   >
                     <Pencil className="h-3.5 w-3.5" />
                     수정
@@ -361,10 +384,10 @@ function ScheduleDoc() {
                 )}
               </div>
               {saveError && (
-                <p className="mb-3 text-xs text-[var(--danger)]">{saveError}</p>
+                <p className="mb-3 text-cell text-[var(--danger)]">{saveError}</p>
               )}
               {!doc.writable && !editing && (
-                <p className="mb-3 text-[11px] text-[var(--text-muted)]">
+                <p className="mb-3 text-cell text-[var(--text-muted)]">
                   읽기 전용입니다. 컨테이너가 `BATCH_SCHEDULE.md`에 쓰지 못합니다.
                 </p>
               )}
@@ -377,9 +400,9 @@ function ScheduleDoc() {
                   hint="시간표 표의 맨 오른쪽 「메모」칸에 운영 메모를 적습니다. 「## 시간표」제목은 지우지 마세요."
                 />
               ) : (
-                <Markdown source={doc.markdown} className="text-[13px] leading-[1.75]" />
+                <Markdown source={doc.markdown} className="text-note leading-[1.75]" />
               )}
-              <p className="mt-4 border-t border-[var(--border)] pt-2 text-[10px] text-[var(--text-muted)]">
+              <p className="mt-4 border-t border-[var(--border)] pt-2 text-micro text-[var(--text-muted)]">
                 원본: <code>{doc.path}</code>
                 {doc.source === "embed" ? " · 이미지에 넣은 사본(디스크 파일 없음)" : " · 디스크"}
                 {doc.writable ? " · 저장 가능" : " · 읽기 전용"}
@@ -392,12 +415,91 @@ function ScheduleDoc() {
   );
 }
 
+function formatLateFor(seconds: number | undefined): string {
+  if (!seconds || seconds <= 0) return "";
+  const hours = Math.floor(seconds / 3600);
+  if (hours >= 24) return ` · ${Math.floor(hours / 24)}일 지남`;
+  if (hours >= 1) return ` · ${hours}시간 지남`;
+  return ` · ${Math.max(1, Math.floor(seconds / 60))}분 지남`;
+}
+
+/**
+ * 배치 감시 배너.
+ *
+ * 화면을 열어야만 아는 상태이지만, 그래도 **열면 반드시 보이는 자리**여야 한다 —
+ * 이 기능이 생기기 전에는 「AI 요약이 19일째 안 돌았다」가 목록 한가운데 조용히
+ * 앉아 있었고 아무도 못 봤다.
+ *
+ * 두 가지를 따로 말한다: 잡들이 늦었는지, 그리고 **그것을 판정하는 워치독이 살아
+ * 있는지**. 후자가 죽으면 전자의 「정상」은 정상이라는 뜻이 아니다.
+ */
+function BatchHealthBanner({ health }: { health: BatchHealthView | null }) {
+  if (!health) return null;
+
+  const attention = (health.report?.jobs ?? []).filter((j) =>
+    batchHealthNeedsAttention(j.health),
+  );
+  const watchdogDown = health.watchdogStale;
+
+  if (attention.length === 0 && !watchdogDown) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2 text-cell text-[var(--text-secondary)]">
+        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[var(--success)]" />
+        <span>
+          예약된 배치가 모두 제 시각에 돌았습니다
+          <span className="text-[var(--text-muted)]">
+            {" "}
+            · {formatDateTime(health.report?.computedAt)} 기준
+          </span>
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5 rounded-lg border border-[var(--danger)]/40 bg-[var(--danger)]/5 px-3 py-2.5">
+      <div className="flex items-center gap-2 text-cell font-semibold text-[var(--danger)]">
+        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+        {watchdogDown && attention.length === 0 ? (
+          <span>배치 감시가 멈췄습니다 — 아래 상태는 최신이 아닐 수 있습니다</span>
+        ) : (
+          <span>제때 돌지 않은 배치 {attention.length}개</span>
+        )}
+      </div>
+      <ul className="space-y-0.5 text-cell text-[var(--text-secondary)]">
+        {attention.map((job) => (
+          <li key={job.jobId}>
+            <span className="font-medium text-[var(--text-primary)]">{job.label}</span>
+            <span className="text-[var(--text-muted)]">
+              {" "}
+              — {BATCH_HEALTH_LABELS[job.health] ?? job.health}
+              {formatLateFor(job.lateBySeconds)} · 마지막 성공{" "}
+              {formatDateTime(job.lastSuccessAt)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {watchdogDown && attention.length > 0 && (
+        <p className="text-micro text-[var(--text-muted)]">
+          감시 자체도 멈춰 있습니다 — worker-scores가 살아 있는지 확인하세요.
+        </p>
+      )}
+      {!watchdogDown && (
+        <p className="text-micro text-[var(--text-muted)]">
+          휴장일은 기대에서 빠집니다 — 여기 뜬 것은 돌았어야 했는데 안 돈 것입니다.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function AdminBatchPanel() {
   const router = useRouter();
   const { session, loading: authLoading } = useAuth();
   const isAdmin = isAdminSession(session);
 
   const [jobs, setJobs] = useState<BatchJobStatus[]>([]);
+  const [health, setHealth] = useState<BatchHealthView | null>(null);
   const [history, setHistory] = useState<BatchJobRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -410,9 +512,10 @@ export function AdminBatchPanel() {
       const res = await fetchAdminBatchJobs();
       setJobs(res.jobs ?? []);
       setHistory(res.history ?? []);
+      setHealth(res.health ?? null);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "배치 목록을 불러오지 못했습니다");
+      setError(toUserMessage(e, "배치 목록을 불러오지 못했습니다"));
     } finally {
       setLoading(false);
     }
@@ -460,7 +563,7 @@ export function AdminBatchPanel() {
       setNotice(`${job.spec.label} 실행을 시작했습니다.`);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "실행 실패");
+      setError(toUserMessage(e, "실행 실패"));
     }
   }
 
@@ -484,27 +587,29 @@ export function AdminBatchPanel() {
       <PageScrollShell>
       <div className="space-y-4 p-3 sm:p-4">
         {error && (
-          <div className="rounded-lg border border-[var(--danger)]/40 bg-[var(--danger)]/5 px-3 py-2 text-xs text-[var(--danger)]">
+          <div className="rounded-lg border border-[var(--danger)]/40 bg-[var(--danger)]/5 px-3 py-2 text-cell text-[var(--danger)]">
             {error}
           </div>
         )}
         {notice && (
-          <div className="rounded-lg border border-[var(--brand)]/40 bg-[var(--brand)]/5 px-3 py-2 text-xs text-[var(--brand)]">
+          <div className="rounded-lg border border-[var(--brand)]/40 bg-[var(--brand)]/5 px-3 py-2 text-cell text-[var(--brand)]">
             {notice}
           </div>
         )}
 
+        <BatchHealthBanner health={health} />
+
         <ScheduleDoc />
 
         <div className="flex items-center justify-between">
-          <p className="text-[11px] text-[var(--text-muted)]">
+          <p className="text-cell text-[var(--text-muted)]">
             같은 외부 소스를 쓰는 잡은 서로를 기다립니다 — 겹쳐 실행해도 실패하지 않고 순서대로
             처리됩니다.
           </p>
           <button
             type="button"
             onClick={() => void load()}
-            className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs hover:bg-[var(--surface-elevated)]"
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] hover:bg-[var(--surface-elevated)]")}
           >
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
             새로고침
@@ -512,7 +617,7 @@ export function AdminBatchPanel() {
         </div>
 
         {loading ? (
-          <div className="py-8 text-center text-xs text-[var(--text-muted)]">불러오는 중…</div>
+          <div className="py-8 text-center text-cell text-[var(--text-muted)]">불러오는 중…</div>
         ) : (
           CATEGORIES.map((category) => {
             const inCategory = jobs.filter((j) => j.spec.category === category.id);
@@ -520,10 +625,10 @@ export function AdminBatchPanel() {
             return (
               <section key={category.id} className="space-y-2">
                 <div className="flex flex-wrap items-baseline gap-2">
-                  <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+                  <h2 className="text-section font-semibold text-[var(--text-primary)]">
                     {category.label}
                   </h2>
-                  <span className="text-[10px] text-[var(--text-muted)]">{category.hint}</span>
+                  <span className="text-micro text-[var(--text-muted)]">{category.hint}</span>
                 </div>
                 <div className="grid gap-2.5 lg:grid-cols-2">
                   {inCategory.map((job) => (
@@ -545,10 +650,10 @@ export function AdminBatchPanel() {
 
         {history.length > 0 && (
           <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-            <h2 className="mb-2 text-sm font-semibold">최근 실행 기록</h2>
+            <h2 className="mb-2 text-section font-semibold">최근 실행 기록</h2>
             <ul className="divide-y divide-[var(--border)]">
               {history.map((run) => (
-                <li key={run.id} className="flex flex-wrap items-baseline gap-2 py-1.5 text-[11px]">
+                <li key={run.id} className="flex flex-wrap items-baseline gap-2 py-1.5 text-cell">
                   <StatusIcon status={run.status} />
                   <span className="font-medium text-[var(--text-primary)]">{run.jobId}</span>
                   <span className="text-[var(--text-muted)]">

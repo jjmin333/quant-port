@@ -13,6 +13,11 @@ type FundamentalsResponse struct {
 	Message      string  `json:"message,omitempty"`
 	DataSource   string  `json:"dataSource,omitempty"`
 	FiscalYear   *int    `json:"fiscalYear,omitempty"`
+	// 화면이 「FY2025」를 사람 말로 옮기려면 회계연도만으로는 부족하다 — 연간
+	// 보고서인지 어느 분기인지("FY"/"1Q"…), 그 기간이 언제 끝났는지를 함께 줘야
+	// 「올해 건지 작년 건지」를 사용자가 알 수 있다.
+	FiscalPeriod string  `json:"fiscalPeriod,omitempty"`
+	PeriodEnd    *string `json:"periodEnd,omitempty"`
 	CoverageTier string  `json:"coverageTier"`
 	CalcStatus   string  `json:"calcStatus,omitempty"`
 	CalcError    string  `json:"calcError,omitempty"`
@@ -47,29 +52,33 @@ func BuildFundamentalsResponse(view *model.FundamentalsView, stock *model.Stock)
 	tier := model.ComputeCoverageTier(f, stock)
 
 	resp := FundamentalsResponse{
-		Symbol:           f.Symbol,
-		DataSource:       string(f.DataSource),
-		FiscalYear:       f.FiscalYear,
-		CoverageTier:     string(tier),
-		CalcStatus:       string(f.CalcStatus),
-		CalcError:        f.CalcError,
-		FetchedAt:        formatTimeRFC3339(f.FetchedAt),
-		Price:            view.Price,
-		PER:              view.PER,
-		PBR:              view.PBR,
-		ROE:              f.ROE,
-		OperatingMargin:  f.OperatingMargin,
-		RevenueGrowthYoY: f.RevenueGrowthYoY,
-		EPSGrowthYoY:     f.EPSGrowthYoY,
-		FwdPER:           f.FwdPER,
-		CyPER:            f.CyPER,
-		DebtRatio:        f.DebtRatio,
-		ROA:              f.ROA,
-		NetProfitMargin:  f.NetProfitMargin,
-		CurrentRatio:     f.CurrentRatio,
-		Revenue:          f.Revenue,
-		NetIncome:        f.NetIncome,
-		TotalEquity:      f.TotalEquity,
+		Symbol:            f.Symbol,
+		DataSource:        string(f.DataSource),
+		FiscalYear:        f.FiscalYear,
+		FiscalPeriod:      f.FiscalPeriod,
+		// 결산일은 날짜만 쓴다 — 시각을 붙이면 화면이 시간대에 따라 하루 어긋난
+		// 라벨("2025년 12월" vs "2026년 1월")을 그린다.
+		PeriodEnd: formatDateOnly(f.PeriodEnd),
+		CoverageTier:      string(tier),
+		CalcStatus:        string(f.CalcStatus),
+		CalcError:         f.CalcError,
+		FetchedAt:         formatTimeRFC3339(f.FetchedAt),
+		Price:             view.Price,
+		PER:               view.PER,
+		PBR:               view.PBR,
+		ROE:               f.ROE,
+		OperatingMargin:   f.OperatingMargin,
+		RevenueGrowthYoY:  f.RevenueGrowthYoY,
+		EPSGrowthYoY:      f.EPSGrowthYoY,
+		FwdPER:            f.FwdPER,
+		CyPER:             f.CyPER,
+		DebtRatio:         f.DebtRatio,
+		ROA:               f.ROA,
+		NetProfitMargin:   f.NetProfitMargin,
+		CurrentRatio:      f.CurrentRatio,
+		Revenue:           f.Revenue,
+		NetIncome:         f.NetIncome,
+		TotalEquity:       f.TotalEquity,
 		SharesOutstanding: f.SharesOutstanding,
 		EPSBasic:          f.EPSBasic,
 		EPSDiluted:        f.EPSDiluted,
@@ -93,5 +102,15 @@ func formatTimeRFC3339(t *time.Time) *string {
 		return nil
 	}
 	s := t.UTC().Format(time.RFC3339)
+	return &s
+}
+
+// formatDateOnly는 "2025-12-31" 꼴로 낸다. 결산일에는 시각이 없으므로 RFC3339로
+// 내보내면 화면이 UTC로 되읽으며 하루를 잃는다(국내 12월 31일 → 12월 30일).
+func formatDateOnly(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	s := t.Format("2006-01-02")
 	return &s
 }

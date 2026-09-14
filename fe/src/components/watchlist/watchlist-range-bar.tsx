@@ -44,11 +44,11 @@ export function WatchlistRangeBar({
           sm ? "hidden @2xl:flex" : "flex",
         )}
       >
-        <span className="truncate text-[10px] leading-none tabular-nums text-[var(--text-muted)]">
+        <span className="truncate text-micro leading-none tabular-nums text-[var(--text-muted)]">
           {priceText(low, currency, sm)}
         </span>
-        <span className="shrink-0 text-[9px] leading-none text-[var(--text-muted)]">52주</span>
-        <span className="truncate text-[10px] leading-none tabular-nums text-[var(--text-muted)]">
+        <span className="shrink-0 text-micro leading-none text-[var(--text-muted)]">52주</span>
+        <span className="truncate text-micro leading-none tabular-nums text-[var(--text-muted)]">
           {priceText(high, currency, sm)}
         </span>
       </div>
@@ -89,7 +89,7 @@ export function WatchlistRangeBar({
       <p
         className={cn(
           "truncate text-center leading-none text-[var(--text-muted)]",
-          sm ? "text-[10px]" : "text-[11px]",
+          sm ? "text-micro" : "text-cell",
         )}
       >
         {pct == null ? (

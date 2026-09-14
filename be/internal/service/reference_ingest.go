@@ -73,6 +73,14 @@ type providerGate struct {
 	last     time.Time
 }
 
+// ProviderGate serialises calls to one upstream (exported for CLI backfill).
+type ProviderGate = providerGate
+
+// NewProviderGate builds a gate with the same pacing as worker-filings DART jobs.
+func NewProviderGate(interval time.Duration) *ProviderGate {
+	return newProviderGate(interval)
+}
+
 func newProviderGate(interval time.Duration) *providerGate {
 	return &providerGate{interval: interval}
 }
@@ -103,18 +111,35 @@ const (
 	// 국내 재무는 종목당 DART 호출이 20회를 넘는다(연도 4벌 × 보고서 4종 +
 	// 누적 조회). 1초 간격이라 종목 하나에 20초 이상 걸리므로 한 실행의 기본
 	// 대상 수가 작다 — 150종목이면 약 한 시간이다.
-	financialsDefaultLimitDomestic = 150
+	financialsDefaultLimitDomestic = 400
 	// 해외는 종목당 companyfacts 1호출이라 훨씬 싸다.
 	financialsDefaultLimitOverseas = 600
 
 	// 종목 경고는 종목당 Toss 1호출이고 **전 종목 매일**이 목표다.
 	warningsDefaultLimit = 20000
-	// Toss 경고 조회 간격.
-	//
-	// 처음에 120ms(초당 8회)로 잡았다가 실측에서 429를 받았다 — 응답 헤더가
-	// `limit=5 resetSec=1`, 즉 **초당 5회**다. 250ms는 초당 4회로 그 아래이고,
-	// 시세 폴러가 쓸 여유도 남긴다. 17,900종목이면 약 75분이라 새벽 창에 들어간다.
-	warningsPause = 250 * time.Millisecond
+	/*
+		Toss 경고 조회 간격.
+
+		처음에 120ms(초당 8회)로 잡았다가 실측에서 429를 받았다 — 응답 헤더가
+		`limit=5 resetSec=1`, 즉 **초당 5회**다. 250ms는 초당 4회로 그 아래다.
+
+		# 250ms → **340ms** (2026-09-11 사용자 요청 7)
+
+		「한도 아래」는 맞았지만 **한도의 80%에 계속 붙어 있었다.** 이 잡의 로그는
+		`toss api rate-limit low: /warnings limit=5 remaining=1`로 가득하고(09-08~09-10
+		실측), 남은 1은 곧 다음 호출 하나가 429라는 뜻이다.
+
+		그 429가 이 잡만의 문제가 아니다. 429를 받으면 클라이언트가 **주 키를 식히고
+		보조 키로 넘어가는데**(`client.go`의 failover) 그 판단은 프로세스마다 따로
+		내려진다 — 워커가 태운 보조 키를 api도 같이 쓴다. 즉 이 잡이 버킷 경계에
+        붙어 있는 동안 사용자 화면의 시세가 같은 실패를 나눠 받는다.
+
+		340ms는 초당 약 3회로 한도의 60%다. 17,900종목이면 약 101분(전에는 75분)이고,
+		이 잡은 01:30에 시작해 grace가 5시간이라 그 안에 넉넉히 든다. 게다가 같은
+		변경에서 404 종목 3,388개가 30일 쿨다운으로 빠지므로(아래 `ingestOneWarning`)
+		실제 대상은 14,500종목 — **82분**이다. 느려지지 않는다.
+	*/
+	warningsPause = 340 * time.Millisecond
 	// 429를 받았을 때 한 번 더 기다렸다 재시도한다. resetSec이 1이므로 1.5초면
 	// 창이 새로 열린다. 재시도하지 않으면 그 종목은 하루를 통째로 건너뛴다.
 	warningsRetryPause = 1500 * time.Millisecond
@@ -145,12 +170,39 @@ func (s *ReferenceIngestService) IngestFinancialsDomestic(ctx context.Context, l
 		if ctx.Err() != nil {
 			break
 		}
-		s.ingestDomesticFinancials(ctx, symbol, stats)
+		if err := s.ingestDomesticFinancials(ctx, symbol, stats); err != nil {
+			// 한도 소진이면 남은 종목도 전부 같은 이유로 실패한다 — 여기서 멈춘다.
+			log.Printf("financials ingest: 중단 — %v", err)
+			break
+		}
 	}
 	return stats.finish("financials_dart", len(symbols))
 }
 
-func (s *ReferenceIngestService) ingestDomesticFinancials(ctx context.Context, symbol string, stats *ingestStats) {
+// IngestDomesticSymbol ingests one domestic symbol (backfill / manual repair).
+//
+// 반환값은 **배치를 세워야 하는 실패**만 담는다(지금은 DART 일일 한도 소진).
+// 한 종목이 그냥 없거나 아직 공시 전인 것은 오류가 아니라 정상이고, 그건
+// `sync_state`에 기록된다.
+func (s *ReferenceIngestService) IngestDomesticSymbol(ctx context.Context, symbol string) error {
+	if s == nil {
+		return nil
+	}
+	stats := newIngestStats()
+	return s.ingestDomesticFinancials(ctx, symbol, stats)
+}
+
+// IngestOverseasSymbol ingests one US symbol (backfill / manual repair).
+func (s *ReferenceIngestService) IngestOverseasSymbol(ctx context.Context, symbol string) error {
+	if s == nil {
+		return nil
+	}
+	stats := newIngestStats()
+	s.ingestOverseasFinancials(ctx, symbol, stats)
+	return nil
+}
+
+func (s *ReferenceIngestService) ingestDomesticFinancials(ctx context.Context, symbol string, stats *ingestStats) error {
 	release := s.dartGate.enter(ctx)
 	quarters, qErr := s.dart.FetchQuarterlyHistory(ctx, symbol, financialsYears)
 	release()
@@ -158,6 +210,16 @@ func (s *ReferenceIngestService) ingestDomesticFinancials(ctx context.Context, s
 	release = s.dartGate.enter(ctx)
 	cumulative, cErr := s.dart.FetchQuarterlySnapshots(ctx, symbol)
 	release()
+
+	// 한도 소진은 이 종목만의 문제가 아니다 — 남은 종목도 전부 같은 이유로
+	// 실패한다. 호출자가 배치를 세우도록 위로 올린다.
+	if IsDartQuotaExceeded(qErr) || IsDartQuotaExceeded(cErr) {
+		stats.record(ctx, s.sync, repository.SyncOutcome{
+			Kind: model.SyncKindFinancialsDART, Symbol: symbol,
+			Status: model.SyncError, Message: ErrDartQuotaExceeded.Error(),
+		})
+		return ErrDartQuotaExceeded
+	}
 
 	// 둘 다 실패했을 때만 실패다. 하나만 얻어도 그 화면은 살아난다.
 	if qErr != nil && cErr != nil {
@@ -169,7 +231,7 @@ func (s *ReferenceIngestService) ingestDomesticFinancials(ctx context.Context, s
 			Kind: model.SyncKindFinancialsDART, Symbol: symbol,
 			Status: status, Message: qErr.Error(),
 		})
-		return
+		return nil
 	}
 
 	rows := make([]repository.FinancialPeriodRow, 0, len(quarters)+len(cumulative))
@@ -200,7 +262,7 @@ func (s *ReferenceIngestService) ingestDomesticFinancials(ctx context.Context, s
 			Kind: model.SyncKindFinancialsDART, Symbol: symbol,
 			Status: model.SyncError, Message: err.Error(),
 		})
-		return
+		return nil
 	}
 	status := model.SyncEmpty
 	if written > 0 {
@@ -210,6 +272,7 @@ func (s *ReferenceIngestService) ingestDomesticFinancials(ctx context.Context, s
 		Kind: model.SyncKindFinancialsDART, Symbol: symbol,
 		Status: status, RowsStored: written, ItemsSeen: len(rows),
 	})
+	return nil
 }
 
 // IngestFinancialsOverseas stores EDGAR quarterly snapshots for US symbols.
@@ -467,9 +530,28 @@ func (s *ReferenceIngestService) ingestOneWarning(ctx context.Context, symbol st
 		warnings, err = s.toss.GetStockWarnings(ctx, symbol)
 	}
 	if err != nil {
+		/*
+			**「상대가 모르는 종목」은 `not_found`다** (2026-09-11 사용자 요청 7).
+
+			예전에는 모든 실패가 `error`였다. 그래서 `SelectTargets`의 30일 not_found
+			쿨다운이 걸리지 않았고, 상대에게 아예 없는 종목을 **매일 다시** 물었다.
+
+			실측(2026-09-11 `symbol_sync_state`, kind='warnings'): 17,918행 중
+			**3,388행(19%)이 `toss api 404 stock-not-found`**였고 전부 `error`였다.
+			이 잡이 쓰는 Toss 호출의 5분의 1이 「내일도 같은 답이 올 질문」이었던 셈이고,
+			그 호출들이 `limit=5` 버킷을 함께 태우고 있었다(같은 잡의 로그가
+			`remaining=1`로 가득하다).
+
+			일시적인 실패(429·타임아웃)는 그대로 `error`다 — 그쪽은 다음 회차에 다시
+			물어야 나아진다. 갈라야 할 것은 「지금 안 되는 것」과 「원래 없는 것」이다.
+		*/
+		status := model.SyncError
+		if toss.IsStockNotFound(err) {
+			status = model.SyncNotFound
+		}
 		stats.record(ctx, s.sync, repository.SyncOutcome{
 			Kind: model.SyncKindWarnings, Symbol: symbol,
-			Status: model.SyncError, Message: err.Error(),
+			Status: status, Message: err.Error(),
 		})
 		return
 	}

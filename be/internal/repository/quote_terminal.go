@@ -201,6 +201,83 @@ func (r *QuoteTerminalRepo) UpsertLastPrice(ctx context.Context, symbol string, 
 	return err
 }
 
+// LastPriceRow is one symbol's last traded price for the batch upsert below.
+type LastPriceRow struct {
+	Symbol    string
+	LastPrice float64
+	Currency  model.QuoteCurrency
+}
+
+// lastPriceUpsertChunk bounds how many rows one statement carries.
+//
+// 400은 이 리포지터리의 다른 배치와 같은 값이다(daily_closes.go). 한 문장이
+// 잡는 행 락 범위를 그 정도로 묶어 두면, 가격 폴러가 도는 동안 같은 표를 읽는
+// 요청이 오래 기다리지 않는다.
+const lastPriceUpsertChunk = 400
+
+// UpsertLastPrices writes many symbols in one statement per chunk.
+//
+// **왜 배치인가.** 가격 폴러는 1초마다 pinned 전체를 갱신하는데, 예전에는
+// 심볼마다 `UpsertLastPrice`를 한 번씩 불렀다. 실측(2026-08-24, 유휴):
+// `Com_insert = 18/s`인데 `Innodb_rows_inserted = 0/s` — 초당 18건의 문장이
+// **한 행도 바꾸지 않고** redo 로그와 행 락만 소비하고 있었다. 사용자가 늘면
+// 이 숫자는 pinned 크기만큼 커진다(docs/PERFORMANCE_AUDIT.md P0-1).
+//
+// 값이 바뀌었는지는 **호출자가** 판단한다. 이 표에는 갱신 시각 컬럼이 없어
+// 리포지터리가 스스로 비교하려면 매번 읽어야 하는데, 그러면 쓰기를 줄이려다
+// 읽기를 늘리는 셈이 된다.
+func (r *QuoteTerminalRepo) UpsertLastPrices(ctx context.Context, rows []LastPriceRow) error {
+	if !r.HasTable(ctx) || len(rows) == 0 {
+		return nil
+	}
+
+	// 같은 심볼이 두 번 들어오면 한 문장 안에서 자기 자신과 충돌한다.
+	// 마지막 값을 남긴다 — 폴러가 주는 순서에서 뒤가 더 새 값이다.
+	seen := make(map[string]int, len(rows))
+	deduped := make([]LastPriceRow, 0, len(rows))
+	for _, row := range rows {
+		sym := strings.ToUpper(strings.TrimSpace(row.Symbol))
+		if sym == "" || row.LastPrice <= 0 {
+			continue
+		}
+		row.Symbol = sym
+		if row.Currency == "" {
+			row.Currency = model.CurrencyKRW
+		}
+		if idx, ok := seen[sym]; ok {
+			deduped[idx] = row
+			continue
+		}
+		seen[sym] = len(deduped)
+		deduped = append(deduped, row)
+	}
+	if len(deduped) == 0 {
+		return nil
+	}
+
+	for start := 0; start < len(deduped); start += lastPriceUpsertChunk {
+		end := min(start+lastPriceUpsertChunk, len(deduped))
+		chunk := deduped[start:end]
+
+		var sb strings.Builder
+		sb.WriteString(`INSERT INTO symbol_last_prices (symbol, last_price, currency) VALUES `)
+		args := make([]any, 0, len(chunk)*3)
+		for i, row := range chunk {
+			if i > 0 {
+				sb.WriteString(",")
+			}
+			sb.WriteString("(?, ?, ?)")
+			args = append(args, row.Symbol, row.LastPrice, string(row.Currency))
+		}
+		sb.WriteString(` ON DUPLICATE KEY UPDATE last_price = VALUES(last_price), currency = VALUES(currency)`)
+
+		if _, err := r.db.ExecContext(ctx, sb.String(), args...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (r *QuoteTerminalRepo) GetLastPrice(ctx context.Context, symbol string) (toss.PriceResponse, bool) {
 	prices := r.GetLastPrices(ctx, []string{symbol})
 	p, ok := prices[strings.ToUpper(strings.TrimSpace(symbol))]

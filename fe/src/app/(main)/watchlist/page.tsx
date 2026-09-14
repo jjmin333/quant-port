@@ -1,7 +1,13 @@
 import { Suspense } from "react";
 import { AuthRequiredShell } from "@/components/auth/auth-required-shell";
 import { WatchlistClient } from "@/components/watchlist/watchlist-client";
-import { MENU_COPY } from "@/lib/menu-copy";
+import { pageMetadata } from "@/lib/seo";
+
+export const metadata = pageMetadata({
+  title: "관심 종목",
+  description: "담은 가격과 함께 기록한 관심 종목 목록입니다.",
+  noindex: true,
+});
 
 export default function WatchlistPage() {
   return (
@@ -13,8 +19,6 @@ export default function WatchlistPage() {
       }
     >
       <AuthRequiredShell
-        title={MENU_COPY.watchlist.title}
-        subtitle={MENU_COPY.watchlist.subtitle}
         loginNext="/watchlist"
         menu="watchlist"
       >

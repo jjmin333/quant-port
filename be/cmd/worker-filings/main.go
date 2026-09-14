@@ -46,6 +46,16 @@ type slot struct {
 }
 
 var slots = []slot{
+	/*
+		유니버스가 **가장 먼저** 돈다 (01:00).
+
+		그날의 다른 잡들이 이 판정을 근거로 대상을 고른다 — 경고 스윕(01:30)과
+		종가 구멍 메우기가 「토스가 모르는 종목」을 빼고 시작할 수 있어야 한다.
+		거꾸로 두면 하루치 404를 그대로 치르고 다음 날부터 줄어든다.
+
+		호출이 일곱뿐이라 30분 여유는 넉넉하다(마켓 사이 2초 간격 + 응답 시간).
+	*/
+	{model.BatchTossUniverse, 1, 0},
 	{model.BatchWarnings, 1, 30},
 	{model.BatchInsiderOverseas, 7, 0},
 	{model.BatchFinancialsOverseas, 9, 0},
@@ -147,6 +157,10 @@ func dispatch(ctx context.Context, deps *service.WorkerDeps, job model.BatchJobI
 		return deps.Reference.IngestDisclosures(ctx, limit)
 	case model.BatchWarnings:
 		return deps.Reference.IngestWarnings(ctx, limit)
+	case model.BatchTossUniverse:
+		// limit 은 쓰지 않는다 — 마켓 일곱을 다 받아야 반영되는 잡이라
+		// 「몇 개만」이 성립하지 않는다(TossUniverseService.Run 머리글).
+		return deps.TossUniverse.Run(ctx)
 	}
 	return nil, "", nil
 }

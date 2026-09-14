@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/enact/quant-port/be/internal/marketdata/calendar"
+	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/toss"
 )
 
@@ -22,8 +23,13 @@ func neverRan(toss.MarketCountry, string) bool { return false }
 
 func TestBatchWindowScalesWithPlannedWork(t *testing.T) {
 	small := batchWindow(10)
-	if want := 10*llmRefreshSpacing + batchStartMargin; small != want {
+	if want := 10*llmBatchPacePerSymbol + batchStartMargin; small != want {
 		t.Fatalf("batchWindow(10) = %s, want %s", small, want)
+	}
+	// 상한(350)만큼 계획해도 창이 그날 마감~기한 사이에 들어와야 한다. 넘치면
+	// 매일 기한에서 잘린 꼬리가 이월된다.
+	if got := batchWindow(model.DefaultLLMSettings().DailyCap); got > batchMaxWindow {
+		t.Fatalf("batchWindow(DailyCap) = %s, exceeds the %s ceiling", got, batchMaxWindow)
 	}
 	// A cap large enough to overrun the ceiling must clamp, or the KR run
 	// would start in the middle of the night.
@@ -32,10 +38,16 @@ func TestBatchWindowScalesWithPlannedWork(t *testing.T) {
 	}
 }
 
-func TestNextBatchWindowFinishesBeforeMarketOpen(t *testing.T) {
-	// Monday 2026-08-10, 22:00 KST — after that day's KR deadline, and after
-	// the US window for the NY day that was still in progress.
-	now := time.Date(2026, 8, 10, 22, 0, 0, 0, kstZone)
+/*
+국내 요약은 **그날 마감 뒤**에 돈다.
+
+예전에는 다음 개장에서 거꾸로 세어 08:00에 돌렸는데, 이 배치가 읽는 값은 마지막으로
+끝난 세션의 종가·지표뿐이라 마감 직후에 만들든 다음 날 아침에 만들든 내용이 같았다.
+같은 값을 열여섯 시간 늦게 만들면서, 그동안 화면에는 **어제 종가 분석**이 떠 있었다.
+*/
+func TestNextBatchWindowRunsAfterKRClose(t *testing.T) {
+	// Monday 2026-08-10, 12:00 KST — 장중. 다음은 그날 마감 뒤의 국내 창이다.
+	now := time.Date(2026, 8, 10, 12, 0, 0, 0, kstZone)
 
 	window, ok := nextBatchWindow(now, 100, neverRan)
 	if !ok {
@@ -46,27 +58,29 @@ func TestNextBatchWindowFinishesBeforeMarketOpen(t *testing.T) {
 	}
 
 	deadline := window.deadline.In(kstZone)
-	wantDeadline := time.Date(2026, 8, 11, 8, 0, 0, 0, kstZone)
+	wantDeadline := time.Date(2026, 8, 10, 18, 30, 0, 0, kstZone)
 	if !deadline.Equal(wantDeadline) {
 		t.Fatalf("deadline = %s, want %s", deadline, wantDeadline)
 	}
-	// The whole point: finished before the 09:00 KST bell.
-	if deadline.Hour() >= 9 {
-		t.Fatalf("KR deadline %s is not before the 09:00 open", deadline)
+	// 요점: 그날 15:30 마감보다 뒤이고, 같은 날 안에서 끝난다.
+	if deadline.Hour() < 16 {
+		t.Fatalf("KR deadline %s must fall after the 15:30 close", deadline)
+	}
+	// 종가 적재(15:50~16:15)가 끝나기 전에는 시작하지 않는다.
+	earliest := time.Date(2026, 8, 10, 16, 30, 0, 0, kstZone)
+	if window.startAt.Before(earliest) {
+		t.Fatalf("startAt = %s, must not precede %s (close ingest)", window.startAt.In(kstZone), earliest)
 	}
 	if !window.startAt.Before(window.deadline) {
 		t.Fatalf("start %s must precede deadline %s", window.startAt, window.deadline)
 	}
-	if got := window.deadline.Sub(window.startAt); got != batchWindow(100) {
-		t.Fatalf("window length = %s, want %s", got, batchWindow(100))
-	}
 }
 
-func TestNextBatchWindowUSFinishesBeforeUSOpen(t *testing.T) {
-	// Monday 2026-08-10, 10:00 KST. The KR deadline has passed, so the next
-	// run is the US one preparing for that night's session — which in NY is
-	// still Monday morning.
-	now := time.Date(2026, 8, 10, 10, 0, 0, 0, kstZone)
+// 해외도 같다 — 16:00 ET 마감 뒤, 적재(≈17:37 ET)가 끝난 다음이다.
+func TestNextBatchWindowRunsAfterUSClose(t *testing.T) {
+	// Monday 2026-08-10, 19:00 KST. 그날 국내 창(마감 18:30)은 지났으므로 다음은
+	// 뉴욕 월요일 장이 끝난 뒤의 해외 창이다.
+	now := time.Date(2026, 8, 10, 19, 0, 0, 0, kstZone)
 
 	window, ok := nextBatchWindow(now, 100, neverRan)
 	if !ok {
@@ -77,21 +91,47 @@ func TestNextBatchWindowUSFinishesBeforeUSOpen(t *testing.T) {
 	}
 
 	deadline := window.deadline.In(nyZone)
-	wantDeadline := time.Date(2026, 8, 10, 8, 30, 0, 0, nyZone)
+	wantDeadline := time.Date(2026, 8, 10, 20, 0, 0, 0, nyZone)
 	if !deadline.Equal(wantDeadline) {
 		t.Fatalf("deadline = %s, want %s", deadline, wantDeadline)
 	}
-	// 08:30 ET is an hour before the 09:30 ET open in either DST state,
-	// which lands at or before 22:30 KST year-round.
-	if kst := window.deadline.In(kstZone); kst.Hour() > 22 || (kst.Hour() == 22 && kst.Minute() > 30) {
-		t.Fatalf("US deadline %s is later than 22:30 KST", kst)
+	if deadline.Hour() < 16 {
+		t.Fatalf("US deadline %s must fall after the 16:00 ET close", deadline)
+	}
+	earliest := time.Date(2026, 8, 10, 18, 0, 0, 0, nyZone)
+	if window.startAt.In(nyZone).Before(earliest) {
+		t.Fatalf("startAt = %s, must not precede %s (close ingest)", window.startAt.In(nyZone), earliest)
+	}
+}
+
+/*
+큰 DailyCap이 창을 종가 적재 앞으로 밀지 못한다.
+
+기한에서 계획한 일감만큼 거꾸로 빼는 구조라, 상한(`batchMaxWindow`, 2시간)까지 당겨지면
+국내는 16:30 이전이 된다. 그 시각에는 그날 종가가 아직 표에 없어 **어제 값으로 오늘
+분석을 만든다** — `earliestOn`이 막는 것이 정확히 이 경우다.
+*/
+func TestNextBatchWindowNeverStartsBeforeCloseIngest(t *testing.T) {
+	now := time.Date(2026, 8, 10, 0, 30, 0, 0, kstZone)
+
+	window, ok := nextBatchWindow(now, 100_000, neverRan)
+	if !ok {
+		t.Fatal("expected a window")
+	}
+	if window.schedule.market != toss.MarketKR {
+		t.Fatalf("market = %s, want KR", window.schedule.market)
+	}
+	earliest := time.Date(2026, 8, 10, 16, 30, 0, 0, kstZone)
+	if window.startAt.In(kstZone).Before(earliest) {
+		t.Fatalf("startAt = %s, want not before %s even with a huge cap",
+			window.startAt.In(kstZone), earliest)
 	}
 }
 
 func TestNextBatchWindowSkipsHolidays(t *testing.T) {
 	// 2026-08-15 (광복절) is a KRX holiday and falls on a Saturday, so the
-	// next KR run is Monday the 17th.
-	now := time.Date(2026, 8, 14, 9, 0, 0, 0, kstZone)
+	// next KR run is Monday the 17th. 19:00 금요일 — 그날 창(마감 18:30)은 이미 지났다.
+	now := time.Date(2026, 8, 14, 19, 0, 0, 0, kstZone)
 
 	var krWindow batchRunWindow
 	found := false
@@ -112,7 +152,7 @@ func TestNextBatchWindowSkipsHolidays(t *testing.T) {
 		t.Fatal("expected a KR window")
 	}
 	got := krWindow.deadline.In(kstZone)
-	want := time.Date(2026, 8, 17, 8, 0, 0, 0, kstZone)
+	want := time.Date(2026, 8, 17, 18, 30, 0, 0, kstZone)
 	if !got.Equal(want) {
 		t.Fatalf("KR deadline = %s, want %s (weekend + 광복절 skipped)", got, want)
 	}
@@ -144,10 +184,9 @@ func TestNextBatchWindowSkipsAlreadyRecordedRun(t *testing.T) {
 }
 
 func TestNextBatchWindowCatchesUpMidWindow(t *testing.T) {
-	// Process restarts at 07:50 KST, inside the KR window (07:00–08:00 for
-	// a 50-symbol plan) with no run recorded: it should start immediately
-	// rather than wait a day.
-	now := time.Date(2026, 8, 10, 7, 50, 0, 0, kstZone)
+	// Process restarts at 18:20 KST, inside the KR window (계획 50건이면 18:15~18:30)
+	// with no run recorded: it should start immediately rather than wait a day.
+	now := time.Date(2026, 8, 10, 18, 20, 0, 0, kstZone)
 
 	window, ok := nextBatchWindow(now, 50, neverRan)
 	if !ok {

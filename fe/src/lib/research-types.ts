@@ -264,6 +264,17 @@ export type ResearchComment = {
   createdAt: string;
   updatedAt: string;
   replies?: ResearchComment[];
+
+  /** 이 댓글의 추천 수와 내가 눌렀는지 (2026-09-14 요청 3). */
+  likeCount: number;
+  liked: boolean;
+  /**
+   * 글쓴이의 누적 활동 수 — 발행한 리포트 + 남긴 댓글.
+   *
+   * 화면은 이 값을 **구간으로 접어** 보여준다(`activityBadge`). 정확한 수는 읽는
+   * 사람에게 아무 결정도 바꾸지 않으면서 그 사람의 활동량만 필요 이상으로 드러낸다.
+   */
+  authorActivity?: number;
 };
 
 /** Reader score of the *argument*, split so raters must say what was good. */
@@ -365,6 +376,9 @@ export type ResearchPreview = {
   expectedValue?: ResearchExpectedValue;
   eligible: boolean;
   ineligibleReason?: string;
+  /** 하루 발행 한도와 오늘 남은 수. 발행 확인 화면이 대가를 말할 수 있게 한다. */
+  dailyCap?: number;
+  dailyRemaining?: number;
 };
 
 export type ResearchRevision = {

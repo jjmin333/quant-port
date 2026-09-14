@@ -1,6 +1,7 @@
 package sample
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -10,6 +11,125 @@ import (
 func now(t *testing.T) time.Time {
 	t.Helper()
 	return time.Date(2026, 8, 16, 3, 0, 0, 0, time.UTC)
+}
+
+// stubQuotes stands in for the market data the fixtures now read.
+//
+// The menus used to carry their own prices, so a test could assert "the sample
+// shows a gain next to a loss" directly. With real quotes that property belongs
+// to the market, not to this package — what is still ours, and what these tests
+// pin down, is that each number is *derived from* the right source: 담은 뒤 from
+// the close on the day the row was created, 전일·전주·전월 from the metrics the
+// signed-in list uses, 목표가 from the 등록가.
+type stubQuotes struct {
+	current map[string]float64
+	// history is keyed by closeKey(symbol, date) so one symbol can have a
+	// different close on each fixture date.
+	history map[string]float64
+	bars    map[string][]model.Candle
+	// metricsFor records which addedAt each symbol was asked about.
+	askedAdded map[string]time.Time
+}
+
+func (s *stubQuotes) BatchQuoteSummaries(_ context.Context, symbols []string) []model.QuoteSummary {
+	out := make([]model.QuoteSummary, 0, len(symbols))
+	for _, sym := range symbols {
+		price, ok := s.current[sym]
+		if !ok {
+			continue
+		}
+		out = append(out, model.QuoteSummary{Symbol: sym, CurrentPrice: price})
+	}
+	return out
+}
+
+func (s *stubQuotes) WatchlistMetricsFor(
+	_ context.Context, item *model.QuoteSummary, addedAt time.Time,
+) *model.WatchlistMetrics {
+	if item == nil || item.CurrentPrice <= 0 {
+		return nil
+	}
+	if s.askedAdded == nil {
+		s.askedAdded = map[string]time.Time{}
+	}
+	s.askedAdded[item.Symbol] = addedAt
+
+	// Stand-in numbers: the real implementation is exercised by the service
+	// package. What matters here is that the block reaches the payload at all.
+	week := item.CurrentPrice * 0.97
+	month := item.CurrentPrice * 0.92
+	weekRate := (item.CurrentPrice - week) / week * 100
+	monthRate := (item.CurrentPrice - month) / month * 100
+	item.ChangeRate = 1.5
+	return &model.WatchlistMetrics{
+		AddedAt:             addedAt.UTC().Format(time.RFC3339),
+		ChangeRatePrevClose: 1.5,
+		PrevClose:           item.CurrentPrice * 0.985,
+		PrevWeekClose:       week,
+		ChangeRatePrevWeek:  &weekRate,
+		PrevMonthClose:      month,
+		ChangeRatePrevMonth: &monthRate,
+		Week52High:          item.CurrentPrice * 1.3,
+		Week52Low:           item.CurrentPrice * 0.6,
+	}
+}
+
+func (s *stubQuotes) DailyCloseAtOrBefore(
+	_ context.Context, symbol string, cutoff time.Time,
+) (float64, bool) {
+	v, ok := s.history[closeKey(symbol, cutoff)]
+	if !ok || v <= 0 {
+		return 0, false
+	}
+	return v, true
+}
+
+func (s *stubQuotes) DailyBars(_ context.Context, symbol string, _ int) []model.Candle {
+	return s.bars[symbol]
+}
+
+// newStub gives every fixture symbol a current price and a close on each date
+// the fixtures ask about. Half the symbols are seeded to have risen since they
+// were added and half to have fallen, so the direction-sensitive assertions
+// below test the derivation rather than the market.
+func newStub(t *testing.T, at time.Time) *stubQuotes {
+	t.Helper()
+	current := map[string]float64{
+		"005930": 270000, "035720": 52000, "000660": 980000,
+		"042660": 84300, "NVDA": 215.15, "AAPL": 268.40,
+	}
+	// gainers rose since purchase, losers fell.
+	factor := map[string]float64{
+		"005930": 0.55, "000660": 0.70, "NVDA": 0.80, // bought cheaper → gain
+		"035720": 1.35, "AAPL": 1.20, "042660": 1.10, // bought dearer → loss
+	}
+
+	s := &stubQuotes{
+		current: current,
+		history: map[string]float64{},
+		bars:    map[string][]model.Candle{},
+	}
+
+	// Every day the fixtures could reference.
+	for sym, price := range current {
+		for d := 0; d <= 400; d++ {
+			day := ago(at, d)
+			s.history[closeKey(sym, endOfDay(day))] = price * factor[sym]
+		}
+		// A flat series is enough: rangeSince only needs highs and lows.
+		bars := make([]model.Candle, 0, 120)
+		for d := 120; d >= 0; d-- {
+			day := ago(at, d).In(model.KST)
+			bars = append(bars, model.Candle{
+				Time:  day.Format("2006-01-02"),
+				High:  price * 1.05,
+				Low:   price * 0.85,
+				Close: price,
+			})
+		}
+		s.bars[sym] = bars
+	}
+	return s
 }
 
 // A sample exists to show what the feature does, so the thing worth asserting
@@ -123,29 +243,80 @@ func TestStampDatesStayRelativeToNow(t *testing.T) {
 // back on the empty screen the sample exists to replace.
 func TestEveryMenuFixtureIsPopulated(t *testing.T) {
 	at := now(t)
+	ctx := context.Background()
+	q := newStub(t, at)
+
 	if len(Stamps(at)) == 0 {
 		t.Error("stamps fixture is empty")
 	}
-	if len(Watchlist(at)) == 0 {
+	if len(Watchlist(ctx, at, q)) == 0 {
 		t.Error("watchlist fixture is empty")
 	}
-	if len(Holdings(at)) == 0 {
+	if len(Holdings(ctx, at, q)) == 0 {
 		t.Error("holdings fixture is empty")
 	}
-	if len(Journal(at)) == 0 {
+	if len(Journal(ctx, at, q)) == 0 {
 		t.Error("journal fixture is empty")
 	}
-	if len(Targets(at)) == 0 {
+	if len(Targets(ctx, at, q)) == 0 {
 		t.Error("targets fixture is empty")
 	}
 }
 
-// 손익이 한쪽으로만 쏠린 표는 화면이 무엇을 구분해 보여주는지 알려주지 못한다.
-func TestHoldingsAndWatchlistShowBothDirections(t *testing.T) {
+// 이 테스트가 잡는 것: 「전주」·「전월」 열이 모든 행에서 —로 뜨던 버그. 원인은 DB에
+// 종가가 없어서가 아니라 예시 payload가 그 블록을 아예 안 실어 보낸 것이었다.
+func TestWatchlistCarriesPeriodMetrics(t *testing.T) {
 	at := now(t)
+	q := newStub(t, at)
+	rows := Watchlist(context.Background(), at, q)
+	if len(rows) == 0 {
+		t.Fatal("watchlist fixture is empty")
+	}
+	for _, w := range rows {
+		if w.Metrics == nil {
+			t.Fatalf("%s: watchlistMetrics 없음 — 전일·전주·전월이 전부 —로 뜬다", w.Symbol)
+		}
+		if w.Metrics.ChangeRatePrevWeek == nil {
+			t.Errorf("%s: 전주 등락률이 비었다", w.Symbol)
+		}
+		if w.Metrics.ChangeRatePrevMonth == nil {
+			t.Errorf("%s: 전월 등락률이 비었다", w.Symbol)
+		}
+		if w.Metrics.AddedAt != w.CreatedAt {
+			t.Errorf("%s: metrics.addedAt=%q, row.createdAt=%q — 둘이 갈리면 「담은 뒤」 기준일이 두 개가 된다",
+				w.Symbol, w.Metrics.AddedAt, w.CreatedAt)
+		}
+		if w.Week52High <= 0 || w.Week52Low <= 0 {
+			t.Errorf("%s: 52주 레인지가 비었다 — 레인지 바가 안 그려진다", w.Symbol)
+		}
+	}
+}
+
+// 현재가·담은 가격이 픽스처 상수가 아니라 시세·과거 종가에서 와야 한다.
+func TestWatchlistPricesComeFromMarketData(t *testing.T) {
+	at := now(t)
+	q := newStub(t, at)
+	for _, w := range Watchlist(context.Background(), at, q) {
+		if got, want := w.Price, q.current[w.Symbol]; got != want {
+			t.Errorf("%s: price=%v, 시세는 %v — 현재가가 시세에서 오지 않았다", w.Symbol, got, want)
+		}
+		added, _ := time.Parse(time.RFC3339, w.CreatedAt)
+		want := q.history[closeKey(w.Symbol, endOfDay(added))]
+		if w.AddedPrice != want {
+			t.Errorf("%s: addedPrice=%v, 담은 날 종가는 %v", w.Symbol, w.AddedPrice, want)
+		}
+	}
+}
+
+// 담은 뒤·평단은 방향이 갈려야 손익 색이 양쪽 다 나온다. 시세는 통제할 수 없으므로
+// 스텁으로 양쪽을 만들고, **파생이 방향을 옳게 옮기는지**를 본다.
+func TestHoldingsAndWatchlistDeriveBothDirections(t *testing.T) {
+	at := now(t)
+	ctx := context.Background()
+	q := newStub(t, at)
 
 	var gain, loss int
-	for _, h := range Holdings(at) {
+	for _, h := range Holdings(ctx, at, q) {
 		if h.AvgPrice == nil {
 			t.Fatalf("%s: holdings fixture needs an average price", h.Symbol)
 		}
@@ -156,11 +327,11 @@ func TestHoldingsAndWatchlistShowBothDirections(t *testing.T) {
 		}
 	}
 	if gain == 0 || loss == 0 {
-		t.Errorf("보유 샘플이 이익 %d건 손실 %d건 — 손익 색이 한쪽만 나온다", gain, loss)
+		t.Errorf("보유 파생이 이익 %d건 손실 %d건 — 평단이 매수일 종가를 안 따라간다", gain, loss)
 	}
 
 	var up, down int
-	for _, w := range Watchlist(at) {
+	for _, w := range Watchlist(ctx, at, q) {
 		if w.AddedPrice == 0 {
 			t.Errorf("%s: 담은 가격이 없으면 「담은 뒤」 열이 —로 남는다", w.Symbol)
 		}
@@ -171,14 +342,31 @@ func TestHoldingsAndWatchlistShowBothDirections(t *testing.T) {
 		}
 	}
 	if up == 0 || down == 0 {
-		t.Errorf("관심 샘플이 상승 %d건 하락 %d건 — 「담은 뒤」 열의 한쪽이 안 보인다", up, down)
+		t.Errorf("관심 파생이 상승 %d건 하락 %d건 — 「담은 뒤」가 담은 날 종가를 안 따라간다", up, down)
+	}
+}
+
+// 평단은 **산 날**의 종가여야 한다. 아무 날짜나 쓰면 담은 뒤 수익률이 조용히 틀린다.
+func TestHoldingsAveragePriceIsTheCloseOnTheBuyDate(t *testing.T) {
+	at := now(t)
+	q := newStub(t, at)
+	bySymbol := map[string]holdingSeed{}
+	for _, s := range holdingSeeds {
+		bySymbol[s.symbol] = s
+	}
+	for _, h := range Holdings(context.Background(), at, q) {
+		seed := bySymbol[h.Symbol]
+		want := q.history[closeKey(h.Symbol, endOfDay(ago(at, seed.boughtDaysAgo)))]
+		if h.AvgPrice == nil || *h.AvgPrice != want {
+			t.Errorf("%s: avgPrice=%v, %d일 전 종가는 %v", h.Symbol, h.AvgPrice, seed.boughtDaysAgo, want)
+		}
 	}
 }
 
 // 고정 메모가 없으면 「고정한 메모」 카드가 샘플에서도 비어 있다.
 func TestJournalHasPinnedAndLinkedNotes(t *testing.T) {
 	var pinned, linked int
-	for _, n := range Journal(now(t)) {
+	for _, n := range Journal(context.Background(), now(t), newStub(t, now(t))) {
 		if n.Pinned {
 			pinned++
 		}
@@ -194,17 +382,77 @@ func TestJournalHasPinnedAndLinkedNotes(t *testing.T) {
 	}
 }
 
-// 목표를 이미 넘긴 행이 하나는 있어야 「도달」 상태가 화면에 나온다.
-func TestTargetsIncludeAReachedOne(t *testing.T) {
-	var reached, pending int
-	for _, tg := range Targets(now(t)) {
-		if tg.Price >= tg.TargetPrice {
-			reached++
-		} else {
-			pending++
+// 「작성 당시 → 현재」 띠는 양쪽 끝이 다 있어야 그려진다.
+func TestJournalLinkedNotesHaveBothPriceEnds(t *testing.T) {
+	at := now(t)
+	q := newStub(t, at)
+	for _, n := range Journal(context.Background(), at, q) {
+		if n.Symbol == "" {
+			continue
+		}
+		if n.PriceAtWrite == nil || *n.PriceAtWrite <= 0 {
+			t.Errorf("%s: 작성 당시 가격이 없다", n.Symbol)
+		}
+		if n.Price <= 0 {
+			t.Errorf("%s: 현재가가 없다", n.Symbol)
+		}
+		if n.PriceDate == "" {
+			t.Errorf("%s: 작성 당시 가격의 날짜가 없다", n.Symbol)
 		}
 	}
-	if reached == 0 || pending == 0 {
-		t.Errorf("목표가 샘플이 도달 %d건 미도달 %d건 — 두 상태가 다 나와야 한다", reached, pending)
+}
+
+// 목표가·손절가는 등록가에서 파생된다 — 고정 숫자를 쓰면 실제 시세가 그 위로
+// 지나가는 순간 모든 행이 「도달」이 되고 다른 상태가 화면에서 사라진다.
+func TestTargetLevelsDeriveFromTheBasePrice(t *testing.T) {
+	at := now(t)
+	q := newStub(t, at)
+	bySymbol := map[string]targetSeed{}
+	for _, s := range targetSeeds {
+		bySymbol[s.symbol] = s
+	}
+
+	var withStop, withSecond int
+	for _, tg := range Targets(context.Background(), at, q) {
+		seed := bySymbol[tg.Symbol]
+		if tg.BasePrice == nil || *tg.BasePrice <= 0 {
+			t.Fatalf("%s: 등록가가 없다", tg.Symbol)
+		}
+		base := *tg.BasePrice
+		if want := q.history[closeKey(tg.Symbol, endOfDay(ago(at, seed.daysAgo)))]; base != want {
+			t.Errorf("%s: basePrice=%v, 등록일 종가는 %v", tg.Symbol, base, want)
+		}
+		if want := roundTick(base*(1+seed.targetPct/100), seed.currency); tg.TargetPrice != want {
+			t.Errorf("%s: targetPrice=%v, 등록가 %v의 %+.0f%%는 %v",
+				tg.Symbol, tg.TargetPrice, base, seed.targetPct, want)
+		}
+		if tg.StopPrice != nil {
+			withStop++
+			if *tg.StopPrice >= base {
+				t.Errorf("%s: 손절가 %v가 등록가 %v보다 높다", tg.Symbol, *tg.StopPrice, base)
+			}
+		}
+		if tg.TargetPrice2 != nil {
+			withSecond++
+			if *tg.TargetPrice2 <= tg.TargetPrice {
+				t.Errorf("%s: 2차 목표 %v가 1차 %v 이하다", tg.Symbol, *tg.TargetPrice2, tg.TargetPrice)
+			}
+		}
+	}
+	if withStop == 0 {
+		t.Error("손절가가 있는 행이 없다 — 진행축의 손절 구간이 안 그려진다")
+	}
+	if withSecond == 0 {
+		t.Error("2차 목표가 있는 행이 없다 — 2단 목표 표시가 안 그려진다")
+	}
+	// 손절가 없는 행도 하나는 있어야 「선택」 필드가 비었을 때의 모양이 보인다.
+	var withoutStop bool
+	for _, s := range targetSeeds {
+		if s.stopPct == 0 {
+			withoutStop = true
+		}
+	}
+	if !withoutStop {
+		t.Error("손절가 없는 행이 없다 — 그 상태의 화면을 못 보여준다")
 	}
 }

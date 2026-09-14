@@ -24,10 +24,10 @@ export function NewsBreakingTicker({ article, badgeLabel, className }: NewsBreak
       )}
     >
       <Megaphone className="h-4 w-4 shrink-0 text-[var(--brand)]" aria-hidden />
-      <span className="shrink-0 rounded-md bg-[var(--brand-muted)] px-2 py-0.5 text-[11px] font-semibold text-[var(--brand)]">
+      <span className="shrink-0 rounded-md bg-[var(--brand-muted)] px-2 py-0.5 text-cell font-semibold text-[var(--brand)]">
         {badgeLabel}
       </span>
-      <p className="min-w-0 truncate text-[13px] font-medium leading-snug text-[var(--text-primary)]">
+      <p className="min-w-0 truncate text-note font-medium leading-snug text-[var(--text-primary)]">
         {newsDisplayHeadline(article)}
       </p>
     </div>

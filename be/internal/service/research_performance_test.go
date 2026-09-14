@@ -137,7 +137,7 @@ func TestJudgeResearchCallExpiredUnknownWithoutCloses(t *testing.T) {
 
 func TestJudgeResearchCallAlphaSubtractsBenchmark(t *testing.T) {
 	c := baseCall(t)
-	prices := researchSeries("2026-02-04", 110.0)          // +10%
+	prices := researchSeries("2026-02-04", 110.0)                     // +10%
 	bench := researchSeries("2026-01-05", 100.0, "2026-02-04", 104.0) // +4%
 	j := judgeResearchCall(c, mustTime(t, "2026-02-10T00:00:00Z"), prices, bench)
 	if j.Alpha == nil || math.Abs(*j.Alpha-6) > 1e-9 {

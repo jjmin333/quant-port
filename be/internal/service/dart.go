@@ -49,6 +49,15 @@ type DartClient struct {
 	mu         sync.RWMutex
 	bySymbol   map[string]string
 	loadedAt   time.Time
+	// financialAPIBase overrides fnlttSinglAcntAll endpoint (tests only).
+	financialAPIBase string
+
+	// paceMu는 DART의 최소 호출 간격을 **기다림으로** 지킨다.
+	// `apibudget.Check`는 간격이 안 지나면 에러만 낸다 — 재무 적재는 종목당
+	// 20회 넘게 연달아 부르므로, 그대로 두면 두 번째 호출부터 전부 거절되고
+	// 호출자는 그것을 「그 분기 미제출」로 오해해 조용히 건너뛴다.
+	// `MinInterval`이 있는 이유가 이것이다(budget.go 주석 참조).
+	paceMu sync.Mutex
 }
 
 func NewDartClient(cfg DartConfig, budget *apibudget.Manager) *DartClient {
@@ -132,6 +141,20 @@ func (d *DartClient) ensureCorpCodes(ctx context.Context) error {
 
 	u := fmt.Sprintf("https://opendart.fss.or.kr/api/corpCode.xml?crtfc_key=%s", url.QueryEscape(d.cfg.APIKey))
 	body, err := d.fetchURL(ctx, u)
+	// **거절도 HTTP 200으로 온다.** 한도가 소진되면 DART는 ZIP 대신
+	// `{"status":"020"}` JSON을 200으로 돌려준다 — 전송 계층은 성공이라
+	// `err == nil`이고, 그대로 두면 그 JSON을 ZIP으로 열려다 실패하거나
+	// **빈 corp_code 맵**이 만들어진다. 그러면 그 뒤 모든 종목이
+	// 「corp_code not found」로 떨어지고, 배치는 그것을 종목 문제로 오해한다
+	// (2026-09-02 실측: 705종목이 전부 그 이유로 아무것도 못 쓰고 ok로 보고됐다).
+	if err == nil {
+		if status, msg, isErr := dartErrorPayload(body); isErr {
+			err = fmt.Errorf("dart corpCode: %s %s", status, msg)
+			if status == "020" {
+				err = fmt.Errorf("%w (corpCode)", ErrDartQuotaExceeded)
+			}
+		}
+	}
 	if err != nil {
 		// Local cache fallback when live download fails (e.g. Go TLS on Windows).
 		if cached, cacheErr := loadDartCorpCodeCache(); cacheErr == nil {
@@ -161,6 +184,11 @@ func (d *DartClient) ensureCorpCodes(ctx context.Context) error {
 			continue
 		}
 		next[code] = strings.TrimSpace(item.CorpCode)
+	}
+	// 빈 맵을 설치하지 않는다. 한 번 설치되면 24시간 캐시로 굳어 그 사이 모든
+	// 종목이 「corp_code not found」가 된다 — 원인과 한참 떨어진 곳에서 터진다.
+	if len(next) == 0 {
+		return fmt.Errorf("dart corpCode: 목록이 비어 있다 (%d바이트 응답)", len(xmlBody))
 	}
 	d.bySymbol = next
 	d.loadedAt = time.Now()

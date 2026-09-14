@@ -76,6 +76,16 @@ func (s *StockSummaryService) RunScheduler(ctx context.Context) {
 		return
 	}
 
+	/*
+		한 슬롯은 한 번만 (SlotGate 머리글).
+
+		여기가 특히 중요한 이유: 이 잡은 LLM 호출이라 두 번 돌면 **그날 예산을 두 배로
+		쓴다.** `batchAlreadyRan`이 이미 같은 날 재실행을 막고 있지만, 그 판정은 원장에
+		기록이 남은 뒤에야 참이 된다 — 시계가 뒤로 밀려 같은 슬롯이 두 번 계산되는 창은
+		그 기록보다 앞이다.
+	*/
+	gate := NewSlotGate()
+
 	for {
 		settings := s.settings.Get(ctx)
 		window, ok := nextBatchWindow(time.Now(), settings.DailyCap, func(market toss.MarketCountry, tradeDate string) bool {
@@ -92,10 +102,12 @@ func (s *StockSummaryService) RunScheduler(ctx context.Context) {
 			}
 		}
 
-		select {
-		case <-ctx.Done():
+		// 한 슬롯은 한 번만 — LLM 배치는 두 번 돌면 그날 예산을 두 배로 쓴다.
+		if !WaitForSlot(ctx, window.startAt) {
 			return
-		case <-time.After(time.Until(window.startAt)):
+		}
+		if !gate.Allow(window.startAt) {
+			continue
 		}
 
 		s.runMarketBatch(ctx, window)
@@ -213,7 +225,7 @@ func (s *StockSummaryService) runMarketBatch(ctx context.Context, window batchRu
 		log.Printf("llm batch %s: %s is not a trading day — skipped", sched.market, tradeDate)
 		return nil, fmt.Errorf("%s 시장은 %s에 휴장입니다", sched.market, tradeDate)
 	}
-	if s.llm == nil || !s.llm.Enabled() {
+	if !s.llmForMarket(sched.market).Enabled() {
 		log.Printf("llm batch %s: llm disabled — skipped", sched.market)
 		return nil, fmt.Errorf("LLM이 비활성화되어 있습니다")
 	}
@@ -221,6 +233,15 @@ func (s *StockSummaryService) runMarketBatch(ctx context.Context, window batchRu
 		return nil, fmt.Errorf("%s 시장 배치가 이미 실행 중입니다", sched.market)
 	}
 	defer s.endMarketRun(sched.market)
+
+	/*
+		여기서부터가 **실제로 시도한 실행**이라 원장에 남긴다.
+
+		위의 이른 반환(휴장·LLM 비활성·중복 실행)은 남기지 않는다 — 휴장에 error 한
+		줄을 남기면 감시가 매 휴일마다 거짓 경보를 낸다. 「돌았어야 했는데 안 돌았다」의
+		판정은 원장이 아니라 달력이 한다(batch_expectation.go).
+	*/
+	ledgerID := s.beginLedgerRun(ctx, window)
 
 	settings := s.settings.Get(ctx)
 	run := &model.LLMBatchRun{
@@ -231,6 +252,7 @@ func (s *StockSummaryService) runMarketBatch(ctx context.Context, window batchRu
 		Running:    true,
 		Symbols:    []model.LLMBatchSymbolResult{},
 	}
+	defer func() { s.finishLedgerRun(ledgerID, run) }()
 
 	targets, err := s.batchTargets(ctx, sched.market, settings)
 	if err != nil {
@@ -246,8 +268,11 @@ func (s *StockSummaryService) runMarketBatch(ctx context.Context, window batchRu
 
 	planned, stopReason := s.applyBudget(ctx, targets.Targets, settings, run)
 	run.Planned = len(planned)
-	log.Printf("llm batch %s %s: %d ranked, %d after filters, %d planned (calls left %d, tokens left %d)",
+	run.BySource = model.CountBySource(planned)
+	log.Printf("llm batch %s %s: %d ranked, %d after filters, %d planned (레이더 %d · AI랭킹 %d · 보유관심 %d · 핀 %d, calls left %d, tokens left %d)",
 		sched.market, tradeDate, targets.Considered, len(targets.Targets), len(planned),
+		run.BySource[model.LLMBatchSourceRadar], run.BySource[model.LLMBatchSourceScore],
+		run.BySource[model.LLMBatchSourceInterest], run.BySource[model.LLMBatchSourcePinned],
 		run.CallsRemaining, run.TokensRemaining)
 
 	s.storeBatchRun(ctx, sched.market, tradeDate, run)
@@ -270,6 +295,76 @@ func (s *StockSummaryService) runMarketBatch(ctx context.Context, window batchRu
 	log.Printf("llm batch %s %s: done — %d ok, %d failed, %d skipped, %d tokens, stop=%s, carryover=%d",
 		sched.market, tradeDate, run.Succeeded, run.Failed, run.Skipped, run.TokensUsed, run.StopReason, len(remaining))
 	return run, nil
+}
+
+/*
+beginLedgerRun / finishLedgerRun — 예약 실행 한 번을 `batch_job_runs` 한 줄로.
+
+워커 잡들이 `RunScheduledJob`으로 남기는 것과 같은 모양이다. 여기서 그 함수를 그대로
+쓰지 못하는 이유는 하나뿐이다 — 이 실행은 중간에 「휴장이라 안 함」으로 빠질 수 있고,
+그 판단이 실행 함수 **안쪽**에 있다. `RunScheduledJob`은 부르기 전에 Begin을 하므로
+휴장마다 error 한 줄이 남는다.
+
+원장에는 **한 줄 요약만** 남긴다. 종목별 결과·토큰·이월은 Redis 기록이 계속 갖는다
+(`llm:batch:v1:*`) — 원장은 「돌았나·성공했나·언제였나」를 묻는 자리다.
+*/
+func (s *StockSummaryService) beginLedgerRun(ctx context.Context, window batchRunWindow) int64 {
+	if !window.ledger || s.batchRuns == nil {
+		return 0
+	}
+	jobID, ok := llmBatchJobID(window.schedule.market)
+	if !ok {
+		return 0
+	}
+	id, err := s.batchRuns.Begin(ctx, string(jobID), "schedule")
+	if err != nil {
+		log.Printf("llm batch %s: ledger begin: %v", window.schedule.market, err)
+		return 0
+	}
+	return id
+}
+
+func (s *StockSummaryService) finishLedgerRun(id int64, run *model.LLMBatchRun) {
+	if id == 0 || s.batchRuns == nil {
+		return
+	}
+	status := "done"
+	message := ""
+	var result map[string]any
+	switch {
+	case run == nil:
+		status = "error"
+		message = "실행 기록이 없습니다"
+	default:
+		message = fmt.Sprintf("대상 %d · 성공 %d · 실패 %d · 건너뜀 %d (%d토큰, stop=%s)",
+			run.Planned, run.Succeeded, run.Failed, run.Skipped, run.TokensUsed, run.StopReason)
+		result = map[string]any{
+			"tradeDate": run.TradeDate, "planned": run.Planned, "succeeded": run.Succeeded,
+			"failed": run.Failed, "tokensUsed": run.TokensUsed, "stopReason": run.StopReason,
+			"bySource": run.BySource, "carryover": len(run.Carryover),
+		}
+		// 한 종목도 못 돌았으면 성공이라고 부르지 않는다 — 예산이 0이거나 대상
+		// 선정이 깨진 날이 「정상 완료」로 보이면 감시가 무의미해진다.
+		if run.Planned > 0 && run.Succeeded == 0 {
+			status = "error"
+		}
+	}
+	payload, _ := json.Marshal(result)
+	// 부모 ctx가 이미 끝났을 수 있다(종료 중 마무리) — 기록은 남겨야 한다.
+	if err := s.batchRuns.Finish(context.Background(), id, status, message, string(payload)); err != nil {
+		log.Printf("llm batch: ledger finish: %v", err)
+	}
+}
+
+// llmBatchJobID maps a market onto its 배치 관리 job id.
+func llmBatchJobID(market toss.MarketCountry) (model.BatchJobID, bool) {
+	switch market {
+	case toss.MarketKR:
+		return model.BatchLLMSummaryDomestic, true
+	case toss.MarketUS:
+		return model.BatchLLMSummaryOverseas, true
+	}
+	return "", false
 }
 
 // batchTargets resolves the run's symbol list: carry-over first (they were
@@ -341,7 +436,7 @@ func (s *StockSummaryService) applyBudget(
 	settings model.LLMSettings,
 	run *model.LLMBatchRun,
 ) ([]model.LLMBatchTarget, string) {
-	head := s.llm.Headroom(ctx)
+	head := s.llmForMarket(toss.MarketCountry(run.Market)).Headroom(ctx)
 	avgTokens := s.batchAvgTokens(ctx)
 
 	limit := len(targets)
@@ -406,7 +501,7 @@ func (s *StockSummaryService) executeBatch(
 	cutReason string,
 ) []string {
 	run.StopReason = cutReason
-	spacing := s.batchSpacing(ctx)
+	spacing := s.batchSpacing(ctx, window.schedule.market)
 
 	for i, target := range planned {
 		if ctx.Err() != nil {
@@ -420,7 +515,7 @@ func (s *StockSummaryService) executeBatch(
 			run.StopReason = model.LLMBatchStopDeadline
 			return remainingSymbols(planned[i:])
 		}
-		if reason, ok := s.batchBudgetExhausted(ctx); ok {
+		if reason, ok := s.batchBudgetExhausted(ctx, window.schedule.market); ok {
 			run.StopReason = reason
 			return remainingSymbols(planned[i:])
 		}
@@ -457,7 +552,7 @@ func (s *StockSummaryService) executeBatch(
 
 		if stats.llmTokens > 0 {
 			run.TokensUsed += stats.llmTokens
-			spacing = s.recordBatchTokens(ctx, stats.llmTokens)
+			spacing = s.recordBatchTokens(ctx, stats.llmTokens, window.schedule.market)
 		}
 		run.Symbols = append(run.Symbols, result)
 		s.storeBatchRun(ctx, window.schedule.market, run.TradeDate, run)
@@ -469,8 +564,8 @@ func (s *StockSummaryService) executeBatch(
 // batchBudgetExhausted reports whether the day's remaining allowance has run
 // out mid-run — a concurrent translation burst can consume it while the batch
 // is walking its list.
-func (s *StockSummaryService) batchBudgetExhausted(ctx context.Context) (string, bool) {
-	head := s.llm.Headroom(ctx)
+func (s *StockSummaryService) batchBudgetExhausted(ctx context.Context, market toss.MarketCountry) (string, bool) {
+	head := s.llmForMarket(market).Headroom(ctx)
 	if head.Calls == 0 {
 		return model.LLMBatchStopQuota, true
 	}
@@ -483,9 +578,9 @@ func (s *StockSummaryService) batchBudgetExhausted(ctx context.Context) (string,
 // batchSpacing is the gap between calls: never below the provider's own
 // minimum interval, and stretched further when the observed token cost would
 // otherwise push the run past its share of the per-minute token ceiling.
-func (s *StockSummaryService) batchSpacing(ctx context.Context) time.Duration {
+func (s *StockSummaryService) batchSpacing(ctx context.Context, market toss.MarketCountry) time.Duration {
 	spacing := llmRefreshSpacing
-	limits := s.llm.Limits()
+	limits := s.llmForMarket(market).Limits()
 	if limits.TokensPerMinute <= 0 {
 		return spacing
 	}
@@ -516,7 +611,7 @@ func (s *StockSummaryService) batchAvgTokens(ctx context.Context) int64 {
 
 // recordBatchTokens folds one observed call into the running average and
 // returns the spacing to use for the next call.
-func (s *StockSummaryService) recordBatchTokens(ctx context.Context, tokens int64) time.Duration {
+func (s *StockSummaryService) recordBatchTokens(ctx context.Context, tokens int64, market toss.MarketCountry) time.Duration {
 	if s.redis != nil && tokens > 0 {
 		// Exponential moving average, weight 1/4 on the newest sample: fast
 		// enough to react to a prompt change, damped enough that one
@@ -525,7 +620,7 @@ func (s *StockSummaryService) recordBatchTokens(ctx context.Context, tokens int6
 		next := (prev*3 + tokens) / 4
 		_ = s.redis.Set(ctx, llmBatchAvgTokensKey, next, 30*24*time.Hour).Err()
 	}
-	return s.batchSpacing(ctx)
+	return s.batchSpacing(ctx, market)
 }
 
 func remainingSymbols(targets []model.LLMBatchTarget) []string {
@@ -633,18 +728,24 @@ func (s *StockSummaryService) BatchStatus(ctx context.Context) model.LLMBatchSta
 	}
 	settings := s.settings.Get(ctx)
 	out := model.LLMBatchStatus{
-		TargetMode: settings.TargetModeOrDefault(),
-		DailyCap:   settings.DailyCap,
-		Markets:    make([]model.LLMBatchMarketStatus, 0, len(batchSchedules)),
+		TargetMode:       settings.TargetModeOrDefault(),
+		DailyCap:         settings.DailyCap,
+		AvgTokensPerCall: s.batchAvgTokens(ctx),
+		Markets:          make([]model.LLMBatchMarketStatus, 0, len(batchSchedules)),
 	}
-	head := s.llm.Headroom(ctx)
-	out.CallsRemaining = head.Calls
-	out.TokensRemaining = head.DayTokens
-	out.AvgTokensPerCall = s.batchAvgTokens(ctx)
-
 	now := time.Now()
 	for _, sched := range batchSchedules {
 		status := model.LLMBatchMarketStatus{Market: string(sched.market)}
+		head := s.llmForMarket(sched.market).Headroom(ctx)
+		status.CallsRemaining = head.Calls
+		status.TokensRemaining = head.DayTokens
+		if out.CallsRemaining == 0 && out.TokensRemaining == 0 {
+			// Top-level remaining is the first market's bucket. When keys are
+			// split the admin page reads each market card instead; when they
+			// share a key both cards report the same numbers.
+			out.CallsRemaining = head.Calls
+			out.TokensRemaining = head.DayTokens
+		}
 		window, ok := nextBatchWindow(now, settings.DailyCap, func(market toss.MarketCountry, tradeDate string) bool {
 			// Only this market matters for its own "next run" line.
 			return market == sched.market && s.batchAlreadyRan(ctx, market, tradeDate)
@@ -721,5 +822,29 @@ func (s *StockSummaryService) PreviewBatchTargets(ctx context.Context, market to
 		}
 		return model.LLMBatchSelection{Market: string(market), Targets: prependPinned(pinned, catalog, nil)}, nil
 	}
-	return s.selectBatchTargets(ctx, market, pinned)
+	selection, err := s.selectBatchTargets(ctx, market, pinned)
+	if err != nil {
+		return model.LLMBatchSelection{}, err
+	}
+
+	/*
+		예산까지 적용해서 보여준다 — 「지금 돌리면 이만큼 돈다」여야 한다.
+
+		층이 셋이 되면서 후보가 시장당 700~800개가 됐다(실측 국내 807 · 해외 680).
+		그걸 그대로 「오늘 대상」이라고 내놓으면 화면은 800줄을 그리는데 실제로 도는
+		것은 상한만큼이라, 회전에서 오늘 차례가 아닌 종목까지 오늘 분석되는 것처럼
+		보인다. 실행 경로와 같은 `applyBudget`을 태워 잘린 수를 `over_budget`으로
+		함께 돌려준다.
+	*/
+	scratch := &model.LLMBatchRun{Market: string(market), Excluded: map[string]int{}}
+	planned, _ := s.applyBudget(ctx, selection.Targets, settings, scratch)
+	selection.Targets = planned
+	selection.BySource = model.CountBySource(planned)
+	if cut := scratch.Excluded[model.LLMBatchExcludeOverBudget]; cut > 0 {
+		if selection.Excluded == nil {
+			selection.Excluded = map[string]int{}
+		}
+		selection.Excluded[model.LLMBatchExcludeOverBudget] += cut
+	}
+	return selection, nil
 }

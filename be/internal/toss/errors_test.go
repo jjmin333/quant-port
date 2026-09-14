@@ -34,12 +34,13 @@ func TestNewErrorFromAPI_zeroWhenHeadersAbsent(t *testing.T) {
 	}
 }
 
-func TestNewErrorFromAPI_ignoresRateLimitHeadersOnNonRateLimitStatus(t *testing.T) {
-	err := newErrorFromAPI(http.StatusBadRequest, ErrorBody{}, RateLimitStatus{
-		Present:    true,
-		RetryAfter: 5,
-	})
-	if err.RetryAfter != 0 {
-		t.Fatalf("RetryAfter=%v want 0 on a non-429 status", err.RetryAfter)
+func TestIsRateLimitError(t *testing.T) {
+	err := newErrorFromAPI(http.StatusTooManyRequests, ErrorBody{Error: APIError{Code: "rate-limit-exceeded"}}, RateLimitStatus{})
+	if !IsRateLimitError(err) {
+		t.Fatal("429 rate-limit-exceeded should match")
+	}
+	other := newErrorFromAPI(http.StatusBadRequest, ErrorBody{Error: APIError{Code: "bad-request"}}, RateLimitStatus{})
+	if IsRateLimitError(other) {
+		t.Fatal("400 must not match")
 	}
 }

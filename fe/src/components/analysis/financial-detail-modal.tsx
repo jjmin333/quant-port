@@ -16,8 +16,16 @@ import { Loader2, X } from "lucide-react";
 import { fetchFinancialHistoryClient } from "@/lib/financial-history-api";
 import type { FinancialHistoryPeriod } from "@/lib/financial-history-types";
 import { formatFinancialAmount, formatPercent } from "@/lib/format";
+import {
+  PERIOD_AXIS_HEIGHT,
+  periodTickInterval,
+  periodTickRenderer,
+} from "@/components/analysis/period-axis-tick";
+import { buildPeriodTicks, periodTickIndex } from "@/lib/financial-period-label";
 import type { QuoteCurrency } from "@/lib/quotes-types";
 import { cn } from "@/lib/utils";
+import { toUserMessage } from "@/lib/error-message";
+import { buttonVariants } from "@/components/ui/button";
 
 export type FinancialDetailPreset = "profitability" | "growth" | "stability";
 
@@ -151,7 +159,7 @@ export function FinancialDetailModal({ open, onClose, symbol, currency, preset }
         if (!cancelled) setData(res.periods);
       })
       .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "재무 히스토리 조회 실패");
+        if (!cancelled) setError(toUserMessage(e, "재무 히스토리 조회 실패"));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -180,8 +188,10 @@ export function FinancialDetailModal({ open, onClose, symbol, currency, preset }
   const config = PRESETS[preset];
   const periods = data ?? [];
   const headline = buildHeadline(periods, config, currency);
-  const chartData = periods.map((p) => ({
-    label: formatPeriodLabel(p),
+  const ticks = buildPeriodTicks(periods);
+  const periodTick = periodTickRenderer(periodTickIndex(ticks));
+  const chartData = periods.map((p, i) => ({
+    label: ticks[i]?.full ?? formatPeriodLabel(p),
     primary: p[config.primaryKey] ?? null,
     secondary: config.secondaryKey ? p[config.secondaryKey] ?? null : null,
     line: p[config.lineKey] ?? null,
@@ -200,7 +210,7 @@ export function FinancialDetailModal({ open, onClose, symbol, currency, preset }
         <header className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-[var(--text-primary)]">{config.title}</h2>
-            <p className="text-xs text-[var(--text-muted)]">{config.subtitle}</p>
+            <p className="text-cell text-[var(--text-muted)]">{config.subtitle}</p>
           </div>
           <button
             type="button"
@@ -236,8 +246,7 @@ export function FinancialDetailModal({ open, onClose, symbol, currency, preset }
                 key={y}
                 type="button"
                 onClick={() => setYears(y)}
-                className={cn(
-                  "rounded-md px-2.5 py-1 text-[11px] font-medium",
+                className={cn(buttonVariants({ variant: "outline", size: "xs" }),
                   years === y
                     ? "bg-[var(--brand-muted)] text-[var(--brand)]"
                     : "border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]",
@@ -249,22 +258,22 @@ export function FinancialDetailModal({ open, onClose, symbol, currency, preset }
           </div>
 
           {loading ? (
-            <div className="flex h-48 items-center justify-center text-xs text-[var(--text-muted)]">
+            <div className="flex h-48 items-center justify-center text-cell text-[var(--text-muted)]">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               불러오는 중…
             </div>
           ) : error ? (
-            <p className="py-6 text-center text-xs text-[var(--loss)]">{error}</p>
+            <p className="py-6 text-center text-cell text-[var(--loss)]">{error}</p>
           ) : periods.length === 0 ? (
-            <p className="py-6 text-center text-xs text-[var(--text-muted)]">표시할 데이터가 없습니다.</p>
+            <p className="py-6 text-center text-cell text-[var(--text-muted)]">표시할 데이터가 없습니다.</p>
           ) : (
             <>
               <ResponsiveContainer width="100%" height={220}>
                 <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--text-muted)" }} interval="preserveStartEnd" />
+                  <XAxis dataKey="label" tick={periodTick} interval={periodTickInterval(ticks.length)} height={PERIOD_AXIS_HEIGHT} />
                   <YAxis yAxisId="left" hide />
-                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: "var(--text-muted)" }} unit="%" />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: "var(--text-muted)" }} unit="%" />
                   <Tooltip
                     contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 11 }}
                     formatter={(value, name) =>
@@ -273,17 +282,17 @@ export function FinancialDetailModal({ open, onClose, symbol, currency, preset }
                         : [formatFinancialAmount(Number(value), currency), name]
                     }
                   />
-                  <Legend wrapperStyle={{ fontSize: 10 }} />
-                  <Bar yAxisId="left" dataKey="primary" name={config.primaryLabel} fill={config.primaryColor} radius={[2, 2, 0, 0]} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar yAxisId="left" dataKey="primary" name={config.primaryLabel} fill={config.primaryColor} radius={[2, 2, 0, 0]} isAnimationActive={false} />
                   {config.secondaryKey && (
-                    <Bar yAxisId="left" dataKey="secondary" name={config.secondaryLabel} fill={config.secondaryColor} radius={[2, 2, 0, 0]} />
+                    <Bar yAxisId="left" dataKey="secondary" name={config.secondaryLabel} fill={config.secondaryColor} radius={[2, 2, 0, 0]} isAnimationActive={false} />
                   )}
-                  <Line yAxisId="right" type="monotone" dataKey="line" name={config.lineLabel} stroke={config.lineColor} strokeWidth={2} dot={{ r: 2 }} />
+                  <Line yAxisId="right" type="monotone" dataKey="line" name={config.lineLabel} stroke={config.lineColor} strokeWidth={2} dot={{ r: 2 }} isAnimationActive={false} />
                 </ComposedChart>
               </ResponsiveContainer>
 
               <div className="mt-3 overflow-x-auto rounded-lg border border-[var(--border)]">
-                <table className="w-full min-w-max text-left text-[11px]">
+                <table className="w-full min-w-max text-left text-cell">
                   <thead>
                     <tr className="border-b border-[var(--border)] bg-[var(--surface-elevated)] text-[var(--text-muted)]">
                       <th className="sticky left-0 z-10 bg-[var(--surface-elevated)] px-2 py-1.5 font-medium">항목</th>
@@ -304,7 +313,7 @@ export function FinancialDetailModal({ open, onClose, symbol, currency, preset }
                   </tbody>
                 </table>
               </div>
-              <p className="mt-2 text-[10px] text-[var(--text-muted)]">
+              <p className="mt-2 text-micro text-[var(--text-muted)]">
                 성장률은 직전 분기 대비 증감입니다. 국내 종목은 DART, 미국 종목은 SEC EDGAR 공시 기준입니다.
               </p>
             </>

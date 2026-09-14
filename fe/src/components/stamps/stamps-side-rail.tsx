@@ -140,7 +140,7 @@ export function StampsSideRail({
             <AlarmClock className="size-3.5" />
             개봉 대기
             {dueStamps.length > 0 && (
-              <span className="font-mono text-[11px] text-[var(--brand)]">{dueStamps.length}</span>
+              <span className="font-num text-cell text-[var(--brand)]">{dueStamps.length}</span>
             )}
           </span>
         }
@@ -154,17 +154,17 @@ export function StampsSideRail({
                 <button
                   type="button"
                   onClick={() => onOpenStamp(stamp.id)}
-                  className="flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-1.5 text-left text-xs hover:bg-accent"
+                  className="flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-1.5 text-left text-cell hover:bg-accent"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate">{stamp.symbolName || stamp.symbol}</span>
-                    <span className="block text-[11px] text-muted-foreground">
+                    <span className="block text-cell text-muted-foreground">
                       {stamp.targetHit
                         ? `${formatDateKST(stamp.targetHit.date)} 목표 도달`
                         : `${formatDateKST(stamp.stampedAt)} · ${HORIZON_LABELS[stamp.horizonKind]}`}
                     </span>
                   </span>
-                  <span className={cn("shrink-0 text-[11px]", STANCE_TONE[stamp.stance])}>
+                  <span className={cn("shrink-0 text-cell", STANCE_TONE[stamp.stance])}>
                     {STANCE_LABELS[stamp.stance]}
                   </span>
                 </button>
@@ -180,7 +180,7 @@ export function StampsSideRail({
           <span className="flex items-center gap-1.5">
             개봉 예정
             {upcoming.length > 0 && (
-              <span className="font-mono text-[11px] text-[var(--brand)]">{upcoming.length}</span>
+              <span className="font-num text-cell text-[var(--brand)]">{upcoming.length}</span>
             )}
           </span>
         }
@@ -205,7 +205,7 @@ export function StampsSideRail({
                   <button
                     type="button"
                     onClick={() => onOpenStamp(stamp.id)}
-                    className="flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-1.5 text-left text-xs hover:bg-accent"
+                    className="flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-1.5 text-left text-cell hover:bg-accent"
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block truncate">
@@ -214,11 +214,11 @@ export function StampsSideRail({
                         </b>{" "}
                         · {stamp.symbolName || stamp.symbol}
                       </span>
-                      <span className="block text-[11px] text-muted-foreground">
+                      <span className="block text-cell text-muted-foreground">
                         {formatDateKST(stamp.dueAt)} · {HORIZON_LABELS[stamp.horizonKind]}
                       </span>
                     </span>
-                    <span className={cn("shrink-0 text-[11px]", STANCE_TONE[stamp.stance])}>
+                    <span className={cn("shrink-0 text-cell", STANCE_TONE[stamp.stance])}>
                       {STANCE_LABELS[stamp.stance]}
                     </span>
                   </button>
@@ -239,7 +239,7 @@ export function StampsSideRail({
               const pct = Math.round((count / allStamps.length) * 100);
               return (
                 <li key={stance} className="flex items-center gap-2">
-                  <span className={cn("w-8 shrink-0 text-[11px]", STANCE_TONE[stance])}>
+                  <span className={cn("w-8 shrink-0 text-cell", STANCE_TONE[stance])}>
                     {STANCE_LABELS[stance]}
                   </span>
                   <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
@@ -248,7 +248,7 @@ export function StampsSideRail({
                       style={{ width: `${pct}%` }}
                     />
                   </span>
-                  <span className="w-12 shrink-0 text-right font-mono text-[11px] tabular-nums">
+                  <span className="w-12 shrink-0 text-right font-num text-cell tabular-nums">
                     {count}건
                   </span>
                 </li>
@@ -263,7 +263,7 @@ export function StampsSideRail({
         {records.length === 0 ? (
           <SectionEmpty text="스탬프를 찍은 종목이 없습니다" />
         ) : (
-          <table className="w-full text-[11px]">
+          <table className="w-full text-cell">
             <thead>
               <tr className="text-muted-foreground">
                 <th className="pb-1 text-left font-medium">종목</th>
@@ -287,11 +287,11 @@ export function StampsSideRail({
                       {r.name}
                     </button>
                   </td>
-                  <td className="py-1 text-right font-mono tabular-nums">{r.count}</td>
-                  <td className="py-1 text-right font-mono tabular-nums">
+                  <td className="py-1 text-right font-num tabular-nums">{r.count}</td>
+                  <td className="py-1 text-right font-num tabular-nums">
                     {r.hitRate === undefined ? "—" : `${Math.round(r.hitRate)}%`}
                   </td>
-                  <td className={cn("py-1 text-right font-mono tabular-nums", toneClass(r.avgAlpha))}>
+                  <td className={cn("py-1 text-right font-num tabular-nums", toneClass(r.avgAlpha))}>
                     {r.avgAlpha === undefined ? "—" : r.avgAlpha.toFixed(1)}
                   </td>
                 </tr>
@@ -299,7 +299,7 @@ export function StampsSideRail({
             </tbody>
           </table>
         )}
-        <p className="mt-1.5 text-[10px] text-muted-foreground">
+        <p className="mt-1.5 text-micro text-muted-foreground">
           종목명을 누르면 목록이 그 종목으로 좁혀집니다
         </p>
       </SectionCard>
@@ -310,7 +310,7 @@ export function StampsSideRail({
           <SectionEmpty text="집계할 일봉이 아직 없습니다" />
         ) : (
           <>
-            <table className="w-full text-[11px]">
+            <table className="w-full text-cell">
               <thead>
                 <tr className="text-muted-foreground">
                   <th className="pb-1 text-left font-medium">종목</th>
@@ -331,15 +331,15 @@ export function StampsSideRail({
                         {s.symbolName || s.symbol}
                       </button>
                     </td>
-                    <td className={cn("py-1 text-right font-mono tabular-nums", toneClass(s.peakReturn))}>
+                    <td className={cn("py-1 text-right font-num tabular-nums", toneClass(s.peakReturn))}>
                       {s.peakReturn === undefined ? "—" : formatPercent(s.peakReturn)}
                     </td>
-                    <td className={cn("py-1 text-right font-mono tabular-nums", toneClass(s.troughReturn))}>
+                    <td className={cn("py-1 text-right font-num tabular-nums", toneClass(s.troughReturn))}>
                       {s.troughReturn === undefined ? "—" : formatPercent(s.troughReturn)}
                     </td>
                     <td
                       className={cn(
-                        "py-1 text-right font-mono tabular-nums",
+                        "py-1 text-right font-num tabular-nums",
                         toneClass(s.current?.changeRate),
                       )}
                     >
@@ -351,7 +351,7 @@ export function StampsSideRail({
                 ))}
               </tbody>
             </table>
-            <p className="mt-1.5 text-[10px] text-muted-foreground">
+            <p className="mt-1.5 text-micro text-muted-foreground">
               맞은 스탬프도 도중에 얼마나 버텨야 했는지는 종가만 봐서는 안 보입니다
             </p>
           </>
@@ -407,13 +407,13 @@ function FilterRow({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "flex h-[30px] w-full min-w-0 items-center gap-2 rounded-md px-1 text-xs",
+        "flex h-[30px] w-full min-w-0 items-center gap-2 rounded-md px-1 text-cell",
         // 활성 표시는 중립색이다 — 파랑은 이 앱에서 하락을 뜻한다 (docs/UI_SPEC.md §14).
         active ? "bg-accent font-medium" : "hover:bg-accent/60",
       )}
     >
       <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-      <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+      <span className="shrink-0 font-num text-cell tabular-nums text-muted-foreground">
         {count}
       </span>
     </button>

@@ -43,12 +43,14 @@ func (s *NewsBriefingService) briefingEarnings(ctx context.Context, market strin
 	from := today.AddDate(0, 0, -briefingEarningsLookbackDays)
 	to := today
 	limit := briefingKREarningsMax
+	queryFrom := from
 	if market == "us" {
 		to = today.AddDate(0, 0, briefingUSEarningsLookaheadDays)
 		limit = briefingUSEarningsMax
+		queryFrom = model.ExpandUSQueryFrom(from, string(model.AssetUS))
 	}
 
-	rows, err := s.earnings.events.ListRange(ctx, from, to, market, nil)
+	rows, err := s.earnings.events.ListRange(ctx, queryFrom, to, market, nil)
 	if err != nil || len(rows) == 0 {
 		return nil
 	}
@@ -69,6 +71,10 @@ func (s *NewsBriefingService) briefingEarnings(ctx context.Context, market strin
 	}
 	s.earnings.AttachMarketCaps(ctx, filtered)
 	s.earnings.AttachReactions(ctx, filtered)
+	model.ApplyOverseasDisplayDates(filtered)
+	if market == "us" {
+		filtered = model.FilterEventsByCalendarDate(filtered, from, to)
+	}
 
 	type scored struct {
 		ev  model.EarningsEvent

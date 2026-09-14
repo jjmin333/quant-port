@@ -38,7 +38,7 @@ export function EarningsScoreboard({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Tile label={`${rangeLabel} 발표`}>
           <span className="text-lg font-bold tabular-nums">{stats.total}</span>
-          <span className="ml-0.5 text-xs font-normal text-muted-foreground">건</span>
+          <span className="ml-0.5 text-cell font-normal text-muted-foreground">건</span>
           <Sub>
             {/* 셋을 나눠 적는다 — 「발표 20 · 예정 23」과 「43건」은 다른 정보다. */}
             {[
@@ -92,7 +92,7 @@ export function EarningsScoreboard({
       </div>
 
       {stats.compared === 0 && stats.total > 0 && (
-        <p className="mt-2 border-t pt-2 text-[10px] leading-relaxed text-muted-foreground">
+        <p className="mt-2 border-t pt-2 text-micro leading-relaxed text-muted-foreground">
           이 구간은 <b>아직 발표 전</b>이거나 컨센서스가 집계되지 않아 비교 가능한 건이 없습니다.
         </p>
       )}
@@ -103,14 +103,14 @@ export function EarningsScoreboard({
 function Tile({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="min-w-0">
-      <p className="truncate text-[10px] text-muted-foreground">{label}</p>
+      <p className="truncate text-micro text-muted-foreground">{label}</p>
       <div className="mt-0.5 min-w-0">{children}</div>
     </div>
   );
 }
 
 function Sub({ children }: { children: React.ReactNode }) {
-  return <p className="truncate text-[10px] text-muted-foreground">{children}</p>;
+  return <p className="truncate text-micro text-muted-foreground">{children}</p>;
 }
 
 function Empty() {
@@ -121,8 +121,8 @@ function PickValue({ pick }: { pick?: EarningsStatsPick }) {
   if (!pick) return <Empty />;
   return (
     <>
-      <p className="truncate text-[13px] font-semibold">{pick.name}</p>
-      <Signed value={pick.pct} className="text-[11px]" />
+      <p className="truncate text-note font-semibold">{pick.name}</p>
+      <Signed value={pick.pct} className="text-cell" />
     </>
   );
 }
@@ -131,7 +131,7 @@ function Signed({ value, className }: { value: number; className?: string }) {
   return (
     <span
       className={cn(
-        "font-mono tabular-nums",
+        "font-num tabular-nums",
         value >= 0 ? "text-[var(--profit)]" : "text-[var(--loss)]",
         className,
       )}

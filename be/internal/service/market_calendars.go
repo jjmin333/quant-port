@@ -2,12 +2,10 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/toss"
 	"github.com/redis/go-redis/v9"
 )
@@ -22,7 +20,7 @@ type marketCalendars struct {
 func detectMarketSession(assetType string, cals marketCalendars, now time.Time) string {
 	if assetType == "us" || assetType == "etf" {
 		if cals.us != nil {
-			return detectUsSession(cals.us.Today, now)
+			return detectUsSessionAcrossDays(cals.us, now)
 		}
 		return "closed"
 	}
@@ -36,6 +34,33 @@ func detectMarketSession(assetType string, cals marketCalendars, now time.Time) 
 		return detectKrSession(*cals.kr.Today.Integrated, now)
 	}
 	return "regular"
+}
+
+/*
+detectUsSessionAcrossDays — 미국 세션은 KST 날짜 경계를 넘는다.
+
+Toss 달력의 `today`는 **KST 기준 오늘**이다. 그런데 미국 정규장은 KST로
+22:30~05:00이라 자정을 넘는다. 그래서 KST 00:00을 지나면 `today`가 다음 날로
+넘어가고, 그 `regularMarket`은 **오늘 밤에 시작할** 세션을 가리킨다 — 지금
+돌아가고 있는 세션은 `previousBusinessDay` 쪽에 들어 있다.
+
+`today`만 보면 매 정규장의 뒷부분 4시간 30분(KST 00:00~05:00 = ET 11:00~16:00)이
+통째로 "closed"로 판정된다. 실측(2026-08-25 01:31 KST = ET 12:31, 정규장
+한복판): AAPL marketSession=closed. 그 판정은 폴러의 filterLiveSessionSymbols를
+타고 1분봉 적재를 멈춰 세워 차트가 그 자리에 얼어붙는다.
+
+세션 창은 오프셋이 붙은 절대 시각이라 두 날짜를 다 봐도 오탐이 없다 — now가
+실제로 그 구간 안에 있을 때만 맞는다. 미래 방향(`nextBusinessDay`)은 볼 필요가
+없다 — KST 자정 전에는 `today`가 이미 그날 밤 세션을 담고 있다.
+*/
+func detectUsSessionAcrossDays(cal *toss.UsMarketCalendarResponse, now time.Time) string {
+	if cal == nil {
+		return "closed"
+	}
+	if session := detectUsSession(cal.Today, now); session != "closed" {
+		return session
+	}
+	return detectUsSession(cal.PreviousBusinessDay, now)
 }
 
 func detectUsSession(day toss.UsMarketDay, now time.Time) string {
@@ -213,12 +238,10 @@ func regularCloseFromRawCandles(
 	}
 
 	sym := strings.ToUpper(strings.TrimSpace(symbol))
-	raw, err := rdb.Get(ctx, fmt.Sprintf(mdRaw1mKeyFmt, sym)).Bytes()
-	if err != nil || len(raw) == 0 {
-		return 0, false
-	}
-	var candles []model.Candle
-	if json.Unmarshal(raw, &candles) != nil || len(candles) == 0 {
+	// 291KB짜리 배열에서 종가 하나를 고르는 자리라 짧은 기억을 거친다
+	// (`quotes_raw_tail_memo.go`). 아래 반복은 읽기뿐이다.
+	candles, ok := loadRawCandles(ctx, rdb, fmt.Sprintf(mdRaw1mKeyFmt, sym))
+	if !ok {
 		return 0, false
 	}
 

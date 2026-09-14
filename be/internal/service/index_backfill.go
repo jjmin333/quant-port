@@ -25,6 +25,7 @@ type IndexBackfillService struct {
 	indices *repository.IndexDailyCloseRepo
 	toss    *toss.Client
 	fred    *marketdata.FREDClient
+	upbit   *marketdata.UpbitClient
 }
 
 func NewIndexBackfillService(
@@ -33,11 +34,14 @@ func NewIndexBackfillService(
 	tossClient *toss.Client,
 	cfg *config.Config,
 ) *IndexBackfillService {
+	httpClient := &http.Client{Timeout: 20 * time.Second}
 	return &IndexBackfillService{
 		db:      db,
 		indices: indices,
 		toss:    tossClient,
-		fred:    marketdata.NewFREDClient(cfg.MarketData.FRED.APIKey, &http.Client{Timeout: 20 * time.Second}, nil),
+		fred:    marketdata.NewFREDClient(cfg.MarketData.FRED.APIKey, httpClient, nil),
+		// 업비트 시세(Quotation) API는 키가 필요 없다 — 일봉도 마찬가지다.
+		upbit: marketdata.NewUpbitClient("", "", httpClient, nil),
 	}
 }
 
@@ -53,6 +57,30 @@ type IndexBackfillResult struct {
 var etfProxyIndices = map[string]string{
 	"nq100": "QQQ",
 	"sox":   "SOXX",
+}
+
+/*
+fredHistoryOverrides — **실시간 소스와 이력 소스가 다른** 지수.
+
+원/달러의 실시간 값은 토스 지표에서 온다. 그런데 토스 지표 캔들은 `USD/KRW` 심볼에
+400을 돌려준다(`backfill-index-closes` 실측). 그래서 이 지수만 이력이 일별 폴러로
+하루에 한 점씩 쌓이는 중이었다 — 실측 08-31 기준 **15행**, 나머지 열 종은 145행.
+차트를 열면 2주치가 전부라 "1주 전"이 사실상 그래프의 절반이었다.
+
+FRED `DEXKOUS`(원/달러, 영업일)를 이력으로 쓴다. 이 계열은 공표가 며칠 늦지만 그건
+**과거를 채우는 데는 상관이 없다** — 오늘 값은 여전히 토스 실시간이 들고 있고, 백필은
+지나간 날짜만 메운다.
+*/
+var fredHistoryOverrides = map[string]string{
+	"usd-krw": "DEXKOUS",
+}
+
+// upbitHistoryMarkets — 업비트 일봉으로 이력을 채우는 지수.
+//
+// 비트코인도 원/달러와 같은 처지였다(22행). 실시간은 업비트 티커를 쓰면서 이력은
+// 아무도 안 읽어 왔는데, 같은 API의 일봉 엔드포인트가 날짜까지 들고 온다.
+var upbitHistoryMarkets = map[string]string{
+	"btc": "KRW-BTC",
 }
 
 // Run backfills every index it has a dated source for.
@@ -73,6 +101,13 @@ func (s *IndexBackfillService) Run(ctx context.Context, since time.Time) (IndexB
 		case etfProxyIndices[entry.id] != "":
 			source = "etf_proxy"
 			points, err = s.fromStockCloses(ctx, etfProxyIndices[entry.id], since)
+		case upbitHistoryMarkets[entry.id] != "":
+			source = "upbit"
+			points, err = s.fromUpbit(ctx, upbitHistoryMarkets[entry.id], since)
+		case fredHistoryOverrides[entry.id] != "":
+			// 실시간과 이력의 소스가 다른 지수 — 위 `fredHistoryOverrides` 참고.
+			source = "fred"
+			points, err = s.fromFRED(ctx, fredHistoryOverrides[entry.id], since)
 		case entry.source == indexSourceToss:
 			source = "toss"
 			points, err = s.fromToss(ctx, entry.symbol, since)
@@ -105,6 +140,25 @@ func (s *IndexBackfillService) Run(ctx context.Context, since time.Time) (IndexB
 			fmt.Sprintf("%-10s %3d행 (%s, %s ~ %s)", entry.id, n, source,
 				points[0].date.Format("2006-01-02"), points[len(points)-1].date.Format("2006-01-02")))
 	}
+
+	/*
+		마지막으로 **폴러가 하루 밀려 적어 둔 유령 행**을 치운다.
+
+		FRED 계열은 관측치를 하루 늦게 공표해서, 세션이 끝날 때 값을 받아 적는 폴러가
+		전일 종가를 오늘 자리에 남겼다 — 같은 값이 이틀 연속으로 서고 등락률이 0%가
+		된다(실측 08-31: 나스닥·나스닥100·S&P 500·다우·VIX). 쓰는 쪽은
+		`indexLiveDate`가 막았고, 여기서는 이미 쌓인 것을 지운다.
+
+		백필 뒤에 두는 이유는 순서가 중요해서다: 날짜 있는 소스로 진짜 행을 먼저 채워
+		놓아야, 유령 행을 지운 자리가 비지 않는다.
+	*/
+	if removed, err := s.indices.DeletePollerDuplicateCloses(ctx); err != nil {
+		res.Report = append(res.Report, fmt.Sprintf("%-10s 중복 정리 실패: %v", "(정리)", err))
+	} else if removed > 0 {
+		res.Report = append(res.Report,
+			fmt.Sprintf("%-10s 폴러 중복 %d행 삭제 (전일과 종가가 같아 등락률 0%%로 남던 행)", "(정리)", removed))
+	}
+
 	return res, nil
 }
 
@@ -161,6 +215,24 @@ func (s *IndexBackfillService) fromFRED(ctx context.Context, seriesID string, si
 			continue
 		}
 		out = append(out, datedClose{date: o.Date, close: o.Value})
+	}
+	return sortedDated(out), nil
+}
+
+func (s *IndexBackfillService) fromUpbit(ctx context.Context, market string, since time.Time) ([]datedClose, error) {
+	if s.upbit == nil || !s.upbit.Enabled() {
+		return nil, fmt.Errorf("upbit not configured")
+	}
+	rows, err := s.upbit.DailyClosesDated(ctx, market, indexBackfillCandles)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]datedClose, 0, len(rows))
+	for _, r := range rows {
+		if r.Date.Before(since) {
+			continue
+		}
+		out = append(out, datedClose{date: r.Date, close: r.Close})
 	}
 	return sortedDated(out), nil
 }

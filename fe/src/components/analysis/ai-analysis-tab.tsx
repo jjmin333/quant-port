@@ -1,13 +1,9 @@
 "use client";
 
-import { Loader2, Sparkles } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { DailyCloseTab } from "@/components/analysis/daily-close-tab";
 import { MarketBriefing } from "@/components/analysis/market-briefing";
-import { StockScoreCard } from "@/components/analysis/stock-score-card";
-import type { StockScoreData } from "@/lib/stock-score-api";
+import { StockAISummaryCard } from "@/components/analysis/stock-ai-summary-card";
 import type { StockSummaryData } from "@/lib/stock-summary-types";
-import { cn } from "@/lib/utils";
 
 type AIAnalysisTabProps = {
   symbol: string;
@@ -17,36 +13,31 @@ type AIAnalysisTabProps = {
   loading: boolean;
   error?: string | null;
   compact?: boolean;
-  /** Score is fetched by the parent too — several tabs show one axis of it. */
-  score?: StockScoreData | null;
-  scoreLoading?: boolean;
 };
 
-const SECTIONS: { key: keyof Pick<StockSummaryData, "valuation" | "technical" | "insider" | "news">; label: string }[] = [
-  { key: "valuation", label: "밸류에이션" },
-  { key: "technical", label: "기술적 분석" },
-  { key: "insider", label: "내부자 거래" },
-  { key: "news", label: "뉴스" },
-];
-
-function formatGeneratedAt(value: string | undefined): string {
-  if (!value) return "";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString("ko-KR", {
-    timeZone: "Asia/Seoul",
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 /**
- * The full AI analysis: every generated section plus the dated score history.
- * The header carries only a one-line headline, so this tab is where the whole
- * picture lives. It replaces the former 일별 시세 tab, whose close/score list is
- * embedded below — the dates and the reasoning belong together.
+ * The full AI analysis: the summary card plus the rule-based market briefing and
+ * the dated score history. It replaces the former 일별 시세 tab, whose close/score
+ * list is embedded below — the dates and the reasoning belong together.
+ *
+ * # 카드 본문은 개요 탭과 공유한다 (2026-09-13 사용자 요청 2)
+ *
+ * 예전에는 이 파일이 네 섹션 그리드를 **직접** 그렸고 개요 탭은 요약 한 문단을
+ * 자기 방식으로 그렸다. 같은 LLM 글의 요약과 본문이 서로 다른 카드 모양을 하고
+ * 있었던 것이다. 지금은 `StockAISummaryCard` 하나가 둘을 다 들고, 오른쪽 위
+ * 세그먼트 컨트롤이 어느 쪽을 볼지 정한다.
+ *
+ * 여기서는 `hideWithoutLLM`을 켜지 않는다 — 「AI 분석」 탭을 연 사람에게 빈 화면을
+ * 주는 것이 규칙 기반 글을 보여 주는 것보다 나쁘다. `onOpenAnalysis`도 안 넘긴다:
+ * 이미 그 탭이다.
+ *
+ * # 순서: AI 분석이 맨 위다 (2026-09-11 사용자 요청 1)
+ *
+ * 탭 이름이 「AI 분석」인데 먼저 오는 카드가 규칙 기반 시장 분석이면, 탭을 연
+ * 사람이 찾던 것이 두 번째로 밀린다. 시장 분석은 그 글의 배경이므로 아래가
+ * 제자리다. 종합 점수 카드는 개요 탭으로 옮겼다(2026-09-03) — 점수는 거의 모든
+ * 종목에 있는데 이 탭의 본문은 4%의 종목에만 있어서, 가장 널리 쓰이는 숫자가
+ * 가장 드물게 열리는 탭 뒤에 있었다.
  */
 export function AIAnalysisTab({
   symbol,
@@ -55,68 +46,18 @@ export function AIAnalysisTab({
   loading,
   error,
   compact = false,
-  score = null,
-  scoreLoading = false,
 }: AIAnalysisTabProps) {
-  const generatedAt = formatGeneratedAt(data?.generatedAt);
-
   return (
     <div className="space-y-3">
-      {/* Deterministic first: the score and the rule-based 시장 분석 are
-          available for every symbol, so they lead — the AI prose then adds
-          interpretation on top rather than being the only content. */}
-      <StockScoreCard score={score} loading={scoreLoading} />
+      <StockAISummaryCard
+        data={data}
+        loading={loading}
+        error={error}
+        symbol={symbol}
+        compact={compact}
+      />
+
       <MarketBriefing briefing={data?.briefing} currency={currency} />
-
-      <Card className="p-0">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2.5">
-          <h2 className="flex items-center gap-1.5 text-sm font-semibold text-[var(--text-primary)]">
-            <Sparkles className="h-4 w-4 text-[var(--brand)]" aria-hidden />
-            AI 분석
-          </h2>
-          <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)]">
-            {data?.source === "rule" && (
-              <span className="rounded-full bg-[var(--surface-elevated)] px-2 py-0.5">
-                규칙 기반 (AI 모델 미설정)
-              </span>
-            )}
-            {generatedAt && <span>{generatedAt} 생성</span>}
-          </div>
-        </div>
-
-        {loading ? (
-          <p className="flex items-center justify-center gap-2 px-3 py-10 text-xs text-[var(--text-muted)]">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            AI 분석 생성 중…
-          </p>
-        ) : error || !data ? (
-          <p className="px-3 py-10 text-center text-xs text-[var(--text-muted)]">
-            {error ?? "AI 분석을 불러오지 못했습니다."}
-          </p>
-        ) : (
-          <div className={cn("grid gap-px bg-[var(--border)]", compact ? "" : "sm:grid-cols-2")}>
-            {SECTIONS.map(({ key, label }) => {
-              const text = data[key]?.trim();
-              return (
-                <section key={key} className="bg-[var(--surface)] px-3 py-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-[11px] font-semibold text-[var(--brand)]">{label}</h3>
-                    {key === "news" && data.newsSentiment && data.newsSentiment.total > 0 && (
-                      <span className="shrink-0 text-[10px] tabular-nums text-[var(--text-muted)]">
-                        긍정 {data.newsSentiment.positive} · 부정 {data.newsSentiment.negative} · 중립{" "}
-                        {data.newsSentiment.neutral}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-[12px] leading-relaxed text-[var(--text-secondary)]">
-                    {text || "요약할 데이터가 부족합니다."}
-                  </p>
-                </section>
-              );
-            })}
-          </div>
-        )}
-      </Card>
 
       <DailyCloseTab symbol={symbol} currency={currency} compact={compact} />
     </div>

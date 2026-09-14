@@ -3,17 +3,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { MenuEmptyState } from "@/components/common/menu-empty-state";
+import { LoadErrorState } from "@/components/common/load-error-state";
 import { menuIcon } from "@/components/common/menu-icon";
 import {
   SampleModeButton,
   SampleRibbon,
   SampleWrap,
+  useAutoSample,
   useSampleMode,
 } from "@/components/common/sample-mode";
 import { useAuth } from "@/components/providers/auth-provider";
-import { PageHeader } from "@/components/layout/header";
 import { PageColumns } from "@/components/layout/page-columns";
-import { PageScrollShell } from "@/components/layout/page-content-shell";
+import { PageActions, PageScrollShell } from "@/components/layout/page-content-shell";
 import { WatchlistListHeader } from "@/components/watchlist/watchlist-columns";
 import { WatchlistQuickLookModal } from "@/components/watchlist/watchlist-quick-look-modal";
 import { WatchlistRow } from "@/components/watchlist/watchlist-row";
@@ -33,7 +34,12 @@ import { MENU_COPY } from "@/lib/menu-copy";
 import { fetchSampleWatchlist, sampleWatchlistParts } from "@/lib/sample-api";
 import { fetchScoresBatchClient, type StockScoreData } from "@/lib/stock-score-api";
 import type { QuoteSummary, StockInfo, WatchlistItem } from "@/lib/quotes-types";
-import { mergeQuoteSummariesForSymbols } from "@/lib/merge-quotes";
+import {
+  applyStreamPricesToQuotes,
+  mergeQuoteSummariesForSymbols,
+} from "@/lib/merge-quotes";
+import { useQuoteStreamByMarket } from "@/hooks/use-quote-stream";
+import { PRICE_POLL_MS, PRICE_POLL_MS_WHILE_STREAMING } from "@/lib/price-cadence";
 import {
   buildWatchlistRows,
   filterWatchlistRows,
@@ -43,10 +49,19 @@ import {
   type WatchlistSort,
   type WatchlistTrendFilter,
 } from "@/lib/watchlist-calc";
+import { toast } from "sonner";
+import { toUserMessage } from "@/lib/error-message";
 
 const COPY = MENU_COPY.watchlist;
 
-const POLL_MS = 5_000;
+/*
+시세 폴링 주기. **5초에서 2초로 맞췄다 (2026-09-04 사용자 요청 1).**
+
+같은 가격이 화면마다 다른 박자로 늙는 것을 없애는 것이 목적이라, 숫자는 이제
+`lib/price-cadence` 한 곳에만 있다. 요청 수는 오히려 줄었다 — SSE가 붙어 있는 동안
+이 폴링은 30초로 물러나고, 끊겼을 때만 2초로 돌아온다.
+*/
+const POLL_MS = PRICE_POLL_MS;
 /** 실적·공시는 종목당 1요청이라 상한을 둔다 — 목록 위쪽부터. */
 const EVENT_SYMBOL_LIMIT = 12;
 
@@ -101,7 +116,7 @@ export function WatchlistClient() {
       return next;
     } catch (err) {
       if (gen !== listGenRef.current) return [];
-      setError(err instanceof Error ? err.message : "목록 로드 실패");
+      setError(toUserMessage(err, "목록 로드 실패"));
       return [];
     } finally {
       if (gen === listGenRef.current) {
@@ -192,14 +207,41 @@ export function WatchlistClient() {
     })();
   }, [load]);
 
+  /*
+    가격을 푸시로도 받는다 (2026-09-04 사용자 요청 1).
+
+    구독 대상을 시세 목록에서 만드는 이유는 자산 구분이 거기 있기 때문이다 —
+    관심 목록에는 국내·해외가 섞이고, 서버는 그 값으로 어느 거래소 달력을 볼지
+    정한다. 예시 모드는 고정 픽스처라 붙지 않는다.
+  */
+  const streamRows = useMemo(
+    () =>
+      sample
+        ? []
+        : quotes.map((q) => ({ symbol: q.symbol, assetType: q.assetType as string })),
+    [quotes, sample],
+  );
+  const { prices: streamPrices, streaming } = useQuoteStreamByMarket(streamRows);
+
+  /*
+    스트림 가격은 **상태에 저장하지 않고 렌더 중에 얹는다.** 이펙트에서 `setQuotes`를
+    하면 틱마다 렌더가 두 번 돈다 — 행 조립·정렬이 그 목록에 걸려 있어 두 배가
+    그대로 비용이다.
+  */
+  const liveQuotes = useMemo(
+    () => applyStreamPricesToQuotes(quotes, streamPrices),
+    [quotes, streamPrices],
+  );
+
   useEffect(() => {
     // 예시는 고정 값이다 — 폴링하면 인증 뒤의 시세 API를 헛되이 두드린다.
     if (sample || symbols.length === 0) return;
+    const every = streaming ? PRICE_POLL_MS_WHILE_STREAMING : POLL_MS;
     const id = window.setInterval(() => {
       void refreshQuotes(symbols);
-    }, POLL_MS);
+    }, every);
     return () => window.clearInterval(id);
-  }, [sample, symbols, refreshQuotes]);
+  }, [sample, symbols, refreshQuotes, streaming]);
 
   async function handleAddStock(stock: StockInfo) {
     if (symbols.includes(stock.symbol)) {
@@ -228,13 +270,25 @@ export function WatchlistClient() {
         next.delete(stock.symbol);
         return next;
       });
-      setError(err instanceof Error ? err.message : "추가 실패");
+      setError(toUserMessage(err, "추가 실패"));
     } finally {
       setAdding(false);
     }
   }
 
+  /*
+    삭제에 **실행 취소**를 붙인다 (§A-2).
+
+    확인 창을 세우지 않은 이유: 관심종목 해제는 하루에도 여러 번 하는 가벼운 행동이라
+    매번 물으면 흐름을 끊는다. 대신 되돌릴 길을 준다 — 정상 사용자는 확인 창을 한 번도
+    보지 않고, 잘못 누른 사람은 5초 안에 되돌린다.
+
+    되돌릴 때 **담은 가격을 함께 복원한다**. 이 값이 「담은 뒤로 얼마나 움직였나」의
+    기준선이고 그게 관심종목의 존재 이유인데, 예전에는 해제 후 다시 담으면 오늘 시세로
+    조용히 덮여 기준선이 리셋됐다(실측: 257,500 → 258,000).
+  */
   async function handleRemove(symbol: string) {
+    const removed = items.find((i) => i.symbol === symbol);
     try {
       await removeWatchlistClient(symbol);
       setPendingSymbols((prev) => {
@@ -244,8 +298,24 @@ export function WatchlistClient() {
         return next;
       });
       await load();
+      const label = quotes.find((q) => q.symbol === symbol)?.name || symbol;
+      toast(`${label}을(를) 관심종목에서 뺐습니다.`, {
+        action: {
+          label: "실행 취소",
+          onClick: () => {
+            void (async () => {
+              try {
+                await addWatchlistClient(symbol, removed?.addedPrice);
+                await load();
+              } catch (err) {
+                setError(toUserMessage(err, "되돌리지 못했습니다."));
+              }
+            })();
+          },
+        },
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "삭제 실패");
+      setError(toUserMessage(err, "삭제 실패"));
     }
   }
 
@@ -265,7 +335,7 @@ export function WatchlistClient() {
       await reorderWatchlistClient(nextSymbols);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "순서 저장 실패");
+      setError(toUserMessage(err, "순서 저장 실패"));
       await loadWatchlist();
     } finally {
       setReorderSaving(false);
@@ -285,11 +355,24 @@ export function WatchlistClient() {
   }
 
   const rows = useMemo(
-    () => buildWatchlistRows(items, quotes, scores),
-    [items, quotes, scores],
+    // 스트림 가격이 얹힌 목록을 쓴다 — 행의 현재가·등락률이 지금 값을 따라간다.
+    () => buildWatchlistRows(items, liveQuotes, scores),
+    [items, liveQuotes, scores],
   );
 
-  const isEmpty = !sample && !listLoading && !error && items.length === 0;
+  /*
+    실패와 「0건」을 가른다. 예전에는 실패해도 목록 자리에 `internal` 한 줄만 뜨고
+    「관심종목이 없습니다」가 함께 나와, 담아 둔 종목이 사라진 것처럼 보였다.
+  */
+  const loadFailed = !sample && !listLoading && Boolean(error) && items.length === 0;
+  /*
+    **`sample`이 섞이지 않은** 「내 것이 아직 없다」 (2026-09-14 사용자 요청 4).
+    `useAutoSample`이 이 값을 받는데, 여기에 `!sample`을 끼우면 켜짐 → 0건 아님 →
+    꺼짐 → 0건 → 켜짐으로 무한히 돈다. 아래 `isEmpty`가 그 위에 `!sample`을 얹는다.
+  */
+  const hasNothingYet = !listLoading && !error && items.length === 0;
+  useAutoSample(hasNothingYet);
+  const isEmpty = !sample && hasNothingYet;
 
   const counts = useMemo(
     () => ({
@@ -335,29 +418,36 @@ export function WatchlistClient() {
 
   return (
     <>
-      <PageHeader
-        title={COPY.title}
-        subtitle={COPY.subtitle}
-        actions={
-          <SampleModeButton
-            active={sample}
-            onToggle={setSample}
-            emphasize={isEmpty || !session}
-          />
-        }
-      />
       <PageScrollShell>
+        {/*
+          0건 안내 카드가 이미 같은 버튼을 들고 있다 (§R-2). 두 곳에 다 두면 한 화면에
+          「예시로 둘러보기」가 둘이 되어 무엇이 다른지 묻게 만든다 — 실측으로 빈
+          보유 화면의 보이는 버튼이 그 문구 ×2 였다.
+        */}
+        <PageActions>
+          {isEmpty ? null : (
+            <SampleModeButton active={sample} onToggle={setSample} emphasize={!session} />
+          )}
+        </PageActions>
         {sample && (
           <div className="mb-3">
             <SampleRibbon
               loggedIn={Boolean(session)}
               loginHref="/login?next=%2Fwatchlist"
               onDismiss={() => setSample(false)}
+              // 안내 카드가 들고 있던 첫 동작 — 카드가 예시 뒤로 물러났으니 여기 선다.
+              action={{ label: "종목 찾아보기", href: "/analysis" }}
             />
           </div>
         )}
 
-        {isEmpty ? (
+        {loadFailed ? (
+          <LoadErrorState
+            message={error ?? "관심종목을 불러오지 못했습니다."}
+            retrying={listLoading}
+            onRetry={() => void load()}
+          />
+        ) : isEmpty ? (
           <MenuEmptyState
             icon={menuIcon("watchlist")}
             headline={COPY.emptyHeadline}
@@ -379,7 +469,7 @@ export function WatchlistClient() {
           rail={
             <WatchlistSideRail
               rows={visibleRows}
-              quotes={quotes}
+              quotes={liveQuotes}
               events={events}
               adding={adding}
               onAddStock={(stock) => void handleAddStock(stock)}
@@ -424,14 +514,14 @@ export function WatchlistClient() {
             ) : (
               <>
                 {dragEnabled && rows.length > 1 && (
-                  <p className="hidden text-xs text-[var(--text-muted)] sm:block">
+                  <p className="hidden text-cell text-[var(--text-muted)] sm:block">
                     {reorderSaving
                       ? "순서 저장 중…"
                       : "왼쪽 핸들을 드래그해 순서를 변경할 수 있습니다. 행을 누르면 상세가 열립니다."}
                   </p>
                 )}
                 {!dragEnabled && sort !== "manual" && (
-                  <p className="text-xs text-[var(--text-muted)]">
+                  <p className="text-cell text-[var(--text-muted)]">
                     보기 순서만 바꿉니다 — 「내 순서」로 돌아가면 내가 정한 순서가 그대로입니다.
                   </p>
                 )}

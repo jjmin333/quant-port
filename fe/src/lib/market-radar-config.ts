@@ -4,14 +4,58 @@ import type {
   RankingDuration,
   RankingType,
 } from "@/lib/market-radar-types";
+import { PRICE_POLL_MS } from "@/lib/price-cadence";
 
 export const MARKET_RADAR_DEFAULT_COUNT = 100;
 
 /** FE fallback refresh interval before `market_data_settings` loads; actual cadence is server-configured (see useMarketDataSettings). */
 export const MARKET_RADAR_POLL_MS = 60_000;
 
-/** Quote overlay for list price/change — same API path as detail panel (2s). */
-export const MARKET_RADAR_QUOTE_POLL_MS = 2_000;
+/** Quote overlay for list price/change — same API path as detail panel. */
+export const MARKET_RADAR_QUOTE_POLL_MS = PRICE_POLL_MS;
+
+/*
+랭킹 목록의 가격·등락률 갱신 주기.
+
+**순위 폴링과 다른 주기다.** 순위 스냅샷은 서버가 5분마다 갱신하므로 그쪽을 자주
+불러 봐야 같은 답을 다시 받는다. 움직이는 것은 가격뿐이라 `/rankings/prices`만
+따로 당겨온다.
+
+1.5초가 안전한 근거는 요청당 비용이다. 이 경로를 세 번 손봤고 그때마다 같은
+방법으로 쟀다(`Com_select` 전역 카운터, 10회 중 최솟값 — 배경 배치 버스트를
+걸러내려고):
+
+	/rankings·/rankings/prices 100종목 (US 장중)
+	  캐시 없음                     658 SELECT
+	  자산구분·전일종가 캐시 후       43 SELECT
+	  목록에서 체결·호가 조회 제거     4 SELECT   ← 지금
+
+	요청당 Redis 명령: 244 → 91 (같은 요청 안에서 같은 키를 두 번 안 읽는다)
+	서버 처리 시간: 7~18ms
+
+**주기를 서버 폴러에 맞춘다.** 화면 값의 신선도 하한을 정하는 것은 서버 폴러이고,
+그 주기를 실측하면 종목이 두 갈래로 갈린다(`market:price:v1`의 updatedAt 간격,
+0.2초 간격 표본):
+
+	009150 (일반 랭킹 종목)      median 999ms  (932~1054, 매우 균일)
+	005930·000660 (웹소켓 구독)  median 578ms  (체결이 같은 키에 쓰인다)
+
+위 표의 median 999ms가 그대로 `PRICE_POLL_MS`(1초)의 근거다. 09-04에 2초로 갔다가
+같은 날 1초로 돌아왔는데, **자기 숫자를 다시 쓰지 않고 공용 상수를 import한다** —
+숫자가 여기 있으면 다음에 또 한쪽만 바뀐다(그 사고가 이 파일에서 두 번 났다).
+
+**비용은 뷰어 수에 정비례한다** — Toss 호출과 달리 캐시로 흡수할 수 없다(요청
+수 자체가 느는 것이라서). 요청당 서버 작업은 4 SELECT · Redis 91명령 · 7~18ms
+(실측 2026-09-04에도 4 SELECT · 80ms로 그대로다).
+
+**그래서 지금 이 상수는 보조 경로다.** 값이 실제로 흐르는 길은 `useQuoteStream`
+(다심볼 SSE)이고, 스트림이 붙어 있는 동안 훅은 `PRICE_POLL_MS_WHILE_STREAMING`
+(30초)으로 물러난다. 이 1초가 실제로 쓰이는 것은 **스트림이 아직 안 붙었거나
+끊긴 동안**뿐이라, 뷰어당 0.5 req/s가 1 req/s가 되는 것은 그 짧은 구간에 한한다.
+
+마감 세션에서는 서버가 빈 배열을 주므로 사실상 공짜다 — 하루의 대부분이 그 상태다.
+*/
+export const MARKET_RADAR_PRICE_POLL_MS = PRICE_POLL_MS;
 
 /** List sparklines cost ~1 candle API each — off by default for faster load. */
 export const MARKET_RADAR_SHOW_SPARKLINES = false;

@@ -70,6 +70,11 @@ func (s *QuotesService) persistRawCandles(ctx context.Context, symbol string, ba
 	for i := range completed {
 		completed[i].Time = normalizeCandleBarTime(completed[i].Time, base)
 	}
+	// 보관 한계 밖의 1분봉은 쓰지 않는다 — 다음 롤업이 곧바로 지운다.
+	completed = dropUnretainedIntraday(base, completed)
+	if len(completed) == 0 {
+		return
+	}
 	_ = s.candles.UpsertBatch(ctx, symbol, base, completed)
 }
 
@@ -96,6 +101,22 @@ func (s *QuotesService) loadHistoricalFromDB(
 		}
 		cursor := mergePaginationCursor(stored, base, nextBefore)
 		page := CandlesPage{Candles: stored, NextBefore: cursor}
+		return normalizeCandlesPageCursor(page, base), true
+	}
+
+	// 인트라데이 집계는 계층 저장을 가로질러 읽는다. 한 페이지가 계층 경계를
+	// 넘는 것은 예외가 아니라 기본이다 — 30분봉 120봉은 약 5거래일이고 1m 계층은
+	// 3일치라, 첫 페이지부터 1m과 5m 둘을 함께 읽는다.
+	//
+	// 커서는 계층이 섞여도 안전하다. CanonicalPaginationCursor가 인트라데이
+	// base를 구분하지 않기 때문이다(1d·1w·1M만 자정 정규화). base를 1m으로
+	// 넘겨도 5m·30m 버킷 시각이 그대로 보존된다.
+	if intervalMinutes(interval) > 1 {
+		bars, ok := s.collectTieredBars(ctx, symbol, interval, before, pageSize)
+		if !ok || len(bars) == 0 {
+			return CandlesPage{}, false
+		}
+		page := CandlesPage{Candles: bars, NextBefore: oldestBarCursor(bars, base)}
 		return normalizeCandlesPageCursor(page, base), true
 	}
 

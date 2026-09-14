@@ -1,8 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { EarningsDaySummary } from "@/lib/earnings-types";
+import { CalendarOff, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  emptyMonthHint,
+  emptyMonthMessage,
+  isEarningsRangeEmpty,
+} from "@/lib/earnings-empty";
+import type { EarningsDaySummary, EarningsMarket } from "@/lib/earnings-types";
 // 날짜 산술은 `lib/earnings-range`에 한 벌만 둔다 — 주간 보드와 「일」 보기가 같은
 // 규칙을 써야 하고, `Date`의 로컬 시간대로 계산하면 격자가 한 칸 밀린다.
 import { shiftMonth, todayKST } from "@/lib/earnings-range";
@@ -27,6 +32,7 @@ export function EarningsMonthGrid({
   days,
   selected,
   loading,
+  market,
   onSelect,
   onMonthChange,
 }: {
@@ -36,6 +42,8 @@ export function EarningsMonthGrid({
   /** 선택된 날짜 (YYYY-MM-DD) 또는 null = 이 달 전체. */
   selected: string | null;
   loading: boolean;
+  /** 빈 달 문구가 「국내」인지 「해외」인지 — `lib/earnings-empty`. */
+  market: EarningsMarket;
   onSelect: (date: string | null) => void;
   onMonthChange: (monthStart: string) => void;
 }) {
@@ -52,6 +60,16 @@ export function EarningsMonthGrid({
 
   const [year, mon] = month.split("-").map(Number);
   const todayKey = todayKST();
+
+  /*
+    # 한 건도 없는 달은 **격자를 그리지 않는다** (2026-09-05 사용자 지적 8)
+
+    빈 31칸은 「데이터가 없다」가 아니라 「고장 났다」로 읽힌다 — 실제로 국내 9월이
+    그랬다. 달 이동 줄은 **그대로 남긴다**: 격자까지 통째로 감추면 다른 달로 갈 길이
+    함께 사라져 사용자가 갇힌다.
+  */
+  const empty = isEarningsRangeEmpty(days);
+  const hint = emptyMonthHint(market);
 
   return (
     <div className="rounded-xl border bg-card p-3">
@@ -74,7 +92,7 @@ export function EarningsMonthGrid({
             <button
               type="button"
               onClick={() => onSelect(null)}
-              className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+              className="rounded-full bg-muted px-2 py-0.5 text-micro text-muted-foreground hover:text-foreground"
             >
               이 달 전체 보기
             </button>
@@ -90,12 +108,22 @@ export function EarningsMonthGrid({
         </button>
       </div>
 
+      {empty ? (
+        <div className="flex min-h-[176px] flex-col items-center justify-center gap-2 px-4 text-center">
+          <CalendarOff className="size-6 text-muted-foreground/60" aria-hidden />
+          <p className="text-sm font-semibold text-foreground">
+            {emptyMonthMessage(month, market)}
+          </p>
+          {hint && <p className="max-w-[22rem] text-cell text-muted-foreground">{hint}</p>}
+        </div>
+      ) : (
+        <>
       <div className="mb-1 grid grid-cols-7 gap-1">
         {WEEKDAYS.map((w, i) => (
           <div
             key={w}
             className={cn(
-              "text-center text-[10px] font-medium",
+              "text-center text-micro font-medium",
               i === 0 ? "text-[var(--loss)]/70" : "text-muted-foreground",
             )}
           >
@@ -118,7 +146,7 @@ export function EarningsMonthGrid({
               onClick={() => onSelect(isSelected ? null : date)}
               title={cellTitle(date, cell)}
               className={cn(
-                "flex h-11 flex-col items-center justify-center gap-0.5 rounded-md border text-[10px] transition-colors",
+                "flex h-11 flex-col items-center justify-center gap-0.5 rounded-md border text-micro transition-colors",
                 // 건수를 배경 농도로 말한다 — 숫자만으로는 "몰리는 주"가 안 보인다.
                 total > 0 ? "border-transparent" : "border-transparent bg-muted/30",
                 isSelected && "ring-2 ring-foreground",
@@ -131,7 +159,7 @@ export function EarningsMonthGrid({
                 {Number(date.slice(8))}
               </span>
               {total > 0 && (
-                <span className="font-mono text-[10px] font-bold tabular-nums">{total}</span>
+                <span className="font-num text-micro font-bold tabular-nums">{total}</span>
               )}
               {/*
                 발표된 날은 **상회 비율**을 적는다 — 달력을 훑는 사람이 찾는 것은
@@ -141,7 +169,7 @@ export function EarningsMonthGrid({
               {cell && cell.compared > 0 && (
                 <span
                   className={cn(
-                    "text-[9px] font-semibold leading-none",
+                    "text-micro font-semibold leading-none",
                     beatRate(cell) >= 50 ? "text-[var(--profit)]" : "text-[var(--loss)]",
                   )}
                 >
@@ -159,7 +187,7 @@ export function EarningsMonthGrid({
         })}
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-2 text-[10px] text-muted-foreground">
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-2 text-micro text-muted-foreground">
         <span className="flex items-center gap-1">
           <span className="size-[9px] rounded-sm" style={{ backgroundColor: "color-mix(in srgb, var(--profit) 32%, transparent)" }} />
           상회 많음
@@ -175,6 +203,8 @@ export function EarningsMonthGrid({
         <LegendItem kind="scheduled" label="예정" />
         <LegendItem kind="estimated" label="추정" />
       </div>
+        </>
+      )}
     </div>
   );
 }

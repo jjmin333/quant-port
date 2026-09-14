@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ImportCropRect } from "@/lib/user-holdings-types";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 
 type Point = { x: number; y: number };
 
@@ -141,7 +142,7 @@ export function ScreenshotCropCanvas({
 
   return (
     <div className={cn("space-y-2", className)}>
-      <p className="text-xs text-[var(--text-muted)]">
+      <p className="text-cell text-[var(--text-muted)]">
         종목 목록 영역을 드래그해 자르세요. 자르지 않으면 전체 이미지를 사용합니다.
       </p>
       <div
@@ -197,7 +198,7 @@ export function ScreenshotCropCanvas({
       <div className="flex gap-2">
         <button
           type="button"
-          className="rounded-md border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]")}
           onClick={() => {
             setLocalCrop(undefined);
             onCropChange(undefined);

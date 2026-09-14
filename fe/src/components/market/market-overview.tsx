@@ -74,7 +74,7 @@ export function MarketOverviewCompact() {
               <span
                 className={cn(
                   "font-medium text-[var(--text-muted)]",
-                  isCompact ? "text-[10px]" : "text-xs",
+                  isCompact ? "text-micro" : "text-cell",
                 )}
               >
                 {index.name}
@@ -82,7 +82,7 @@ export function MarketOverviewCompact() {
               <span
                 className={cn(
                   "font-semibold text-[var(--text-primary)]",
-                  isCompact ? "text-xs" : "text-sm",
+                  isCompact ? "text-cell" : "text-sm",
                 )}
               >
                 <IndexValueDisplay index={index} compact={isCompact} />
@@ -90,7 +90,7 @@ export function MarketOverviewCompact() {
               <span
                 className={cn(
                   "font-sans tabular-nums",
-                  isCompact ? "text-[10px]" : "text-xs",
+                  isCompact ? "text-micro" : "text-cell",
                   hasValue ? trendTextClass(index.changeRate) : "text-[var(--text-muted)]",
                 )}
               >

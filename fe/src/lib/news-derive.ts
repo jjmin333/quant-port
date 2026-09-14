@@ -1,53 +1,30 @@
 import type { NewsArticle } from "@/lib/news-types";
-import { isArticleBreakingNews } from "@/lib/news-breaking";
 
 /**
  * 뉴스 화면의 파생 집계.
  *
- * 전부 **이미 받아 둔 기사 목록에서** 계산한다. 같은 화면의 숫자를 서버에 다시 물으면
- * 집계와 목록이 어긋날 수 있고(기사가 그 사이에 들어온다), 요청 하나를 아끼는 것보다
- * 그게 더 나쁘다 — 우측 레일의 「오늘의 키워드」가 이미 쓰던 규칙이다.
+ * 여기 남은 것은 **화면에 떠 있는 기사만 보면 되는** 계산이다 — 시세를 받을 심볼
+ * 목록, 시간 구분선, 같은 이슈 묶기.
+ *
+ * 「오늘의 키워드」와 「많이 언급된 종목」은 여기 있다가 서버로 갔다. 목록을 세면 그
+ * 목록이 덮는 시간만 세게 되는데, 국내 최신 100건이 덮는 시간이 34분이었다(실측
+ * 2026-09-01). 고정된 모수가 필요한 집계는 `news-api.ts`의 fetch 두 개가 맡는다.
  */
-
-/* ── A1: 오늘의 이슈 종목 ─────────────────────────────────────────────────── */
-
-export type SymbolMention = {
-  symbol: string;
-  /** 이 종목이 언급된 기사 수 */
-  count: number;
-  /** 그중 속보가 하나라도 있었나 */
-  hasBreaking: boolean;
-};
 
 /**
- * 언급 상위 종목. 한 기사가 같은 종목을 여러 번 달아도 1로 센다.
+ * 화면에 있는 기사에 붙은 모든 심볼 — 시세를 한 번에 받아오기 위한 목록.
  *
- * 종목 태그는 BE가 제목·요약에서 뽑는다. 국내 6자리 코드와 해외 티커가 한 목록에
- * 섞여 올 수 있어(국내 기사가 미국 종목을 언급하는 일이 흔하다) 시장으로 거르지 않는다.
+ * **cap은 서버 상한(`/quotes/batch`의 `limit` = 100)에서 역산한 값이다.** 호출부는
+ * 여기에 「내 종목」과 「많이 언급된 종목」을 더해서 보내므로, 90이면 그 둘이
+ * 붙어도 서버 상한 안에 든다(상한을 넘기면 서버가 `truncated`로 알려 주지만,
+ * 애초에 넘기지 않는 편이 낫다).
+ *
+ * 60이던 것을 올렸다. 실측(2026-09-01 마감 후) 국내 뉴스 100건의 서로 다른 심볼이
+ * 67개라, 60에서 잘린 7개가 **요청되지도 않은 채** 기사 하단에 종목코드로 남아
+ * 있었다 — 「시세를 못 받아서」가 아니라 「묻지 않아서」였다. 배치가 캐시·DB만
+ * 읽게 된 뒤로는(quotes_batch.go) 심볼을 늘려도 상류 호출이 늘지 않는다.
  */
-export function topSymbolMentions(articles: NewsArticle[], limit = 6): SymbolMention[] {
-  const counts = new Map<string, SymbolMention>();
-  for (const article of articles) {
-    const breaking = isArticleBreakingNews(article);
-    for (const raw of new Set(article.symbols ?? [])) {
-      const symbol = raw.trim().toUpperCase();
-      if (!symbol) continue;
-      const cur = counts.get(symbol);
-      if (cur) {
-        cur.count += 1;
-        cur.hasBreaking = cur.hasBreaking || breaking;
-      } else {
-        counts.set(symbol, { symbol, count: 1, hasBreaking: breaking });
-      }
-    }
-  }
-  return [...counts.values()]
-    .sort((a, b) => b.count - a.count || a.symbol.localeCompare(b.symbol))
-    .slice(0, limit);
-}
-
-/** 화면에 있는 기사에 붙은 모든 심볼 — 시세를 한 번에 받아오기 위한 목록. */
-export function allArticleSymbols(articles: NewsArticle[], cap = 60): string[] {
+export function allArticleSymbols(articles: NewsArticle[], cap = 90): string[] {
   const seen = new Set<string>();
   for (const article of articles) {
     for (const raw of article.symbols ?? []) {
@@ -57,59 +34,6 @@ export function allArticleSymbols(articles: NewsArticle[], cap = 60): string[] {
     }
   }
   return [...seen];
-}
-
-/* ── A2: 뉴스 흐름 ────────────────────────────────────────────────────────── */
-
-export type NewsFlowBucket = {
-  /** 이 칸이 덮는 시간대의 시작 */
-  start: Date;
-  count: number;
-  breaking: number;
-};
-
-export const NEWS_FLOW_HOURS = 24;
-
-/**
- * 최근 24시간을 1시간 칸으로 나눈 기사량.
- *
- * 마지막 칸은 "지금이 속한 시간"이라 아직 채워지는 중이다 — 낮게 나오는 게 정상이고,
- * 그래서 화면에서 마지막 칸만 색을 달리해 진행 중임을 표시한다.
- */
-export function buildNewsFlow(articles: NewsArticle[], now = new Date()): NewsFlowBucket[] {
-  const end = new Date(now);
-  end.setMinutes(0, 0, 0);
-
-  const buckets: NewsFlowBucket[] = [];
-  const indexByTime = new Map<number, number>();
-  for (let i = NEWS_FLOW_HOURS - 1; i >= 0; i -= 1) {
-    const start = new Date(end.getTime() - i * 3600_000);
-    indexByTime.set(start.getTime(), buckets.length);
-    buckets.push({ start, count: 0, breaking: 0 });
-  }
-
-  const oldest = buckets[0].start.getTime();
-  for (const article of articles) {
-    const at = new Date(article.publishedAt).getTime();
-    if (!Number.isFinite(at) || at < oldest) continue;
-    const slot = new Date(at);
-    slot.setMinutes(0, 0, 0);
-    const idx = indexByTime.get(slot.getTime());
-    if (idx === undefined) continue;
-    buckets[idx].count += 1;
-    if (isArticleBreakingNews(article)) buckets[idx].breaking += 1;
-  }
-  return buckets;
-}
-
-/** A2의 막대를 눌렀을 때 남길 기사. */
-export function articlesInHour(articles: NewsArticle[], start: Date): NewsArticle[] {
-  const from = start.getTime();
-  const to = from + 3600_000;
-  return articles.filter((article) => {
-    const at = new Date(article.publishedAt).getTime();
-    return Number.isFinite(at) && at >= from && at < to;
-  });
 }
 
 /* ── C2: 시간 구분 ────────────────────────────────────────────────────────── */
@@ -153,21 +77,6 @@ export function newsTimeGroup(article: NewsArticle, now = new Date()): NewsTimeG
     at.getMonth() === yesterday.getMonth() &&
     at.getDate() === yesterday.getDate();
   return isYesterday ? "yesterday" : "older";
-}
-
-/* ── E3: 출처 분포 ────────────────────────────────────────────────────────── */
-
-export type PublisherCount = { id: string; name: string; count: number };
-
-export function publisherBreakdown(articles: NewsArticle[], limit = 6): PublisherCount[] {
-  const counts = new Map<string, PublisherCount>();
-  for (const article of articles) {
-    const id = article.publisher.id;
-    const cur = counts.get(id);
-    if (cur) cur.count += 1;
-    else counts.set(id, { id, name: article.publisher.name, count: 1 });
-  }
-  return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, limit);
 }
 
 /* ── D2: 같은 이슈 묶기 ───────────────────────────────────────────────────── */

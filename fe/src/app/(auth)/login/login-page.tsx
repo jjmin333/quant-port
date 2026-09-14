@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { useAuth } from "@/components/providers/auth-provider";
+import { toUserMessage } from "@/lib/error-message";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -20,7 +21,7 @@ export default function LoginPage() {
     try {
       await login(email, password, searchParams.get("next") ?? undefined);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "로그인에 실패했습니다.");
+      setError(toUserMessage(err, "로그인에 실패했습니다."));
     } finally {
       setSubmitting(false);
     }
@@ -80,7 +81,7 @@ export default function LoginPage() {
       </p>
 
       {searchParams.get("next") && (
-        <p className="mt-2 text-center text-xs text-[var(--text-muted)]">
+        <p className="mt-2 text-center text-cell text-[var(--text-muted)]">
           로그인 후 이전 페이지로 이동합니다.
         </p>
       )}

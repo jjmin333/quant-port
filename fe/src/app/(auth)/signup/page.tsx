@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useAuth } from "@/components/providers/auth-provider";
+import { toUserMessage } from "@/lib/error-message";
 
 export default function SignupPage() {
   const { signup } = useAuth();
@@ -19,7 +20,7 @@ export default function SignupPage() {
     try {
       await signup(email, password, displayName.trim());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "회원가입에 실패했습니다.");
+      setError(toUserMessage(err, "회원가입에 실패했습니다."));
     } finally {
       setSubmitting(false);
     }

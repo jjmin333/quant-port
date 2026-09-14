@@ -80,6 +80,38 @@ func (r *LLMSettingsRepo) Update(ctx context.Context, in model.LLMSettings) (mod
 	return r.Get(ctx)
 }
 
+/*
+MigrateLLMBatchCapsIfNeeded — 066_llm_batch_caps.sql (하루 상한 350 · 토큰 예비 200K).
+
+가드가 행이 아니라 **컬럼 DEFAULT**를 보는 이유: 값 갱신은 한 번만 걸려야 한다.
+행의 값으로 가드하면 관리자가 나중에 250으로 되돌린 순간 다음 재기동이 그 선택을
+다시 덮어쓴다. DEFAULT는 이 마이그레이션 말고는 아무도 안 건드리므로 「이미 적용됨」의
+정직한 표식이다.
+*/
+func MigrateLLMBatchCapsIfNeeded(ctx context.Context, db *sql.DB, migrationsDir string) error {
+	exists, err := tableExists(ctx, db, "llm_settings")
+	if err != nil || !exists {
+		return err
+	}
+	var def sql.NullString
+	err = db.QueryRowContext(ctx, `
+		SELECT column_default
+		FROM information_schema.columns
+		WHERE table_schema = DATABASE() AND table_name = 'llm_settings' AND column_name = 'daily_cap'
+	`).Scan(&def)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(def.String) == "350" {
+		return nil
+	}
+	return applyMigrationFile(ctx, db, migrationsDir,
+		"066_llm_batch_caps.sql", "AI 요약 배치 상한 350 · 토큰 예비 200K")
+}
+
 func clampInt(v, lo, hi int) int {
 	if v < lo {
 		return lo

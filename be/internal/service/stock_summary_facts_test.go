@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/enact/quant-port/be/internal/model"
@@ -185,8 +186,14 @@ func TestCompactFactsAreSmallAndCarryScore(t *testing.T) {
 	if len(facts.Score.Strengths) == 0 || len(facts.Score.Weaknesses) == 0 {
 		t.Error("강점/약점 축이 서버에서 계산되어야 함")
 	}
-	if facts.Fundamental == nil || facts.Fundamental.PERPeerPct == nil || *facts.Fundamental.PERPeerPct != 3 {
-		t.Error("PER 피어 백분위가 포함되어야 함")
+	// 배치는 백분위(높을수록 우수)로 저장하고, 페이로드는 화면과 같은 상위 N%
+	// (낮을수록 우수)로 뒤집어 넘긴다. per 백분위 3 → 상위 97%, roe 99 → 상위 1%.
+	// 두 방향이 한 페이로드에 섞여 있던 것이 「동종 상위 94%」의 원인이었다.
+	if facts.Fundamental == nil || facts.Fundamental.PERTopPercent == nil || *facts.Fundamental.PERTopPercent != 97 {
+		t.Errorf("PER 피어 순위가 상위 N%%로 담겨야 함, got %v", facts.Fundamental.PERTopPercent)
+	}
+	if facts.Fundamental.ROETopPercent == nil || *facts.Fundamental.ROETopPercent != 1 {
+		t.Errorf("ROE 백분위 99는 상위 1%%여야 함, got %v", facts.Fundamental.ROETopPercent)
 	}
 	if facts.Technical == nil || facts.Technical.Trend != "bearish" || facts.Technical.MACD != "recovering" {
 		t.Errorf("기술적 분류가 서버에서 이뤄져야 함, got %+v", facts.Technical)
@@ -208,4 +215,47 @@ func indexOf(h, n string) int {
 		}
 	}
 	return -1
+}
+
+/*
+개요는 **네 갈래를 다 거친다** (§8).
+
+예전에는 화면이 `valuation`을 그대로 첫 줄로 썼다. 그래서 내부자가 대량 매도
+중이어도 개요는 밸류에이션 이야기로 끝났다. 이 검사는 네 섹션이 모두 개요에
+한 번씩 등장하는지, 그리고 "데이터 없음" 문장은 빠지는지를 본다.
+*/
+func TestComposeOverviewDrawsOnEverySection(t *testing.T) {
+	view := &model.StockSummaryView{
+		Valuation: "PER은 동종 대비 낮다. 두 번째 문장은 버려진다.",
+		Technical: "주가는 20일선 위에 있다. 두 번째 문장.",
+		Insider:   "임원 대량 매도가 이어졌다. 두 번째 문장.",
+		News:      "실적 기대 기사가 다수다. 두 번째 문장.",
+	}
+	got := composeOverview(view)
+
+	for _, want := range []string{"PER", "20일선", "대량 매도", "실적 기대"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("overview dropped %q: %s", want, got)
+		}
+	}
+	if strings.Contains(got, "두 번째 문장") {
+		t.Fatalf("overview should keep only each section's first sentence: %s", got)
+	}
+}
+
+// 「없습니다」로만 끝나는 규칙 기반 문장은 개요 네 줄 중 한 줄을 쓸 값이 없다.
+func TestComposeOverviewSkipsEmptySections(t *testing.T) {
+	view := &model.StockSummaryView{
+		Valuation: "PER은 동종 대비 낮다.",
+		Technical: "기술적 지표를 계산할 캔들 데이터가 부족합니다.",
+		Insider:   "최근 내부자 거래 내역이 없습니다.",
+		News:      "최근 관련 뉴스가 없습니다.",
+	}
+	got := composeOverview(view)
+	if got != "PER은 동종 대비 낮다." {
+		t.Fatalf("expected only the informative sentence, got %q", got)
+	}
+	if composeOverview(&model.StockSummaryView{}) != "" {
+		t.Fatal("an empty view should produce an empty overview, not filler")
+	}
 }

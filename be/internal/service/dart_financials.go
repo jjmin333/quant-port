@@ -1,8 +1,11 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/xml"
+	"errors"
 	"fmt"
 	"net/url"
 	"sort"
@@ -14,6 +17,11 @@ import (
 )
 
 const dartAnnualReportCode = "11011"
+
+const (
+	dartFSConsolidated = "CFS" // 연결재무제표 — 대형·지주사 등 다수가 제출
+	dartFSSeparate     = "OFS" // 별도재무제표 — HPSP 등 자회사 없는 상장사는 이것만 있는 경우가 많다
+)
 
 // dartQuarterlyReportCodes drives 분기별 실적 상세 — DART reports cumulative
 // figures under these codes (1Q, 1H cumulative, 9M cumulative, then FY).
@@ -28,27 +36,17 @@ var dartQuarterlyReportCodes = []struct {
 	{"11011", "연간", 4},
 }
 
-// DART appends "(손실)" to an account name whenever any comparative column
-// in that particular filing shows a loss — the same concept can appear as
-// "영업이익" in one year's report and "영업이익(손실)" in another for the
-// same company. dartAccountNameMatches (below) treats these as the same
-// account rather than enumerating every suffixed variant here.
-var dartAccountFallbacks = map[string][]string{
-	"revenue":             {"매출액", "수익(매출액)"},
-	"operating_income":    {"영업이익"},
-	"net_income":          {"당기순이익", "분기순이익", "반기순이익"},
-	"total_assets":        {"자산총계"},
-	"total_equity":        {"자본총계"},
-	"total_liabilities":   {"부채총계"},
-	"current_assets":      {"유동자산"},
-	"current_liabilities": {"유동부채"},
-	"eps_basic":           {"기본주당이익", "주당순이익"},
-	"eps_diluted":         {"희석주당이익"},
-}
+// 계정명 매칭은 dart_account_match.go로 옮겼다 — DART가 같은 개념을 회사마다,
+// 같은 회사의 분기마다 다른 이름으로 주기 때문에 완전 일치 목록으로는 감당이
+// 안 됐다(실측 결측률: 매출 21.3% · EPS 32.2%).
 
 type dartAccountRow struct {
 	AccountName string `json:"account_nm"`
-	Amount      string `json:"thstrm_amount"`
+	// StatementDiv("sj_div")는 이 행이 어느 재무제표의 것인지 말한다
+	// (BS/IS/CIS/CF/SCE). 손익 항목을 재무상태표에서 찾지 않게 막는다 —
+	// `매출채권`(BS)이 매출로 잡히는 부류의 사고를 원천 차단한다.
+	StatementDiv string `json:"sj_div"`
+	Amount       string `json:"thstrm_amount"`
 	// AddAmount ("당기 누적") is only present on interim reports (반기/분기) —
 	// thstrm_amount there is already the standalone period; AddAmount is the
 	// cumulative-since-fiscal-year-start figure, needed to derive Q4 (DART has
@@ -82,13 +80,22 @@ func (d *DartClient) FetchAnnualFinancialSnapshots(ctx context.Context, symbol s
 }
 
 func (d *DartClient) fetchFinancialAccounts(ctx context.Context, corpCode string, bsnsYear int, reprtCode string) ([]dartAccountRow, error) {
-	u := fmt.Sprintf(
-		"https://opendart.fss.or.kr/api/fnlttSinglAcntAll.json?crtfc_key=%s&corp_code=%s&bsns_year=%d&reprt_code=%s&fs_div=CFS",
-		url.QueryEscape(d.cfg.APIKey),
-		url.QueryEscape(corpCode),
-		bsnsYear,
-		reprtCode,
-	)
+	rows, err := d.fetchFinancialAccountsFS(ctx, corpCode, bsnsYear, reprtCode, dartFSConsolidated)
+	if err == nil {
+		return rows, nil
+	}
+	if !dartFSNoDataErr(err) {
+		return nil, err
+	}
+	return d.fetchFinancialAccountsFS(ctx, corpCode, bsnsYear, reprtCode, dartFSSeparate)
+}
+
+func dartFSNoDataErr(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "no data for year")
+}
+
+func (d *DartClient) fetchFinancialAccountsFS(ctx context.Context, corpCode string, bsnsYear int, reprtCode, fsDiv string) ([]dartAccountRow, error) {
+	u := d.dartFinancialAccountsURL(corpCode, bsnsYear, reprtCode, fsDiv)
 	body, err := d.fetchURL(ctx, u)
 	if err != nil {
 		return nil, err
@@ -106,9 +113,28 @@ func (d *DartClient) fetchFinancialAccounts(ctx context.Context, corpCode string
 		if payload.Status == "013" {
 			return nil, fmt.Errorf("dart: no data for year %d", bsnsYear)
 		}
+		if payload.Status == "020" {
+			return nil, fmt.Errorf("%w (%s)", ErrDartQuotaExceeded, payload.Message)
+		}
 		return nil, fmt.Errorf("dart fnlttSinglAcntAll: %s", payload.Message)
 	}
 	return payload.List, nil
+}
+
+func (d *DartClient) dartFinancialAccountsURL(corpCode string, bsnsYear int, reprtCode, fsDiv string) string {
+	base := "https://opendart.fss.or.kr/api/fnlttSinglAcntAll.json"
+	if d != nil && d.financialAPIBase != "" {
+		base = strings.TrimRight(d.financialAPIBase, "/")
+	}
+	return fmt.Sprintf(
+		"%s?crtfc_key=%s&corp_code=%s&bsns_year=%d&reprt_code=%s&fs_div=%s",
+		base,
+		url.QueryEscape(d.cfg.APIKey),
+		url.QueryEscape(corpCode),
+		bsnsYear,
+		reprtCode,
+		fsDiv,
+	)
 }
 
 // FetchQuarterlySnapshots returns this fiscal year's filed 1Q/반기/3Q/연간
@@ -143,6 +169,9 @@ func (d *DartClient) fetchQuarterlyForYear(ctx context.Context, corpCode string,
 	for _, rc := range dartQuarterlyReportCodes {
 		rows, err := d.fetchFinancialAccounts(ctx, corpCode, year, rc.Code)
 		if err != nil {
+			if IsDartQuotaExceeded(err) {
+				return nil
+			}
 			continue // not yet filed for this period
 		}
 		snap := mapDartRows(rows)
@@ -186,7 +215,14 @@ func (d *DartClient) FetchQuarterlyHistory(ctx context.Context, symbol string, y
 	currentYear := time.Now().Year()
 	var out []model.FinancialHistoryPeriod
 	for offset := years; offset >= 0; offset-- {
-		out = append(out, d.fetchStandaloneQuartersForYear(ctx, corpCode, currentYear-offset)...)
+		yearly, err := d.fetchStandaloneQuartersForYear(ctx, corpCode, currentYear-offset)
+		if err != nil {
+			if IsDartQuotaExceeded(err) {
+				return nil, err
+			}
+			continue
+		}
+		out = append(out, yearly...)
 	}
 	if len(out) == 0 {
 		return nil, fmt.Errorf("dart: no quarterly history found for %s", symbol)
@@ -197,11 +233,16 @@ func (d *DartClient) FetchQuarterlyHistory(ctx context.Context, symbol string, y
 	return out, nil
 }
 
-func (d *DartClient) fetchStandaloneQuartersForYear(ctx context.Context, corpCode string, year int) []model.FinancialHistoryPeriod {
+func (d *DartClient) fetchStandaloneQuartersForYear(ctx context.Context, corpCode string, year int) ([]model.FinancialHistoryPeriod, error) {
 	rowsByCode := map[string][]dartAccountRow{}
 	for _, rc := range dartQuarterlyReportCodes {
 		rows, err := d.fetchFinancialAccounts(ctx, corpCode, year, rc.Code)
 		if err != nil {
+			// 한도 소진은 건너뛸 수 있는 실패가 아니다 — 그 뒤 모든 호출이 같은
+			// 이유로 실패한다. 즉시 멈춰 호출자가 배치를 세울 수 있게 한다.
+			if IsDartQuotaExceeded(err) {
+				return nil, err
+			}
 			continue // not yet filed for this period
 		}
 		rowsByCode[rc.Code] = rows
@@ -236,7 +277,7 @@ func (d *DartClient) fetchStandaloneQuartersForYear(ctx context.Context, corpCod
 		}
 		out = append(out, historyPeriod(year, 4, q4))
 	}
-	return out
+	return out, nil
 }
 
 // historyPeriod converts a snapshot into a history period, computing
@@ -292,109 +333,45 @@ func (d *DartClient) FindLatestAnnualSnapshots(ctx context.Context, symbol strin
 }
 
 func mapDartRows(rows []dartAccountRow) model.FinancialSnapshot {
+	pick := func(field string) *int64 { return toInt64Ptr(pickDartTiered(rows, field, dartAmountCurrent)) }
+
 	var snap model.FinancialSnapshot
-	snap.Revenue = pickDartAmount(rows, dartAccountFallbacks["revenue"])
-	snap.OperatingIncome = pickDartAmount(rows, dartAccountFallbacks["operating_income"])
-	snap.NetIncome = pickDartAmount(rows, dartAccountFallbacks["net_income"])
-	snap.TotalAssets = pickDartAmount(rows, dartAccountFallbacks["total_assets"])
-	snap.TotalEquity = pickDartAmount(rows, dartAccountFallbacks["total_equity"])
-	snap.TotalLiabilities = pickDartAmount(rows, dartAccountFallbacks["total_liabilities"])
-	snap.CurrentAssets = pickDartAmount(rows, dartAccountFallbacks["current_assets"])
-	snap.CurrentLiabilities = pickDartAmount(rows, dartAccountFallbacks["current_liabilities"])
-	snap.EPSBasic = pickDartFloat(rows, dartAccountFallbacks["eps_basic"])
+	snap.Revenue = pick("revenue")
+	snap.OperatingIncome = pick("operating_income")
+	snap.NetIncome = pick("net_income")
+	snap.TotalAssets = pick("total_assets")
+	snap.TotalEquity = pick("total_equity")
+	snap.TotalLiabilities = pick("total_liabilities")
+	snap.CurrentAssets = pick("current_assets")
+	snap.CurrentLiabilities = pick("current_liabilities")
+	snap.EPSBasic = pickDartTiered(rows, "eps_basic", dartAmountCurrent)
 	snap.EPSDiluted = firstNonNilFloat(
-		pickDartFloat(rows, dartAccountFallbacks["eps_diluted"]),
+		pickDartTiered(rows, "eps_diluted", dartAmountCurrent),
 		snap.EPSBasic,
 	)
 	return snap
+}
+
+func toInt64Ptr(v *float64) *int64 {
+	if v == nil {
+		return nil
+	}
+	i := int64(mathRound(*v))
+	return &i
 }
 
 // mapDartCumulativeRows reads thstrm_add_amount (cumulative-since-fiscal-
 // year-start) instead of thstrm_amount — only meaningful on interim reports,
 // used to derive Q4 (see FetchQuarterlyHistory).
 func mapDartCumulativeRows(rows []dartAccountRow) model.FinancialSnapshot {
+	pick := func(field string) *int64 { return toInt64Ptr(pickDartTiered(rows, field, dartAmountAdd)) }
+
 	var snap model.FinancialSnapshot
-	snap.Revenue = pickDartAddAmount(rows, dartAccountFallbacks["revenue"])
-	snap.OperatingIncome = pickDartAddAmount(rows, dartAccountFallbacks["operating_income"])
-	snap.NetIncome = pickDartAddAmount(rows, dartAccountFallbacks["net_income"])
-	snap.EPSBasic = pickDartAddFloat(rows, dartAccountFallbacks["eps_basic"])
+	snap.Revenue = pick("revenue")
+	snap.OperatingIncome = pick("operating_income")
+	snap.NetIncome = pick("net_income")
+	snap.EPSBasic = pickDartTiered(rows, "eps_basic", dartAmountAdd)
 	return snap
-}
-
-func pickDartAddAmount(rows []dartAccountRow, names []string) *int64 {
-	v := pickDartAddFloat(rows, names)
-	if v == nil {
-		return nil
-	}
-	i := int64(mathRound(*v))
-	return &i
-}
-
-func pickDartAddFloat(rows []dartAccountRow, names []string) *float64 {
-	var best *float64
-	var bestAbs float64
-	for _, row := range rows {
-		if !dartAccountNameMatchesAny(row.AccountName, names) {
-			continue
-		}
-		if strings.TrimSpace(row.AddAmount) == "" {
-			continue
-		}
-		val := parseDartAmount(row.AddAmount)
-		abs := val
-		if abs < 0 {
-			abs = -abs
-		}
-		if best == nil || abs > bestAbs {
-			v := val
-			best = &v
-			bestAbs = abs
-		}
-	}
-	return best
-}
-
-// dartAccountNameMatchesAny reports whether accountName is one of names, or
-// one of names with DART's conditional "(손실)" suffix appended (see
-// dartAccountFallbacks doc comment).
-func dartAccountNameMatchesAny(accountName string, names []string) bool {
-	accountName = strings.TrimSpace(accountName)
-	for _, name := range names {
-		if accountName == name || accountName == name+"(손실)" {
-			return true
-		}
-	}
-	return false
-}
-
-func pickDartAmount(rows []dartAccountRow, names []string) *int64 {
-	v := pickDartFloat(rows, names)
-	if v == nil {
-		return nil
-	}
-	i := int64(mathRound(*v))
-	return &i
-}
-
-func pickDartFloat(rows []dartAccountRow, names []string) *float64 {
-	var best *float64
-	var bestAbs float64
-	for _, row := range rows {
-		if !dartAccountNameMatchesAny(row.AccountName, names) {
-			continue
-		}
-		val := parseDartAmount(row.Amount)
-		abs := val
-		if abs < 0 {
-			abs = -abs
-		}
-		if best == nil || abs > bestAbs {
-			v := val
-			best = &v
-			bestAbs = abs
-		}
-	}
-	return best
 }
 
 func parseDartAmount(raw string) float64 {
@@ -415,4 +392,55 @@ func mathRound(v float64) int64 {
 		return int64(v + 0.5)
 	}
 	return int64(v - 0.5)
+}
+
+// ErrDartQuotaExceeded — DART 일일 사용한도 소진(status 020).
+//
+// **다른 오류와 갈라야 한다.** 「그 해에 그 보고서가 없다」(013)는 정상이고 건너뛰면
+// 되지만, 한도 소진은 **그 뒤 모든 호출이 똑같이 실패**한다. 구분하지 않으면 배치가
+// 남은 수백 종목을 계속 돌면서 아무것도 못 쓰고, 「구멍 그대로 · ok=true」로 보고한다
+// (2026-09-02 실측: 705종목 전부 ok=true인데 코호트가 한 종목도 안 줄었다).
+var ErrDartQuotaExceeded = errors.New("dart: 일일 사용한도 초과")
+
+// IsDartQuotaExceeded reports whether err is (or wraps) a DART quota rejection.
+func IsDartQuotaExceeded(err error) bool {
+	return errors.Is(err, ErrDartQuotaExceeded)
+}
+
+// dartErrorPayload는 응답이 DART의 거절인지 본다 — JSON과 XML 두 꼴 모두.
+//
+// **DART는 거절도 HTTP 200으로 준다.** 그래서 전송 계층은 성공이라고 말한다.
+// ZIP(corpCode)이나 JSON(재무)을 기대하는 자리에서 이걸 못 알아보면 빈 결과가
+// 조용히 만들어진다 — 아무도 실패라고 말하지 않는다.
+//
+// 실측 2026-09-02: 한도 소진 시 `corpCode.xml`이
+// `<result><status>020</status>…</result>` 149바이트를 200으로 돌려줬다.
+// 이것을 corp_code 목록으로 파싱하면 **빈 맵**이 되고, 그 뒤 모든 종목이
+// 「corp_code not found」로 떨어진다. 705종목이 전부 그렇게 실패하고도
+// ok로 보고된 이유다.
+func dartErrorPayload(body []byte) (status, message string, ok bool) {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return "", "", false
+	}
+	var payload struct {
+		Status  string `json:"status" xml:"status"`
+		Message string `json:"message" xml:"message"`
+	}
+	switch trimmed[0] {
+	case 0x7b: // JSON
+		if err := json.Unmarshal(trimmed, &payload); err != nil {
+			return "", "", false
+		}
+	case 0x3c: // XML — corpCode.xml은 오류를 이 꼴로 준다
+		if err := xml.Unmarshal(trimmed, &payload); err != nil {
+			return "", "", false
+		}
+	default:
+		return "", "", false
+	}
+	if payload.Status == "" || payload.Status == "000" {
+		return "", "", false
+	}
+	return payload.Status, payload.Message, true
 }

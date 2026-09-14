@@ -43,12 +43,24 @@ func TestKrPreviousRegularSessionFallback_skipsWeekend(t *testing.T) {
 	}
 }
 
-func TestComputeQuoteChange_regularUsesPrevRegularClose(t *testing.T) {
-	change, rate := computeQuoteChange(1_647_000, 1_322_000, 0, "regular")
+func TestComputeQuoteChange_usesPrevClose(t *testing.T) {
+	change, rate := computeQuoteChange(1_647_000, 1_322_000)
 	if change != 325_000 {
 		t.Fatalf("change = %v want 325000", change)
 	}
 	if rate < 24.5 || rate > 24.7 {
 		t.Fatalf("rate = %.2f want ~24.58", rate)
+	}
+}
+
+// 마감 후에도 기준은 전일 종가다 — 당일 정규장 종가를 기준으로 삼으면 하루
+// 등락률이 아니라 시간외 등락률이 된다(실측 2026-09-01 삼성전자 −2.11% vs −1.16%).
+func TestComputeQuoteChange_closedSessionStillUsesPrevClose(t *testing.T) {
+	change, rate := computeQuoteChange(255_000, 258_000)
+	if change != -3_000 {
+		t.Fatalf("change = %v want -3000", change)
+	}
+	if rate < -1.17 || rate > -1.15 {
+		t.Fatalf("rate = %.4f want ~-1.163", rate)
 	}
 }

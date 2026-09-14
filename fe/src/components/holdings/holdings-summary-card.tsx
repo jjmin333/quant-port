@@ -8,6 +8,7 @@ import { formatKRW, formatPercent, formatPriceChange } from "@/lib/format";
 import type { HoldingsTotals } from "@/lib/holdings-calc";
 import { trendTextClass } from "@/lib/trend-colors";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 
 type StatItem = {
   key: string;
@@ -56,7 +57,7 @@ export function HoldingsSummaryCard({
   if (!totals || (totals.pricedCount === 0 && !totals.hasCash)) {
     return (
       <>
-        <Card className="p-6 text-center text-xs text-muted-foreground">
+        <Card className="p-6 text-center text-cell text-muted-foreground">
           <div className="mb-3 flex justify-center gap-2">
             <CashButton onClick={() => setCashOpen(true)} />
           </div>
@@ -132,33 +133,33 @@ export function HoldingsSummaryCard({
     <>
       <Card className="p-4 md:p-5">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] font-medium text-muted-foreground">{headlineLabel}</p>
+          <p className="text-cell font-medium text-muted-foreground">{headlineLabel}</p>
           <CashButton onClick={() => setCashOpen(true)} />
         </div>
 
         <div className="mt-1 min-w-0">
           {headlineCanShow ? (
             <>
-              <p className="font-mono text-[32px] leading-tight font-bold tracking-tight tabular-nums">
+              <p className="font-num text-[32px] leading-tight font-bold tracking-tight tabular-nums">
                 {formatKRW(headlineValue)}
               </p>
               {totals.pricedCount > 0 ? (
-                <p className={cn("mt-0.5 font-mono text-[13px] tabular-nums", dayTone)}>
+                <p className={cn("mt-0.5 font-num text-note tabular-nums", dayTone)}>
                   오늘 {formatPriceChange(Math.round(totals.dayPnlKRW), "KRW")} (
                   {formatPercent(totals.dayPnlRate)})
                 </p>
               ) : (
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                <p className="mt-0.5 text-cell text-muted-foreground">
                   등록된 주식 종목이 없습니다
                 </p>
               )}
             </>
           ) : (
             <>
-              <p className="font-mono text-[32px] leading-tight font-bold tabular-nums text-muted-foreground">
+              <p className="font-num text-[32px] leading-tight font-bold tabular-nums text-muted-foreground">
                 —
               </p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
+              <p className="mt-0.5 text-cell text-muted-foreground">
                 환율을 불러오는 중이라 달러 자산을 합산하지 못했습니다
               </p>
             </>
@@ -198,7 +199,7 @@ function CashButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
+      className={cn(buttonVariants({ variant: "outline", size: "xs" }), "text-muted-foreground hover:bg-accent hover:text-foreground")}
     >
       <Wallet className="size-3" />
       현금
@@ -209,11 +210,11 @@ function CashButton({ onClick }: { onClick: () => void }) {
 function Stat({ label, value, sub, tone }: StatItem) {
   return (
     <div className="min-w-0">
-      <p className="text-[11px] text-muted-foreground">{label}</p>
-      <p className={cn("font-mono text-[15px] font-semibold tabular-nums", tone)}>{value}</p>
+      <p className="text-cell text-muted-foreground">{label}</p>
+      <p className={cn("font-num text-section font-semibold tabular-nums", tone)}>{value}</p>
       <p
         className={cn(
-          "min-h-[14px] font-mono text-[10px] tabular-nums text-muted-foreground",
+          "min-h-[14px] font-num text-micro tabular-nums text-muted-foreground",
           tone,
         )}
       >

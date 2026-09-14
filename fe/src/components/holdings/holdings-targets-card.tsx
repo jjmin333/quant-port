@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SectionCard, SectionEmpty } from "@/components/ui/section-card";
-import { formatPercent, formatPrice } from "@/lib/format";
+import { formatPercent } from "@/lib/format";
 import type { HoldingMetrics } from "@/lib/holdings-calc";
 import {
   inferTargetCurrency,
@@ -23,6 +23,8 @@ import {
 } from "@/lib/price-targets";
 import { trendTextClass } from "@/lib/trend-colors";
 import { cn } from "@/lib/utils";
+import { toUserMessage } from "@/lib/error-message";
+import { PriceDisplay } from "@/components/ui/price-display";
 
 /**
  * 보유 종목에 걸어둔 내 목표가까지 남은 거리 + 빠른 목표가 추가.
@@ -77,7 +79,7 @@ export function HoldingsTargetsCard({
       setAddOpen(false);
       resetForm();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "저장 실패");
+      setError(toUserMessage(err, "저장 실패"));
     }
   };
 
@@ -94,17 +96,17 @@ export function HoldingsTargetsCard({
                   resetForm();
                   setAddOpen(true);
                 }}
-                className="flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground"
+                className="flex items-center gap-0.5 text-cell text-muted-foreground hover:text-foreground"
               >
                 <Plus className="size-3" />
                 추가
               </button>
             )}
             <Link
-              href="/targets"
-              className="flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground"
+              href="/predictions"
+              className="flex items-center gap-0.5 text-cell text-muted-foreground hover:text-foreground"
             >
-              목표가 관리
+              목표가 예측
               <ArrowRight className="size-3" />
             </Link>
           </div>
@@ -119,22 +121,22 @@ export function HoldingsTargetsCard({
                 <button
                   type="button"
                   onClick={() => onPick(m.symbol)}
-                  className="flex h-[30px] w-full min-w-0 items-center gap-2 rounded-md px-1 text-[11px] hover:bg-accent"
+                  className="flex h-[30px] w-full min-w-0 items-center gap-2 rounded-md px-1 text-cell hover:bg-accent"
                 >
                   <span className="min-w-0 flex-1 truncate text-left">{m.name}</span>
-                  <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
-                    {formatPrice(target.targetPrice, target.currency)}
+                  <span className="shrink-0 font-num text-micro tabular-nums text-muted-foreground">
+                    <PriceDisplay value={target.targetPrice} currency={target.currency} size="inherit" />
                   </span>
                   {gap == null ? (
                     <span className="w-14 shrink-0 text-right text-muted-foreground">—</span>
                   ) : gap <= 0 ? (
-                    <span className="w-14 shrink-0 rounded bg-[var(--brand-muted)] text-center text-[10px] font-semibold text-[var(--brand)]">
+                    <span className="w-14 shrink-0 rounded bg-[var(--brand-muted)] text-center text-micro font-semibold text-[var(--brand)]">
                       도달
                     </span>
                   ) : (
                     <span
                       className={cn(
-                        "w-14 shrink-0 text-right font-mono tabular-nums",
+                        "w-14 shrink-0 text-right font-num tabular-nums",
                         trendTextClass(gap),
                       )}
                     >
@@ -152,17 +154,17 @@ export function HoldingsTargetsCard({
         <DialogContent className="gap-4 sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-base">목표가 추가</DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogDescription className="text-cell">
               보유 종목 중에서 선택합니다.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <label className="block space-y-1">
-              <span className="text-[11px] text-muted-foreground">종목</span>
+              <span className="text-cell text-muted-foreground">종목</span>
               <select
                 value={pickSymbol}
                 onChange={(e) => setPickSymbol(e.target.value)}
-                className="h-8 w-full rounded-lg border bg-background px-2.5 text-xs focus:border-[var(--brand)] focus:outline-none"
+                className="h-8 w-full rounded-lg border bg-background px-2.5 text-cell focus:border-[var(--brand)] focus:outline-none"
               >
                 <option value="">선택…</option>
                 {(heldWithoutTarget.length > 0 ? heldWithoutTarget : metrics).map((m) => (
@@ -173,7 +175,7 @@ export function HoldingsTargetsCard({
               </select>
             </label>
             <label className="block space-y-1">
-              <span className="text-[11px] text-muted-foreground">목표가</span>
+              <span className="text-cell text-muted-foreground">목표가</span>
               <Input
                 type="number"
                 min={0}
@@ -181,10 +183,10 @@ export function HoldingsTargetsCard({
                 placeholder="0"
                 value={targetPrice}
                 onChange={(e) => setTargetPrice(e.target.value)}
-                className="font-mono tabular-nums"
+                className="font-num tabular-nums"
               />
             </label>
-            {error && <p className="text-[11px] text-[var(--danger)]">{error}</p>}
+            {error && <p className="text-cell text-[var(--danger)]">{error}</p>}
             <div className="flex gap-2">
               <Button type="button" size="sm" className="flex-1" onClick={saveTarget}>
                 저장

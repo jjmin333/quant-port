@@ -12,6 +12,7 @@ import type { ValuationSeries } from "@/lib/holding-trades-types";
 import { formatKRW, formatPercent } from "@/lib/format";
 import { trendTextClass } from "@/lib/trend-colors";
 import { cn } from "@/lib/utils";
+import { toUserMessage } from "@/lib/error-message";
 
 export type UntrackedHoldingInput = {
   symbol: string;
@@ -84,7 +85,7 @@ export function HoldingsValuationChart({
           setLoaded({
             key,
             series: null,
-            error: err instanceof Error ? err.message : "불러오기 실패",
+            error: toUserMessage(err, "불러오기 실패"),
           });
         }
       });
@@ -173,7 +174,7 @@ export function HoldingsValuationChart({
       setBulkModalOpen(false);
       onTradesChanged?.();
     } catch (err: unknown) {
-      setBulkError(err instanceof Error ? err.message : "일괄 등록 실패");
+      setBulkError(toUserMessage(err, "일괄 등록 실패"));
     } finally {
       setBulkBusy(false);
     }
@@ -189,7 +190,7 @@ export function HoldingsValuationChart({
     <>
     <Card className="p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-semibold">평가금액 추이</p>
+        <p className="text-cell font-semibold">평가금액 추이</p>
         <div className="flex items-center gap-0.5 rounded-md bg-muted p-0.5">
           {RANGES.map((r) => (
             <button
@@ -198,7 +199,7 @@ export function HoldingsValuationChart({
               onClick={() => setDays(r.days)}
               aria-pressed={days === r.days}
               className={cn(
-                "rounded px-2 py-0.5 text-[11px] transition-colors",
+                "rounded px-2 py-0.5 text-cell transition-colors",
                 days === r.days
                   ? "bg-card font-semibold text-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground",
@@ -213,10 +214,10 @@ export function HoldingsValuationChart({
       {loading ? (
         <div className="h-[120px] animate-pulse rounded bg-muted" />
       ) : error ? (
-        <p className="py-10 text-center text-[11px] text-muted-foreground">{error}</p>
+        <p className="py-10 text-center text-cell text-muted-foreground">{error}</p>
       ) : !chart ? (
         <div className="py-6 text-center">
-          <p className="text-[11px] leading-relaxed text-muted-foreground">
+          <p className="text-cell leading-relaxed text-muted-foreground">
             매매 이력이 없어 추이를 그릴 수 없습니다.
             <br />
             종목을 눌러 매수 기록을 추가하면 그날부터의 실제 평가금액이 쌓입니다.
@@ -290,14 +291,14 @@ export function HoldingsValuationChart({
             </svg>
           </div>
 
-          <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
+          <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-micro text-muted-foreground">
             {hoveredPoint ? (
               <>
                 <span>{hoveredPoint.date}</span>
-                <span className="font-mono tabular-nums text-foreground">
+                <span className="font-num tabular-nums text-foreground">
                   평가 {formatKRW(Math.round(hoveredPoint.valueKrw))}
                 </span>
-                <span className="font-mono tabular-nums">
+                <span className="font-num tabular-nums">
                   매입 {formatKRW(Math.round(hoveredPoint.costKrw))}
                 </span>
               </>
@@ -306,7 +307,7 @@ export function HoldingsValuationChart({
                 <span>
                   {chart.points[0].date} · {formatKRW(Math.round(chart.first))}
                 </span>
-                <span className={cn("font-mono tabular-nums", trendTextClass(chart.rate))}>
+                <span className={cn("font-num tabular-nums", trendTextClass(chart.rate))}>
                   구간 {formatPercent(chart.rate)}
                 </span>
                 <span>
@@ -317,7 +318,7 @@ export function HoldingsValuationChart({
             )}
           </div>
 
-          <p className="mt-1.5 border-t pt-1.5 text-[10px] leading-relaxed text-muted-foreground">
+          <p className="mt-1.5 border-t pt-1.5 text-micro leading-relaxed text-muted-foreground">
             실선 = 평가금액, 점선 = 매입금액. 매매 이력에 기록된 날짜별 실제 보유수량 ×
             그날 종가로 계산합니다.
             {series?.untrackedSymbols && series.untrackedSymbols.length > 0 && (
@@ -375,13 +376,13 @@ function BulkRegisterBlock({
 }) {
   return (
     <div className="mx-auto mt-4 max-w-sm rounded-lg border border-dashed bg-muted/30 p-3 text-left">
-      <p className="text-[11px] font-medium text-foreground">
+      <p className="text-cell font-medium text-foreground">
         보유 {candidates.length}종목을 평가금액 추이에 등록
       </p>
-      <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+      <p className="mt-1 text-micro leading-relaxed text-muted-foreground">
         현재 수량·평단으로 매수 기록을 만듭니다. 종목별 매수일을 지정할 수 있습니다.
       </p>
-      <p className="mt-1 truncate text-[10px] text-muted-foreground">
+      <p className="mt-1 truncate text-micro text-muted-foreground">
         {candidates
           .slice(0, 4)
           .map((h) => h.name || h.symbol)
@@ -389,11 +390,11 @@ function BulkRegisterBlock({
         {candidates.length > 4 ? ` 외 ${candidates.length - 4}종목` : ""}
       </p>
       {skipped.length > 0 && (
-        <p className="mt-1 text-[10px] text-muted-foreground">
+        <p className="mt-1 text-micro text-muted-foreground">
           평단이 없어 제외: {skipped.map((h) => h.name || h.symbol).join(", ")}
         </p>
       )}
-      {error && <p className="mt-1 text-[10px] text-[var(--danger)]">{error}</p>}
+      {error && <p className="mt-1 text-micro text-[var(--danger)]">{error}</p>}
       <Button
         type="button"
         size="sm"

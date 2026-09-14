@@ -19,6 +19,8 @@ import {
   type StampUpdateInput,
 } from "@/lib/stamp-types";
 import { cn } from "@/lib/utils";
+import { PriceDisplay } from "@/components/ui/price-display";
+import { buttonVariants } from "@/components/ui/button";
 
 /**
  * 개봉 — 이 화면의 하이라이트.
@@ -144,7 +146,7 @@ export function StampRevealModal({
               : "bg-gradient-to-b from-amber-500/12 to-transparent",
           )}
         >
-          <div className="flex items-center justify-center gap-1.5 text-[11px] text-[var(--text-muted)]">
+          <div className="flex items-center justify-center gap-1.5 text-cell text-[var(--text-muted)]">
             <StockAvatar symbol={stamp.symbol} name={stamp.symbolName} size="xs" />
             {stamp.symbolName || stamp.symbol} · {formatDateKST(stamp.stampedAt)}{" "}
             {STANCE_LABELS[stamp.stance]} · {HORIZON_LABELS[stamp.horizonKind]}
@@ -157,8 +159,8 @@ export function StampRevealModal({
           >
             {stamp.verdict === "unknown" ? "판정 불가" : hit ? "적중" : "빗나감"}
           </p>
-          <p className="mt-1 text-[11.5px] text-[var(--text-muted)]">
-            {formatPrice(stamp.price, currency)} → <b>{settled?.price !== undefined
+          <p className="mt-1 text-cell text-[var(--text-muted)]">
+            <PriceDisplay value={stamp.price} currency={currency} size="inherit" /> → <b>{settled?.price !== undefined
               ? formatPrice(settled.price, currency)
               : stamp.current
                 ? formatPrice(stamp.current.price, currency)
@@ -175,9 +177,9 @@ export function StampRevealModal({
             )}
           </p>
           {stamp.targetHit && (
-            <p className="mt-1 text-[11px] text-[var(--profit)]">
+            <p className="mt-1 text-cell text-[var(--profit)]">
               {formatDateKST(stamp.targetHit.date)} 장중 목표가{" "}
-              {formatPrice(stamp.targetPrice, currency)}에 도달해 조기 종료됐습니다
+              <PriceDisplay value={stamp.targetPrice} currency={currency} size="inherit" />에 도달해 조기 종료됐습니다
             </p>
           )}
 
@@ -194,7 +196,7 @@ export function StampRevealModal({
                   />
                 ))}
               </div>
-              <p className="mt-1 text-[10px] text-[var(--text-muted)]">
+              <p className="mt-1 text-micro text-[var(--text-muted)]">
                 {index + 1} / {queue.length}
               </p>
             </>
@@ -226,7 +228,7 @@ export function StampRevealModal({
             )}
             <Row label="확신도" value={`${stamp.conviction} / 5`} />
             {stamp.note && (
-              <p className="mt-1.5 border-t border-[var(--border)] pt-1.5 text-[11px] text-[var(--text-secondary)]">
+              <p className="mt-1.5 border-t border-[var(--border)] pt-1.5 text-cell text-[var(--text-secondary)]">
                 {stamp.note}
               </p>
             )}
@@ -280,9 +282,9 @@ export function StampRevealModal({
                 if (e.key === "Enter" && !busy) confirm();
               }}
               placeholder={hit ? "예: 수급 근거가 실제로 이어졌다" : "예: 실적 발표 일정을 못 봤다"}
-              className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-2 text-[11px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none"
+              className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-2 text-cell text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none"
             />
-            <p className="mt-1 text-[10px] text-[var(--text-muted)]">
+            <p className="mt-1 text-micro text-[var(--text-muted)]">
               원래 적어둔 이유 뒤에 붙습니다 — 지우지 않습니다
             </p>
           </Panel>
@@ -293,18 +295,18 @@ export function StampRevealModal({
             type="button"
             disabled={busy}
             onClick={() => (remaining > 0 ? setIndex((i) => i + 1) : onOpenChange(false))}
-            className="rounded-lg px-2.5 py-1.5 text-[11px] text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+            className="rounded-lg px-2.5 py-1.5 text-cell text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
           >
             건너뛰기
           </button>
-          <span className="ml-auto text-[10.5px] text-[var(--text-muted)]">
+          <span className="ml-auto text-micro text-[var(--text-muted)]">
             {remaining > 0 ? `남은 ${remaining}건` : "마지막"}
           </span>
           <button
             type="button"
             disabled={busy}
             onClick={confirm}
-            className="rounded-lg bg-[var(--brand)] px-3 py-1.5 text-[11px] font-medium text-white disabled:opacity-40"
+            className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-white disabled:opacity-40")}
           >
             {busy ? "저장 중…" : remaining > 0 ? "확인하고 다음 →" : "확인"}
           </button>
@@ -317,7 +319,7 @@ export function StampRevealModal({
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-lg border border-[var(--border)] p-2.5">
-      <h4 className="mb-1.5 text-[10.5px] font-semibold text-[var(--text-muted)]">{title}</h4>
+      <h4 className="mb-1.5 text-micro font-semibold text-[var(--text-muted)]">{title}</h4>
       {children}
     </section>
   );
@@ -333,7 +335,7 @@ function Row({
   valueClass?: string;
 }) {
   return (
-    <div className="flex items-baseline justify-between py-0.5 text-[11px]">
+    <div className="flex items-baseline justify-between py-0.5 text-cell">
       <span className="text-[var(--text-muted)]">{label}</span>
       <span className={cn("tabular-nums text-[var(--text-secondary)]", valueClass)}>{value}</span>
     </div>

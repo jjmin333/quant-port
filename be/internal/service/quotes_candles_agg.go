@@ -17,8 +17,6 @@ func intervalMinutes(interval model.CandleInterval) int {
 		return 10
 	case model.Interval30m:
 		return 30
-	case model.Interval60m:
-		return 60
 	default:
 		return 0
 	}
@@ -33,9 +31,22 @@ func needsCandleAggregation(interval model.CandleInterval) bool {
 	}
 }
 
-// maxIntradayRawBars caps 1m history fetched for aggregated intraday intervals.
-// 7200 ≈ 120×60m bars (~5 US regular sessions of 1m data).
-const maxIntradayRawBars = 7200
+/*
+maxIntradayRawBars — 집계 인트라데이 간격을 만들기 위해 받아 두는 1분봉 상한.
+
+값은 **가장 굵은 인트라데이 간격 × 표시 봉 수**에서 나온다. 60분봉이 있던 동안은
+`120 × 60 = 7,200`이었고, 60분봉을 기능에서 뺀 지금은 30분봉이 가장 굵어
+`120 × 30 = 3,600`이다.
+
+이 상수는 화면용 창 크기로만 쓰이지 않는다 — **콜드 미스 경로의 페치 크기**이기도
+하다(`intraday1mFetchTarget`이 저장된 봉이 하나도 없으면 이 값을 그대로 요청한다).
+Toss `/candles`가 200봉/호출이므로 7,200은 **36호출**, 3,600은 **18호출**이다.
+일봉 1호출까지 더하면 콜드 미스 1회가 37 → 19호출로 줄어든다.
+
+그래서 이 값을 낮추는 것은 60분봉을 보던 사람만이 아니라 **모든 인트라데이 첫
+열람**에 효과가 있다.
+*/
+const maxIntradayRawBars = 3600
 
 // intradayDisplayBars is the default tail length returned per intraday interval.
 const intradayDisplayBars = 120
@@ -145,6 +156,7 @@ func aggregateCandlesMinutes(candles []model.Candle, interval model.CandleInterv
 			bucketStart = start
 			next := c
 			next.Time = formatCandleTime(start, interval)
+			next.SrcBars = candleCoverage(c)
 			bucket = &next
 			continue
 		}
@@ -152,9 +164,21 @@ func aggregateCandlesMinutes(candles []model.Candle, interval model.CandleInterv
 		bucket.Low = min(bucket.Low, c.Low)
 		bucket.Close = c.Close
 		bucket.Volume += c.Volume
+		// 이 버킷이 몇 개의 1분봉에서 나왔는지 이어 센다. 계층이 섞인 소스를
+		// 접을 때 어느 쪽이 더 완전한지 판단하는 근거가 된다.
+		bucket.SrcBars += candleCoverage(c)
 	}
 	flush()
 	return out
+}
+
+// candleCoverage — 이 봉이 대표하는 1분봉 수. 저장 경로를 거치지 않은 봉
+// (Toss에서 갓 받은 것, 테스트 픽스처)은 SrcBars가 0이라 1로 센다.
+func candleCoverage(c model.Candle) int {
+	if c.SrcBars <= 0 {
+		return 1
+	}
+	return c.SrcBars
 }
 
 type periodKind int

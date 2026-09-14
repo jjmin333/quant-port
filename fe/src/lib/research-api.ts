@@ -134,6 +134,20 @@ export async function deleteResearchCommentClient(commentId: number): Promise<vo
   await apiRequest<{ id: number }>(`/api/v1/research/comments/${commentId}`, { method: "DELETE" });
 }
 
+/**
+ * 댓글 추천을 켜고 끈다. 돌려주는 값은 **누른 뒤의 상태**다 (2026-09-14 요청 3).
+ *
+ * 글 추천(`toggleResearchReactionClient`)과 같은 모양이라 화면이 같은 방식으로
+ * 쓴다 — 낙관적으로 먼저 그리고 이 값으로 바로잡는다.
+ */
+export async function toggleResearchCommentLikeClient(commentId: number): Promise<boolean> {
+  const data = await apiRequest<{ id: number; active: boolean }>(
+    `/api/v1/research/comments/${commentId}/like`,
+    { method: "POST" },
+  );
+  return data.active;
+}
+
 /** Rate the *argument*. Refused by the server once the verdict is in. */
 export async function rateResearchClient(
   id: number,

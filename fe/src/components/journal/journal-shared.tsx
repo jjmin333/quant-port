@@ -1,7 +1,7 @@
 "use client";
 
 import { StockAvatar } from "@/components/stocks/stock-avatar";
-import { formatPrice } from "@/lib/format";
+
 import {
   JOURNAL_TAG_TONE,
   noteReturnPct,
@@ -9,6 +9,7 @@ import {
 } from "@/lib/journal-types";
 import type { QuoteSummary } from "@/lib/quotes-types";
 import { cn } from "@/lib/utils";
+import { PriceDisplay } from "@/components/ui/price-display";
 
 /**
  * 메모장 화면의 공용 조각.
@@ -42,7 +43,7 @@ export function JournalTagChips({
       {tags.map((tag) => {
         const tone = JOURNAL_TAG_TONE[tag] ?? "bg-[var(--surface-elevated)] text-[var(--text-muted)]";
         const classes = cn(
-          "rounded-full px-2 py-0.5 text-[10px] font-medium",
+          "rounded-full px-2 py-0.5 text-micro font-medium",
           tone,
           active === tag && "ring-1 ring-[var(--brand)]",
         );
@@ -104,26 +105,26 @@ export function JournalPriceStrip({
         className,
       )}
     >
-      <span className="text-[10px] text-[var(--text-muted)]">작성 당시</span>
-      <span className="font-mono text-xs font-medium tabular-nums text-[var(--text-primary)]">
-        {formatPrice(base, currency)}
+      <span className="text-micro text-[var(--text-muted)]">작성 당시</span>
+      <span className="font-num text-cell font-medium tabular-nums text-[var(--text-primary)]">
+        <PriceDisplay value={base} currency={currency} size="inherit" />
       </span>
       {current && current > 0 ? (
         <>
-          <span className="text-[10px] text-[var(--text-muted)]">→</span>
-          {!compact && <span className="text-[10px] text-[var(--text-muted)]">현재</span>}
+          <span className="text-micro text-[var(--text-muted)]">→</span>
+          {!compact && <span className="text-micro text-[var(--text-muted)]">현재</span>}
           <span
             className={cn(
-              "font-mono text-xs font-medium tabular-nums",
+              "font-num text-cell font-medium tabular-nums",
               toneClass(pct),
             )}
           >
-            {formatPrice(current, currency)}
+            <PriceDisplay value={current} currency={currency} size="inherit" />
           </span>
           {pct !== null && (
             <span
               className={cn(
-                "rounded-md px-1.5 py-0.5 font-mono text-[10px] font-semibold tabular-nums",
+                "rounded-md px-1.5 py-0.5 font-num text-micro font-semibold tabular-nums",
                 pct > 0
                   ? "bg-[var(--profit)]/12 text-[var(--profit)]"
                   : pct < 0
@@ -137,10 +138,10 @@ export function JournalPriceStrip({
           )}
         </>
       ) : (
-        <span className="text-[10px] text-[var(--text-muted)]">현재가 확인 중</span>
+        <span className="text-micro text-[var(--text-muted)]">현재가 확인 중</span>
       )}
       {note.priceDate && !compact && (
-        <span className="ml-auto text-[10px] text-[var(--text-muted)]">{note.priceDate} 기준</span>
+        <span className="ml-auto text-micro text-[var(--text-muted)]">{note.priceDate} 기준</span>
       )}
     </div>
   );
@@ -150,7 +151,7 @@ export function JournalPriceStrip({
 export function JournalSymbolChip({ note }: { note: JournalNote }) {
   if (!note.symbol) return null;
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--surface-elevated)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)]">
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--surface-elevated)] px-2 py-0.5 text-cell font-medium text-[var(--text-secondary)]">
       <StockAvatar symbol={note.symbol} name={note.symbolName} size="xs" />
       {note.symbolName || note.symbol}
     </span>

@@ -6,8 +6,8 @@ type OrderbookEntry struct {
 }
 
 type OrderbookResponse struct {
-	Timestamp *string         `json:"timestamp"`
-	Currency  Currency        `json:"currency"`
+	Timestamp *string          `json:"timestamp"`
+	Currency  Currency         `json:"currency"`
 	Asks      []OrderbookEntry `json:"asks"`
 	Bids      []OrderbookEntry `json:"bids"`
 }

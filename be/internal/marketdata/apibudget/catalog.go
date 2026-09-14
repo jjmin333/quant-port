@@ -40,7 +40,7 @@ var catalog = map[Provider]CatalogEntry{
 	ProviderFRED: {
 		Provider: ProviderFRED, Category: CategoryMarket,
 		Label:   "FRED",
-		Purpose: "나스닥·S&P500·다우·VIX 등 미국 지수 시리즈 (batch 5개 = 호출 1회).",
+		Purpose: "나스닥·S&P500·다우·VIX·미 국채 10년 등 미국 시리즈 (batch 6개 = 호출 1회).",
 	},
 	ProviderFinnhub: {
 		Provider: ProviderFinnhub, Category: CategoryMarket,
@@ -82,6 +82,11 @@ var catalog = map[Provider]CatalogEntry{
 		Label:   "Finnhub Earnings",
 		Purpose: "해외 실적 캘린더 배치 (예정일 · 장전/장후 · EPS·매출 추정치와 실적). 같은 키, 라이브 폴러와 분리된 버킷.",
 	},
+	ProviderFinnhubBackfill: {
+		Provider: ProviderFinnhubBackfill, Category: CategoryCorp,
+		Label:   "Finnhub Earnings (과거 백필)",
+		Purpose: "해외 과거 실적 서프라이즈 일회성 백필(/stock/earnings, 종목당 1호출). 캘린더 배치와 분리된 버킷 — 3,000종목을 한 번에 도느라 간격이 다르다.",
+	},
 	ProviderFnGuide: {
 		Provider: ProviderFnGuide, Category: CategoryCorp,
 		Label:   "FnGuide",
@@ -100,27 +105,35 @@ var catalog = map[Provider]CatalogEntry{
 	ProviderFinnhubNews: {
 		Provider: ProviderFinnhubNews, Category: CategoryNews,
 		Label:   "Finnhub News",
-		Purpose: "미국 뉴스(/news, /company-news). 키 미설정 시 RSS로 대체.",
+		Purpose: "미국 시장 전체 뉴스(/news). 키 미설정 시 RSS로 대체.",
 	},
-	ProviderPapagoText: {
-		Provider: ProviderPapagoText, Category: CategoryTranslation,
-		Label:   "Papago (텍스트)",
-		Purpose: "미국 뉴스 제목·요약 EN→KO 번역.",
+
+	ProviderFinnhubNewsCompany: {
+		Provider: ProviderFinnhubNewsCompany, Category: CategoryNews,
+		Label:   "Finnhub Company News",
+		Purpose: "미국 종목별 뉴스(/company-news). 관심·보유 종목을 8분마다 32개씩 돈다.",
 	},
-	ProviderPapagoWeb: {
-		Provider: ProviderPapagoWeb, Category: CategoryTranslation,
-		Label:   "Papago (본문)",
-		Purpose: "US 리더 모드 본문 EN→KO 번역 (최초 열람 시 1회).",
+
+	ProviderAzureTranslate: {
+		Provider: ProviderAzureTranslate, Category: CategoryTranslation,
+		Label:   "Azure Translator",
+		Purpose: "해외 뉴스 제목 EN→KO. 세는 단위는 문자이며 무료 등급(F0) 월 200만 자.",
 	},
-	ProviderPapago: {
-		Provider: ProviderPapago, Category: CategoryTranslation,
-		Label:   "Papago (레거시)",
-		Purpose: "papago_text의 폐기 예정 alias. 신규 코드에서 사용하지 않음.",
-	},
+
 	ProviderOpenAI: {
 		Provider: ProviderOpenAI, Category: CategoryLLM,
-		Label:   "LLM (OpenAI 호환)",
-		Purpose: "포트폴리오 모닝 브리핑 + 종목별 AI 요약(밸류에이션/기술적분석/내부자/뉴스). 백엔드는 OPENAI_API_KEY 또는 GEMINI_API_KEY로 선택(현재 Gemini 무료 티어). AI 요약은 심볼당 24h 캐시 + 파일럿 종목으로 범위 제한(/admin/api의 AI 요약 파일럿 섹션 참고).",
+		Label:   "LLM 공유 키",
+		Purpose: "국내·해외가 같은 API 키를 쓸 때의 공유 버킷. 키가 시장별로 나뉘면 llm_kr / llm_us를 본다.",
+	},
+	ProviderLLMKR: {
+		Provider: ProviderLLMKR, Category: CategoryLLM,
+		Label:   "LLM 국내",
+		Purpose: "국내 종목 AI 요약 + 국내 뉴스 시장 브리핑. GEMINI_KR_API_KEY (없으면 GEMINI_API_KEY). 조회 경로는 LLM 0콜.",
+	},
+	ProviderLLMUS: {
+		Provider: ProviderLLMUS, Category: CategoryLLM,
+		Label:   "LLM 해외",
+		Purpose: "해외 종목 AI 요약 + 해외 뉴스 시장 브리핑. GEMINI_US_API_KEY (없으면 GEMINI_API_KEY). 조회 경로는 LLM 0콜. 제목 번역은 자체 모델(translator 컨테이너)이라 LLM 예산과 무관하다.",
 	},
 }
 

@@ -26,7 +26,9 @@ func (h *StockSummaryHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	view, err := h.svc.Get(r.Context(), symbol)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		// 모든 실패를 500으로 덮으면 「없는 종목」이 장애로 보고된다.
+		// writeServiceError가 ErrUnknownSymbol을 404로 옮긴다.
+		writeServiceError(w, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, map[string]any{"data": view})

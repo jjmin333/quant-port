@@ -19,6 +19,8 @@ import { fetchQuoteDetailClient } from "@/lib/market-api";
 import type { StockInfo } from "@/lib/quotes-types";
 import { createStampClient } from "@/lib/stamp-api";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
+import { useModalAutoFocus } from "@/hooks/use-modal-autofocus";
 
 /**
  * 스탬프 화면에서 바로 도장을 찍는 모달.
@@ -40,6 +42,8 @@ export function StampCreateDialog({
   onOpenChange: (open: boolean) => void;
   onCreated: () => void;
 }) {
+  /* 폰·태블릿에서는 모달이 열려도 자판을 올리지 않는다 — lib/modal-autofocus.ts */
+  const canAutoFocus = useModalAutoFocus();
   const [stock, setStock] = useState<StockInfo | null>(null);
   const [quote, setQuote] = useState<{
     price: number;
@@ -122,14 +126,15 @@ export function StampCreateDialog({
         </DialogHeader>
 
         {done && (
-          <p className="rounded-lg border border-[var(--brand)] bg-[var(--brand-muted)] px-3 py-2 text-[11px] text-[var(--text-primary)]">
+          <p className="rounded-lg border border-[var(--brand)] bg-[var(--brand-muted)] px-3 py-2 text-cell text-[var(--text-primary)]">
             {done} 다른 종목도 이어서 찍을 수 있습니다.
           </p>
         )}
 
         {!stock ? (
           <StockCatalogSearchField
-            autoFocus
+            /* 폰·태블릿에서는 자판을 올리지 않는다 — lib/modal-autofocus.ts */
+            autoFocus={canAutoFocus}
             placeholder="종목명·티커 검색 (예: 삼성전자, NVDA)"
             onSelect={pick}
             suggestionsId="stamp-create-suggestions"
@@ -139,10 +144,10 @@ export function StampCreateDialog({
             <div className="flex items-center gap-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] px-2.5 py-2">
               <StockAvatar symbol={stock.symbol} name={stock.name} size="sm" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold text-[var(--text-primary)]">
+                <p className="truncate text-cell font-semibold text-[var(--text-primary)]">
                   {stock.name || stock.symbol}
                 </p>
-                <p className="text-[10.5px] tabular-nums text-[var(--text-muted)]">
+                <p className="text-micro tabular-nums text-[var(--text-muted)]">
                   {loadingQuote
                     ? "현재가 불러오는 중…"
                     : quote
@@ -170,7 +175,7 @@ export function StampCreateDialog({
                   setStock(null);
                   setQuote(null);
                 }}
-                className="shrink-0 rounded-md border border-[var(--border)] px-2 py-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                className={cn(buttonVariants({ variant: "outline", size: "xs" }), "border-[var(--border)] text-micro text-[var(--text-muted)] hover:text-[var(--text-secondary)]")}
               >
                 종목 변경
               </button>
@@ -191,7 +196,7 @@ export function StampCreateDialog({
           </>
         )}
 
-        {!stock && error && <p className="text-[11px] text-[var(--loss)]">{error}</p>}
+        {!stock && error && <p className="text-cell text-[var(--loss)]">{error}</p>}
       </DialogContent>
     </Dialog>
   );

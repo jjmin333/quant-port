@@ -97,7 +97,7 @@ export function StampSeal({
         "grid shrink-0 place-items-center rounded-full border-[1.5px] text-center leading-[1.05]",
         // 살짝 기울여야 붙인 도장처럼 읽힌다. 각도를 더 주면 글자가 읽기 어려워진다.
         "-rotate-[9deg] opacity-[0.85]",
-        size === "sm" ? "size-9 text-[8.5px]" : "size-[46px] text-[9.5px]",
+        size === "sm" ? "size-9 text-micro" : "size-[46px] text-micro",
         style.tone,
         style.border,
         className,
@@ -106,7 +106,7 @@ export function StampSeal({
       <span className="font-extrabold tracking-tight">
         {top}
         {bottom && (
-          <span className="block text-[8px] font-semibold tracking-normal opacity-80">
+          <span className="block text-micro font-semibold tracking-normal opacity-80">
             {bottom}
           </span>
         )}

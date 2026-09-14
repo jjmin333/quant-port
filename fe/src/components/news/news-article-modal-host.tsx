@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { NewsArticleContext, articleModalContextHasContent } from "@/components/news/news-article-context";
 import { NewsArticleModal } from "@/components/news/news-article-modal";
+import { useModalHistory } from "@/hooks/use-modal-history";
 import { NewsReaderModal } from "@/components/news/news-reader-modal";
 import { NewsUsHeadlineModal } from "@/components/news/news-us-headline-modal";
 import { recordNewsView } from "@/lib/news-api";
@@ -66,6 +67,16 @@ export function useNewsArticleModal(
   }, []);
 
   const close = useCallback(() => setArticle(null), []);
+
+  /*
+    뒤로가기로 기사 모달을 닫는다 (§C-3).
+
+    셸이 셋(`NewsArticleModal`·`NewsReaderModal`·`NewsUsHeadlineModal`)이라 각각에
+    붙이면 반드시 하나를 빠뜨린다 — 실제로 처음에 iframe 셸에만 붙였다가 국내 뉴스가
+    쓰는 리더 셸에서는 그대로 사이트를 벗어나는 것을 실측으로 다시 잡았다. 어느 셸이
+    뜨든 열림/닫힘을 아는 곳은 여기 하나뿐이므로 여기에 둔다.
+  */
+  useModalHistory(article !== null, close);
 
   /*
    * 문맥 블록은 셸 셋이 **같은 것을 공유한다**. 셸마다 따로 만들면 "관련 종목이

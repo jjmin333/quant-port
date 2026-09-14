@@ -11,7 +11,7 @@ import dynamic from "next/dynamic";
 
 function TabFallback() {
   return (
-    <div className="flex min-h-[240px] items-center justify-center text-xs text-[var(--text-muted)]">
+    <div className="flex min-h-[240px] items-center justify-center text-cell text-[var(--text-muted)]">
       불러오는 중…
     </div>
   );

@@ -11,7 +11,7 @@ export function NewsBreakingBadge({ className }: NewsBreakingBadgeProps) {
   return (
     <span
       className={cn(
-        "news-badge news-badge--red inline-flex shrink-0 items-center px-2 py-0.5 text-[10px] font-semibold",
+        "news-badge news-badge--red inline-flex shrink-0 items-center px-2 py-0.5 text-micro font-semibold",
         className,
       )}
     >

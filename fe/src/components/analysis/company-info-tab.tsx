@@ -58,8 +58,8 @@ export function CompanyInfoTab({ stock, quote, fundamentals }: CompanyInfoTabPro
       <div className="border-b border-[var(--border)] px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">기업 정보</h2>
-            <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">
+            <h2 className="text-section font-semibold text-[var(--text-primary)]">기업 정보</h2>
+            <p className="mt-0.5 text-micro text-[var(--text-muted)]">
               {fundamentals?.dataSource === "dart"
                 ? "출처: DART 공시"
                 : fundamentals?.dataSource === "edgar"
@@ -68,7 +68,7 @@ export function CompanyInfoTab({ stock, quote, fundamentals }: CompanyInfoTabPro
             </p>
           </div>
         </div>
-        <p className="mt-2 rounded-lg bg-[var(--surface-elevated)]/60 px-3 py-2 text-xs leading-relaxed text-[var(--text-secondary)]">
+        <p className="mt-2 rounded-lg bg-[var(--surface-elevated)]/60 px-3 py-2 text-read text-[var(--text-secondary)]">
           {summary}
         </p>
       </div>
@@ -76,15 +76,15 @@ export function CompanyInfoTab({ stock, quote, fundamentals }: CompanyInfoTabPro
       <dl className="grid grid-cols-2 gap-px border-b border-[var(--border)] bg-[var(--border)] sm:grid-cols-3">
         {stats.map((item) => (
           <div key={item.label} className="bg-[var(--surface)] px-3 py-2.5">
-            <dt className="text-[10px] text-[var(--text-muted)]">{item.label}</dt>
-            <dd className="mt-0.5 text-xs font-medium text-[var(--text-primary)]">{item.value}</dd>
+            <dt className="text-micro text-[var(--text-muted)]">{item.label}</dt>
+            <dd className="mt-0.5 text-cell font-medium text-[var(--text-primary)]">{item.value}</dd>
           </div>
         ))}
       </dl>
 
       <div className="px-4 py-3">
-        <h3 className="text-xs font-semibold text-[var(--text-primary)]">매출·산업 구성</h3>
-        <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">
+        <h3 className="text-cell font-semibold text-[var(--text-primary)]">매출·산업 구성</h3>
+        <p className="mt-0.5 text-micro text-[var(--text-muted)]">
           세그먼트별 매출 비중 (원천 데이터 연동 전 · 추정/데모)
         </p>
         {segmentData.length > 0 ? (
@@ -117,7 +117,7 @@ export function CompanyInfoTab({ stock, quote, fundamentals }: CompanyInfoTabPro
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <ul className="space-y-1.5 text-[11px] text-[var(--text-secondary)]">
+            <ul className="space-y-1.5 text-cell text-[var(--text-secondary)]">
               {segmentData.map((seg, i) => (
                 <li key={seg.name} className="flex items-center gap-2">
                   <span
@@ -131,7 +131,7 @@ export function CompanyInfoTab({ stock, quote, fundamentals }: CompanyInfoTabPro
             </ul>
           </div>
         ) : (
-          <p className="mt-3 text-xs text-[var(--text-muted)]">세그먼트 매출 데이터가 없습니다.</p>
+          <p className="mt-3 text-cell text-[var(--text-muted)]">세그먼트 매출 데이터가 없습니다.</p>
         )}
       </div>
     </Card>

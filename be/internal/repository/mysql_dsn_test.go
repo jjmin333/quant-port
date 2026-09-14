@@ -65,3 +65,29 @@ func TestRealWorldDSNShape(t *testing.T) {
 		}
 	}
 }
+
+// 세션 타임존이 DSN에 들어가야 한다. 관리형 MySQL은 서버 tz가 대개 UTC라
+// loc=Asia/Seoul 만으로는 TIMESTAMP 읽기가 9시간 밀린다 — 근거는 mysql.go 주석.
+func TestDSNPinsSessionTimeZone(t *testing.T) {
+	got := withDefaultDSNTimeouts("u:p@tcp(h:3306)/db?parseTime=true")
+	// SET time_zone='+09:00' 이 되도록 따옴표째 URL 인코딩돼야 한다.
+	if !strings.Contains(got, "time_zone=%27%2B09%3A00%27") {
+		t.Errorf("session time zone not pinned: %q", got)
+	}
+}
+
+func TestDSNTimeZoneOverridable(t *testing.T) {
+	t.Setenv("MYSQL_TIME_ZONE", "UTC")
+	got := withDefaultDSNTimeouts("u:p@tcp(h:3306)/db")
+	if !strings.Contains(got, "time_zone=%27UTC%27") {
+		t.Errorf("MYSQL_TIME_ZONE ignored: %q", got)
+	}
+}
+
+// 운영자가 DSN에 직접 적었으면 그것이 이긴다 — 다른 파라미터와 같은 규칙.
+func TestDSNTimeZoneNotOverriddenWhenExplicit(t *testing.T) {
+	got := withDefaultDSNTimeouts("u:p@tcp(h:3306)/db?time_zone=%27%2B00%3A00%27")
+	if strings.Contains(got, "%2B09%3A00") {
+		t.Errorf("explicit time_zone overridden: %q", got)
+	}
+}

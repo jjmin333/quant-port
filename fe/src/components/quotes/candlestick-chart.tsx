@@ -16,6 +16,7 @@ import {
   type CandlestickData,
   type HistogramData,
   type IChartApi,
+  type IPriceLine,
   type ISeriesApi,
   type LogicalRange,
   type SeriesType,
@@ -35,6 +36,12 @@ import {
   visibleEpochsFromChartTimes,
   type ChartVisibleSpan,
 } from "@/lib/chart-time";
+import {
+  measureAxisLabelWidth,
+  rightEdgePad,
+  rightEdgePadPx,
+  widestAxisLabelSample,
+} from "@/lib/chart-axis";
 import { formatVolume } from "@/lib/format";
 import type { Candle, CandleInterval, ChartStyle } from "@/lib/quotes-types";
 
@@ -49,6 +56,27 @@ type CandlestickChartProps = {
   hasMore?: boolean;
   loadingMore?: boolean;
   onLoadMore?: () => void;
+  /**
+   * 축 오른쪽 끝의 **현재가 표**를 이 값으로 그린다 (2026-09-05 사용자 지적 4).
+   *
+   * # 왜 시리즈에게 맡기지 않는가
+   *
+   * lightweight-charts는 기본으로 **마지막 봉의 종가**를 그 자리에 적는다. 사용자가
+   * 「상단 가격과 하단 가격이 다르다」고 한 것이 그것이다 — 헤더는 `detail.currentPrice`
+   * (체결·호가·배치 캐시를 거친 값)인데, 차트 표는 마지막 봉의 close라 **두 값이 서로
+   * 다른 길에서 온다**.
+   *
+   * 평소에는 둘이 같다. 형성 중인 봉을 화면이 현재가로 덧칠하기 때문이다
+   * (`use-quote-candles`의 `applyLivePrice`). 그런데 그 덧칠은 **형성봉이 있을 때만**
+   * 된다 — 서버가 형성봉을 안 준 구간(일봉의 장 초반, 프리·애프터 세션)에서는 표가
+   * 조용히 어제 종가에 머문다. 값이 두 길에서 오는 한 그런 구간은 또 생긴다.
+   *
+   * 그래서 표를 **헤더와 같은 값에 직접 묶는다.** 봉 데이터는 건드리지 않는다 —
+   * 일봉의 종가는 정의가 있는 값이라 시간외 가격으로 덮으면 그건 다른 종류의 거짓이다.
+   *
+   * 넘기지 않으면(0 · undefined) 예전처럼 시리즈 기본 동작을 쓴다.
+   */
+  livePrice?: number;
 };
 
 const UP_COLOR = "#EF4444";
@@ -104,6 +132,35 @@ function readChartThemeColors() {
     crosshairText: normalizeColor(root.getPropertyValue("--chart-crosshair-text").trim(), "#F1F5F9"),
     crosshairBorder: normalizeColor(root.getPropertyValue("--chart-crosshair-border").trim(), "#334155"),
   };
+}
+
+/*
+ * 캔들 차트의 축·크로스헤어 글자는 **캔버스에 그려지므로 CSS를 상속받지 않는다.**
+ * 지정하지 않으면 lightweight-charts 자체 기본값(Trebuchet MS 계열)이 쓰여, 앱에서
+ * 유일하게 Pretendard가 아닌 글자가 여기에 남는다 — 축의 날짜·가격만 다른 글꼴로
+ * 보이던 원인이다. `--font-pretendard`를 읽어 그대로 넘긴다.
+ */
+/** 축 글자 크기 — 아래 차트 옵션과 여백 계산이 **같은 값**을 봐야 한다. */
+const AXIS_FONT_SIZE_PX = 11;
+
+/**
+ * 이 간격에서 라벨이 잘리지 않을 오른쪽 여백(px). 캔버스로 **실제로 재서** 정한다 —
+ * 어림수로 적어 둔 16px이 6px 모자라 「고쳤는데 그대로」였던 적이 있다
+ * (`lib/chart-axis.ts` 참조).
+ */
+function axisRightPadPx(interval: CandleInterval): number {
+  const font = `${AXIS_FONT_SIZE_PX}px ${readChartFontFamily()}`;
+  return rightEdgePadPx(measureAxisLabelWidth(widestAxisLabelSample(interval), font));
+}
+
+function readChartFontFamily() {
+  const fallback =
+    '"Pretendard Variable", Pretendard, -apple-system, system-ui, sans-serif';
+  if (typeof window === "undefined") return fallback;
+  const v = getComputedStyle(document.documentElement)
+    .getPropertyValue("--font-pretendard")
+    .trim();
+  return v || fallback;
 }
 
 function crosshairOptions() {
@@ -334,48 +391,60 @@ function updatePriceSeriesBar(
   series.update(bar);
 }
 
+/**
+ * 오른쪽 끝의 논리 좌표. 여백 계산은 `lib/chart-axis`에 있다(캔버스 없이 검증한다).
+ *
+ * 두 번째 반환값은 「**실제 축 폭으로 쟀는가**」다 — 첫 렌더에는 캔버스 폭이 아직
+ * 0이라 폴백(0.5봉)을 타고, 그러면 「2026-09」가 잘린 채로 그려진다.
+ */
+function rightEdgeLogical(
+  chart: IChartApi,
+  barCount: number,
+  visible: number,
+  padPx: number,
+): { to: number; exact: boolean } {
+  const pad = rightEdgePad(chart.timeScale().width(), visible, padPx);
+  return { to: barCount + pad.bars, exact: pad.exact };
+}
+
+/**
+ * 처음 보여 줄 구간. **축 폭을 알고 계산했으면 true**를 돌려준다 — false면 부르는
+ * 쪽이 폭이 정해진 뒤 한 번 더 불러야 한다(`retryRightEdge`).
+ */
 function applyDefaultVisibleRange(
   chart: IChartApi,
   ohlc: CandlestickData<Time>[],
   interval: CandleInterval,
-) {
+): boolean {
+  const padPx = axisRightPadPx(interval);
   const barCount = ohlc.length;
-  if (barCount <= 0) return;
-  if (isMonthlyCandleInterval(interval)) {
-    const visible = Math.min(MONTHLY_INITIAL_BARS, barCount);
-    chart.timeScale().setVisibleLogicalRange({
-      from: Math.max(0, barCount - visible),
-      to: barCount + 0.5,
-    });
-    return;
-  }
-  if (isWeeklyCandleInterval(interval)) {
-    const visible = Math.min(WEEKLY_INITIAL_BARS, barCount);
-    chart.timeScale().setVisibleLogicalRange({
-      from: Math.max(0, barCount - visible),
-      to: barCount + 0.5,
-    });
-    return;
-  }
-  if (isDailyBarInterval(interval)) {
-    const visible = Math.min(DAILY_INITIAL_BARS, barCount);
-    chart.timeScale().setVisibleLogicalRange({
-      from: Math.max(0, barCount - visible),
-      to: barCount + 0.5,
-    });
-    return;
-  }
-  const visible = Math.min(intradayInitialVisibleBars(interval), barCount);
+  if (barCount <= 0) return true;
+  let initial = intradayInitialVisibleBars(interval);
+  if (isMonthlyCandleInterval(interval)) initial = MONTHLY_INITIAL_BARS;
+  else if (isWeeklyCandleInterval(interval)) initial = WEEKLY_INITIAL_BARS;
+  else if (isDailyBarInterval(interval)) initial = DAILY_INITIAL_BARS;
+
+  const visible = Math.min(initial, barCount);
+  const edge = rightEdgeLogical(chart, barCount, visible, padPx);
   chart.timeScale().setVisibleLogicalRange({
     from: Math.max(0, barCount - visible),
-    to: barCount + 0.5,
+    to: edge.to,
   });
+  return edge.exact;
 }
 
-function followLiveEdge(chart: IChartApi, barCount: number, span: number) {
+/** 축 폭이 정해지기를 기다리며 다시 잡아 볼 최대 프레임 수 — 위 주석 참조. */
+const RIGHT_EDGE_MAX_RETRIES = 30;
+
+function followLiveEdge(
+  chart: IChartApi,
+  barCount: number,
+  span: number,
+  interval: CandleInterval,
+) {
   chart.timeScale().setVisibleLogicalRange({
     from: Math.max(0, barCount - span),
-    to: barCount + 0.5,
+    to: rightEdgeLogical(chart, barCount, span, axisRightPadPx(interval)).to,
   });
 }
 
@@ -406,12 +475,15 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
       hasMore = false,
       loadingMore = false,
       onLoadMore,
+      livePrice = 0,
     }: CandlestickChartProps,
     ref,
   ) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const priceSeriesRef = useRef<ISeriesApi<PriceSeriesType> | null>(null);
+  /** 헤더와 같은 값으로 그리는 현재가 선. `livePrice`를 안 받으면 만들지 않는다. */
+  const livePriceLineRef = useRef<IPriceLine | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const shouldFitRef = useRef(true);
   const prevBarCountRef = useRef(0);
@@ -426,10 +498,55 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
   const visibleSpanRef = useRef<ChartVisibleSpan>({ spanSeconds: 0 });
   const visibleEpochsRef = useRef<number[]>([]);
   const pinnedToLiveRef = useRef(true);
+  /*
+    **축 폭을 모른 채 처음 구간을 잡았는가** (2026-09-03 사용자 신고).
+
+    첫 렌더에는 캔버스 폭이 0이라 오른쪽 여백을 봉 단위로 환산할 수 없다. 그때는
+    폴백(0.5봉)으로 그리는데 그 폭으로는 맨 오른쪽 라벨(「2026-09」)이 잘린다 —
+    「개요 탭을 모바일에서 **처음** 열었을 때만」 잘려 보이던 것이 이것이다.
+    폭이 정해지는 대로 프레임마다 다시 시도해서 제대로 된 여백으로 바꿔 놓는다.
+  */
+  const rightEdgePendingRef = useRef(false);
+  const rightEdgeFrameRef = useRef(0);
   const intervalRefForZoom = useRef(interval);
   const daily = isDailyCandleInterval(interval);
   const [tooltip, setTooltip] = useState<ChartHoverTooltip | null>(null);
   const currencyRef = useRef(currency);
+
+  /**
+   * 축 폭이 생길 때까지 프레임마다 처음 구간을 다시 잡는다.
+   *
+   * 폭이 0인 이유는 대개 **아직 배치가 끝나지 않아서**라 한두 프레임이면 정해진다.
+   * 그래도 상한을 둔다 — 탭이 숨겨져 있거나 부모가 `display:none`이면 폭은 영영
+   * 0이고, 그때 프레임을 계속 잡으면 보이지도 않는 차트가 배터리를 쓴다. 상한에
+   * 걸려도 손해는 없다: 폴백 여백으로 이미 그려져 있고, 화면에 나타나는 순간
+   * `ResizeObserver`가 같은 일을 한다.
+   */
+  const rightEdgeRetriesRef = useRef(0);
+  const retryRightEdge = useCallback(() => {
+    window.cancelAnimationFrame(rightEdgeFrameRef.current);
+    rightEdgePendingRef.current = true;
+    rightEdgeRetriesRef.current = 0;
+
+    const step = () => {
+      const chart = chartRef.current;
+      if (!chart || !rightEdgePendingRef.current) return;
+      if (applyDefaultVisibleRange(chart, ohlcRef.current, intervalRef.current)) {
+        rightEdgePendingRef.current = false;
+        return;
+      }
+      if (rightEdgeRetriesRef.current >= RIGHT_EDGE_MAX_RETRIES) {
+        rightEdgePendingRef.current = false;
+        return;
+      }
+      rightEdgeRetriesRef.current += 1;
+      rightEdgeFrameRef.current = window.requestAnimationFrame(step);
+    };
+
+    rightEdgeFrameRef.current = window.requestAnimationFrame(step);
+  }, []);
+
+  useEffect(() => () => window.cancelAnimationFrame(rightEdgeFrameRef.current), []);
 
   const tryLoadMoreAtLeftEdgeRef = useRef<() => void>(() => {});
 
@@ -528,7 +645,8 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
         textColor,
-        fontSize: 11,
+        fontSize: AXIS_FONT_SIZE_PX,
+        fontFamily: readChartFontFamily(),
         attributionLogo: false,
       },
       grid: {
@@ -584,6 +702,7 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
     chartRef.current = chart;
     priceSeriesRef.current = priceSeries;
     volumeSeriesRef.current = volumeSeries;
+    livePriceLineRef.current = null;
 
     const themeObserver = new MutationObserver(() => {
       if (chartRef.current) applyChartTheme(chartRef.current);
@@ -628,6 +747,31 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
     const resize = () => {
       if (containerRef.current && chartRef.current) {
         chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
+        /*
+          폭이 생겼는데 처음 구간을 폭 없이 잡아 뒀다면 지금 다시 잡는다 — 숨겨져
+          있던 탭이 처음 보이는 순간이 여기다(프레임 재시도는 그전에 상한에 걸린다).
+        */
+        if (rightEdgePendingRef.current) {
+          if (applyDefaultVisibleRange(chartRef.current, ohlcRef.current, intervalRef.current)) {
+            rightEdgePendingRef.current = false;
+          }
+        } else if (pinnedToLiveRef.current) {
+          /*
+            **폭이 바뀌면 오른쪽 여백을 다시 잰다.**
+
+            여백은 픽셀로 정하고 봉 단위로 환산해 두는 값이라(`rightEdgePad`), 칸이
+            좁아지면 봉 간격이 줄어 그 봉 수로는 모자라게 된다 — 목록에서 상세로
+            넘어가며 폭이 바뀌는 화면(랭킹·마켓 레이더)에서 「2026-09」가 그렇게
+            다시 잘렸다. **보고 있던 배율(span)은 그대로 두고** 오른쪽 끝만 다시
+            맞춘다. 사용자가 과거로 밀어 둔 상태면(`pinnedToLiveRef`가 false) 손대지
+            않는다 — 그 자리를 흔드는 것이 잘린 라벨보다 나쁘다.
+          */
+          const range = chartRef.current.timeScale().getVisibleLogicalRange();
+          const barCount = ohlcRef.current.length;
+          if (range && barCount > 0) {
+            followLiveEdge(chartRef.current, barCount, range.to - range.from, intervalRef.current);
+          }
+        }
         syncVisibleSpan(chartRef.current.timeScale().getVisibleLogicalRange());
       }
     };
@@ -644,10 +788,51 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
       chart.remove();
       chartRef.current = null;
       priceSeriesRef.current = null;
+      livePriceLineRef.current = null;
       volumeSeriesRef.current = null;
       setTooltip(null);
     };
   }, [height, interval, currency, daily, chartStyle]);
+
+  /*
+    **현재가 표는 헤더와 같은 값에 묶는다** (2026-09-05 사용자 지적 4 — `livePrice` prop 참조).
+
+    시리즈가 스스로 적는 「마지막 봉 종가」를 끄고, 우리가 만든 선 하나가 그 자리를
+    대신한다. 색은 전일 대비 방향을 따른다 — 마지막 봉의 종가가 아니라 **그 봉의
+    시가**와 견준다. 일봉에서 그 둘의 차이가 곧 그날의 등락이고, 헤더가 빨강일 때
+    표만 파랑인 일이 생기지 않는다.
+
+    `livePrice`를 안 받는 화면(미니 차트 등)은 예전 그대로 시리즈에 맡긴다.
+  */
+  useEffect(() => {
+    const series = priceSeriesRef.current;
+    if (!series) return;
+
+    if (!(livePrice > 0)) {
+      if (livePriceLineRef.current) {
+        series.removePriceLine(livePriceLineRef.current);
+        livePriceLineRef.current = null;
+      }
+      series.applyOptions({ lastValueVisible: true, priceLineVisible: true });
+      return;
+    }
+
+    series.applyOptions({ lastValueVisible: false, priceLineVisible: false });
+
+    const lastBar = ohlcRef.current[ohlcRef.current.length - 1];
+    const rising = !lastBar || livePrice >= lastBar.open;
+    const options = {
+      price: livePrice,
+      color: rising ? UP_COLOR : DOWN_COLOR,
+      lineWidth: 1 as const,
+      lineStyle: LineStyle.Dashed,
+      axisLabelVisible: true,
+      title: "",
+    };
+
+    if (livePriceLineRef.current) livePriceLineRef.current.applyOptions(options);
+    else livePriceLineRef.current = series.createPriceLine(options);
+  }, [livePrice, candles, chartStyle, interval, currency, daily, height]);
 
   useEffect(() => {
     if (!priceSeriesRef.current || !volumeSeriesRef.current || !chartRef.current) return;
@@ -691,7 +876,7 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
           const span = visibleRange
             ? visibleRange.to - visibleRange.from
             : intradayInitialVisibleBars(interval);
-          followLiveEdge(chart, ohlc.length, span);
+          followLiveEdge(chart, ohlc.length, span, interval);
         }
         prevBarCountRef.current = ohlc.length;
         return;
@@ -707,14 +892,16 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
     volumeSeries.setData(volume);
 
     if (shouldFitRef.current) {
-      applyDefaultVisibleRange(chart, ohlc, interval);
+      const exact = applyDefaultVisibleRange(chart, ohlc, interval);
       shouldFitRef.current = false;
       pinnedToLiveRef.current = true;
+      // 폭을 모른 채 잡았으면 폭이 생기는 대로 다시 잡는다(위 ref 주석 참조).
+      if (!exact) retryRightEdge();
     } else if (pinned && ohlc.length > prevCount && prevCount > 0 && !isDailyCandleInterval(interval)) {
       const span = visibleRange
         ? visibleRange.to - visibleRange.from
         : intradayInitialVisibleBars(interval);
-      followLiveEdge(chart, ohlc.length, span);
+      followLiveEdge(chart, ohlc.length, span, interval);
     } else if (visibleRange && addedLeft > 0) {
       chart.timeScale().setVisibleLogicalRange({
         from: visibleRange.from + addedLeft,
@@ -743,10 +930,20 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
         },
       });
     }
-  }, [candles, interval, chartStyle]);
+  }, [candles, interval, chartStyle, retryRightEdge]);
 
   return (
-    <div className="relative h-full w-full min-h-[240px]">
+    /*
+      최소 높이는 **이 차트가 실제로 그려지는 높이**다.
+
+      예전에는 `min-h-[240px]`로 못박혀 있었다. 그런데 lightweight-charts는 위에서
+      넘긴 `height`만큼의 캔버스를 만들므로, 그보다 작은 높이를 요청한 화면에서는
+      캔버스 아래에 **차이만큼의 빈 칸**이 남았다 — 모바일 개요 탭의 일봉 카드가
+      200px 차트에 240px 상자라 카드 밑단에 40px짜리 흰 띠가 붙어 있었다.
+
+      값을 `height`에서 가져오면 두 숫자가 어긋날 자리가 없어진다.
+    */
+    <div className="relative h-full w-full" style={{ minHeight: height }}>
       <div ref={containerRef} className="h-full w-full" />
       {tooltip && (
         <div
@@ -759,8 +956,8 @@ export const CandlestickChart = forwardRef<CandlestickChartHandle, CandlestickCh
             color: "var(--chart-crosshair-text)",
           }}
         >
-          <p className="text-[11px] font-semibold">{tooltip.timeLabel}</p>
-          <dl className="mt-1.5 space-y-0.5 font-mono text-[10px] leading-relaxed">
+          <p className="text-cell font-semibold">{tooltip.timeLabel}</p>
+          <dl className="mt-1.5 space-y-0.5 font-num text-micro leading-relaxed">
             <div className="flex justify-between gap-3">
               <dt className="text-[var(--text-muted)]">시가</dt>
               <dd>{formatChartPrice(tooltip.open, currency)}</dd>

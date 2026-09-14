@@ -29,6 +29,14 @@ type FinancialHistoryPeriod struct {
 	DebtRatio       *float64 `json:"debtRatio,omitempty"`
 	CurrentRatio    *float64 `json:"currentRatio,omitempty"`
 
+	// 밸류에이션은 분기말 종가 × 그 분기 재무로 실제 계산한 값이다
+	// (financial_history_valuation.go). 만들 수 없으면 비운다 — 화면이 선을 끊는다.
+	PER *float64 `json:"per,omitempty"`
+	PBR *float64 `json:"pbr,omitempty"`
+	// CloseAtPeriodEnd는 위 둘의 분자다. 화면이 「무엇으로 계산했는지」를
+	// 툴팁에서 말할 수 있어야 한다.
+	CloseAtPeriodEnd *float64 `json:"closeAtPeriodEnd,omitempty"`
+
 	RevenueGrowthQoQ         *float64 `json:"revenueGrowthQoq,omitempty"`
 	OperatingIncomeGrowthQoQ *float64 `json:"operatingIncomeGrowthQoq,omitempty"`
 	NetIncomeGrowthQoQ       *float64 `json:"netIncomeGrowthQoq,omitempty"`

@@ -112,3 +112,104 @@ func isDuplicateKey(err error) bool {
 	}
 	return strings.Contains(strings.ToLower(err.Error()), "duplicate")
 }
+
+/*
+UpdatePassword replaces the stored bcrypt hash.
+
+호출부(`AuthService.ChangePassword`)가 현재 비밀번호를 먼저 확인한다 — 저장소는
+「누가 요청했는지」를 알 수 없으므로 여기서 검사하지 않는다.
+*/
+func (r *UserRepo) UpdatePassword(ctx context.Context, userID int64, passwordHash string) error {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+	`, passwordHash, userID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrUserNotFound
+	}
+	return nil
+}
+
+// UpdateDisplayName renames the account.
+func (r *UserRepo) UpdateDisplayName(ctx context.Context, userID int64, displayName string) error {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE users SET display_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+	`, strings.TrimSpace(displayName), userID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrUserNotFound
+	}
+	return nil
+}
+
+// PasswordHash returns the stored hash for re-authentication (탈퇴·비밀번호 변경).
+func (r *UserRepo) PasswordHash(ctx context.Context, userID int64) (string, error) {
+	var hash sql.NullString
+	err := r.db.QueryRowContext(ctx, `SELECT password_hash FROM users WHERE id = ?`, userID).Scan(&hash)
+	if err == sql.ErrNoRows {
+		return "", ErrUserNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	if !hash.Valid || hash.String == "" {
+		return "", ErrUserNotFound
+	}
+	return hash.String, nil
+}
+
+/*
+Delete removes the account and everything it owns.
+
+**한 트랜잭션 안에서 지운다.** 중간에 실패하면 「관심종목은 지워졌는데 계정은 남은」
+상태가 되고, 사용자가 다시 로그인했을 때 데이터가 반쯤 사라진 것으로 보인다.
+FK가 걸린 표(holding_trades·user_holdings·user_cash_balances·user_refresh_tokens)가
+있으므로 소유 데이터를 먼저 지우고 users를 마지막에 지운다.
+
+**발행된 리포트와 댓글은 지우지 않는다.** 그것들은 공개 기록이고 다른 사람의 댓글·평가가
+붙어 있다 — 계정 하나가 사라졌다고 그 대화까지 사라지면 안 된다. 대신 작성자 이름은
+`users` 행과 함께 사라지므로(조회가 `LEFT JOIN users`다) 화면에는 「탈퇴한 사용자」로
+나온다. 개인정보는 지우면서 남의 글은 지키는 경계가 여기다.
+*/
+func (r *UserRepo) Delete(ctx context.Context, userID int64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// 「내 투자」 화면 순서대로. 전부 이 사용자만 소유하는 행이다.
+	owned := []string{
+		`DELETE FROM watchlist_items WHERE user_id = ?`,
+		`DELETE FROM holding_trades WHERE user_id = ?`,
+		`DELETE FROM user_holdings WHERE user_id = ?`,
+		`DELETE FROM user_cash_balances WHERE user_id = ?`,
+		`DELETE FROM user_price_targets WHERE user_id = ?`,
+		`DELETE FROM journal_notes WHERE user_id = ?`,
+		`DELETE FROM stamps WHERE user_id = ?`,
+		`DELETE FROM user_refresh_tokens WHERE user_id = ?`,
+	}
+	for _, q := range owned {
+		if _, err := tx.ExecContext(ctx, q, userID); err != nil {
+			// 이 배포에 없는 표라면 넘어간다 — 스키마 편차 때문에 탈퇴가 영영
+			// 막히는 쪽이 더 나쁘다.
+			if isUnknownTableErr(err) {
+				continue
+			}
+			return err
+		}
+	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, userID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func isUnknownTableErr(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "doesn't exist")
+}

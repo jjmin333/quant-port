@@ -101,7 +101,7 @@ func (s *MarketService) UsCalendar(ctx context.Context, date string) (*toss.UsMa
 
 func (s *MarketService) Rankings(ctx context.Context, p toss.GetRankingsParams) (*RankingsAPIResult, error) {
 	if !isSupportedRankingPollParams(p) {
-		return &RankingsAPIResult{Rankings: []toss.RankingItem{}}, nil
+		return &RankingsAPIResult{Rankings: []RankingAPIItem{}}, nil
 	}
 
 	storeParams := p
@@ -109,13 +109,114 @@ func (s *MarketService) Rankings(ctx context.Context, p toss.GetRankingsParams) 
 
 	stored, ok := s.loadRankingsFromStore(ctx, storeParams)
 	if !ok {
-		return &RankingsAPIResult{Rankings: []toss.RankingItem{}}, nil
+		return &RankingsAPIResult{
+			MarketClock: s.rankingMarketClock(ctx, p.MarketCountry),
+			Rankings:    []RankingAPIItem{},
+		}, nil
 	}
 	result := stored.toAPIResult(rankingsAPIResultCount(p.Count))
+	result.MarketClock = s.rankingMarketClock(ctx, p.MarketCountry)
 	if s.quotes != nil && len(result.Rankings) > 0 {
-		result.Rankings = s.quotes.EnrichRankingPrices(ctx, result.Rankings)
+		result.applyTossItems(s.quotes.EnrichRankingPrices(ctx, result.tossItems()))
 	}
+	s.attachRankingNames(ctx, result)
 	return result, nil
+}
+
+/*
+rankingMarketClock — 이 목록이 속한 시장의 세션 시계.
+
+목록의 모든 행이 한 달력을 쓰므로 시장 하나로 물으면 된다(국내 탭 = KRX, 해외
+탭 = 미국). ETF도 미국 달력이라 「해외」 하나로 묶인다 — 랭킹의 시장 구분이
+`domesticAssetTypes` / `overseasAssetTypes`와 같은 선이다.
+*/
+func (s *MarketService) rankingMarketClock(ctx context.Context, country toss.MarketCountry) MarketClock {
+	if s.quotes == nil {
+		return MarketClock{}
+	}
+	return s.quotes.MarketClockFor(ctx, rankingAssetType(country))
+}
+
+// rankingMarketClockCached는 같은 판정을 **상류 호출 없이** 한다 — 주기적으로 도는
+// 자리용이다(MarketClockCachedFor 머리글).
+func (s *MarketService) rankingMarketClockCached(ctx context.Context, country toss.MarketCountry) MarketClock {
+	if s.quotes == nil {
+		return MarketClock{}
+	}
+	return s.quotes.MarketClockCachedFor(ctx, rankingAssetType(country))
+}
+
+func rankingAssetType(country toss.MarketCountry) string {
+	if country == toss.MarketUS {
+		return string(model.AssetUS)
+	}
+	return string(model.AssetDomestic)
+}
+
+/*
+MarketClocks — **두 시장의 세션을 한 번에** 답한다 (2026-09-11 사용자 요청 9).
+
+`rankingMarketClock`은 「이 목록의 시장」 하나만 답하므로, 화면이 「지금 어느 쪽이
+열려 있나」를 물으려면 두 번 물어야 한다. 그런데 그 질문을 하는 자리(홈 카드의
+국내/해외 기본값)는 **데이터를 받기 전에** 답을 알아야 한다 — 어느 쪽을 받을지
+정하는 값이기 때문이다.
+
+브라우저에서 다시 계산하지 않는 이유는 `lib/market-session`에 적힌 그대로다:
+세션 창은 종목마다 다르고 미국은 서머타임에 창이 밀려, 화면이 판정하면 서버와
+어긋나는 두 번째 진실이 생긴다. 달력은 `EnsureCalendars`가 캐시하므로 이 응답에
+상류 호출은 없다.
+*/
+type MarketClocksView struct {
+	Domestic MarketClock `json:"domestic"`
+	US       MarketClock `json:"us"`
+}
+
+func (s *MarketService) MarketClocks(ctx context.Context) MarketClocksView {
+	if s == nil || s.quotes == nil {
+		return MarketClocksView{}
+	}
+	return MarketClocksView{
+		Domestic: s.quotes.MarketClockFor(ctx, string(model.AssetDomestic)),
+		US:       s.quotes.MarketClockFor(ctx, string(model.AssetUS)),
+	}
+}
+
+/*
+attachRankingNames — 카탈로그에서 종목명을 붙인다.
+
+`ListBySymbols` 한 번(심볼 IN 조회)이고 상류 호출은 없다. 이름을 못 찾은 행은
+`Name`이 빈 채로 나가고 화면이 심볼로 되돌린다 — 카탈로그에 없는 신규 상장이
+목록에서 통째로 사라지는 것보다 낫다.
+
+여기서 조용히 실패해도 목록은 그대로 나간다. 이름은 표시용이고, 없다고 해서
+순위·가격·등락률이 틀리지는 않는다.
+*/
+func (s *MarketService) attachRankingNames(ctx context.Context, result *RankingsAPIResult) {
+	if s.stocks == nil || result == nil || len(result.Rankings) == 0 {
+		return
+	}
+	symbols := make([]string, 0, len(result.Rankings))
+	for i := range result.Rankings {
+		symbols = append(symbols, result.Rankings[i].Symbol)
+	}
+	rows, err := s.stocks.ListBySymbols(ctx, symbols)
+	if err != nil {
+		log.Printf("rankings: 종목명 조회 실패 (심볼 %d개): %v", len(symbols), err)
+		return
+	}
+	bySymbol := make(map[string]model.Stock, len(rows))
+	for _, st := range rows {
+		bySymbol[strings.ToUpper(strings.TrimSpace(st.Symbol))] = st
+	}
+	for i := range result.Rankings {
+		st, ok := bySymbol[strings.ToUpper(strings.TrimSpace(result.Rankings[i].Symbol))]
+		if !ok {
+			continue
+		}
+		result.Rankings[i].Name = st.Name
+		result.Rankings[i].AssetType = st.AssetType
+		result.Rankings[i].LogoURL = st.LogoURL
+	}
 }
 
 func rankingsAPIResultCount(requested int) int {

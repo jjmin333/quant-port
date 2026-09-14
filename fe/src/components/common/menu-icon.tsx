@@ -1,4 +1,4 @@
-import { Briefcase, Pencil, Stamp, Star, Target } from "lucide-react";
+import { Briefcase, Crosshair, Heart, NotepadText, Stamp, Target } from "lucide-react";
 import type { MenuKey } from "@/lib/menu-copy";
 
 /**
@@ -12,12 +12,16 @@ export function menuIcon(menu: MenuKey, className = "size-5") {
     case "holdings":
       return <Briefcase className={className} />;
     case "watchlist":
-      return <Star className={className} />;
+      return <Heart className={className} />;
     case "stamps":
       return <Stamp className={className} />;
     case "journal":
-      return <Pencil className={className} />;
+      return <NotepadText className={className} />;
     case "targets":
       return <Target className={className} />;
+    // 통합 메뉴. 사이드바와 같은 아이콘을 쓴다 — 로그인 게이트에서 본 그림과
+    // 로그인 뒤 빈 화면의 그림이 갈라지면 같은 메뉴를 두 번 처음 만나는 셈이 된다.
+    case "predictions":
+      return <Crosshair className={className} />;
   }
 }

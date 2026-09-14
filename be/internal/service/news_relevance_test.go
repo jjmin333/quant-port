@@ -243,3 +243,84 @@ func TestPassesStockRelevance_cryptoSource(t *testing.T) {
 		t.Fatal("expected non-finance crypto RSS article to be excluded")
 	}
 }
+
+/*
+사용자 신고 2건 (2026-09-03) — 코인 전용 기사가 국내 주식 뉴스에 섞여 있었다.
+
+둘 다 「선물」·「etf」 한 단어로 증시 앵커 검사를 통과했다. 주식과 코인이 같이 쓰는
+말이라, 그 단어들은 「증시 기사다」의 근거가 될 수 없다.
+*/
+func TestPassesStockRelevance_altcoinOnlyArticlesBlocked(t *testing.T) {
+	st := &NewsStore{}
+	ctx := context.Background()
+
+	cases := []struct {
+		name  string
+		title string
+		desc  string
+	}{
+		{
+			name:  "리플 선물 — 「선물」로 통과하던 기사",
+			title: "리플 선물 매도우위 8억8210만달러로 확대",
+			desc:  "XRP 선물 시장에서 매도 포지션이 늘었다.",
+		},
+		{
+			name:  "알트 현물 ETF — 「etf」로 통과하던 기사",
+			title: "[알트 현물 ETF] 라이트코인 단독 순유입…XRP·SOL·도지코인은 순유출",
+			desc:  "라이트코인 현물 ETF에만 자금이 들어왔다.",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			item := marketdata.RawNewsItem{SourceID: "tokenpost", Title: tc.title, Description: tc.desc}
+			if st.passesStockRelevance(ctx, item, nil, "") {
+				t.Fatal("altcoin-only article passed the stock relevance gate")
+			}
+			// 같은 기사가 네이버 종목 검색 등 다른 경로로 들어와도 막혀야 한다.
+			if isStockRelated(ctx, st, tc.title, tc.desc, "", nil, nil) {
+				t.Fatal("altcoin-only article passed isStockRelated (non-crypto source path)")
+			}
+		})
+	}
+}
+
+// 좁히기가 **진짜 증시 기사까지** 가져가지는 않는다.
+func TestPassesStockRelevance_realMarketNewsStillPasses(t *testing.T) {
+	st := &NewsStore{}
+	ctx := context.Background()
+
+	cases := []struct {
+		name  string
+		title string
+		desc  string
+	}{
+		{"코스피 앵커", "코스피, 외국인 매수에 2%대 상승", "증시가 강세를 보였다."},
+		{"종목 ETF", "코스닥 상장 종목 담은 ETF 순유입 확대", "국내 증시 자금이 몰렸다."},
+		{"섹터 전망", "반도체 업황 전망 개선…수출 회복 기대", "반도체 산업 수출이 늘었다."},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !isStockRelated(ctx, st, tc.title, tc.desc, "", nil, nil) {
+				t.Fatal("real market news was filtered out")
+			}
+		})
+	}
+}
+
+// 비트코인은 지수로 관리하는 자산이라 **알트코인 규칙에 걸리지 않는다** — 판정은
+// 예전 규칙(가상자산 전용 게이트) 그대로다.
+func TestIsAltcoinOnlyArticle_bitcoinIsExempt(t *testing.T) {
+	if isAltcoinOnlyArticle("비트코인 현물 etf에 자금이 들어왔다") {
+		t.Fatal("bitcoin article was treated as altcoin-only")
+	}
+	if !isAltcoinOnlyArticle("리플 선물 매도우위 확대") {
+		t.Fatal("altcoin article was not detected")
+	}
+	// 앵커는 조사가 붙지 않은 꼴로 둔다 — `containsWholeTerm`이 세 글자 이하
+	// 단어 뒤에 한글이 붙으면 다른 낱말로 본다(이 파일 위쪽 규칙 그대로다).
+	if isAltcoinOnlyArticle("리플 관련주, 코스닥 상한가 기록") {
+		t.Fatal("altcoin article with a real market anchor was blocked")
+	}
+}

@@ -16,11 +16,14 @@ import {
 } from "@/components/ui/dialog";
 import { useSparklineCandles } from "@/hooks/use-sparkline-candles";
 import { analysisSymbolHref } from "@/lib/analysis-tabs";
-import { formatDateTimeKST, formatPrice } from "@/lib/format";
+import { formatDateTimeKST } from "@/lib/format";
 import type { JournalNote, JournalNoteInput } from "@/lib/journal-types";
 import { usePriceTargets } from "@/lib/price-targets";
 import type { QuoteSummary } from "@/lib/quotes-types";
 import { cn } from "@/lib/utils";
+import { PriceDisplay } from "@/components/ui/price-display";
+import { buttonVariants } from "@/components/ui/button";
+import { useModalAutoFocus } from "@/hooks/use-modal-autofocus";
 
 /**
  * 메모 상세 모달.
@@ -51,6 +54,8 @@ export function JournalNoteModal({
   /** 예시 모드 — 서버에 없는 행이라 수정·삭제 버튼을 그리지 않는다. */
   readOnly?: boolean;
 }) {
+  /* 폰·태블릿에서는 모달이 열려도 자판을 올리지 않는다 — lib/modal-autofocus.ts */
+  const canAutoFocus = useModalAutoFocus();
   const [editing, setEditing] = useState(false);
   const targets = usePriceTargets();
 
@@ -92,7 +97,7 @@ export function JournalNoteModal({
                   <Pin className="mt-0.5 size-3.5 shrink-0 fill-current text-[var(--brand)]" />
                 )}
               </DialogTitle>
-              <DialogDescription className="text-[11px]">
+              <DialogDescription className="text-cell">
                 {note.symbol ? `${note.symbolName || note.symbol} · ${note.symbol}` : "종목 미지정"}
                 {" · "}
                 {note.updatedAt !== note.createdAt ? "수정 " : "작성 "}
@@ -105,7 +110,8 @@ export function JournalNoteModal({
                 <JournalNoteForm
                   initial={note}
                   compact
-                  autoFocus
+                  /* 폰·태블릿에서는 자판을 올리지 않는다 — lib/modal-autofocus.ts */
+                  autoFocus={canAutoFocus}
                   onCancel={() => setEditing(false)}
                   onSubmit={async (input) => {
                     await onSave(input);
@@ -132,7 +138,7 @@ export function JournalNoteModal({
 
                   <JournalTagChips tags={note.tags} />
 
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--text-secondary)]">
+                  <p className="whitespace-pre-wrap text-read text-[var(--text-secondary)]">
                     {note.body}
                   </p>
 
@@ -142,13 +148,13 @@ export function JournalNoteModal({
                   */}
                   {target && (
                     <div className="rounded-lg border border-[var(--border)] px-3 py-2">
-                      <p className="text-[11px] font-medium text-[var(--text-muted)]">이 종목의 목표가</p>
+                      <p className="text-cell font-medium text-[var(--text-muted)]">이 종목의 목표가</p>
                       <p className="mt-1 flex flex-wrap items-baseline gap-2 text-sm">
-                        <span className="font-mono font-semibold text-[var(--brand)]">
-                          {formatPrice(target.targetPrice, target.currency)}
+                        <span className="font-num font-semibold text-[var(--brand)]">
+                          <PriceDisplay value={target.targetPrice} currency={target.currency} size="inherit" />
                         </span>
                         {quote?.currentPrice ? (
-                          <span className="font-mono text-[11px] text-[var(--text-muted)]">
+                          <span className="font-num text-cell text-[var(--text-muted)]">
                             현재 대비{" "}
                             {(
                               ((target.targetPrice - quote.currentPrice) / quote.currentPrice) *
@@ -158,7 +164,7 @@ export function JournalNoteModal({
                           </span>
                         ) : null}
                         {target.note && (
-                          <span className="text-[11px] text-[var(--text-muted)]">{target.note}</span>
+                          <span className="text-cell text-[var(--text-muted)]">{target.note}</span>
                         )}
                       </p>
                     </div>
@@ -174,7 +180,7 @@ export function JournalNoteModal({
                     <button
                       type="button"
                       onClick={() => setEditing(true)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:border-[var(--brand)]"
+                      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--brand)]")}
                     >
                       <Pencil className="size-3.5" />
                       수정
@@ -182,8 +188,7 @@ export function JournalNoteModal({
                     <button
                       type="button"
                       onClick={onTogglePin}
-                      className={cn(
-                        "inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:border-[var(--brand)]",
+                      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] hover:border-[var(--brand)]",
                         note.pinned ? "text-[var(--brand)]" : "text-[var(--text-secondary)]",
                       )}
                     >
@@ -202,8 +207,8 @@ export function JournalNoteModal({
                 )}
                 {note.symbol && (
                   <Link
-                    href={analysisSymbolHref(note.symbol, "ai")}
-                    className="ml-auto inline-flex items-center gap-1 rounded-lg bg-[var(--brand)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
+                    href={analysisSymbolHref(note.symbol)}
+                    className={cn(buttonVariants({ variant: "default", size: "sm" }), "ml-auto bg-[var(--brand)] text-white hover:opacity-90")}
                   >
                     종목 분석 보기
                     <ArrowRight className="size-3" />

@@ -22,6 +22,8 @@ import {
   type SymbolScoreWeights,
 } from "@/lib/admin";
 import { cn } from "@/lib/utils";
+import { toUserMessage } from "@/lib/error-message";
+import { buttonVariants } from "@/components/ui/button";
 
 const AXIS_ORDER: (keyof ScoreWeights)[] = [
   "technical",
@@ -90,9 +92,9 @@ function WeightEditor({
         return (
           <div key={axis.id} className="flex items-center gap-3">
             <div className={cn("shrink-0", compact ? "w-20" : "w-24")}>
-              <div className="text-xs font-medium text-[var(--text-primary)]">{axis.label}</div>
+              <div className="text-cell font-medium text-[var(--text-primary)]">{axis.label}</div>
               {!compact && (
-                <div className="text-[10px] leading-tight text-[var(--text-muted)]">
+                <div className="text-micro leading-tight text-[var(--text-muted)]">
                   {AXIS_HINTS[axis.id]}
                 </div>
               )}
@@ -115,15 +117,15 @@ function WeightEditor({
               value={value}
               disabled={disabled}
               onChange={(e) => onChange({ ...weights, [axis.id]: Number(e.target.value) })}
-              className="w-14 shrink-0 rounded border border-[var(--border)] bg-[var(--surface)] px-1.5 py-1 text-right text-xs"
+              className="w-14 shrink-0 rounded border border-[var(--border)] bg-[var(--surface)] px-1.5 py-1 text-right text-cell"
             />
-            <span className="w-14 shrink-0 text-right text-[11px] tabular-nums text-[var(--text-secondary)]">
+            <span className="w-14 shrink-0 text-right text-cell tabular-nums text-[var(--text-secondary)]">
               {share.toFixed(1)}%
             </span>
           </div>
         );
       })}
-      <div className="flex justify-between border-t border-[var(--border)] pt-2 text-[11px] text-[var(--text-muted)]">
+      <div className="flex justify-between border-t border-[var(--border)] pt-2 text-cell text-[var(--text-muted)]">
         <span>합계 {total}</span>
         <span>가중치는 상대값 — 데이터가 있는 축끼리 자동 재정규화됩니다</span>
       </div>
@@ -135,7 +137,7 @@ function DistributionCard({ dist }: { dist: ScoreDistribution }) {
   return (
     <div
       className={cn(
-        "rounded-lg border px-3 py-2.5 text-xs",
+        "rounded-lg border px-3 py-2.5 text-cell",
         dist.healthy
           ? "border-[var(--border)] bg-[var(--surface-elevated)]/50"
           : "border-[var(--danger)]/40 bg-[var(--danger)]/5",
@@ -159,7 +161,7 @@ function DistributionCard({ dist }: { dist: ScoreDistribution }) {
         <span className="text-[var(--text-muted)]">100점 부근 {dist.atCeil}</span>
       </div>
       {dist.warnings?.length ? (
-        <ul className="mt-2 list-inside list-disc space-y-0.5 text-[11px] text-[var(--danger)]">
+        <ul className="mt-2 list-inside list-disc space-y-0.5 text-cell text-[var(--danger)]">
           {dist.warnings.map((wrn) => (
             <li key={wrn}>{wrn}</li>
           ))}
@@ -210,7 +212,7 @@ export function AdminScorePanel() {
       setSymbols(res.symbols ?? []);
       if (st) setStatus(st);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "점수 설정을 불러오지 못했습니다");
+      setError(toUserMessage(e, "점수 설정을 불러오지 못했습니다"));
     } finally {
       setLoading(false);
     }
@@ -252,7 +254,7 @@ export function AdminScorePanel() {
       setShrinkFull(updated.shrinkFull);
       setNotice("저장했습니다. 반영하려면 재계산을 실행하세요.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "저장 실패");
+      setError(toUserMessage(e, "저장 실패"));
     } finally {
       setSaving(false);
     }
@@ -269,7 +271,7 @@ export function AdminScorePanel() {
       const st = await fetchAdminScoreStatus().catch(() => null);
       if (st) setStatus(st);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "재계산 실패");
+      setError(toUserMessage(e, "재계산 실패"));
     } finally {
       setRecomputing(false);
     }
@@ -288,7 +290,7 @@ export function AdminScorePanel() {
       await load();
       setNotice(`${symbol} 가중치를 저장했습니다. 반영하려면 재계산을 실행하세요.`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "종목 가중치 저장 실패");
+      setError(toUserMessage(e, "종목 가중치 저장 실패"));
     } finally {
       setAddingBusy(false);
     }
@@ -310,7 +312,7 @@ export function AdminScorePanel() {
       });
       setNotice(`${item.symbol} 저장 완료. 반영하려면 재계산을 실행하세요.`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "저장 실패");
+      setError(toUserMessage(e, "저장 실패"));
     }
   }
 
@@ -321,7 +323,7 @@ export function AdminScorePanel() {
       setSymbols((prev) => prev.filter((s) => s.symbol !== symbol));
       setNotice(`${symbol} 오버라이드를 제거했습니다 (전역 가중치 적용)`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "삭제 실패");
+      setError(toUserMessage(e, "삭제 실패"));
     }
   }
 
@@ -345,19 +347,19 @@ export function AdminScorePanel() {
       <PageScrollShell>
       <div className="space-y-4 p-3 sm:p-4">
         {error && (
-          <div className="rounded-lg border border-[var(--danger)]/40 bg-[var(--danger)]/5 px-3 py-2 text-xs text-[var(--danger)]">
+          <div className="rounded-lg border border-[var(--danger)]/40 bg-[var(--danger)]/5 px-3 py-2 text-cell text-[var(--danger)]">
             {error}
           </div>
         )}
         {notice && (
-          <div className="rounded-lg border border-[var(--brand)]/40 bg-[var(--brand)]/5 px-3 py-2 text-xs text-[var(--brand)]">
+          <div className="rounded-lg border border-[var(--brand)]/40 bg-[var(--brand)]/5 px-3 py-2 text-cell text-[var(--brand)]">
             {notice}
           </div>
         )}
 
         <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 sm:p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <h2 className="flex items-center gap-2 text-section font-semibold">
               <Gauge className="h-4 w-4 text-[var(--brand)]" />
               전역 기본 가중치
             </h2>
@@ -366,7 +368,7 @@ export function AdminScorePanel() {
                 type="button"
                 onClick={() => void load()}
                 disabled={loading}
-                className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs hover:bg-[var(--surface-elevated)]"
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] hover:bg-[var(--surface-elevated)]")}
               >
                 <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
                 새로고침
@@ -375,7 +377,7 @@ export function AdminScorePanel() {
                 type="button"
                 onClick={() => void handleSave()}
                 disabled={saving || !dirty}
-                className="flex items-center gap-1.5 rounded-lg bg-[var(--brand)] px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-white disabled:opacity-50")}
               >
                 {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                 저장
@@ -384,13 +386,13 @@ export function AdminScorePanel() {
           </div>
 
           {loading ? (
-            <div className="py-6 text-center text-xs text-[var(--text-muted)]">불러오는 중…</div>
+            <div className="py-6 text-center text-cell text-[var(--text-muted)]">불러오는 중…</div>
           ) : (
             <>
               <WeightEditor weights={weights} axes={axes} onChange={setWeights} disabled={saving} />
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <label className="text-xs">
+                <label className="text-cell">
                   <span className="mb-1 block font-medium">커버리지 하한 ({coverageFloor.toFixed(2)})</span>
                   <input
                     type="range"
@@ -401,11 +403,11 @@ export function AdminScorePanel() {
                     onChange={(e) => setCoverageFloor(Number(e.target.value))}
                     className="w-full accent-[var(--brand)]"
                   />
-                  <span className="text-[10px] text-[var(--text-muted)]">
+                  <span className="text-micro text-[var(--text-muted)]">
                     데이터가 이 비율 미만이면 점수를 내지 않고 &apos;-&apos; 로 둡니다
                   </span>
                 </label>
-                <label className="text-xs">
+                <label className="text-cell">
                   <span className="mb-1 block font-medium">수축 해제 지점 ({shrinkFull.toFixed(2)})</span>
                   <input
                     type="range"
@@ -416,7 +418,7 @@ export function AdminScorePanel() {
                     onChange={(e) => setShrinkFull(Number(e.target.value))}
                     className="w-full accent-[var(--brand)]"
                   />
-                  <span className="text-[10px] text-[var(--text-muted)]">
+                  <span className="text-micro text-[var(--text-muted)]">
                     커버리지가 이 값 미만이면 점수를 50 쪽으로 수축시켜 극단값을 막습니다
                   </span>
                 </label>
@@ -427,18 +429,18 @@ export function AdminScorePanel() {
 
         <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 sm:p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold">배치 재계산</h2>
+            <h2 className="text-section font-semibold">배치 재계산</h2>
             <button
               type="button"
               onClick={() => void handleRecompute()}
               disabled={recomputing}
-              className="flex items-center gap-1.5 rounded-lg border border-[var(--brand)] px-2.5 py-1.5 text-xs font-medium text-[var(--brand)] disabled:opacity-50"
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--brand)] text-[var(--brand)] disabled:opacity-50")}
             >
               {recomputing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
               지금 재계산
             </button>
           </div>
-          <p className="mb-2 text-[11px] text-[var(--text-muted)]">
+          <p className="mb-2 text-cell text-[var(--text-muted)]">
             외부 API를 호출하지 않고 DB 데이터만 사용합니다. 전 종목 기준 수 초 소요.
             {status?.tradeDate && (
               <>
@@ -453,8 +455,8 @@ export function AdminScorePanel() {
         </section>
 
         <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 sm:p-4">
-          <h2 className="mb-1 text-sm font-semibold">종목별 가중치</h2>
-          <p className="mb-3 text-[11px] text-[var(--text-muted)]">
+          <h2 className="mb-1 text-section font-semibold">종목별 가중치</h2>
+          <p className="mb-3 text-cell text-[var(--text-muted)]">
             등록된 종목은 전역 기본값 대신 아래 가중치로 계산됩니다. 삭제하면 다시 전역값을 따릅니다.
           </p>
 
@@ -464,19 +466,19 @@ export function AdminScorePanel() {
                 value={newSymbol}
                 onChange={(e) => setNewSymbol(e.target.value)}
                 placeholder="종목코드 (예: 005930, AAPL)"
-                className="w-48 rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-xs"
+                className="w-48 rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-cell"
               />
               <input
                 value={newNote}
                 onChange={(e) => setNewNote(e.target.value)}
                 placeholder="메모 (선택)"
-                className="w-56 rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-xs"
+                className="w-56 rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-cell"
               />
               <button
                 type="button"
                 onClick={() => void handleAddSymbol()}
                 disabled={addingBusy || !newSymbol.trim()}
-                className="flex items-center gap-1.5 rounded-lg bg-[var(--brand)] px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-white disabled:opacity-50")}
               >
                 {addingBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                 추가
@@ -486,7 +488,7 @@ export function AdminScorePanel() {
           </div>
 
           {symbols.length === 0 ? (
-            <div className="py-4 text-center text-xs text-[var(--text-muted)]">
+            <div className="py-4 text-center text-cell text-[var(--text-muted)]">
               등록된 종목별 가중치가 없습니다 — 전 종목이 전역 기본값을 사용 중입니다
             </div>
           ) : (
@@ -497,17 +499,17 @@ export function AdminScorePanel() {
                     <div className="min-w-0">
                       <span className="text-sm font-medium">{item.name || item.symbol}</span>
                       {item.name && (
-                        <span className="ml-1.5 text-[11px] text-[var(--text-muted)]">{item.symbol}</span>
+                        <span className="ml-1.5 text-cell text-[var(--text-muted)]">{item.symbol}</span>
                       )}
                       {item.note && (
-                        <span className="ml-2 text-[11px] text-[var(--text-muted)]">· {item.note}</span>
+                        <span className="ml-2 text-cell text-[var(--text-muted)]">· {item.note}</span>
                       )}
                     </div>
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => void handleSaveSymbol(item)}
-                        className="flex items-center gap-1 rounded border border-[var(--border)] px-2 py-1 text-[11px] hover:bg-[var(--surface-elevated)]"
+                        className="flex items-center gap-1 rounded border border-[var(--border)] px-2 py-1 text-cell hover:bg-[var(--surface-elevated)]"
                       >
                         <Save className="h-3 w-3" />
                         저장
@@ -515,7 +517,7 @@ export function AdminScorePanel() {
                       <button
                         type="button"
                         onClick={() => void handleDeleteSymbol(item.symbol)}
-                        className="flex items-center gap-1 rounded border border-[var(--border)] px-2 py-1 text-[11px] text-[var(--danger)] hover:bg-[var(--danger)]/10"
+                        className="flex items-center gap-1 rounded border border-[var(--border)] px-2 py-1 text-cell text-[var(--danger)] hover:bg-[var(--danger)]/10"
                       >
                         <Trash2 className="h-3 w-3" />
                         삭제
@@ -534,10 +536,10 @@ export function AdminScorePanel() {
           )}
         </section>
 
-        <p className="pb-4 text-[11px] leading-relaxed text-[var(--text-muted)]">
+        <p className="pb-4 text-cell leading-relaxed text-[var(--text-muted)]">
           점수는 서버가 계산합니다(LLM이 만든 숫자가 아님). 각 지표는 피어 그룹 내 순위 백분위로
           정규화되며, 데이터가 없는 축은 0점이 아니라 가중치에서 제외됩니다. 설계 상세는
-          <code className="mx-1">docs/STOCK_SCORE_DESIGN.md</code> 참조. 투자 자문이 아닙니다.
+          <code className="mx-1">docs/STOCK_SCORE_DESIGN.md</code> 참조.
         </p>
       </div>
       </PageScrollShell>

@@ -7,6 +7,8 @@ import { formatPrice } from "@/lib/format";
 import type { UserHolding } from "@/lib/user-holdings-types";
 import type { TargetView } from "@/lib/target-stats";
 import { cn } from "@/lib/utils";
+import { PriceDisplay } from "@/components/ui/price-display";
+import { buttonVariants } from "@/components/ui/button";
 
 /**
  * 목표가 화면의 우측 레일.
@@ -65,7 +67,7 @@ export function TargetsSideRail({
         title="곧 결판납니다"
         action={
           near.length > 0 ? (
-            <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">
+            <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-micro font-semibold text-amber-500">
               {near.length}
             </span>
           ) : undefined
@@ -80,7 +82,7 @@ export function TargetsSideRail({
                 <button
                   type="button"
                   onClick={() => onOpenTarget(v.target.id)}
-                  className="flex h-[30px] w-full min-w-0 items-center gap-2 rounded-md px-1 text-xs hover:bg-accent"
+                  className="flex h-[30px] w-full min-w-0 items-center gap-2 rounded-md px-1 text-cell hover:bg-accent"
                 >
                   <StockAvatar
                     symbol={v.target.symbol}
@@ -93,7 +95,7 @@ export function TargetsSideRail({
                   </span>
                   <span
                     className={cn(
-                      "shrink-0 font-mono text-[11px] font-semibold tabular-nums",
+                      "shrink-0 font-num text-cell font-semibold tabular-nums",
                       v.status === "stop_near" ? "text-[var(--loss)]" : "text-amber-500",
                     )}
                   >
@@ -109,7 +111,7 @@ export function TargetsSideRail({
       </SectionCard>
 
       {reached.length > 0 && (
-        <SectionCard title="도달한 목표" action={<span className="text-[10px] text-muted-foreground">다음 목표를 정할 때</span>}>
+        <SectionCard title="도달한 목표" action={<span className="text-micro text-muted-foreground">다음 목표를 정할 때</span>}>
           <ul className="min-w-0">
             {reached.slice(0, 5).map((v) => (
               <li key={v.target.id}>
@@ -125,9 +127,9 @@ export function TargetsSideRail({
                     className="shrink-0"
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs">{v.quote?.name || v.target.symbol}</span>
-                    <span className="block truncate text-[11px] text-muted-foreground">
-                      목표 {formatPrice(v.target.targetPrice, v.target.currency)}
+                    <span className="block truncate text-cell">{v.quote?.name || v.target.symbol}</span>
+                    <span className="block truncate text-cell text-muted-foreground">
+                      목표 <PriceDisplay value={v.target.targetPrice} currency={v.target.currency} size="inherit" />
                       {v.target.reachedDate && ` · ${v.target.reachedDate} 도달`}
                     </span>
                   </span>
@@ -139,7 +141,7 @@ export function TargetsSideRail({
       )}
 
       {heldWithTarget.length > 0 && (
-        <SectionCard title="보유 중인 목표가" action={<span className="text-[10px] text-muted-foreground">평단 대비</span>}>
+        <SectionCard title="보유 중인 목표가" action={<span className="text-micro text-muted-foreground">평단 대비</span>}>
           <ul className="min-w-0 space-y-1">
             {heldWithTarget.map(({ view, holding }) => {
               const avg = holding.avgPrice ?? null;
@@ -152,12 +154,12 @@ export function TargetsSideRail({
                     onClick={() => onOpenTarget(view.target.id)}
                     className="w-full min-w-0 rounded-md px-1 py-1 text-left hover:bg-accent"
                   >
-                    <span className="block truncate text-xs">
+                    <span className="block truncate text-cell">
                       {view.quote?.name || view.target.symbol}
                     </span>
-                    <span className="mt-0.5 block truncate font-mono text-[11px] text-muted-foreground">
+                    <span className="mt-0.5 block truncate font-num text-cell text-muted-foreground">
                       평단 {avg ? formatPrice(avg, view.target.currency) : "—"} → 목표{" "}
-                      {formatPrice(view.target.targetPrice, view.target.currency)}
+                      <PriceDisplay value={view.target.targetPrice} currency={view.target.currency} size="inherit" />
                       {upside !== null && (
                         <span
                           className={cn(
@@ -182,7 +184,7 @@ export function TargetsSideRail({
         title="목표가 없는 보유 종목"
         action={
           heldWithoutTarget.length > 0 ? (
-            <span className="text-[10px] text-muted-foreground">{heldWithoutTarget.length}종목</span>
+            <span className="text-micro text-muted-foreground">{heldWithoutTarget.length}종목</span>
           ) : undefined
         }
       >
@@ -194,13 +196,13 @@ export function TargetsSideRail({
           <ul className="min-w-0">
             {heldWithoutTarget.map((h) => (
               <li key={h.symbol}>
-                <div className="flex h-[30px] min-w-0 items-center gap-2 rounded-md px-1 text-xs hover:bg-accent">
+                <div className="flex h-[30px] min-w-0 items-center gap-2 rounded-md px-1 text-cell hover:bg-accent">
                   <StockAvatar symbol={h.symbol} name={h.name} size="xs" className="shrink-0" />
                   <span className="min-w-0 flex-1 truncate">{h.name || h.symbol}</span>
                   <button
                     type="button"
                     onClick={() => onAddTarget(h.symbol, h.name || h.symbol)}
-                    className="shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:border-[var(--brand)] hover:text-foreground"
+                    className={cn(buttonVariants({ variant: "outline", size: "xs" }), "text-micro text-muted-foreground hover:border-[var(--brand)] hover:text-foreground")}
                   >
                     목표 설정
                   </button>

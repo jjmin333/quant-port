@@ -3,10 +3,10 @@ package toss
 type RankingType string
 
 const (
-	RankingMarketTradingAmount        RankingType = "MARKET_TRADING_AMOUNT"
-	RankingMarketTradingVolume        RankingType = "MARKET_TRADING_VOLUME"
-	RankingTopGainers                 RankingType = "TOP_GAINERS"
-	RankingTopLosers                  RankingType = "TOP_LOSERS"
+	RankingMarketTradingAmount         RankingType = "MARKET_TRADING_AMOUNT"
+	RankingMarketTradingVolume         RankingType = "MARKET_TRADING_VOLUME"
+	RankingTopGainers                  RankingType = "TOP_GAINERS"
+	RankingTopLosers                   RankingType = "TOP_LOSERS"
 	RankingTossSecuritiesTradingAmount RankingType = "TOSS_SECURITIES_TRADING_AMOUNT"
 	RankingTossSecuritiesTradingVolume RankingType = "TOSS_SECURITIES_TRADING_VOLUME"
 )

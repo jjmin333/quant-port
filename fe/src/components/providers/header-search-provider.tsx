@@ -18,8 +18,10 @@ import {
   type HeaderSearchConfig,
   type HeaderSearchMode,
 } from "@/lib/header-search-config";
+import { stockSuggestionsOpen } from "@/lib/header-search-panel";
 import { analysisSymbolHref } from "@/lib/analysis-tabs";
 import { searchStocksCatalogClient } from "@/lib/market-api";
+import { rememberStock } from "@/lib/recent-stocks";
 import type { StockInfo } from "@/lib/quotes-types";
 
 const STOCK_SUGGEST_LIMIT = 8;
@@ -144,8 +146,10 @@ export function HeaderSearchProvider({ children }: { children: ReactNode }) {
    */
   const selectStockSuggestion = useCallback(
     (item: StockInfo) => {
+      // 고른 종목을 최근 목록에 남긴다 (§A-4) — 빈 검색창이 이걸 보여준다.
+      rememberStock(item);
       if (config.mode === "stock") {
-        router.push(analysisSymbolHref(item.symbol, "ai"));
+        router.push(analysisSymbolHref(item.symbol));
         clearSearch();
         return;
       }
@@ -187,7 +191,7 @@ export function HeaderSearchProvider({ children }: { children: ReactNode }) {
       // `/analysis?symbol=삼성전자`는 존재하지 않는 심볼이다.
       const symbol = parseStockSearchSymbol(trimmed);
       if (symbol) {
-        router.push(analysisSymbolHref(symbol, "ai"));
+        router.push(analysisSymbolHref(symbol));
         clearSearch();
         return;
       }
@@ -196,10 +200,15 @@ export function HeaderSearchProvider({ children }: { children: ReactNode }) {
     setDebouncedQuery(trimmed);
   }, [clearSearch, config.mode, highlightedIndex, inputValue, router, selectStockSuggestion]);
 
-  const suggestionsOpen =
-    supportsStockSuggestions(config.mode) &&
-    inputValue.trim().length > 0 &&
-    (suggestionsLoading || stockSuggestions.length > 0);
+  /*
+   * 검색어가 있으면 **결과가 0건이어도** 패널을 연다.
+   *
+   * 전에는 `stockSuggestions.length > 0`를 함께 걸어서, 0건이면 패널 자체가 뜨지
+   * 않았다. 그래서 `HeaderStockSuggestions`의 「검색 결과가 없습니다」 분기가
+   * 한 번도 그려지지 않는 죽은 코드였고, 사용자 입장에서는 **아직 찾는 중인지
+   * 없는 것인지 구분할 방법이 없었다**(실측: `005930` 입력 → 아무 것도 안 뜸).
+   */
+  const suggestionsOpen = stockSuggestionsOpen(config.mode, inputValue);
 
   const value = useMemo(
     () => ({

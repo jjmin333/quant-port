@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchMyResearchCallsClient,
   fetchResearchCallsClient,
@@ -12,6 +12,7 @@ import {
   type ResearchDirection,
   type ResearchSummary,
 } from "@/lib/research-types";
+import { useUrlFlagState, useUrlParamState } from "@/hooks/use-url-param-state";
 
 export type ResearchScope = "feed" | "mine";
 export type ResearchSort = "recent" | "views" | "likes";
@@ -23,20 +24,46 @@ export type ResearchSort = "recent" | "views" | "likes";
  * puts whatever the market carried at the top, which is the exact failure this
  * feature exists to avoid.
  */
-export function useResearchCalls(initialScope: ResearchScope = "feed") {
-  const [scope, setScope] = useState<ResearchScope>(initialScope);
-  const [calls, setCalls] = useState<ResearchCall[]>([]);
+const isScope = (v: string): v is ResearchScope => v === "feed" || v === "mine";
+const isDirection = (v: string): v is ResearchDirection | "all" =>
+  v === "all" || v === "buy" || v === "sell" || v === "hold";
+const isSort = (v: string): v is ResearchSort =>
+  v === "recent" || v === "views" || v === "likes";
+
+export function useResearchCalls(
+  initialScope: ResearchScope = "feed",
+  /**
+   * 서버가 익명으로 미리 받아 둔 공개 피드. 크롤러가 받는 첫 HTML에 리포트
+   * **제목과 상세 링크**가 실리게 하는 것이 목적이다 — 없으면 목록이 비어 있어
+   * 크롤러가 `/reports/<id>`를 하나도 발견하지 못한다.
+   */
+  initialCalls: ResearchCall[] = [],
+) {
+  /*
+    탭·필터·정렬을 **주소에 싣는다** (§C-2). 예전에는 컴포넌트 상태여서 새로고침하면
+    「전체」로 돌아가고, 상세를 보고 뒤로 오면 필터가 풀렸으며, 걸러 놓은 화면을
+    공유할 수도 없었다. `/market`이 이미 하고 있던 방식으로 맞춘다.
+  */
+  const [scope, setScope] = useUrlParamState<ResearchScope>("scope", initialScope, isScope);
+  const [directionFilter, setDirectionFilter] = useUrlParamState<ResearchDirection | "all">(
+    "direction",
+    "all",
+    isDirection,
+  );
+  const [contrarianOnly, setContrarianOnly] = useUrlFlagState("contrarian");
+  const [sort, setSort] = useUrlParamState<ResearchSort>("sort", "recent", isSort);
+
+  const [calls, setCalls] = useState<ResearchCall[]>(initialCalls);
   const [summary, setSummary] = useState<ResearchSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  // 서버가 준 목록이 있으면 「불러오는 중」으로 시작하지 않는다.
+  const [loading, setLoading] = useState(initialCalls.length === 0);
   const [error, setError] = useState<string | null>(null);
 
-  const [directionFilter, setDirectionFilter] = useState<ResearchDirection | "all">("all");
-  const [contrarianOnly, setContrarianOnly] = useState(false);
-  const [sort, setSort] = useState<ResearchSort>("recent");
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const load = useCallback(async (background = false) => {
+    if (!background) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const list =
         scope === "mine"
@@ -47,14 +74,21 @@ export function useResearchCalls(initialScope: ResearchScope = "feed") {
       const stats = await fetchResearchSummaryClient().catch(() => null);
       setSummary(stats);
     } catch {
-      setError("리포트를 불러오지 못했습니다.");
+      if (!background) setError("리포트를 불러오지 못했습니다.");
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, [scope]);
 
+  /*
+   * 서버가 준 것이 있어도 한 번은 다시 받는다 — 서버 것은 쿠키 없이 받아 온
+   * 비로그인 시야라 「내가 누른 좋아요」와 내 성적표가 비어 있다. 그때는 화면을
+   * 비우지 않고 조용히 덮는다(`background`).
+   */
+  const startedWithServerData = useRef(initialCalls.length > 0);
   useEffect(() => {
-    load();
+    load(startedWithServerData.current);
+    startedWithServerData.current = false;
   }, [load]);
 
   const retract = useCallback(async (id: number) => {

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -92,7 +93,7 @@ func TestDueRankingsPollParams_bucketBoundary(t *testing.T) {
 	targetKey := rankingsPollSlotKey(target)
 
 	isDue := func(now time.Time, lastFetched map[string]time.Time) bool {
-		for _, p := range svc.dueRankingsPollParams(now, lastFetched) {
+		for _, p := range svc.dueRankingsPollParams(context.Background(), now, lastFetched) {
 			if rankingsPollSlotKey(p) == targetKey {
 				return true
 			}

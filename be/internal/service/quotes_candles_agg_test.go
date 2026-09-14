@@ -28,8 +28,8 @@ func TestCandleFetchCount_scalesByInterval(t *testing.T) {
 	if got := candleFetchCount(model.Interval5m); got != 600 {
 		t.Fatalf("5m=%d want 600", got)
 	}
-	if got := candleFetchCount(model.Interval60m); got != 7200 {
-		t.Fatalf("60m=%d want 7200", got)
+	if got := candleFetchCount(model.Interval30m); got != maxIntradayRawBars {
+		t.Fatalf("30m=%d want %d", got, maxIntradayRawBars)
 	}
 }
 
@@ -37,8 +37,8 @@ func TestCandlePageSize_returnsAggregatedBarCount(t *testing.T) {
 	if got := candlePageSize(model.Interval5m); got != intradayDisplayBars {
 		t.Fatalf("5m page=%d want %d", got, intradayDisplayBars)
 	}
-	if got := candlePageSize(model.Interval60m); got != intradayDisplayBars {
-		t.Fatalf("60m page=%d want %d", got, intradayDisplayBars)
+	if got := candlePageSize(model.Interval30m); got != intradayDisplayBars {
+		t.Fatalf("30m page=%d want %d", got, intradayDisplayBars)
 	}
 }
 
@@ -54,13 +54,13 @@ func TestTrimCandlesTail(t *testing.T) {
 
 func TestNeedsIntradayDepthRefresh_shallowSnapshot(t *testing.T) {
 	snap := model.CandleSnapshot{
-		Interval: model.Interval60m,
+		Interval: model.Interval30m,
 		Completed: []model.Candle{
 			{Time: "2026-07-30T11:00:00+09:00"},
 			{Time: "2026-07-31T18:00:00+09:00"},
 		},
 	}
-	if !needsIntradayDepthRefresh(model.Interval60m, snap) {
-		t.Fatal("expected shallow 60m snapshot to need refresh")
+	if !needsIntradayDepthRefresh(model.Interval30m, snap) {
+		t.Fatal("expected shallow 30m snapshot to need refresh")
 	}
 }

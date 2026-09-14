@@ -66,7 +66,7 @@ export function EarningsSurpriseView({
   return (
     <Card className="p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-xs font-semibold text-foreground">
+        <h2 className="text-section font-semibold text-foreground">
           컨센서스 대비 실적
           <span className="ml-1.5 font-normal text-muted-foreground">최근 90일</span>
         </h2>
@@ -86,7 +86,7 @@ export function EarningsSurpriseView({
                 onClick={() => onPickEvent(event)}
                 className="flex w-full min-w-0 items-center gap-2 px-1 py-2 text-left hover:bg-muted/50"
               >
-                <span className="w-5 shrink-0 text-right font-mono text-[10px] tabular-nums text-muted-foreground">
+                <span className="w-5 shrink-0 text-right font-num text-micro tabular-nums text-muted-foreground">
                   {i + 1}
                 </span>
                 <StockAvatar
@@ -99,8 +99,8 @@ export function EarningsSurpriseView({
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 items-center gap-1.5">
-                    <span className="truncate text-xs font-medium">{eventName(event)}</span>
-                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                    <span className="truncate text-cell font-medium">{eventName(event)}</span>
+                    <span className="shrink-0 font-num text-micro text-muted-foreground">
                       {periodLabel(event)}
                     </span>
                   </div>
@@ -108,12 +108,12 @@ export function EarningsSurpriseView({
                     {event.surprise && (
                       <EstimateActualPair surprise={event.surprise} currency={event.currency} />
                     )}
-                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                    <span className="shrink-0 text-micro text-muted-foreground">
                       {/* 어느 지표 기준인지 밝힌다 — 국내는 영업이익, 해외는 EPS라
                           한 목록에 두 기준이 섞인다. */}
-                      {event.surprise ? `${SURPRISE_METRIC_LABEL[event.surprise.metric]} 기준` : ""}
+                      {event.surprise ? `${SURPRISE_METRIC_LABEL[event.surprise.metric] ?? "실적"} 기준` : ""}
                     </span>
-                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                    <span className="shrink-0 font-num text-micro text-muted-foreground">
                       {event.date.slice(5).replace("-", "/")} 발표
                     </span>
                     <DivergenceFlag event={event} />
@@ -126,7 +126,8 @@ export function EarningsSurpriseView({
                   <ReactionValue
                     reaction={event.reaction}
                     status={event.dateStatus}
-                    className="text-[11px]"
+                    currency={event.currency}
+                    className="text-cell"
                   />
                 </div>
               </button>
@@ -135,7 +136,7 @@ export function EarningsSurpriseView({
         </ol>
       )}
 
-      <div className="mt-2 space-y-1 border-t pt-2 text-[10px] leading-relaxed text-muted-foreground">
+      <div className="mt-2 space-y-1 border-t pt-2 text-micro leading-relaxed text-muted-foreground">
         <p>
           국내는 <b>영업이익</b>, 해외는 <b>EPS</b> 기준입니다 — 각 시장이 「어닝
           서프라이즈」로 부르는 지표가 다릅니다. 두 종류는 이 줄 세우기에서 빠집니다: 적자를

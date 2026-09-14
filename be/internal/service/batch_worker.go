@@ -73,6 +73,45 @@ func runOneQueuedJob(ctx context.Context, runs *repository.BatchJobRunRepo, jobI
 	}
 }
 
+/*
+RunScheduledJobResult records a scheduled run that has **already finished**.
+
+`RunScheduledJob`은 실행을 감싸므로 Begin이 실행 앞에 온다. 그런데 어떤 예약 실행은
+「돌았다」는 사실이 실행 **뒤에야** 정해진다 — 뉴스 브리핑 슬롯이 그렇다: 슬롯이 지나야
+그 슬롯을 기록할 수 있고, 그 전에는 이번 틱이 슬롯 경계인지도 모른다. 그럴 때 한 줄을
+사후에 남긴다.
+
+시작 시각이 실제보다 늦게 찍히는 것이 유일한 손해인데, 초 단위라 감시에는 영향이 없다.
+*/
+func RunScheduledJobResult(
+	ctx context.Context,
+	runs *repository.BatchJobRunRepo,
+	jobID model.BatchJobID,
+	result map[string]any,
+	message string,
+	runErr error,
+) {
+	if runs == nil {
+		return
+	}
+	id, err := runs.Begin(ctx, string(jobID), "schedule")
+	if err != nil || id == 0 {
+		if err != nil {
+			log.Printf("batch %s: ledger begin: %v", jobID, err)
+		}
+		return
+	}
+	status := "done"
+	if runErr != nil {
+		status = "error"
+		message = runErr.Error()
+	}
+	payload, _ := json.Marshal(result)
+	if e := runs.Finish(context.Background(), id, status, message, string(payload)); e != nil {
+		log.Printf("batch %s: record finish: %v", jobID, e)
+	}
+}
+
 // RunScheduledJob is the schedule-driven counterpart to the queue poller: it
 // records a "schedule"-triggered run the same way a manual one is recorded, so
 // the admin console shows both kinds in one history without caring which

@@ -41,16 +41,16 @@ export function HoldingsContributionCard({
   return (
     <Card className="p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-semibold">오늘 손익 기여</p>
+        <p className="text-cell font-semibold">오늘 손익 기여</p>
         {totals?.canTotal && (
-          <span className={cn("font-mono text-[11px] tabular-nums", trendTextClass(totals.dayPnlKRW))}>
+          <span className={cn("font-num text-cell tabular-nums", trendTextClass(totals.dayPnlKRW))}>
             합계 {formatPriceChange(Math.round(totals.dayPnlKRW), "KRW")}
           </span>
         )}
       </div>
 
       {rows.length === 0 ? (
-        <p className="py-8 text-center text-[11px] text-muted-foreground">
+        <p className="py-8 text-center text-cell text-muted-foreground">
           오늘 값이 움직인 보유 종목이 없습니다
         </p>
       ) : (
@@ -64,7 +64,7 @@ export function HoldingsContributionCard({
                 <button
                   type="button"
                   onClick={() => onSelect?.(m.symbol)}
-                  className="grid w-full grid-cols-[minmax(0,1fr)_84px_84px] items-center gap-2 rounded-md px-1 py-1 text-left text-[11px] hover:bg-accent"
+                  className="grid w-full grid-cols-[minmax(0,1fr)_84px_84px] items-center gap-2 rounded-md px-1 py-1 text-left text-cell hover:bg-accent"
                 >
                   <span className="min-w-0 truncate">{m.name}</span>
                   <span className="relative h-3.5">
@@ -82,9 +82,9 @@ export function HoldingsContributionCard({
                       aria-hidden
                     />
                   </span>
-                  <span className={cn("text-right font-mono tabular-nums", trendTextClass(pnl))}>
+                  <span className={cn("text-right font-num tabular-nums", trendTextClass(pnl))}>
                     {formatPriceChange(Math.round(pnl), "KRW")}
-                    <span className="block text-[10px]">{formatPercent(m.changeRate)}</span>
+                    <span className="block text-micro">{formatPercent(m.changeRate)}</span>
                   </span>
                 </button>
               </li>
@@ -94,12 +94,12 @@ export function HoldingsContributionCard({
       )}
 
       {totals && !totals.canTotal && (
-        <p className="mt-2 border-t pt-1.5 text-[10px] text-muted-foreground">
+        <p className="mt-2 border-t pt-1.5 text-micro text-muted-foreground">
           환율을 못 받아 달러 종목의 기여는 제외했습니다.
         </p>
       )}
       {totals?.canTotal && rows.length > 0 && (
-        <p className="mt-2 border-t pt-1.5 text-[10px] text-muted-foreground">
+        <p className="mt-2 border-t pt-1.5 text-micro text-muted-foreground">
           등락률이 아니라 <b className="text-foreground">금액</b> 기준입니다 — 비중이 큰 종목은
           조금만 움직여도 위로 올라옵니다. 총 평가금액 {formatKRW(totals.marketValueKRW)}.
         </p>

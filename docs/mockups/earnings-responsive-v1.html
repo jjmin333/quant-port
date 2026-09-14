@@ -1,0 +1,566 @@
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>실적 일정 가시성 개선 — PC · 모바일 v1</title>
+<style>
+/* ── 토큰: fe/src/app/globals.css 에서 그대로 옮김 ── */
+:root {
+  --background: oklch(0.97 0 0); --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0); --surface: oklch(1 0 0); --surface-elevated: oklch(0.97 0 0);
+  --muted: oklch(0.97 0 0); --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.93 0 0); --border: oklch(0.87 0 0);
+  --brand: #2563EB; --profit: #DC2626; --loss: #2563EB;
+  --text-primary: oklch(0.145 0 0); --text-secondary: oklch(0.36 0 0); --text-muted: oklch(0.55 0 0);
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0); --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0); --surface: oklch(0.205 0 0); --surface-elevated: oklch(0.269 0 0);
+  --muted: oklch(0.269 0 0); --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0); --border: oklch(1 0 0 / 16%);
+  --brand: #60A5FA; --profit: #F87171; --loss: #60A5FA;
+  --text-primary: oklch(0.985 0 0); --text-secondary: oklch(0.82 0 0); --text-muted: oklch(0.6 0 0);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--background); color: var(--foreground);
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 12px; line-height: 1.5; padding: 24px 20px 120px;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1520px; margin: 0 auto; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
+h2 { font-size: 15px; font-weight: 600; }
+h3 { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
+p.lead { color: var(--muted-foreground); margin-top: 8px; max-width: 88ch; line-height: 1.75; }
+p.lead b { color: var(--text-secondary); }
+.num { font-variant-numeric: tabular-nums; }
+.up { color: var(--profit); } .down { color: var(--loss); } .dim { color: var(--text-muted); }
+
+section.block { margin-top: 34px; border-top: 1px solid var(--border); padding-top: 22px; }
+section.block > header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.tag { font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--brand); border: 1px solid color-mix(in oklab, var(--brand) 40%, transparent); border-radius: 999px; padding: 1px 8px; }
+.tag.now { color: var(--text-muted); border-color: var(--border); }
+.tag.rec { color: #fff; background: var(--brand); border-color: var(--brand); }
+.why { color: var(--muted-foreground); font-size: 12px; line-height: 1.75; margin-top: 10px; max-width: 90ch; }
+.why b { color: var(--text-secondary); font-weight: 600; }
+.why ul { margin: 6px 0 0 16px; }
+.why li { margin-top: 3px; }
+
+.pair { display: flex; gap: 26px; margin-top: 18px; align-items: flex-start; flex-wrap: wrap; }
+.frame-label { font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 6px; }
+
+/* 폰 프레임 — 실측 375px(iPhone SE/14 논리폭) */
+.phone { width: 375px; height: 640px; border: 1px solid var(--border); border-radius: 16px; overflow: hidden; background: var(--background); position: relative; flex: 0 0 auto; }
+.phone .scroll { height: 100%; overflow: hidden; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.fold { position: absolute; left: 0; right: 0; top: 613px; border-top: 2px dashed color-mix(in oklab, var(--brand) 55%, transparent); }
+.fold span { position: absolute; right: 6px; top: -14px; font-size: 9.5px; color: var(--brand); background: var(--background); padding: 0 4px; }
+
+/* 데스크톱 프레임 — 1440 을 0.62 로 축소해 붙인다 */
+.pc { width: 660px; flex: 1 1 620px; min-width: 520px; }
+.pc .inner { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--background); padding: 10px; display: flex; gap: 10px; }
+.pc .main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.pc .rail { width: 150px; flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; }
+
+.card { border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 10px; }
+.card.tight { padding: 8px 10px; }
+
+/* 스코어보드 */
+.score { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.pc .score { grid-template-columns: repeat(5, 1fr); }
+.tile .lbl { font-size: 10px; color: var(--text-muted); }
+.tile .val { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tile .sub { font-size: 10px; color: var(--text-muted); }
+
+/* 요약 한 줄 띠 */
+.strip { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.strip .k { color: var(--text-muted); }
+.strip b { font-variant-numeric: tabular-nums; }
+.chev { margin-left: auto; color: var(--text-muted); font-size: 11px; }
+
+/* 달력 */
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.cal-head b { font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.dow, .cells { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.dow div { text-align: center; font-size: 9.5px; color: var(--text-muted); }
+.cells button { height: 40px; border: 0; border-radius: 6px; background: var(--surface-elevated); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 10px; color: var(--foreground); font-variant-numeric: tabular-nums; }
+.cells button.hot { background: color-mix(in oklab, var(--profit) 26%, transparent); }
+.cells button.warm { background: color-mix(in oklab, var(--profit) 14%, transparent); }
+.cells button.mid { background: var(--accent); }
+.cells button.pad { background: transparent; }
+.cells button b { font-size: 11px; }
+
+/* 주 스트립 */
+.weekstrip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.weekstrip button { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 5px 0; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10px; color: var(--text-muted); }
+.weekstrip button b { font-size: 13px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.weekstrip button .cnt { font-size: 9.5px; font-weight: 700; color: var(--brand); font-variant-numeric: tabular-nums; }
+.weekstrip button.sel { border-color: var(--foreground); box-shadow: inset 0 0 0 1px var(--foreground); }
+.weekstrip button.zero b { color: var(--text-muted); }
+
+/* 정렬 pill */
+.pills { display: flex; gap: 5px; overflow: hidden; }
+.pills button { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 3px 9px; font-size: 10.5px; color: var(--text-secondary); white-space: nowrap; }
+.pills button.on { background: var(--foreground); color: var(--background); border-color: var(--foreground); }
+
+/* 표 (현재 모습) */
+.tblwrap { overflow: hidden; position: relative; }
+.tbl { width: 900px; border-collapse: collapse; font-size: 10.5px; }
+.tbl th { text-align: right; color: var(--text-muted); font-weight: 500; border-bottom: 1px solid var(--border); padding: 4px 6px; white-space: nowrap; }
+.tbl th:first-child, .tbl td:first-child { text-align: left; }
+.tbl td { padding: 6px; border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cut { position: absolute; top: 0; bottom: 0; left: 359px; width: 46px; background: linear-gradient(to right, transparent, var(--card)); pointer-events: none; }
+.cutline { position: absolute; top: 0; bottom: 0; left: 359px; border-left: 2px dashed color-mix(in oklab, var(--loss) 60%, transparent); }
+
+/* 카드 목록 */
+.ev { display: flex; gap: 8px; padding: 8px 2px; border-bottom: 1px solid color-mix(in oklab, var(--border) 65%, transparent); }
+.ev:last-child { border-bottom: 0; }
+.logo { width: 26px; height: 26px; border-radius: 999px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #fff; }
+.ev .body { flex: 1 1 auto; min-width: 0; }
+.ev .top { display: flex; align-items: baseline; gap: 5px; }
+.ev .nm { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev .q { font-size: 9.5px; color: var(--text-muted); flex: 0 0 auto; }
+.ev .when { margin-left: auto; font-size: 10px; color: var(--text-muted); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.ev .line { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.ev .line .k { color: var(--text-muted); font-size: 10px; }
+.pill { border-radius: 999px; padding: 0 6px; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pill.up { background: color-mix(in oklab, var(--profit) 14%, transparent); color: var(--profit); }
+.pill.down { background: color-mix(in oklab, var(--loss) 14%, transparent); color: var(--loss); }
+.pill.plan { background: var(--surface-elevated); color: var(--text-secondary); font-weight: 600; }
+.rowbar { height: 3px; border-radius: 999px; background: var(--surface-elevated); margin-top: 5px; overflow: hidden; }
+.rowbar i { display: block; height: 100%; background: var(--profit); }
+
+/* 탭 */
+.tabs { display: flex; gap: 2px; background: var(--muted); border-radius: 10px; padding: 2px; }
+.tabs button { flex: 1; border: 0; background: transparent; border-radius: 8px; padding: 5px 0; font-size: 11.5px; color: var(--text-muted); }
+.tabs button.on { background: var(--card); color: var(--foreground); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
+
+.headline { display: flex; align-items: baseline; gap: 6px; }
+.headline .big { font-size: 14px; font-weight: 700; }
+.headline .cnt { font-size: 11px; color: var(--text-muted); }
+
+.measure { margin-top: 8px; font-size: 11px; color: var(--text-muted); }
+.measure b { color: var(--brand); font-variant-numeric: tabular-nums; font-size: 12px; }
+.bad { color: var(--loss); }
+
+.legend { margin-top: 34px; border-top: 1px solid var(--border); padding-top: 16px; color: var(--muted-foreground); font-size: 11.5px; line-height: 1.9; max-width: 92ch; }
+.legend code { background: var(--surface-elevated); padding: 1px 4px; border-radius: 4px; }
+button.theme { position: fixed; right: 16px; top: 16px; border: 1px solid var(--border); background: var(--surface); color: var(--foreground); border-radius: 999px; padding: 6px 12px; font-size: 11px; cursor: pointer; z-index: 9; }
+</style>
+</head>
+<body>
+<button class="theme" id="themeBtn">라이트/다크</button>
+<div class="wrap">
+
+  <h1>실적 일정 — 모바일 가시성 개선안 (PC 대조 포함)</h1>
+  <p class="lead">
+    2026-09-05 사용자 요청 9. 폰 프레임은 <b>375 × 640px</b>(헤더·검색줄을 뺀 본문 영역 실측치)이고,
+    파란 점선은 <b>첫 화면의 끝</b>이다. 데스크톱 프레임은 1440px 배치를 폭만 줄여 옮긴 것이라
+    비율만 보면 된다. 각 안 아래 숫자는 <b>첫 화면에 실제로 보이는 발표 건수</b>다 —
+    이 화면이 답해야 하는 질문이 「누가 언제 발표하나」이므로, 그 답이 몇 개나 보이는지가 곧 점수다.
+  </p>
+
+  <!-- ═══════════════ 현재 ═══════════════ -->
+  <section class="block">
+    <header><span class="tag now">현재</span><h2>지금 화면 (해외 실적 일정 · 9월 5일)</h2></header>
+    <div class="why">
+      실측한 세로 예산: <b>스코어보드 244px + 달력 345px = 589px</b>. 본문 영역이 640px이니
+      <b>목록은 첫 화면 밖에서 시작한다.</b> 그 목록마저 <code>min-width: 900px</code> 짜리 9열 표라,
+      375px에서는 <b>회사 · 발표일 · 시간</b>까지만 보이고 EPS · 서프라이즈 · 매출 · 현재가 ·
+      발표 후 주가는 가로로 밀어야 나온다. 가로 스크롤은 손잡이도 없어서 「열이 더 있다」는 사실 자체가 안 보인다.
+    </div>
+    <div class="pair">
+      <div>
+        <div class="frame-label">모바일 375px</div>
+        <div class="phone">
+          <div class="scroll">
+            <div class="tabs" style="max-width:236px;margin-left:auto;font-size:11px"><button>월</button><button class="on">캘린더</button><button>서프라이즈</button></div>
+            <div class="card">
+              <div class="score">
+                <div class="tile"><div class="lbl">9월 5일 (토) 발표</div><div class="val">1<span style="font-size:11px;font-weight:400" class="dim"> 건</span></div><div class="sub">예정 1</div></div>
+                <div class="tile"><div class="lbl">컨센서스 상회</div><div class="val dim">—</div></div>
+                <div class="tile"><div class="lbl">서프라이즈 중위</div><div class="val dim">—</div></div>
+                <div class="tile"><div class="lbl">최대 상회</div><div class="val dim">—</div></div>
+                <div class="tile"><div class="lbl">최대 하회</div><div class="val dim">—</div></div>
+              </div>
+              <div class="sub dim" style="margin-top:8px;border-top:1px solid var(--border);padding-top:6px;font-size:10.5px">이 구간은 아직 발표 전이거나 컨센서스가 집계되지 않아 비교 가능한 건이 없습니다.</div>
+            </div>
+            <div class="card">
+              <div class="cal-head"><span class="dim">‹</span><b>2026. 09</b><span class="dim">›</span></div>
+              <div class="dow"><div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div></div>
+              <div class="cells" style="margin-top:3px">
+                <button class="pad"></button><button class="pad"></button>
+                <button class="hot">1<b>6</b></button><button class="hot">2<b>12</b></button><button class="hot">3<b>20</b></button><button class="hot">4<b>16</b></button><button class="mid">5<b>1</b></button>
+                <button class="pad">6</button><button class="mid">7<b>24</b></button><button class="mid">8<b>18</b></button><button class="mid">9<b>15</b></button><button class="mid">10<b>19</b></button><button class="mid">11<b>4</b></button><button class="pad">12</button>
+                <button class="pad">13</button><button class="mid">14<b>16</b></button><button class="mid">15<b>5</b></button><button class="mid">16<b>8</b></button><button class="mid">17<b>7</b></button><button class="mid">18<b>1</b></button><button class="pad">19</button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="headline"><span class="big">9월 5일 (토)</span><span class="cnt">1건</span></div>
+              <div class="tblwrap" style="margin-top:6px">
+                <table class="tbl">
+                  <tr><th>회사</th><th>발표일</th><th>시간</th><th>시가총액</th><th>EPS 실적/예측</th><th>EPS 서프라이즈</th><th>매출</th><th>현재가</th><th>발표 후 주가</th></tr>
+                  <tr><td>RFMZ 4Q</td><td>9/5</td><td>예정</td><td>$315.4M</td><td>—</td><td>—</td><td>—</td><td>$4.12</td><td>—</td></tr>
+                </table>
+                <div class="cutline"></div><div class="cut"></div>
+              </div>
+            </div>
+          </div>
+          <div class="fold"><span>첫 화면 끝</span></div>
+        </div>
+        <div class="measure">첫 화면에 보이는 발표: <b class="bad">0건</b> · 표는 <b class="bad">9열 중 3열</b>만 보임</div>
+      </div>
+
+      <div class="pc">
+        <div class="frame-label">데스크톱 1440px (비율)</div>
+        <div class="inner">
+          <div class="main">
+            <div class="card"><div class="score">
+              <div class="tile"><div class="lbl">9월 발표</div><div class="val">231<span style="font-size:11px;font-weight:400" class="dim"> 건</span></div><div class="sub">발표 74 · 예정 157</div></div>
+              <div class="tile"><div class="lbl">컨센서스 상회</div><div class="val up">61%</div><div class="sub">45 / 74건</div></div>
+              <div class="tile"><div class="lbl">서프라이즈 중위</div><div class="val up">+8.4%</div><div class="sub">평균 +21.0%</div></div>
+              <div class="tile"><div class="lbl">최대 상회</div><div class="val up">+440%</div><div class="sub">이머전트</div></div>
+              <div class="tile"><div class="lbl">최대 하회</div><div class="val down">−611%</div><div class="sub">HMH 홀딩</div></div>
+            </div></div>
+            <div class="card">
+              <div class="cal-head"><span class="dim">‹</span><b>2026. 09</b><span class="dim">›</span></div>
+              <div class="dow"><div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div></div>
+              <div class="cells" style="margin-top:3px">
+                <button class="pad"></button><button class="pad"></button>
+                <button class="hot">1<b>6</b></button><button class="hot">2<b>12</b></button><button class="hot">3<b>20</b></button><button class="hot">4<b>16</b></button><button class="mid">5<b>1</b></button>
+                <button class="pad">6</button><button class="mid">7<b>24</b></button><button class="mid">8<b>18</b></button><button class="mid">9<b>15</b></button><button class="mid">10<b>19</b></button><button class="mid">11<b>4</b></button><button class="pad">12</button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="headline"><span class="big">9월 5일 (토)</span><span class="cnt">1건</span></div>
+              <table class="tbl" style="width:100%;margin-top:6px">
+                <tr><th>회사</th><th>발표일</th><th>시간</th><th>시가총액</th><th>EPS</th><th>서프라이즈</th><th>매출</th><th>현재가</th><th>발표 후</th></tr>
+                <tr><td>RFMZ 4Q</td><td>9/5</td><td>예정</td><td>$315.4M</td><td>—</td><td>—</td><td>—</td><td>$4.12</td><td>—</td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="rail">
+            <div class="card tight"><h3>다가오는 대형 발표</h3><div class="sub dim" style="margin-top:4px">오라클 D-2 · 어도비 D-6 · 페덱스 D-11</div></div>
+            <div class="card tight"><h3>기대와 주가가 엇갈린 발표</h3><div class="sub dim" style="margin-top:4px">HMH 홀딩 −611% …</div></div>
+          </div>
+        </div>
+        <div class="measure">데스크톱은 폭이 넉넉해 <b>9열이 다 보인다</b> — 고칠 것은 세로가 아니라 <b>모바일</b>이다.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ A안 ═══════════════ -->
+  <section class="block">
+    <header><span class="tag rec">A안 · 권장</span><h2>상단은 접고, 목록은 카드로</h2></header>
+    <div class="why">
+      <b>모바일에서만</b> 세 가지를 바꾼다. 데스크톱은 지금 그대로다 — 거기서는 표가 이미 잘 읽힌다.
+      <ul>
+        <li><b>스코어보드 → 한 줄 띠(38px).</b> 「9/5 (토) · 1건 · 예정 1 · 상회 —」. 누르면 지금의 다섯 칸이 펼쳐진다. 발표 전인 날은 「—」 다섯 개가 244px을 쓰던 자리다.</li>
+        <li><b>월 달력 → 주 스트립(56px) + 「달력 ▾」.</b> 실적을 보는 사람이 실제로 하는 일은 「이번 주 누가 발표하나」다. 달의 지형이 필요할 때만 펼친다.</li>
+        <li><b>표 → 카드.</b> 가로 스크롤을 없애고 한 회사가 두 줄을 쓴다: ① 로고·이름·분기·발표일 ② 지표(예측→실적)와 서프라이즈, 그리고 발표 후 주가. 정렬은 표 머리 대신 <b>pill</b>이 맡는다.</li>
+      </ul>
+      잃는 것: 모바일에서 열 아홉 개를 한눈에 견주지 못한다. 그건 <b>지금도 못 한다</b>(3열까지만 보였다).
+      매출·현재가처럼 카드에서 뺀 값은 행을 눌러 여는 상세 모달이 그대로 들고 있다.
+    </div>
+    <div class="pair">
+      <div>
+        <div class="frame-label">모바일 375px</div>
+        <div class="phone">
+          <div class="scroll">
+            <div class="tabs" style="max-width:236px;margin-left:auto;font-size:11px"><button>월</button><button class="on">캘린더</button><button>서프라이즈</button></div>
+            <div class="card tight">
+              <div class="strip"><b>9/5 (토)</b><span class="k">발표</span><b>1건</b><span class="k">예정 1</span><span class="k">· 상회 —</span><span class="chev">펼치기 ▾</span></div>
+            </div>
+            <div class="card tight">
+              <div class="cal-head" style="margin-bottom:5px"><span class="dim">‹ 지난주</span><b>9월 첫째 주</b><span class="dim">다음주 ›</span></div>
+              <div class="weekstrip">
+                <button class="zero"><span>일</span><b>30</b><span class="cnt">&nbsp;</span></button>
+                <button><span>월</span><b>31</b><span class="cnt">6</span></button>
+                <button><span>화</span><b>1</b><span class="cnt">6</span></button>
+                <button><span>수</span><b>2</b><span class="cnt">12</span></button>
+                <button><span>목</span><b>3</b><span class="cnt">20</span></button>
+                <button><span>금</span><b>4</b><span class="cnt">16</span></button>
+                <button class="sel"><span>토</span><b>5</b><span class="cnt">1</span></button>
+              </div>
+              <div class="strip" style="margin-top:6px;font-size:10.5px"><span class="k">달력 ▾</span><span class="chev">이 달 전체 231건</span></div>
+            </div>
+            <div class="card">
+              <div class="headline"><span class="big">9월 3일 (목)</span><span class="cnt">20건</span></div>
+              <div class="pills" style="margin-top:6px"><button class="on">시가총액 ↓</button><button>서프라이즈</button><button>발표 후 주가</button><button>내 종목만</button></div>
+              <div style="margin-top:2px">
+                <div class="ev"><div class="logo" style="background:#76B900">NV</div><div class="body">
+                  <div class="top"><span class="nm">엔비디아</span><span class="q">2026 2Q</span><span class="when">9/3 장후</span></div>
+                  <div class="line"><span class="k">EPS</span><b>$1.24</b><span class="dim">→</span><b>$1.31</b><span class="pill up">+5.6%</span><span class="k" style="margin-left:auto">발표 후</span><b class="up">+3.7%</b></div>
+                </div></div>
+                <div class="ev"><div class="logo" style="background:#00A4EF">MS</div><div class="body">
+                  <div class="top"><span class="nm">마이크로소프트</span><span class="q">2026 2Q</span><span class="when">9/3 장후</span></div>
+                  <div class="line"><span class="k">EPS</span><b>$3.11</b><span class="dim">→</span><b>$3.31</b><span class="pill up">+6.3%</span><span class="k" style="margin-left:auto">발표 후</span><b class="up">+1.9%</b></div>
+                </div></div>
+                <div class="ev"><div class="logo" style="background:#ED1C24">EL</div><div class="body">
+                  <div class="top"><span class="nm">일라이 릴리</span><span class="q">2026 2Q</span><span class="when">9/3 장전</span></div>
+                  <div class="line"><span class="k">EPS</span><b>$5.10</b><span class="dim">→</span><b>$6.35</b><span class="pill up">+24.5%</span><span class="k" style="margin-left:auto">발표 후</span><b class="down">−2.1%</b></div>
+                </div></div>
+                <div class="ev"><div class="logo" style="background:#111">AM</div><div class="body">
+                  <div class="top"><span class="nm">AMD</span><span class="q">2026 2Q</span><span class="when">9/3 장후</span></div>
+                  <div class="line"><span class="k">EPS</span><b>$0.92</b><span class="dim">→</span><b>$0.95</b><span class="pill up">+3.5%</span><span class="k" style="margin-left:auto">발표 후</span><b class="up">+0.8%</b></div>
+                </div></div>
+                <div class="ev"><div class="logo" style="background:#0B57D0">CV</div><div class="body">
+                  <div class="top"><span class="nm">셰브론</span><span class="q">2026 2Q</span><span class="when">9/3 장전</span></div>
+                  <div class="line"><span class="k">EPS</span><b>$2.40</b><span class="dim">→</span><b>$2.60</b><span class="pill up">+8.4%</span><span class="k" style="margin-left:auto">발표 후</span><b class="down">−0.4%</b></div>
+                </div></div>
+                <div class="ev"><div class="logo" style="background:#5B6770">LR</div><div class="body">
+                  <div class="top"><span class="nm">램 리서치</span><span class="q">2026 2Q</span><span class="when">9/3 장후</span></div>
+                  <div class="line"><span class="k">EPS</span><b>$1.02</b><span class="dim">→</span><b>$1.08</b><span class="pill up">+5.5%</span><span class="k" style="margin-left:auto">발표 후</span><b class="up">+2.2%</b></div>
+                </div></div>
+              </div>
+            </div>
+          </div>
+          <div class="fold"><span>첫 화면 끝</span></div>
+        </div>
+        <div class="measure">첫 화면에 보이는 발표: <b>6건</b> · 가로 스크롤 <b>없음</b> · 상단 chrome <b>589 → 132px</b></div>
+      </div>
+
+      <div class="pc">
+        <div class="frame-label">데스크톱 1440px — <b>바뀌는 것 없음</b></div>
+        <div class="inner">
+          <div class="main">
+            <div class="card"><div class="score">
+              <div class="tile"><div class="lbl">9월 발표</div><div class="val">231<span style="font-size:11px;font-weight:400" class="dim"> 건</span></div><div class="sub">발표 74 · 예정 157</div></div>
+              <div class="tile"><div class="lbl">컨센서스 상회</div><div class="val up">61%</div><div class="sub">45 / 74건</div></div>
+              <div class="tile"><div class="lbl">서프라이즈 중위</div><div class="val up">+8.4%</div><div class="sub">평균 +21.0%</div></div>
+              <div class="tile"><div class="lbl">최대 상회</div><div class="val up">+440%</div><div class="sub">이머전트</div></div>
+              <div class="tile"><div class="lbl">최대 하회</div><div class="val down">−611%</div><div class="sub">HMH 홀딩</div></div>
+            </div></div>
+            <div class="card">
+              <div class="cal-head"><span class="dim">‹</span><b>2026. 09</b><span class="dim">›</span></div>
+              <div class="dow"><div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div></div>
+              <div class="cells" style="margin-top:3px">
+                <button class="pad"></button><button class="pad"></button>
+                <button class="hot">1<b>6</b></button><button class="hot">2<b>12</b></button><button class="hot">3<b>20</b></button><button class="hot">4<b>16</b></button><button class="mid">5<b>1</b></button>
+                <button class="pad">6</button><button class="mid">7<b>24</b></button><button class="mid">8<b>18</b></button><button class="mid">9<b>15</b></button><button class="mid">10<b>19</b></button><button class="mid">11<b>4</b></button><button class="pad">12</button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="headline"><span class="big">9월 3일 (목)</span><span class="cnt">20건</span></div>
+              <table class="tbl" style="width:100%;margin-top:6px">
+                <tr><th>회사</th><th>발표일</th><th>시간</th><th>시가총액</th><th>EPS 실적/예측</th><th>서프라이즈</th><th>매출</th><th>현재가</th><th>발표 후</th></tr>
+                <tr><td>엔비디아 2Q</td><td>9/3</td><td>장후</td><td>$3.9T</td><td>$1.31 / $1.24</td><td class="up">+5.6%</td><td>$62.1B</td><td>$229.47</td><td class="up">+3.7%</td></tr>
+                <tr><td>마이크로소프트 2Q</td><td>9/3</td><td>장후</td><td>$3.1T</td><td>$3.31 / $3.11</td><td class="up">+6.3%</td><td>$70.4B</td><td>$512.10</td><td class="up">+1.9%</td></tr>
+                <tr><td>일라이 릴리 2Q</td><td>9/3</td><td>장전</td><td>$0.9T</td><td>$6.35 / $5.10</td><td class="up">+24.5%</td><td>$15.2B</td><td>$980.00</td><td class="down">−2.1%</td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="rail">
+            <div class="card tight"><h3>다가오는 대형 발표</h3><div class="sub dim" style="margin-top:4px">오라클 D-2 · 어도비 D-6 · 페덱스 D-11</div></div>
+            <div class="card tight"><h3>꾸준히 기대를 넘는 기업</h3><div class="sub dim" style="margin-top:4px">엔비디아 4/4 · MS 4/4</div></div>
+          </div>
+        </div>
+        <div class="measure">데스크톱은 <b>한 줄도 건드리지 않는다</b> — 바꾸는 것은 <code>sm</code> 미만 분기뿐.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ B안 ═══════════════ -->
+  <section class="block">
+    <header><span class="tag">B안</span><h2>모바일은 탭으로 나눈다 — 요약 · 달력 · 목록</h2></header>
+    <div class="why">
+      셋을 세로로 쌓지 않고 <b>한 번에 하나만</b> 그린다. 기본 탭은 「목록」이라, 화면을 열면 곧바로 발표가 보인다.
+      요약·달력은 필요할 때 한 번 누르면 <b>전체 화면</b>을 쓰므로 지금보다 오히려 크게 볼 수 있다.
+      <ul>
+        <li><b>좋은 점</b> — 목록에 세로 예산을 전부 준다. 첫 화면에 발표 8건. 달력도 44px 칸을 그대로 쓰면서 한 달이 다 들어간다.</li>
+        <li><b>나쁜 점</b> — 「달력에서 날짜를 고르고 그 날 목록을 본다」가 <b>탭 왕복</b>이 된다. 지금은 스크롤 한 번이면 되던 동작이다. 날짜를 고르면 자동으로 목록 탭으로 넘어가게 해서 왕복을 반으로 줄일 수는 있다.</li>
+      </ul>
+      데스크톱에서는 탭을 쓰지 않는다 — 폭이 남으므로 <b>왼쪽에 요약·달력, 오른쪽에 목록</b>을 나란히 세워 스크롤 없이 둘을 함께 본다(지금은 위아래로 쌓여 있다).
+    </div>
+    <div class="pair">
+      <div>
+        <div class="frame-label">모바일 375px — 「목록」 탭 (기본)</div>
+        <div class="phone">
+          <div class="scroll">
+            <div class="tabs"><button>요약</button><button>달력</button><button class="on">목록 · 20건</button></div>
+            <div class="card">
+              <div class="headline"><span class="big">9월 3일 (목)</span><span class="cnt">20건</span><span class="chev">날짜 바꾸기 ›</span></div>
+              <div class="pills" style="margin-top:6px"><button class="on">시가총액 ↓</button><button>서프라이즈</button><button>발표 후 주가</button></div>
+              <div style="margin-top:2px">
+                <div class="ev"><div class="logo" style="background:#76B900">NV</div><div class="body">
+                  <div class="top"><span class="nm">엔비디아</span><span class="q">2026 2Q</span><span class="when">장후</span></div>
+                  <div class="line"><span class="k">EPS</span><b>$1.24</b><span class="dim">→</span><b>$1.31</b><span class="pill up">+5.6%</span><span class="k" style="margin-left:auto">발표 후</span><b class="up">+3.7%</b></div>
+                </div></div>
+                <div class="ev"><div class="logo" style="background:#00A4EF">MS</div><div class="body">
+                  <div class="top"><span class="nm">마이크로소프트</span><span class="q">2026 2Q</span><span class="when">장후</span></div>
+                  <div class="line"><span class="k">EPS</span><b>$3.11</b><span class="dim">→</span><b>$3.31</b><span class="pill up">+6.3%</span><span class="k" style="margin-left:auto">발표 후</span><b class="up">+1.9%</b></div>
+                </div></div>
+                <div class="ev"><div class="logo" style="background:#ED1C24">EL</div><div class="body">
+                  <div class="top"><span class="nm">일라이 릴리</span><span class="q">2026 2Q</span><span class="when">장전</span></div>
+                  <div class="line"><span class="k">EPS</span><b>$5.10</b><span class="dim">→</span><b>$6.35</b><span class="pill up">+24.5%</span><span class="k" style="margin-left:auto">발표 후</span><b class="down">−2.1%</b></div>
+                </div></div>
+                <div class="ev"><div class="logo" style="background:#111">AM</div><div class="body">
+                  <div class="top"><span class="nm">AMD</span><span class="q">2026 2Q</span><span class="when">장후</span></div>
+                  <div class="line"><span class="k">EPS</span><b>$0.92</b><span class="dim">→</span><b>$0.95</b><span class="pill up">+3.5%</span><span class="k" style="margin-left:auto">발표 후</span><b class="up">+0.8%</b></div>
+                </div></div>
+                <div class="ev"><div class="logo" style="background:#0B57D0">CV</div><div class="body">
+                  <div class="top"><span class="nm">셰브론</span><span class="q">2026 2Q</span><span class="when">장전</span></div>
+                  <div class="line"><span class="k">EPS</span><b>$2.40</b><span class="dim">→</span><b>$2.60</b><span class="pill up">+8.4%</span><span class="k" style="margin-left:auto">발표 후</span><b class="down">−0.4%</b></div>
+                </div></div>
+                <div class="ev"><div class="logo" style="background:#5B6770">LR</div><div class="body">
+                  <div class="top"><span class="nm">램 리서치</span><span class="q">2026 2Q</span><span class="when">장후</span></div>
+                  <div class="line"><span class="k">EPS</span><b>$1.02</b><span class="dim">→</span><b>$1.08</b><span class="pill up">+5.5%</span><span class="k" style="margin-left:auto">발표 후</span><b class="up">+2.2%</b></div>
+                </div></div>
+                <div class="ev"><div class="logo" style="background:#6D28D9">FD</div><div class="body">
+                  <div class="top"><span class="nm">페덱스</span><span class="q">2026 1Q</span><span class="when">장후</span></div>
+                  <div class="line"><span class="k">EPS</span><b>$4.10</b><span class="dim">→</span><b>$3.88</b><span class="pill down">−5.4%</span><span class="k" style="margin-left:auto">발표 후</span><b class="down">−6.1%</b></div>
+                </div></div>
+                <div class="ev"><div class="logo" style="background:#0F766E">KR</div><div class="body">
+                  <div class="top"><span class="nm">크로거</span><span class="q">2026 2Q</span><span class="when">장전</span></div>
+                  <div class="line"><span class="k">EPS</span><b>$0.98</b><span class="dim">→</span><b>$1.04</b><span class="pill up">+6.1%</span><span class="k" style="margin-left:auto">발표 후</span><b class="up">+4.0%</b></div>
+                </div></div>
+              </div>
+            </div>
+          </div>
+          <div class="fold"><span>첫 화면 끝</span></div>
+        </div>
+        <div class="measure">첫 화면에 보이는 발표: <b>8건</b> · 다만 달력 ↔ 목록이 <b>탭 왕복</b></div>
+      </div>
+
+      <div class="pc">
+        <div class="frame-label">데스크톱 1440px — 좌 요약·달력 / 우 목록</div>
+        <div class="inner">
+          <div class="main" style="flex-direction:row">
+            <div style="width:210px;flex:0 0 auto;display:flex;flex-direction:column;gap:8px">
+              <div class="card tight">
+                <div class="tile"><div class="lbl">9월 발표</div><div class="val">231 <span style="font-size:11px;font-weight:400" class="dim">건</span></div><div class="sub">발표 74 · 예정 157</div></div>
+                <div style="height:1px;background:var(--border);margin:6px 0"></div>
+                <div class="tile"><div class="lbl">컨센서스 상회</div><div class="val up">61%</div><div class="sub">45 / 74건</div></div>
+                <div style="height:1px;background:var(--border);margin:6px 0"></div>
+                <div class="tile"><div class="lbl">서프라이즈 중위</div><div class="val up">+8.4%</div><div class="sub">평균 +21.0%</div></div>
+              </div>
+              <div class="card tight">
+                <div class="cal-head"><span class="dim">‹</span><b>2026. 09</b><span class="dim">›</span></div>
+                <div class="dow"><div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div></div>
+                <div class="cells" style="margin-top:3px">
+                  <button class="pad"></button><button class="pad"></button>
+                  <button class="hot">1<b>6</b></button><button class="hot">2<b>12</b></button><button class="hot">3<b>20</b></button><button class="hot">4<b>16</b></button><button class="mid">5<b>1</b></button>
+                  <button class="pad">6</button><button class="mid">7<b>24</b></button><button class="mid">8<b>18</b></button><button class="mid">9<b>15</b></button><button class="mid">10<b>19</b></button><button class="mid">11<b>4</b></button><button class="pad">12</button>
+                  <button class="pad">13</button><button class="mid">14<b>16</b></button><button class="mid">15<b>5</b></button><button class="mid">16<b>8</b></button><button class="mid">17<b>7</b></button><button class="mid">18<b>1</b></button><button class="pad">19</button>
+                </div>
+              </div>
+            </div>
+            <div class="card" style="flex:1 1 auto;min-width:0">
+              <div class="headline"><span class="big">9월 3일 (목)</span><span class="cnt">20건</span></div>
+              <table class="tbl" style="width:100%;margin-top:6px">
+                <tr><th>회사</th><th>시간</th><th>시가총액</th><th>EPS 실적/예측</th><th>서프라이즈</th><th>매출</th><th>발표 후</th></tr>
+                <tr><td>엔비디아 2Q</td><td>장후</td><td>$3.9T</td><td>$1.31 / $1.24</td><td class="up">+5.6%</td><td>$62.1B</td><td class="up">+3.7%</td></tr>
+                <tr><td>마이크로소프트 2Q</td><td>장후</td><td>$3.1T</td><td>$3.31 / $3.11</td><td class="up">+6.3%</td><td>$70.4B</td><td class="up">+1.9%</td></tr>
+                <tr><td>일라이 릴리 2Q</td><td>장전</td><td>$0.9T</td><td>$6.35 / $5.10</td><td class="up">+24.5%</td><td>$15.2B</td><td class="down">−2.1%</td></tr>
+                <tr><td>AMD 2Q</td><td>장후</td><td>$0.4T</td><td>$0.95 / $0.92</td><td class="up">+3.5%</td><td>$9.1B</td><td class="up">+0.8%</td></tr>
+                <tr><td>셰브론 2Q</td><td>장전</td><td>$0.3T</td><td>$2.60 / $2.40</td><td class="up">+8.4%</td><td>$48.0B</td><td class="down">−0.4%</td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="rail">
+            <div class="card tight"><h3>다가오는 대형 발표</h3><div class="sub dim" style="margin-top:4px">오라클 D-2 · 어도비 D-6</div></div>
+          </div>
+        </div>
+        <div class="measure">달력과 목록이 <b>같은 화면</b>에 선다 — 날짜를 바꾸며 목록을 훑는 동작이 스크롤 없이 끝난다.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ C안 ═══════════════ -->
+  <section class="block">
+    <header><span class="tag">C안</span><h2>표를 지키되 모바일에서 세 열만 — 「열 더보기」</h2></header>
+    <div class="why">
+      가장 적게 바꾸는 안이다. 표를 카드로 갈아엎지 않고, <b>모바일에서만 열을 셋으로 줄인다</b>:
+      회사 · 지표(서프라이즈) · 발표 후 주가. 나머지 여섯 열은 헤더 오른쪽 「열 ▾」로 켠다.
+      정렬은 지금처럼 열 머리를 눌러서 한다.
+      <ul>
+        <li><b>좋은 점</b> — 표의 성격(줄 세우기)이 모바일에서도 그대로 남는다. 구현이 가장 작다.</li>
+        <li><b>나쁜 점</b> — 한 행이 26px이라 <b>글자가 작고 탭 영역이 좁다</b>. 그리고 상단 589px 문제를 건드리지 않아, 첫 화면에 보이는 발표는 여전히 <b>0~2건</b>이다. A안의 상단 접기와 <b>같이 써야</b> 값을 한다.</li>
+      </ul>
+    </div>
+    <div class="pair">
+      <div>
+        <div class="frame-label">모바일 375px (A안의 상단 접기를 함께 적용한 모습)</div>
+        <div class="phone">
+          <div class="scroll">
+            <div class="card tight"><div class="strip"><b>9/3 (목)</b><span class="k">발표</span><b>20건</b><span class="k">· 상회 61%</span><span class="chev">펼치기 ▾</span></div></div>
+            <div class="card tight">
+              <div class="weekstrip">
+                <button class="zero"><span>일</span><b>30</b><span class="cnt">&nbsp;</span></button>
+                <button><span>월</span><b>31</b><span class="cnt">6</span></button>
+                <button><span>화</span><b>1</b><span class="cnt">6</span></button>
+                <button><span>수</span><b>2</b><span class="cnt">12</span></button>
+                <button class="sel"><span>목</span><b>3</b><span class="cnt">20</span></button>
+                <button><span>금</span><b>4</b><span class="cnt">16</span></button>
+                <button><span>토</span><b>5</b><span class="cnt">1</span></button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="headline"><span class="big">9월 3일 (목)</span><span class="cnt">20건</span><span class="chev">열 ▾</span></div>
+              <table class="tbl" style="width:100%;margin-top:6px">
+                <tr><th>회사 ⇅</th><th>EPS 서프라이즈 ⇅</th><th>발표 후 ⇅</th></tr>
+                <tr><td>엔비디아 2Q</td><td class="up">+5.6%</td><td class="up">+3.7%</td></tr>
+                <tr><td>마이크로소프트 2Q</td><td class="up">+6.3%</td><td class="up">+1.9%</td></tr>
+                <tr><td>일라이 릴리 2Q</td><td class="up">+24.5%</td><td class="down">−2.1%</td></tr>
+                <tr><td>AMD 2Q</td><td class="up">+3.5%</td><td class="up">+0.8%</td></tr>
+                <tr><td>셰브론 2Q</td><td class="up">+8.4%</td><td class="down">−0.4%</td></tr>
+                <tr><td>램 리서치 2Q</td><td class="up">+5.5%</td><td class="up">+2.2%</td></tr>
+                <tr><td>페덱스 1Q</td><td class="down">−5.4%</td><td class="down">−6.1%</td></tr>
+                <tr><td>크로거 2Q</td><td class="up">+6.1%</td><td class="up">+4.0%</td></tr>
+                <tr><td>코팟 4Q</td><td class="up">+2.2%</td><td class="up">+0.9%</td></tr>
+                <tr><td>선벨트 렌탈스 1Q</td><td class="down">−1.1%</td><td class="down">−3.2%</td></tr>
+                <tr><td>오라클 1Q</td><td class="up">+3.0%</td><td class="up">+8.8%</td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="fold"><span>첫 화면 끝</span></div>
+        </div>
+        <div class="measure">첫 화면에 보이는 발표: <b>11건</b> · 다만 행 높이 26px로 <b>탭이 좁다</b></div>
+      </div>
+
+      <div class="pc">
+        <div class="frame-label">데스크톱 1440px — <b>바뀌는 것 없음</b> (열 숨김은 <code>sm</code> 미만에서만)</div>
+        <div class="inner">
+          <div class="main">
+            <div class="card"><div class="score">
+              <div class="tile"><div class="lbl">9월 발표</div><div class="val">231<span style="font-size:11px;font-weight:400" class="dim"> 건</span></div><div class="sub">발표 74 · 예정 157</div></div>
+              <div class="tile"><div class="lbl">컨센서스 상회</div><div class="val up">61%</div><div class="sub">45 / 74건</div></div>
+              <div class="tile"><div class="lbl">서프라이즈 중위</div><div class="val up">+8.4%</div><div class="sub">평균 +21.0%</div></div>
+              <div class="tile"><div class="lbl">최대 상회</div><div class="val up">+440%</div><div class="sub">이머전트</div></div>
+              <div class="tile"><div class="lbl">최대 하회</div><div class="val down">−611%</div><div class="sub">HMH 홀딩</div></div>
+            </div></div>
+            <div class="card">
+              <div class="headline"><span class="big">9월 3일 (목)</span><span class="cnt">20건</span></div>
+              <table class="tbl" style="width:100%;margin-top:6px">
+                <tr><th>회사</th><th>발표일</th><th>시간</th><th>시가총액</th><th>EPS 실적/예측</th><th>서프라이즈</th><th>매출</th><th>현재가</th><th>발표 후</th></tr>
+                <tr><td>엔비디아 2Q</td><td>9/3</td><td>장후</td><td>$3.9T</td><td>$1.31 / $1.24</td><td class="up">+5.6%</td><td>$62.1B</td><td>$229.47</td><td class="up">+3.7%</td></tr>
+                <tr><td>마이크로소프트 2Q</td><td>9/3</td><td>장후</td><td>$3.1T</td><td>$3.31 / $3.11</td><td class="up">+6.3%</td><td>$70.4B</td><td>$512.10</td><td class="up">+1.9%</td></tr>
+                <tr><td>일라이 릴리 2Q</td><td>9/3</td><td>장전</td><td>$0.9T</td><td>$6.35 / $5.10</td><td class="up">+24.5%</td><td>$15.2B</td><td>$980.00</td><td class="down">−2.1%</td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="rail"><div class="card tight"><h3>다가오는 대형 발표</h3><div class="sub dim" style="margin-top:4px">오라클 D-2 · 어도비 D-6</div></div></div>
+        </div>
+        <div class="measure">데스크톱은 그대로. C안은 <b>모바일 열 숨김</b>만 하는 안이다.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="legend">
+    <p><b>세 안을 한 줄로.</b></p>
+    <p>· <b>A안(권장)</b> — 상단을 접고 목록을 카드로. 첫 화면 <b>0건 → 6건</b>, 가로 스크롤 제거. 모바일 분기만 손대므로 데스크톱 위험 없음. 구현 범위: <code>earnings-client</code>(상단 접기) · <code>earnings-week-strip</code>(신규) · <code>earnings-table</code>의 <code>sm</code> 미만 카드 렌더.</p>
+    <p>· <b>B안</b> — 모바일 탭 3개. 첫 화면 <b>8건</b>으로 가장 많지만 「달력에서 고르고 목록을 본다」가 탭 왕복이 된다. 데스크톱은 2단 배치로 함께 개선되는 것이 덤.</p>
+    <p>· <b>C안</b> — 표를 지키고 모바일 열만 셋으로. 가장 작게 고치지만 상단 589px을 그대로 두면 값이 없다. <b>A안의 상단 접기와 함께</b> 쓰는 조각으로 보는 편이 맞다.</p>
+    <p style="margin-top:10px">· <b>세 안 공통으로 함께 넣을 것</b> — 요청 8에서 이미 넣은 「이 달에는 일정이 없습니다」 빈 상태(<code>lib/earnings-empty.ts</code>), 그리고 목록 카드/행을 눌렀을 때 열리는 상세 모달은 지금 그대로 유지한다.</p>
+    <p style="margin-top:10px">· <b>측정 방법</b> — 「첫 화면에 보이는 발표」는 375×640 본문 영역(앱 헤더 100px·검색줄 72px 제외)에 들어가는 목록 항목 수를 프레임에서 그대로 센 값이다. 현재 화면의 589px은 실제 브라우저에서 잰 값이다(스코어보드 244 + 달력 345).</p>
+  </div>
+</div>
+<script>
+  const btn = document.getElementById('themeBtn');
+  btn.addEventListener('click', () => {
+    const el = document.documentElement;
+    el.setAttribute('data-theme', el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  });
+</script>
+</body>
+</html>

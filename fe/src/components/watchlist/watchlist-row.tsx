@@ -14,6 +14,7 @@ import { WatchlistRangeBar } from "@/components/watchlist/watchlist-range-bar";
 import { Card } from "@/components/ui/card";
 import { daysUntil, type UpcomingEvent } from "@/hooks/use-upcoming-events";
 import { formatPercent, formatPrice, formatPriceChange } from "@/lib/format";
+import { ValueFlash } from "@/components/ui/value-flash";
 import { SCORE_TONE_BADGE, scoreTone } from "@/lib/stock-score-api";
 import { trendTextClass } from "@/lib/trend-colors";
 import type { WatchlistRow as Row } from "@/lib/watchlist-calc";
@@ -115,7 +116,7 @@ export function WatchlistRow({
           />
           <span className="min-w-0 flex-1">
             <span className="flex min-w-0 items-center gap-1">
-              <span className="truncate text-[13px] font-semibold leading-[19px] text-[var(--text-primary)]">
+              <span className="truncate text-note font-semibold leading-[19px] text-[var(--text-primary)]">
                 {q?.name || row.symbol}
               </span>
               {eventSoon && (
@@ -125,7 +126,7 @@ export function WatchlistRow({
                 />
               )}
             </span>
-            <span className="block truncate text-[10px] leading-[13px] text-[var(--text-muted)]">
+            <span className="block truncate text-micro leading-[13px] text-[var(--text-muted)]">
               {row.symbol}
             </span>
           </span>
@@ -136,7 +137,7 @@ export function WatchlistRow({
           {row.score != null ? (
             <span
               className={cn(
-                "grid h-[19px] w-full place-items-center rounded-md text-[11px] font-bold tabular-nums",
+                "grid h-[19px] w-full place-items-center rounded-md text-cell font-bold tabular-nums",
                 SCORE_TONE_BADGE[scoreTone(row.score)],
               )}
               title={`종합 점수 ${row.score}${row.scoreGrade ? ` (${row.scoreGrade})` : ""}`}
@@ -144,7 +145,7 @@ export function WatchlistRow({
               {Math.round(row.score)}
             </span>
           ) : (
-            <span className="text-[11px] text-[var(--text-muted)]" title="산출된 점수 없음">
+            <span className="text-cell text-[var(--text-muted)]" title="산출된 점수 없음">
               —
             </span>
           )}
@@ -177,11 +178,23 @@ export function WatchlistRow({
           sub={row.addedAt ? row.addedAt.slice(5, 10) : "기록 없음"}
         />
 
-        {/* 현재가 */}
+        {/* 현재가 — 실시간 차트 목록과 같은 플래시를 준다(2026-09-04 사용자 요청 4).
+            `WatchlistCell`이 값 칸을 `truncate`된 고정 높이 span으로 그리므로,
+            감싸는 자리는 그 안쪽이다 — 바깥에 두면 셀의 두 줄 레이아웃이 깨진다. */}
         <WatchlistCell
           className={WL_COL.price}
-          value={pending ? "…" : hasPrice && q ? formatPrice(q.currentPrice, q.currency) : "—"}
-          valueClassName={cn("text-[15px] font-bold", !hasPrice && "text-[var(--text-muted)]")}
+          value={
+            pending ? (
+              "…"
+            ) : hasPrice && q ? (
+              <ValueFlash value={q.currentPrice} resetKey={row.symbol}>
+                {formatPrice(q.currentPrice, q.currency)}
+              </ValueFlash>
+            ) : (
+              "—"
+            )
+          }
+          valueClassName={cn("text-section font-bold", !hasPrice && "text-[var(--text-muted)]")}
           sub={
             pending || !hasPrice || !q ? null : (
               <span className={trendTextClass(q.changeRate)}>

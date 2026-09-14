@@ -112,3 +112,49 @@ export function mergeQuoteSummaries(prev: QuoteSummary[], next: QuoteSummary[]):
 
   return merged;
 }
+
+/**
+ * 스트림이 준 가격을 시세 목록에 덮는다 — 보유·관심이 함께 쓴다.
+ *
+ * # 기준가를 새로 받지 않는다
+ *
+ * `change`(전일 대비 금액)와 `currentPrice`가 이미 있으므로 **기준가는 그 둘의
+ * 차**다. 세션 안에서 변하지 않는 값이라 마지막 REST 응답의 것을 그대로 쓰면 되고,
+ * 그래서 스트림은 가격만 실어 보낸다(서버가 종목마다 기준가를 푸는 비용은
+ * `use-quote-stream` 머리글의 실측 참조).
+ *
+ * `currentPrice`가 0이면 기준가를 못 낸다 — 그 행은 **건드리지 않는다.** 가격만
+ * 갈아 끼우고 등락률을 옛 값으로 두면 숫자 둘이 서로 다른 순간을 가리킨다.
+ *
+ * # 같은 배열·같은 객체를 지킨다
+ *
+ * 값이 안 바뀐 행은 같은 객체를, 하나도 안 바뀌었으면 같은 배열을 돌려준다.
+ * 보유 화면은 이 목록으로 평가손익을 다시 계산하므로, 참조가 매번 바뀌면 2초마다
+ * 전체 재계산 + 전체 리렌더가 된다.
+ */
+export function applyStreamPricesToQuotes(
+  quotes: QuoteSummary[],
+  stream: Map<string, { price: number }>,
+): QuoteSummary[] {
+  if (stream.size === 0) return quotes;
+
+  let changed = false;
+  const next = quotes.map((q) => {
+    const tick = stream.get(q.symbol.toUpperCase());
+    if (!tick || !(tick.price > 0)) return q;
+    if (q.currentPrice <= 0) return q;
+    if (q.currentPrice === tick.price) return q;
+
+    const base = q.currentPrice - q.change;
+    if (!(base > 0)) return q;
+
+    changed = true;
+    return {
+      ...q,
+      currentPrice: tick.price,
+      change: tick.price - base,
+      changeRate: ((tick.price - base) / base) * 100,
+    };
+  });
+  return changed ? next : quotes;
+}

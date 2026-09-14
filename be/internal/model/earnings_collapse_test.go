@@ -125,38 +125,41 @@ func TestCollapseCalendarEvents_runsBothCollapses(t *testing.T) {
 	}
 }
 
-func TestDropStaleOverseasScheduled_hidesPastKeepsYesterday(t *testing.T) {
-	now := time.Date(2026, 8, 21, 10, 0, 0, 0, KST)
+func TestDropStaleOverseasScheduled_hidesPastKeepsToday(t *testing.T) {
+	now := time.Date(2026, 8, 27, 10, 0, 0, 0, KST)
 	stale := EarningsEvent{
-		Symbol: "AARD", Market: string(AssetUS), Date: "2026-08-19",
-		DateStatus: EarningsDateScheduled, FiscalYear: 2026, FiscalPeriod: "2Q",
+		Symbol: "AARD", Market: string(AssetUS), Date: "2026-08-25",
+		DateStatus: EarningsDateScheduled, Session: EarningsSessionBeforeOpen,
+		FiscalYear: 2026, FiscalPeriod: "2Q",
 	}
-	yesterday := EarningsEvent{
-		Symbol: "FOO", Market: string(AssetUS), Date: "2026-08-20",
-		DateStatus: EarningsDateScheduled, FiscalYear: 2026, FiscalPeriod: "2Q",
+	todayAMC := EarningsEvent{
+		Symbol: "NVDA", Market: string(AssetUS), Date: "2026-08-26",
+		DateStatus: EarningsDateScheduled, Session: EarningsSessionAfterClose,
+		FiscalYear: 2027, FiscalPeriod: "2Q",
 	}
-	today := EarningsEvent{
-		Symbol: "BAR", Market: string(AssetUS), Date: "2026-08-21",
-		DateStatus: EarningsDateScheduled, FiscalYear: 2026, FiscalPeriod: "2Q",
+	todayBMO := EarningsEvent{
+		Symbol: "BAR", Market: string(AssetUS), Date: "2026-08-27",
+		DateStatus: EarningsDateScheduled, Session: EarningsSessionBeforeOpen,
+		FiscalYear: 2026, FiscalPeriod: "2Q",
 	}
 	confirmed := EarningsEvent{
-		Symbol: "ADI", Market: string(AssetUS), Date: "2026-08-19",
+		Symbol: "ADI", Market: string(AssetUS), Date: "2026-08-25",
 		DateStatus: EarningsDateConfirmed, FiscalYear: 2026, FiscalPeriod: "3Q",
 	}
 	domestic := EarningsEvent{
-		Symbol: "005930", Market: string(AssetDomestic), Date: "2026-08-19",
+		Symbol: "005930", Market: string(AssetDomestic), Date: "2026-08-25",
 		DateStatus: EarningsDateScheduled, FiscalYear: 2026, FiscalPeriod: "2Q",
 		Basis: "연결",
 	}
 
 	got := DropStaleOverseasScheduled(
-		[]EarningsEvent{stale, yesterday, today, confirmed, domestic}, now)
+		[]EarningsEvent{stale, todayAMC, todayBMO, confirmed, domestic}, now)
 	if len(got) != 4 {
-		t.Fatalf("len = %d, want 4 (drop AARD 8/19 scheduled only)", len(got))
+		t.Fatalf("len = %d, want 4 (drop stale bmo 8/25 only)", len(got))
 	}
 	for _, ev := range got {
 		if ev.Symbol == "AARD" {
-			t.Fatalf("stale 8/19 scheduled %s should be hidden", ev.Symbol)
+			t.Fatalf("stale 8/25 scheduled %s should be hidden", ev.Symbol)
 		}
 	}
 }
@@ -184,14 +187,16 @@ func TestCollapseCalendarEvents_dropsStaleScheduled(t *testing.T) {
 
 	stale := EarningsEvent{
 		Symbol: "AARD", Market: string(AssetUS), Date: staleDay,
-		DateStatus: EarningsDateScheduled, FiscalYear: 2026, FiscalPeriod: "2Q",
+		DateStatus: EarningsDateScheduled, Session: EarningsSessionBeforeOpen,
+		FiscalYear: 2026, FiscalPeriod: "2Q",
 	}
 	keep := EarningsEvent{
 		Symbol: "FOO", Market: string(AssetUS), Date: yesterday,
-		DateStatus: EarningsDateScheduled, FiscalYear: 2026, FiscalPeriod: "2Q",
+		DateStatus: EarningsDateScheduled, Session: EarningsSessionAfterClose,
+		FiscalYear: 2026, FiscalPeriod: "2Q",
 	}
 	got := CollapseCalendarEvents([]EarningsEvent{stale, keep})
 	if len(got) != 1 || got[0].Symbol != "FOO" {
-		t.Fatalf("got = %+v, want only yesterday scheduled", got)
+		t.Fatalf("got = %+v, want only yesterday amc scheduled (display today)", got)
 	}
 }

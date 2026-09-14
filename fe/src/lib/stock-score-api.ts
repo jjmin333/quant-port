@@ -45,6 +45,14 @@ export const SCORE_AXIS_ORDER: ScoreAxisId[] = [
  */
 export const TAB_SCORE_AXIS: Record<string, ScoreAxisId> = {
   chart: "technical",
+  /*
+    밸류에이션도 **다른 탭과 같은 배지**를 쓴다 (2026-09-03 사용자 결정).
+
+    한동안 여기서 빠져 있었다 — 그 탭의 「종합 지표」 카드가 가치 점수를 자기 머리줄에
+    직접 적고 있었기 때문이다. 그래서 같은 앱에서 「수익성 점수」는 막대 달린 배지로,
+    「가치 점수」는 카드 안 글자로 나왔다. 점수를 읽는 자리는 탭마다 같아야 한다 —
+    카드 쪽 글자를 지우고 이 표에 넣었다.
+  */
   valuation: "valuation",
   financials: "quality",
   earnings: "growth",
@@ -70,11 +78,16 @@ export async function fetchScoresBatchClient(symbols: string[]): Promise<StockSc
   return data ?? [];
 }
 
+/**
+ * 종합 점수 — **하루 한 번 도는 배치**가 만든다. 화면이 다시 물어도 같은 값이다.
+ * 워크스페이스의 여러 탭이 각자 축 점수를 그리므로 같은 순간에 여러 번 불린다.
+ */
 export function fetchStockScoreClient(symbol: string): Promise<StockScoreData | null> {
-  return apiRequest<StockScoreData | null>(
-    `/api/v1/stocks/${encodeURIComponent(symbol)}/score`,
-    undefined,
-    "점수 조회 실패",
+  const path = `/api/v1/stocks/${encodeURIComponent(symbol)}/score`;
+  return cachedGet(
+    path,
+    () => apiRequest<StockScoreData | null>(path, undefined, "점수 조회 실패"),
+    60_000,
   );
 }
 
@@ -91,23 +104,74 @@ export type StockScoreListItem = {
   closePrice?: number;
   currency?: string;
   tradeDate: string;
+  /**
+   * 등락률·가격의 출처. `"live"`(지금 시세) 또는 종가의 거래일(`YYYY-MM-DD`).
+   *
+   * 서버가 정한다 — 프리·정규·애프터 중이면 실시간 시세로 덮고, 애프터마켓까지
+   * 끝난 뒤에는 확정 종가를 쓴다. 화면은 **툴팁 문구를 고르는 데만** 쓴다:
+   * 이 값으로 색을 빼거나 각주를 달지 않는다(그러면 정상 상태인 해외 종목이
+   * 언제나 「밀린 값」으로 보인다 — 점수의 날은 KST, 미국 종가는 하루 뒤다).
+   */
+  priceAsOf?: string;
+  /**
+   * 이 목록이 **실제로 줄 세운 값**. 축을 고르면 그 축 점수이고, 기간을 고르면 그
+   * 기간의 최고점이다. 종합·실시간에서는 `score`와 같다.
+   *
+   * 행에 적히는 숫자는 이 값이다 — `score`(최신일 종합)를 그리면 축 랭킹에서
+   * 목록이 뒤죽박죽 정렬된 것처럼 읽힌다.
+   */
+  rankValue?: number;
+  /**
+   * 등락률의 **기준가**. 서버가 고른 값이다(`scorePrevCloseHint`).
+   *
+   * 목록 가격이 SSE로 오기 때문에 필요하다 — 스트림은 가격만 보내고, 등락률은 이
+   * 값으로 화면이 낸다(`changeRateFrom`). 기준가를 서버가 틱마다 풀면 종목당 4~5
+   * SELECT가 붙어서(실측: 이 응답 20줄이 100 SELECT였다) 푸시로 옮긴 뜻이 없어진다.
+   *
+   * 없으면 등락률을 **그리지 않는다.** 0.00%로 때우면 「보합」으로 읽히는데 실제
+   * 뜻은 「기준가를 모른다」다.
+   */
+  basePrice?: number;
 };
 
 export type ScoreRankingMarket = "domestic" | "overseas";
 
-export async function fetchScoreRankingsClient(
-  market: ScoreRankingMarket,
+export type ScoreRankingQuery = {
+  market: ScoreRankingMarket;
+  /** `lib/score-ranking-config`의 축. 생략하면 종합. */
+  axis?: string;
+  /** 같은 파일의 기간. 생략하면 최신 배치일. */
+  duration?: string;
+  limit?: number;
+};
+
+/**
+ * 축·기간별 랭킹.
+ *
+ * 종합·실시간을 뺀 조합은 **배치가 미리 만들어 둔 목록**이다(BE
+ * `service/stock_score_rankings.go`) — 기간 창을 훑는 계산은 운영 DB에서 수 초라
+ * 요청 경로에 둘 수 없다. 그래서 조합을 바꿔도 응답 시간은 종합·실시간과 같다.
+ */
+export async function fetchScoreRankingsClient({
+  market,
+  axis,
+  duration,
   limit = 20,
-): Promise<{ items: StockScoreListItem[]; tradeDate: string }> {
+}: ScoreRankingQuery): Promise<{ items: StockScoreListItem[]; tradeDate: string }> {
   const params = new URLSearchParams({ market, limit: String(limit) });
+  if (axis && axis !== "composite") params.set("axis", axis);
+  if (duration && duration !== "realtime") params.set("duration", duration);
   const path = `/api/v1/stocks/scores/top?${params.toString()}`;
-  // 이 랭킹은 하루 한 번 도는 배치가 만든다. 국내/해외 토글을 오가거나 화면을
-  // 떠났다 돌아올 때마다 다시 받을 이유가 없다.
+  /*
+   * 순위·점수는 하루 한 번 도는 배치가 만들지만 **등락률은 장중에 서버가 실시간
+   * 시세로 덮는다.** 그래서 예전의 5분 캐시는 너무 길다 — 토글을 오가는 동안의
+   * 중복 요청만 걷어내면 되므로 30초로 줄인다.
+   */
   const items = await cachedGet(
     path,
     () =>
       apiRequest<StockScoreListItem[] | null>(path, undefined, "종목 랭킹 조회 실패"),
-    5 * 60_000,
+    30_000,
   );
   const rows = items ?? [];
   return { items: rows, tradeDate: rows[0]?.tradeDate ?? "" };
@@ -173,3 +237,15 @@ export const SCORE_TONE_BADGE: Record<ScoreTone, string> = {
  * 하고 신호등으로 되돌린다. 지금은 종목 랭킹 목록이 유일한 사용처다.
  */
 export const SCORE_NEUTRAL_TEXT = "text-foreground";
+
+/**
+ * 랭킹 등락률 칸의 툴팁 문구.
+ *
+ * 화면에는 숫자만 두고 출처는 여기로 보낸다 — 여덟 줄에 날짜를 일일이 적으면
+ * 목록이 날짜 표가 되고, 색으로 구분하면 색이 방향 말고 다른 것도 뜻하게 된다.
+ */
+export function priceAsOfLabel(priceAsOf?: string): string | undefined {
+  if (!priceAsOf) return undefined;
+  if (priceAsOf === "live") return "실시간 시세 기준";
+  return `${priceAsOf} 종가 기준`;
+}

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -30,27 +29,35 @@ type NewsBriefingService struct {
 	news     *NewsStore
 	indices  *MarketIndexStore
 	quotes   *QuotesService
-	stocks   *repository.StockRepo
 	repo     *repository.NewsBriefingRepo
-	llm      *llm.Client
+	llm      *llm.Pool
 	earnings *EarningsCalendarService
 	toss     *toss.Client
 	redis    *redis.Client
+	// runs records each scheduled slot in the batch ledger — 건너뛴 슬롯까지
+	// 포함해서. 없으면 감시는 「조용한 주말」과 「죽은 스케줄러」를 구분하지 못한다.
+	runs *repository.BatchJobRunRepo
 }
 
 func NewNewsBriefingService(
 	news *NewsStore,
 	indices *MarketIndexStore,
 	quotes *QuotesService,
-	stocks *repository.StockRepo,
 	repo *repository.NewsBriefingRepo,
 ) *NewsBriefingService {
-	return &NewsBriefingService{news: news, indices: indices, quotes: quotes, stocks: stocks, repo: repo}
+	return &NewsBriefingService{news: news, indices: indices, quotes: quotes, repo: repo}
 }
 
-func (s *NewsBriefingService) SetLLM(client *llm.Client) {
+// SetBatchRuns wires the batch ledger so every scheduled slot leaves a row.
+func (s *NewsBriefingService) SetBatchRuns(repo *repository.BatchJobRunRepo) {
 	if s != nil {
-		s.llm = client
+		s.runs = repo
+	}
+}
+
+func (s *NewsBriefingService) SetLLM(pool *llm.Pool) {
+	if s != nil {
+		s.llm = pool
 	}
 }
 
@@ -80,9 +87,30 @@ const (
 	// filling the whole list and skewing what the briefing thinks the day was
 	// about.
 	briefingHeadlinesPerPublisher = 5
-	// briefingMentionCount is how many symbols the 「오늘의 이슈 종목」 strip and
-	// the prompt share.
-	briefingMentionCount = 10
+	/*
+		「많이 언급된 종목」의 세 숫자.
+
+		예전에는 이 목록을 **브리핑이 프롬프트에 실으려고 받아 둔 기사 200건**에서
+		Go로 셌다. 그 200건이 덮는 시간이 국내 기준 한 시간 남짓이라, 「오늘 많이
+		언급된 종목」이 사실 「방금 한 시간」이었다 — 뉴스 화면의 필터 칩이 같은
+		이유로 이미 최근 1,000건 SQL 집계로 옮겨 가 있었는데(news_top_symbols.go)
+		홈 브리핑만 옛 방식으로 남아, **같은 앱의 두 화면이 다른 하루를 말했다.**
+
+		이제 둘이 같은 집계를 부른다. 다른 것은 문턱뿐이다:
+
+		  - Min  25회 — 브리핑이 「많이 언급됐다」고 적을 때 2회는 많이가 아니다.
+		    처음에는 10회로 뒀는데 그 문턱을 넘는 종목이 국내 19·해외 21개나 됐다
+		    (실측 2026-09-03) — 그 정도면 「오늘 화제인 종목」이 아니라 「오늘 뉴스에
+		    나온 종목」이다. 25회로 올리면 국내 8·해외 5개가 남고(같은 표본), 그게
+		    사람이 훑어보고 「오늘은 이것들이었구나」 하는 크기다(사용자 결정).
+		    **화면도 같은 수로 한 번 더 거른다** — 문턱을 바꾸면 예전 문턱으로 저장된
+		    브리핑이 남아 있어서, 각주와 칩이 어긋나는 프레임이 생긴다.
+		  - Count 30 — 문턱을 넘은 종목을 **다 준다**. 문턱을 넘긴 종목이 많은 날은
+		    스무 개도 나오는데, 그걸 서버에서 잘라 버리면 화면이 「전체 보기」로
+		    펼칠 것이 없다. 접는 일은 화면이 한다(market-briefing-card.tsx).
+	*/
+	briefingMentionMinCount = 25
+	briefingMentionCount    = 30
 	// briefingHistoryCount / briefingHistoryChars — how much of the previous
 	// briefings the next prompt reads back. Ten truncated summaries of the
 	// same morning cost more than the facts they were meant to support; three
@@ -148,11 +176,12 @@ func (s *NewsBriefingService) Generate(ctx context.Context, market string, skipW
 	briefing := model.NewsMarketBriefing{
 		Market:      market,
 		GeneratedAt: time.Now().UTC(),
-		Source:      "rules",
+		Source:      model.BriefingSourceRules,
 		Facts:       facts,
 	}
 
-	if s.llm != nil && s.llm.Enabled() {
+	client := s.llm.For(market)
+	if client.Enabled() {
 		history, _ := s.repo.History(ctx, market, briefingHistoryCount, briefingHistoryChars)
 		earnings := s.briefingEarnings(ctx, market)
 		var flow *briefingFlowDTO
@@ -161,22 +190,23 @@ func (s *NewsBriefingService) Generate(ctx context.Context, market string, skipW
 		}
 		factsJSON, err := s.promptJSON(market, facts, history, earnings, flow)
 		if err == nil {
-			out, err := s.llm.GenerateNewsBriefing(ctx, factsJSON)
-			if err != nil {
-				// 실패해도 카드를 비우지 않는다 — 규칙 기반으로 내려간다.
-				log.Printf("news briefing %s: llm failed, falling back to rules: %v", market, err)
-			} else if strings.TrimSpace(out.Summary) != "" {
-				briefing.Source = "llm"
+			if out := s.briefingNarrative(ctx, client, market, factsJSON); out != nil {
+				briefing.Source = model.BriefingSourceLLM
 				briefing.Summary = out.Summary
 				briefing.Mood = out.Mood
 				briefing.MoodReason = out.MoodReason
 				briefing.Highlights = out.Highlights
 				briefing.WatchPoints = out.WatchPoints
 			}
+		} else {
+			log.Printf("news briefing %s: prompt build failed: %v", market, err)
 		}
 	}
 
-	if briefing.Source == "rules" {
+	// 문장을 못 얻었을 때의 차선은 **직전 AI 문장을 물려받는 것**이고, 그마저
+	// 없을 때가 규칙 문장이다. 실패 한 번에 카드가 「AI 분석 없음」으로 바뀌던
+	// 것이 이 두 줄로 바뀐 지점이다.
+	if briefing.Source == model.BriefingSourceRules && !s.carryBriefingNarrative(ctx, &briefing) {
 		applyRuleBasedBriefing(&briefing)
 	}
 
@@ -189,6 +219,155 @@ func (s *NewsBriefingService) Generate(ctx context.Context, market string, skipW
 		}
 	}
 	return &briefing, true, nil
+}
+
+const (
+	// briefingRetryWait is the pause before the one extra attempt. The floor is
+	// the provider's own spacing: the likeliest fast failure is another LLM
+	// batch (종목 AI 요약) having just taken this key's MinInterval slot — the
+	// counters live in Redis, so the worker containers and the API share them.
+	// Waiting that out is exactly what makes the second attempt worth making.
+	briefingRetryWait = 5 * time.Second
+	// briefingCarryWindow is how stale an inherited narrative may be. Past
+	// this the sentences are describing a different session than the numbers
+	// printed beside them, and a plain rules paragraph is the honest answer.
+	briefingCarryWindow = 3 * time.Hour
+	// briefingCarryDepth is how far back to look for one. Slots are 30–60
+	// minutes, so this comfortably covers the window above.
+	briefingCarryDepth = 8
+)
+
+// briefingNarrative asks the model for this slot's prose, with **one** extra
+// attempt when the first failure is the kind a second try could survive.
+//
+// Not retried:
+//   - 한도 초과(llm.IsBudgetExhausted) — 다시 물어도 같은 대답이고, 통과한다면
+//     쓰지 않기로 정한 예산을 쓰는 것이다.
+//   - 503 — chatCompletion이 이미 한 번 다시 걸었다. 여기서 또 걸면 한 슬롯에
+//     네 번이 된다.
+//
+// Retried: MinInterval 거절, 타임아웃, 그 밖의 5xx, JSON 파싱 실패, 그리고
+// **빈 summary**. 마지막 것이 특히 중요하다 — 모델이 형식만 맞는 빈 응답을 준
+// 갈래는 예전에 로그를 한 줄도 남기지 않아, 카드가 규칙으로 내려간 이유를
+// 사후에 확인할 수 없었다.
+func (s *NewsBriefingService) briefingNarrative(
+	ctx context.Context,
+	client *llm.Client,
+	market string,
+	factsJSON string,
+) *llm.NewsBriefingLLMOutput {
+	for attempt := 1; attempt <= 2; attempt++ {
+		out, err := client.GenerateNewsBriefing(ctx, factsJSON)
+		switch {
+		case err != nil:
+			if attempt == 1 && !llm.IsBudgetExhausted(err) && !llm.IsUnavailable(err) {
+				log.Printf("news briefing %s: llm failed (%v) — retrying once", market, err)
+				if !s.waitBeforeBriefingRetry(ctx, client) {
+					return nil
+				}
+				continue
+			}
+			log.Printf("news briefing %s: llm failed, no narrative this slot: %v", market, err)
+			return nil
+		case strings.TrimSpace(out.Summary) == "":
+			if attempt == 1 {
+				log.Printf("news briefing %s: llm returned an empty summary — retrying once", market)
+				if !s.waitBeforeBriefingRetry(ctx, client) {
+					return nil
+				}
+				continue
+			}
+			log.Printf("news briefing %s: llm returned an empty summary twice", market)
+			return nil
+		default:
+			return out
+		}
+	}
+	return nil
+}
+
+// waitBeforeBriefingRetry sleeps out the retry pause, or reports false when the
+// context was cancelled while waiting (shutdown — the slot is simply skipped).
+func (s *NewsBriefingService) waitBeforeBriefingRetry(ctx context.Context, client *llm.Client) bool {
+	wait := briefingRetryWait
+	if gap := client.Limits().MinInterval; gap+time.Second > wait {
+		wait = gap + time.Second
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
+// carryBriefingNarrative inherits the last real AI narrative when this slot
+// could not produce one, and reports whether it found one.
+//
+// Only the prose is inherited. The number tiles, the session label and the
+// timestamp stay this slot's own — they are counted, not written, so freezing
+// them would make a working screen look stuck for an hour. What the card owes
+// the reader instead is CarriedFrom: 「문장은 몇 시 것인가」.
+//
+// Chained carries keep pointing at the *original* slot, so the 3-hour window is
+// measured from when the sentences were actually written and a long outage
+// cannot walk a morning briefing into the evening one slot at a time.
+func (s *NewsBriefingService) carryBriefingNarrative(ctx context.Context, b *model.NewsMarketBriefing) bool {
+	if s == nil || s.repo == nil {
+		return false
+	}
+	recent, err := s.repo.Recent(ctx, b.Market, briefingCarryDepth)
+	if err != nil {
+		log.Printf("news briefing %s: carry lookup failed: %v", b.Market, err)
+		return false
+	}
+	for _, prev := range recent {
+		if prev.Source != model.BriefingSourceLLM && prev.Source != model.BriefingSourceCarry {
+			continue
+		}
+		if strings.TrimSpace(prev.Summary) == "" {
+			continue
+		}
+		origin := prev.GeneratedAt
+		if prev.CarriedFrom != nil {
+			origin = *prev.CarriedFrom
+		}
+		if !briefingCarryAllowed(origin, b.GeneratedAt) {
+			return false
+		}
+
+		b.Source = model.BriefingSourceCarry
+		b.Summary = prev.Summary
+		b.Mood = prev.Mood
+		b.MoodReason = prev.MoodReason
+		b.Highlights = prev.Highlights
+		b.WatchPoints = prev.WatchPoints
+		b.CarriedFrom = &origin
+		log.Printf("news briefing %s: carried the %s narrative forward",
+			b.Market, origin.In(seoulLocation()).Format("15:04"))
+		return true
+	}
+	return false
+}
+
+// briefingCarryAllowed reports whether a narrative written at origin may still
+// stand beside facts counted at now.
+//
+// Two limits, and the second is not implied by the first: 3시간이 지나면 문장이
+// 옆의 숫자와 다른 장을 말하고, **날이 바뀌면** 3시간 이내여도 다른 날 이야기다
+// (어제 18:00 장 마감 문장 옆에 오늘 08:00 개장 전 숫자).
+func briefingCarryAllowed(origin, now time.Time) bool {
+	if origin.IsZero() || now.Before(origin) {
+		return false
+	}
+	if now.Sub(origin) > briefingCarryWindow {
+		return false
+	}
+	seoul := seoulLocation()
+	o, n := origin.In(seoul), now.In(seoul)
+	return o.Year() == n.Year() && o.YearDay() == n.YearDay()
 }
 
 // RunBatchNow is the 배치 관리 manual trigger. Unlike the schedule it never
@@ -210,6 +389,9 @@ func (s *NewsBriefingService) RunBatchNow(ctx context.Context, market string) (m
 		"breakingCount": briefing.Facts.BreakingCount,
 		"summaryChars":  len([]rune(briefing.Summary)),
 		"generated":     generated,
+	}
+	if briefing.CarriedFrom != nil {
+		result["carriedFrom"] = briefing.CarriedFrom.In(seoulLocation()).Format("15:04")
 	}
 	return result, briefing.GeneratedAt.Format(time.RFC3339), nil
 }
@@ -239,7 +421,7 @@ func (s *NewsBriefingService) buildFacts(ctx context.Context, market string) mod
 	}
 
 	facts.Indices = s.briefingIndices(ctx, market)
-	facts.TopMentioned = s.topMentioned(ctx, articles, market)
+	facts.TopMentioned, facts.MentionSample = s.topMentioned(ctx, market)
 	facts.Headlines = briefingHeadlines(articles, facts.TopMentioned, market)
 	return facts
 }
@@ -293,63 +475,36 @@ func (s *NewsBriefingService) briefingIndices(ctx context.Context, market string
 	return out
 }
 
-// topMentioned counts how often each symbol is tagged across the articles the
-// screen is showing, then attaches the live change rate.
-//
-// The count comes from the same article list the front-end renders, so the
-// strip and the sentence are looking at one set of facts.
+/*
+topMentioned은 최근 1,000건에서 briefingMentionMinCount회 이상 언급된 종목을 세고, 각 종목에 지금 시세를
+붙인다. 두 번째 반환값은 **실제로 센 기사 수**다 — 화면 각주가 「최근 N건 중」이라고
+적을 때 요청한 수가 아니라 있었던 수를 써야 한다.
+
+세는 일은 SQL이 한다(repository.TopSymbols). 옛 방식은 프롬프트용 기사 200건을 Go로
+훑는 것이었는데, 표본을 1,000건으로 넓히려면 그 200건을 1,000건으로 올려야 하고 그건
+**기사 본문·이미지 판정까지 딸린 1,000건을 메모리에 올리는 일**이다. 집계에 필요한
+것은 심볼 목록뿐이라 그 값을 치를 이유가 없다.
+
+이름은 SQL이 stocks를 조인해 함께 준다 — 국내 화면에 엔비디아가 올라오던 것도 그
+조인이 막는다(asset_type='domestic').
+*/
 func (s *NewsBriefingService) topMentioned(
 	ctx context.Context,
-	articles []model.NewsArticle,
 	market string,
-) []model.NewsBriefingMention {
-	counts := map[string]int{}
-	for _, a := range articles {
-		seen := map[string]bool{}
-		for _, sym := range a.Symbols {
-			sym = strings.ToUpper(strings.TrimSpace(sym))
-			if sym == "" || seen[sym] {
-				continue
-			}
-			seen[sym] = true
-			counts[sym]++
-		}
+) ([]model.NewsBriefingMention, int) {
+	if s.news == nil {
+		return nil, 0
 	}
-	if len(counts) == 0 {
-		return nil
+	top, err := s.news.TopSymbolsAbove(ctx, market, briefingMentionMinCount, briefingMentionCount)
+	if err != nil || len(top.Symbols) == 0 {
+		return nil, top.ArticleCount
 	}
 
-	type pair struct {
-		symbol string
-		count  int
-	}
-	pairs := make([]pair, 0, len(counts))
-	for sym, n := range counts {
-		pairs = append(pairs, pair{sym, n})
-	}
-	sort.Slice(pairs, func(i, j int) bool {
-		if pairs[i].count != pairs[j].count {
-			return pairs[i].count > pairs[j].count
-		}
-		return pairs[i].symbol < pairs[j].symbol
-	})
-	if len(pairs) > briefingMentionCount {
-		pairs = pairs[:briefingMentionCount]
+	symbols := make([]string, 0, len(top.Symbols))
+	for _, row := range top.Symbols {
+		symbols = append(symbols, strings.ToUpper(strings.TrimSpace(row.Symbol)))
 	}
 
-	symbols := make([]string, 0, len(pairs))
-	for _, p := range pairs {
-		symbols = append(symbols, p.symbol)
-	}
-
-	names := map[string]string{}
-	if s.stocks != nil {
-		if rows, err := s.stocks.ListBySymbols(ctx, symbols); err == nil {
-			for _, row := range rows {
-				names[strings.ToUpper(row.Symbol)] = row.Name
-			}
-		}
-	}
 	quotes := map[string]model.QuoteSummary{}
 	if s.quotes != nil {
 		for _, q := range s.quotes.BatchQuoteSummaries(ctx, symbols) {
@@ -357,10 +512,11 @@ func (s *NewsBriefingService) topMentioned(
 		}
 	}
 
-	out := make([]model.NewsBriefingMention, 0, len(pairs))
-	for _, p := range pairs {
-		m := model.NewsBriefingMention{Symbol: p.symbol, Mentions: p.count, Name: names[p.symbol]}
-		if q, ok := quotes[p.symbol]; ok {
+	out := make([]model.NewsBriefingMention, 0, len(top.Symbols))
+	for i, row := range top.Symbols {
+		sym := symbols[i]
+		m := model.NewsBriefingMention{Symbol: sym, Mentions: row.Count, Name: row.Name}
+		if q, ok := quotes[sym]; ok {
 			if m.Name == "" {
 				m.Name = q.Name
 			}
@@ -372,11 +528,11 @@ func (s *NewsBriefingService) topMentioned(
 			}
 		}
 		if m.Name == "" {
-			m.Name = p.symbol
+			m.Name = sym
 		}
 		out = append(out, m)
 	}
-	return out
+	return out, top.ArticleCount
 }
 
 // promptJSON is the exact user message the model sees. Everything it may cite

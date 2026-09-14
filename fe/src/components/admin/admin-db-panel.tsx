@@ -21,6 +21,8 @@ import {
   type DBTableSummary,
 } from "@/lib/admin";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/providers/confirm-provider";
+import { toUserMessage } from "@/lib/error-message";
 
 const PAGE_SIZE = 25;
 
@@ -58,6 +60,7 @@ type EditorState = {
 };
 
 export function AdminDBPanel() {
+  const confirm = useConfirm();
   const router = useRouter();
   const { session, loading } = useAuth();
 
@@ -85,7 +88,7 @@ export function AdminDBPanel() {
       setTables(list);
       setSelected((prev) => prev ?? list.find((t) => t.exists)?.name ?? null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "테이블 목록 조회 실패");
+      setError(toUserMessage(e, "테이블 목록 조회 실패"));
     }
   }, []);
 
@@ -106,7 +109,7 @@ export function AdminDBPanel() {
         setPage(p);
         setOffset(nextOffset);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "행 조회 실패");
+        setError(toUserMessage(e, "행 조회 실패"));
         setPage(null);
       } finally {
         setBusy(false);
@@ -190,7 +193,7 @@ export function AdminDBPanel() {
       setEditor(null);
       await loadRows(detail.name, offset, searchTerm);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "저장 실패");
+      setError(toUserMessage(e, "저장 실패"));
     } finally {
       setBusy(false);
     }
@@ -199,7 +202,21 @@ export function AdminDBPanel() {
   async function removeRow(row: DBRow) {
     if (!detail) return;
     const label = (detail.primaryKey ?? []).map((k) => `${k}=${row[k]}`).join(", ");
-    if (!window.confirm(`이 행을 삭제합니다.\n\n${detail.name} (${label})\n\n되돌릴 수 없습니다.`)) {
+    if (
+      !(await confirm({
+        title: "이 행을 삭제할까요?",
+        description: (
+          <>
+            <p>
+              {detail.name} ({label})
+            </p>
+            <p className="text-[var(--text-muted)]">되돌릴 수 없습니다.</p>
+          </>
+        ),
+        confirmLabel: "삭제",
+        tone: "danger",
+      }))
+    ) {
       return;
     }
     setBusy(true);
@@ -209,7 +226,7 @@ export function AdminDBPanel() {
       setNotice("행이 삭제되었습니다.");
       await loadRows(detail.name, offset, searchTerm);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "삭제 실패");
+      setError(toUserMessage(e, "삭제 실패"));
     } finally {
       setBusy(false);
     }
@@ -235,12 +252,12 @@ export function AdminDBPanel() {
       <PageScrollShell>
         <div className="space-y-4">
           {error && (
-            <div className="rounded-lg border border-[rgba(239,68,68,0.4)] bg-[rgba(239,68,68,0.08)] px-3 py-2 text-xs text-[#EF4444]">
+            <div className="rounded-lg border border-[rgba(239,68,68,0.4)] bg-[rgba(239,68,68,0.08)] px-3 py-2 text-cell text-[#EF4444]">
               {error}
             </div>
           )}
           {notice && (
-            <div className="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+            <div className="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-cell text-[var(--text-secondary)]">
               <span>{notice}</span>
               <button onClick={() => setNotice(null)} aria-label="닫기">
                 <X className="h-3.5 w-3.5" />
@@ -253,7 +270,7 @@ export function AdminDBPanel() {
             <aside className="space-y-3">
               {grouped.map(([groupLabel, list]) => (
                 <div key={groupLabel} className="rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <div className="border-b border-[var(--border)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                  <div className="border-b border-[var(--border)] px-3 py-2 text-cell font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                     {groupLabel}
                   </div>
                   <ul className="p-1">
@@ -270,8 +287,8 @@ export function AdminDBPanel() {
                             !t.exists && "cursor-not-allowed opacity-40",
                           )}
                         >
-                          <span className="truncate text-xs font-medium">{t.label}</span>
-                          <span className="truncate font-mono text-[10px] text-[var(--text-muted)]">
+                          <span className="truncate text-cell font-medium">{t.label}</span>
+                          <span className="truncate font-code text-micro text-[var(--text-muted)]">
                             {t.name} · {formatRows(t.estimatedRows)}행
                           </span>
                         </button>
@@ -287,25 +304,25 @@ export function AdminDBPanel() {
               {detail && (
                 <div className="space-y-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-sm font-semibold text-[var(--text-primary)]">{detail.label}</h2>
-                    <code className="font-mono text-[11px] text-[var(--text-muted)]">{detail.name}</code>
+                    <h2 className="text-section font-semibold text-[var(--text-primary)]">{detail.label}</h2>
+                    <code className="font-code text-cell text-[var(--text-muted)]">{detail.name}</code>
                     <span
                       className={cn(
-                        "rounded px-1.5 py-0.5 text-[10px] font-medium",
+                        "rounded px-1.5 py-0.5 text-micro font-medium",
                         ACCESS_BADGE[detail.access]?.className,
                       )}
                     >
                       {ACCESS_BADGE[detail.access]?.label}
                     </span>
                   </div>
-                  <p className="text-xs leading-relaxed text-[var(--text-secondary)]">{detail.purpose}</p>
+                  <p className="text-cell leading-relaxed text-[var(--text-secondary)]">{detail.purpose}</p>
                   {detail.note && (
-                    <p className="rounded border border-[var(--border)] bg-[var(--surface-elevated)] px-2 py-1.5 text-[11px] text-[var(--text-muted)]">
+                    <p className="rounded border border-[var(--border)] bg-[var(--surface-elevated)] px-2 py-1.5 text-cell text-[var(--text-muted)]">
                       ⚠ {detail.note}
                     </p>
                   )}
-                  <dl className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[var(--text-muted)]">
-                    <div>PK: <span className="font-mono">{detail.primaryKey.join(", ") || "—"}</span></div>
+                  <dl className="flex flex-wrap gap-x-4 gap-y-1 text-cell text-[var(--text-muted)]">
+                    <div>PK: <span className="font-code">{detail.primaryKey.join(", ") || "—"}</span></div>
                     <div>행: {formatRows(detail.estimatedRows)}</div>
                     <div>데이터: {formatBytes(detail.dataBytes)}</div>
                     <div>인덱스: {formatBytes(detail.indexBytes)}</div>
@@ -322,19 +339,19 @@ export function AdminDBPanel() {
                     onChange={(e) => setSearchInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && setSearchTerm(searchInput)}
                     placeholder="텍스트 컬럼 검색 후 Enter"
-                    className="w-full rounded border border-[var(--border)] bg-[var(--surface)] py-1.5 pl-7 pr-2 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--brand)]"
+                    className="w-full rounded border border-[var(--border)] bg-[var(--surface)] py-1.5 pl-7 pr-2 text-cell text-[var(--text-primary)] outline-none focus:border-[var(--brand)]"
                   />
                 </div>
                 <button
                   onClick={() => selected && loadRows(selected, offset, searchTerm)}
-                  className="flex items-center gap-1 rounded border border-[var(--border)] px-2 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+                  className="flex items-center gap-1 rounded border border-[var(--border)] px-2 py-1.5 text-cell text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
                 >
                   <RefreshCw className={cn("h-3.5 w-3.5", busy && "animate-spin")} /> 새로고침
                 </button>
                 {canWrite && (
                   <button
                     onClick={openCreate}
-                    className="flex items-center gap-1 rounded bg-[var(--brand)] px-2 py-1.5 text-xs font-medium text-white"
+                    className="flex items-center gap-1 rounded bg-[var(--brand)] px-2 py-1.5 text-cell font-medium text-white"
                   >
                     <Plus className="h-3.5 w-3.5" /> 행 추가
                   </button>
@@ -343,7 +360,7 @@ export function AdminDBPanel() {
 
               {/* ---- rows ---- */}
               <div className="overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                <table className="w-full min-w-max text-left text-[11px]">
+                <table className="w-full min-w-max text-left text-cell">
                   <thead className="border-b border-[var(--border)] text-[var(--text-muted)]">
                     <tr>
                       {canWrite && <th className="w-20 px-2 py-1.5" />}
@@ -382,7 +399,7 @@ export function AdminDBPanel() {
                           <td
                             key={c.name}
                             className={cn(
-                              "max-w-[24rem] truncate px-2 py-1 font-mono",
+                              "max-w-[24rem] truncate px-2 py-1 font-code",
                               row[c.name] === null ? "text-[var(--text-muted)] italic" : "text-[var(--text-secondary)]",
                             )}
                             title={row[c.name] ?? "NULL"}
@@ -396,7 +413,7 @@ export function AdminDBPanel() {
                       <tr>
                         <td
                           colSpan={(page?.columns.length ?? 1) + (canWrite ? 1 : 0)}
-                          className="px-3 py-6 text-center text-xs text-[var(--text-muted)]"
+                          className="px-3 py-6 text-center text-cell text-[var(--text-muted)]"
                         >
                           표시할 행이 없습니다.
                         </td>
@@ -408,7 +425,7 @@ export function AdminDBPanel() {
 
               {/* ---- pagination ---- */}
               {page && page.total > PAGE_SIZE && (
-                <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
+                <div className="flex items-center justify-between text-cell text-[var(--text-muted)]">
                   <span>
                     {offset + 1}–{Math.min(offset + PAGE_SIZE, page.total)} / {page.total.toLocaleString()}
                   </span>
@@ -453,11 +470,11 @@ export function AdminDBPanel() {
                     c.readOnly || (editor.mode === "edit" && c.isPrimary);
                   return (
                     <label key={c.name} className="block">
-                      <span className="mb-0.5 flex items-baseline gap-1.5 text-[11px] text-[var(--text-secondary)]">
-                        <span className="font-mono">{c.name}</span>
-                        <span className="text-[10px] text-[var(--text-muted)]">{c.columnType}</span>
-                        {!c.nullable && <span className="text-[10px] text-[#EF4444]">필수</span>}
-                        {locked && <span className="text-[10px] text-[var(--text-muted)]">자동/PK</span>}
+                      <span className="mb-0.5 flex items-baseline gap-1.5 text-cell text-[var(--text-secondary)]">
+                        <span className="font-code">{c.name}</span>
+                        <span className="text-micro text-[var(--text-muted)]">{c.columnType}</span>
+                        {!c.nullable && <span className="text-micro text-[#EF4444]">필수</span>}
+                        {locked && <span className="text-micro text-[var(--text-muted)]">자동/PK</span>}
                       </span>
                       <input
                         value={editor.draft[c.name] ?? ""}
@@ -468,7 +485,7 @@ export function AdminDBPanel() {
                           )
                         }
                         placeholder={c.nullable ? "비우면 NULL" : ""}
-                        className="w-full rounded border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 font-mono text-xs text-[var(--text-primary)] outline-none focus:border-[var(--brand)] disabled:opacity-50"
+                        className="w-full rounded border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 font-code text-cell text-[var(--text-primary)] outline-none focus:border-[var(--brand)] disabled:opacity-50"
                       />
                     </label>
                   );
@@ -478,14 +495,14 @@ export function AdminDBPanel() {
               <div className="mt-4 flex justify-end gap-2">
                 <button
                   onClick={() => setEditor(null)}
-                  className="rounded border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-secondary)]"
+                  className="rounded border border-[var(--border)] px-3 py-1.5 text-cell text-[var(--text-secondary)]"
                 >
                   취소
                 </button>
                 <button
                   onClick={submitEditor}
                   disabled={busy}
-                  className="flex items-center gap-1 rounded bg-[var(--brand)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                  className="flex items-center gap-1 rounded bg-[var(--brand)] px-3 py-1.5 text-cell font-medium text-white disabled:opacity-50"
                 >
                   {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} 저장
                 </button>

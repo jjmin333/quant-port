@@ -7,6 +7,7 @@ import (
 
 	"github.com/enact/quant-port/be/internal/marketdata"
 	"github.com/enact/quant-port/be/internal/model"
+	"github.com/enact/quant-port/be/internal/translate"
 )
 
 func TestPassesUSStockRelevance_strongMarket(t *testing.T) {
@@ -93,7 +94,7 @@ func TestIsUSStockRelated_personalFinanceNoise(t *testing.T) {
 		},
 	}
 
-		for _, tc := range cases {
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			got := isUSStockRelated(ctx, st, tc.title, tc.summary, "", nil, nil, "")
 			if got != tc.want {
@@ -127,18 +128,18 @@ func TestIsUSStockRelated_fedOperationalNoise(t *testing.T) {
 			want:  false,
 		},
 		{
-			name:  "fomc statement allowed",
-			title: "Federal Reserve issues FOMC statement",
+			name:    "fomc statement allowed",
+			title:   "Federal Reserve issues FOMC statement",
 			summary: "The committee decided to maintain the target range for the federal funds rate.",
-			url:   "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260729a.htm",
-			want:  true,
+			url:     "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260729a.htm",
+			want:    true,
 		},
 		{
-			name:  "fed inflation credibility allowed",
-			title: "US Treasury sell-off raises questions about Fed inflation credibility",
+			name:    "fed inflation credibility allowed",
+			title:   "US Treasury sell-off raises questions about Fed inflation credibility",
 			summary: "Bond yields climbed after the interview.",
-			url:   "https://www.reuters.com/markets/example",
-			want:  true,
+			url:     "https://www.reuters.com/markets/example",
+			want:    true,
 		},
 	}
 
@@ -164,10 +165,13 @@ func TestIsUSRSSNoiseItem_motleyFool(t *testing.T) {
 	}
 }
 
+// 「재고」 보정은 translate 패키지의 용어 사전으로 옮겼다(ApplyGlossary).
+// 여기 남겨 두는 이유는 이 실측 문장이 그 규칙이 생긴 이유이기 때문이다 —
+// 규칙만 옮기고 근거를 버리면 다음 사람이 「왜 이런 치환이 있지」 하고 지운다.
 func TestFixUSStockTranslation_inventoryToEquity(t *testing.T) {
 	en := "Starbucks vs. Chipotle: Which Stock Is the Better Buy Today?"
 	ko := "스타벅스 대. 치폴레: 두 식당 모두 반전을 맞고 있는데, 오늘 어떤 재고가 더 좋은 매수처일까요?"
-	got := fixUSStockTranslation(en, ko)
+	got := translate.ApplyGlossary(en, ko)
 	if strings.Contains(got, "재고") {
 		t.Fatalf("expected stock mistranslation fix, got %q", got)
 	}

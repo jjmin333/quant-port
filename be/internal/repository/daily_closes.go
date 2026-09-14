@@ -100,18 +100,31 @@ func (r *StockDailyCloseRepo) UpsertBatch(ctx context.Context, rows []StockDaily
 	return nil
 }
 
-// UpsertAnalysis attaches a score and AI summary to an existing (or new) date
-// row. Inserting a placeholder close of 0 would be wrong, so the analysis is
-// only written when the date row exists — the ingestion always runs first.
+/*
+UpsertAnalysis attaches the AI 요약 text to an existing date row. Inserting a
+placeholder close of 0 would be wrong, so the analysis is only written when the
+date row exists — the ingestion always runs first.
+
+**score 컬럼은 여기서 건드리지 않는다** (2026-09-03 §6 점수 통일).
+
+예전에는 이 UPDATE가 `score`도 함께 썼고, 그 값은 요약 파이프라인이 자체적으로
+계산한 **또 다른 점수**였다(기술적 지표 + 뉴스 감성만 보는 절대 기준 0~100).
+그런데 같은 컬럼을 점수 배치의 `SyncDailyCloseScores`도 쓴다 — 그쪽은 동종 그룹
+백분위로 매긴 5축 종합 점수다. 두 파이프라인이 한 칸을 번갈아 덮어쓰니, AI 분석
+탭 위쪽의 「오늘의 종합 점수」와 아래 날짜별 목록의 같은 날 점수가 **마지막에
+쓴 쪽에 따라 달라졌다.**
+
+이제 이 컬럼의 주인은 `stock_scores` 하나다. 요약은 글만 쓴다.
+*/
 func (r *StockDailyCloseRepo) UpsertAnalysis(ctx context.Context, a model.DailyCloseAnalysis) (bool, error) {
 	if r == nil || r.db == nil {
 		return false, nil
 	}
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE stock_daily_closes
-		   SET score = ?, ai_summary = ?, analysis_source = ?, analyzed_at = CURRENT_TIMESTAMP(3)
+		   SET ai_summary = ?, analysis_source = ?, analyzed_at = CURRENT_TIMESTAMP(3)
 		 WHERE symbol = ? AND trade_date = ?`,
-		nullIntArg(a.Score), a.AISummary, a.Source, strings.ToUpper(strings.TrimSpace(a.Symbol)), a.TradeDate,
+		a.AISummary, a.Source, strings.ToUpper(strings.TrimSpace(a.Symbol)), a.TradeDate,
 	)
 	if err != nil {
 		return false, err
@@ -131,12 +144,26 @@ func (r *StockDailyCloseRepo) List(ctx context.Context, symbol string, limit int
 	if limit <= 0 {
 		limit = 60
 	}
+	/*
+		점수는 **`stock_scores`에서 읽는다** (2026-09-03 §6 점수 통일).
+
+		`stock_daily_closes.score`는 배치가 끝나고 `SyncDailyCloseScores`가 복사해
+		두는 사본일 뿐이다. 사본을 읽으면 두 가지가 어긋난다: ① 복사가 실패한 날
+		(비치명적으로 로그만 남긴다)에는 옛 값이 남고, ② 이 컬럼을 예전에 요약
+		파이프라인이 **다른 잣대의 점수**로 덮어써 둔 과거 행들이 그대로 보인다.
+
+		원본을 조인하면 「오늘의 종합 점수」 카드와 이 목록의 같은 날 값이 정의상
+		같아진다. 사본은 조인이 비었을 때만 쓴다 — 아직 안 지운 과거 데이터라도
+		빈칸보다는 낫고, 배치가 다시 돌면 원본이 이긴다.
+	*/
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT symbol, trade_date, close_price, prev_close, change_amount, change_rate,
-		       volume, currency, score, ai_summary, analysis_source, source
-		  FROM stock_daily_closes
-		 WHERE symbol = ?
-		 ORDER BY trade_date DESC
+		SELECT d.symbol, d.trade_date, d.close_price, d.prev_close, d.change_amount, d.change_rate,
+		       d.volume, d.currency, COALESCE(sc.score, d.score), d.ai_summary, d.analysis_source, d.source
+		  FROM stock_daily_closes d
+		  LEFT JOIN stock_scores sc
+		         ON sc.symbol = d.symbol AND sc.trade_date = d.trade_date
+		 WHERE d.symbol = ?
+		 ORDER BY d.trade_date DESC
 		 LIMIT ?`, strings.ToUpper(strings.TrimSpace(symbol)), limit)
 	if err != nil {
 		return nil, err
@@ -210,6 +237,15 @@ type IndexDailyCloseRow struct {
 	// upsert — the same one-way split the stock side uses.
 	Score     sql.NullInt64
 	AISummary string
+	/*
+		LLMNote/LLMStance는 **그날 행에 붙은 해설**이다.
+
+		종목의 `stock_daily_closes.ai_summary`가 날짜마다 남아 그대로 이력이 되는 것과
+		같은 구조다 — 어제 뭐라고 했는지 되짚을 수 있어야 오늘의 말이 믿을 만한지
+		판단할 수 있다. 화면은 일별 표의 줄을 펼쳐 그날 것을 본다.
+	*/
+	LLMNote   string
+	LLMStance string
 }
 
 type IndexDailyCloseRepo struct {
@@ -275,7 +311,8 @@ func (r *IndexDailyCloseRepo) List(ctx context.Context, indexID string, limit in
 		limit = 60
 	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT index_id, trade_date, close_value, prev_close, change_amount, change_rate, currency, source, score, ai_summary
+		SELECT index_id, trade_date, close_value, prev_close, change_amount, change_rate,
+		       currency, source, score, ai_summary, llm_note, llm_stance
 		  FROM index_daily_closes
 		 WHERE index_id = ?
 		 ORDER BY trade_date DESC
@@ -291,7 +328,7 @@ func (r *IndexDailyCloseRepo) List(ctx context.Context, indexID string, limit in
 		if err := rows.Scan(
 			&row.IndexID, &row.TradeDate, &row.Close, &row.PrevClose,
 			&row.ChangeAmount, &row.ChangeRate, &row.Currency, &row.Source,
-			&row.Score, &row.AISummary,
+			&row.Score, &row.AISummary, &row.LLMNote, &row.LLMStance,
 		); err != nil {
 			return nil, err
 		}

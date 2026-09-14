@@ -1,7 +1,13 @@
 import { Suspense } from "react";
 import { AuthRequiredShell } from "@/components/auth/auth-required-shell";
 import { TargetsClient } from "@/components/targets/targets-client";
-import { MENU_COPY } from "@/lib/menu-copy";
+import { pageMetadata } from "@/lib/seo";
+
+export const metadata = pageMetadata({
+  title: "목표가 관리",
+  description: "종목별 목표가와 도달 현황입니다.",
+  noindex: true,
+});
 
 export default function TargetsPage() {
   return (
@@ -13,8 +19,6 @@ export default function TargetsPage() {
       }
     >
       <AuthRequiredShell
-        title={MENU_COPY.targets.title}
-        subtitle={MENU_COPY.targets.subtitle}
         loginNext="/targets"
         menu="targets"
       >

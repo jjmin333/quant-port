@@ -175,7 +175,7 @@ export function SymbolNewsModal({
         <DialogContent className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
           <DialogHeader className="border-b px-4 py-3 pr-10 text-left">
             <DialogTitle className="text-sm">{title}</DialogTitle>
-            <DialogDescription className="text-[11px]">
+            <DialogDescription className="text-cell">
               {subjectLabel} {targets.length}종목 관련 기사 · 종목당 최대 {FETCH_PER_SYMBOL}건
             </DialogDescription>
           </DialogHeader>
@@ -212,7 +212,7 @@ export function SymbolNewsModal({
                 ))}
               </div>
             ) : visible.length === 0 ? (
-              <p className="py-10 text-center text-[11px] text-muted-foreground">
+              <p className="py-10 text-center text-cell text-muted-foreground">
                 관련 뉴스가 없습니다
               </p>
             ) : (
@@ -224,8 +224,8 @@ export function SymbolNewsModal({
                       className="block w-full min-w-0 rounded-md px-1 py-0.5 text-left hover:bg-accent"
                       onClick={() => newsModal.open(a)}
                     >
-                      <p className="text-[12px] leading-snug">{a.headlineKo || a.headline}</p>
-                      <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                      <p className="text-cell leading-snug">{a.headlineKo || a.headline}</p>
+                      <p className="mt-0.5 truncate text-micro text-muted-foreground">
                         {a.subjectName} · {formatRelativeTime(a.publishedAt)}
                       </p>
                     </button>
@@ -235,7 +235,7 @@ export function SymbolNewsModal({
             )}
             {hasMore && <div ref={sentinelRef} className="h-4" aria-hidden />}
             {filtered != null && filtered.length > 0 && (
-              <p className="py-2 text-center text-[10px] text-muted-foreground">
+              <p className="py-2 text-center text-micro text-muted-foreground">
                 {Math.min(visibleCount, filtered.length)} / {filtered.length}건
               </p>
             )}
@@ -262,7 +262,7 @@ function FilterChip({
       type="button"
       onClick={onClick}
       className={cn(
-        "max-w-[120px] truncate rounded-full px-2 py-0.5 text-[10px] transition-colors",
+        "max-w-[120px] truncate rounded-full px-2 py-0.5 text-micro transition-colors",
         active
           ? "bg-[var(--brand-muted)] font-semibold text-[var(--brand)]"
           : "bg-muted text-muted-foreground hover:text-foreground",
