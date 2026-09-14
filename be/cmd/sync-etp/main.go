@@ -106,7 +106,7 @@ func runCatalogDryRun(ctx context.Context, source catalog.ETPSource) {
 }
 
 func runCatalog(ctx context.Context, cfg *config.Config, source catalog.ETPSource) {
-	mysql, err := repository.NewMySQL(cfg.MySQLDSN)
+	mysql, err := repository.NewMySQLForCLI(cfg.MySQLDSN)
 	if err != nil {
 		log.Fatalf("mysql: %v", err)
 	}
@@ -140,7 +140,7 @@ func runCatalog(ctx context.Context, cfg *config.Config, source catalog.ETPSourc
 }
 
 func runRepairNames(ctx context.Context, cfg *config.Config, krx *marketdata.KRXClient, basDD string) {
-	mysql, err := repository.NewMySQL(cfg.MySQLDSN)
+	mysql, err := repository.NewMySQLForCLI(cfg.MySQLDSN)
 	if err != nil {
 		log.Fatalf("mysql: %v", err)
 	}
@@ -155,7 +155,7 @@ func runRepairNames(ctx context.Context, cfg *config.Config, krx *marketdata.KRX
 }
 
 func runLogos(ctx context.Context, cfg *config.Config, outDir string, naverDelay time.Duration, fmpWorkers int) {
-	mysql, err := repository.NewMySQL(cfg.MySQLDSN)
+	mysql, err := repository.NewMySQLForCLI(cfg.MySQLDSN)
 	if err != nil {
 		log.Fatalf("mysql: %v", err)
 	}
@@ -178,7 +178,7 @@ func runLogos(ctx context.Context, cfg *config.Config, outDir string, naverDelay
 	}
 
 	before := len(stocks)
-	stocks = stocklogo.FilterDeltaLogoStocks(stocks, existing, filepath.Join(outDir, "kr"), true)
+	stocks = stocklogo.FilterDeltaLogoStocks(stocks, existing, filepath.Join(outDir, "kr"), filepath.Join(outDir, "us"), true, false)
 	log.Printf("logos: %d rows need migration (skipped %d already done)", len(stocks), before-len(stocks))
 
 	manifest, err := stocklogo.RunMigrate(ctx, stocklogo.MigrateOptions{

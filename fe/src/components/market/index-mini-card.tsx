@@ -46,25 +46,25 @@ export function IndexMiniCard({
         <Link
           href={href}
           onClick={onNavigate}
-          className="group flex min-w-0 items-center gap-1.5 text-xs font-semibold text-[var(--text-primary)]"
+          className="group flex min-w-0 items-center gap-1.5 text-cell font-semibold text-[var(--text-primary)]"
         >
           <span className="truncate">{index.name}</span>
           <ArrowRight className="size-3 shrink-0 text-[var(--text-muted)] group-hover:text-[var(--brand)]" />
         </Link>
-        <span className="shrink-0 rounded-md bg-[var(--surface-elevated)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text-muted)]">
+        <span className="shrink-0 rounded-md bg-[var(--surface-elevated)] px-1.5 py-0.5 text-micro font-semibold text-[var(--text-muted)]">
           지수
         </span>
       </div>
 
       <div className="mt-1.5 flex items-baseline gap-1.5">
-        <span className="font-mono text-lg font-bold tabular-nums text-[var(--text-primary)]">
+        <span className="font-num text-lg font-bold tabular-nums text-[var(--text-primary)]">
           {index.value > 0
             ? index.value.toLocaleString("ko-KR", { maximumFractionDigits: 2 })
             : "—"}
         </span>
         <span
           className={cn(
-            "font-mono text-xs font-semibold tabular-nums",
+            "font-num text-cell font-semibold tabular-nums",
             trendTextClass(index.changeRate),
           )}
         >

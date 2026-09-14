@@ -42,11 +42,11 @@ type ColumnInfo struct {
 
 type TableSummary struct {
 	TableSpec
-	GroupLabel   string `json:"groupLabel"`
-	EstimatedRows int64 `json:"estimatedRows"`
-	DataBytes    int64  `json:"dataBytes"`
-	IndexBytes   int64  `json:"indexBytes"`
-	Exists       bool   `json:"exists"`
+	GroupLabel    string `json:"groupLabel"`
+	EstimatedRows int64  `json:"estimatedRows"`
+	DataBytes     int64  `json:"dataBytes"`
+	IndexBytes    int64  `json:"indexBytes"`
+	Exists        bool   `json:"exists"`
 }
 
 type TableDetail struct {
@@ -198,11 +198,11 @@ func (s *DBAdminService) columns(ctx context.Context, spec TableSpec) ([]ColumnI
 // ---------------------------------------------------------------- read
 
 type RowQuery struct {
-	Table  string
-	Limit  int
-	Offset int
-	Search string
-	SortBy string
+	Table    string
+	Limit    int
+	Offset   int
+	Search   string
+	SortBy   string
 	SortDesc bool
 }
 

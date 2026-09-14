@@ -6,6 +6,7 @@ import type {
   StockFundamentalsPanel,
 } from "@/lib/fundamentals-types";
 import type { QuoteCurrency, StockInfo } from "@/lib/quotes-types";
+import { metricHint } from "@/lib/valuation-labels";
 
 function fmtMultiple(n: number): string {
   return `${n.toFixed(1)}x`;
@@ -32,6 +33,30 @@ function pbrVerdict(pbr: number): { verdict: string; tone: MetricTone; gauge: nu
   return { verdict: "적정", tone: "accent", gauge: Math.min(95, Math.round(pbr / 5 * 100)) };
 }
 
+// PSR은 업종 편차가 커서 절대 기준이 약하다 — PBR보다 넓은 띠를 쓴다.
+function psrVerdict(psr: number): { verdict: string; tone: MetricTone; gauge: number } {
+  if (psr <= 0) return { verdict: "N/A", tone: "neutral", gauge: 0 };
+  const gauge = Math.min(95, Math.max(8, Math.round((psr / 10) * 100)));
+  if (psr > 5) return { verdict: "고평가", tone: "negative", gauge };
+  if (psr < 1) return { verdict: "저평가", tone: "positive", gauge };
+  return { verdict: "적정", tone: "accent", gauge };
+}
+
+/**
+ * PSR = 시가총액 ÷ 매출.
+ *
+ * 시가총액은 이 표에 없으므로 주가 × 발행주식수로 만든다 — 화면이 부르기 전에
+ * `applyLiveValuationMultiples`가 주가를 실시간 값으로 갈아 두므로 PSR도 함께 산다.
+ * 셋 중 하나라도 없거나 매출이 0 이하면 지표를 만들지 않는다(0으로 그리면
+ * 「PSR 0배」라는 없는 사실이 된다).
+ */
+function computePSR(data: FundamentalsData): number | undefined {
+  const { price, sharesOutstanding, revenue } = data;
+  if (price == null || sharesOutstanding == null || revenue == null) return undefined;
+  if (price <= 0 || sharesOutstanding <= 0 || revenue <= 0) return undefined;
+  return (price * sharesOutstanding) / revenue;
+}
+
 function roeVerdict(roe: number): { verdict: string; tone: MetricTone; gauge: number } {
   if (roe >= 15) return { verdict: "우수", tone: "positive", gauge: Math.min(95, Math.round(roe / 40 * 100)) };
   if (roe >= 8) return { verdict: "보통", tone: "neutral", gauge: Math.min(95, Math.round(roe / 40 * 100)) };
@@ -53,6 +78,7 @@ function missingMetric(id: string, label: string): FundamentalMetric {
     tone: "neutral",
     gauge: 0,
     available: false,
+    hint: metricHint(id),
   };
 }
 
@@ -75,80 +101,32 @@ function metricFromValue(
     tone: v.tone,
     gauge: v.gauge,
     available: true,
+    hint: metricHint(id),
   };
 }
 
-function computeScore(data: FundamentalsData, tier: CoverageTier): number {
-  if (tier === "unavailable") return 0;
+/*
+종합 지표 카드의 **자체 점수는 없앴다** (2026-09-03 사용자 결정 §9).
 
-  let score = tier === "full" ? 42 : 32;
-  let strongSignals = 0;
+여기에는 ROE·마진·성장·PER에 임계값을 걸어 20~90 사이 숫자를 만들고 그것을
+「강력 매수 / 매수 / 중립 / 관망」으로 옮기는 함수 둘(computeScore·computeRating)이
+있었다. 문제가 둘이다.
 
-  if (data.roe != null) {
-    if (data.roe >= 20) {
-      score += 10;
-      strongSignals++;
-    } else if (data.roe >= 12) score += 4;
-    else if (data.roe >= 8) score += 1;
-    else score -= 8;
-  }
+  · **세 번째 점수였다.** 같은 화면에 서버 산출 종합 점수(0~100, 동종 그룹 백분위)와
+    그 「가치」축 점수가 이미 있는데, 이 카드만 다른 잣대로 잰 다른 숫자를 크게 띄웠다.
+    같은 종목을 두고 화면이 두 가지 답을 하고 있었다.
+  · **매매 의견이었다.** 「강력 매수」는 이 앱이 할 말이 아니다.
 
-  if (data.operatingMargin != null) {
-    if (data.operatingMargin >= 20) {
-      score += 8;
-      strongSignals++;
-    } else if (data.operatingMargin >= 10) score += 3;
-    else if (data.operatingMargin < 5) score -= 6;
-  }
+이제 이 자리에는 서버가 산출한 가치 점수가 그대로 온다 — 부르는 쪽이 넘긴다.
 
-  if (data.revenueGrowthYoy != null) {
-    if (data.revenueGrowthYoy >= 25) {
-      score += 8;
-      strongSignals++;
-    } else if (data.revenueGrowthYoy >= 10) score += 3;
-    else if (data.revenueGrowthYoy < 0) score -= 10;
-  }
+**아래 `buildSummary`의 문장은 밸류에이션 탭에서 빠졌다** (2026-09-03 사용자 결정).
+「SK하이닉스(000660) — FY2025 기준, ROE 44.1%, 영업마진 48.6%, 매출 YoY +46.8%,
+PER 27.6x (실시간 시세), PBR 9.8x (실시간 시세).」처럼, 바로 아래 지표 카드들이 숫자를
+하나씩 크게 늘어놓는 값을 쉼표로 이어 한 번 더 적은 것이었다.
 
-  if (data.epsGrowthYoy != null) {
-    if (data.epsGrowthYoy >= 20) {
-      score += 5;
-      strongSignals++;
-    } else if (data.epsGrowthYoy < 0) score -= 5;
-  }
-
-  if (data.per != null && data.per > 0) {
-    if (data.per > 35) score -= 10;
-    else if (data.per > 25) score -= 4;
-    else if (data.per < 12) {
-      score += 4;
-      strongSignals++;
-    } else if (data.per < 18) score += 1;
-  }
-
-  if (data.pbr != null && data.pbr > 0) {
-    if (data.pbr > 5) score -= 6;
-    else if (data.pbr < 1.5) score += 2;
-  }
-
-  if (data.debtRatio != null && data.debtRatio > 80) score -= 5;
-
-  if (strongSignals >= 3) score += 6;
-  else if (strongSignals >= 2) score += 2;
-  else score -= 4;
-
-  if (tier === "basic") score = Math.min(score, 72);
-
-  return Math.min(90, Math.max(20, Math.round(score)));
-}
-
-function computeRating(score: number): string {
-  if (score >= 85) return "강력 매수";
-  if (score >= 70) return "매수";
-  if (score >= 52) return "중립";
-  if (score === 0) return "—";
-  return "관망";
-}
-
+**함수는 남는다** — 재무제표 화면(`/financials`)의 「핵심 요약」 밴드가 아직 쓴다.
+거기는 지표 카드가 한참 아래에 있어 이 한 줄이 머리말 노릇을 한다.
+*/
 function buildSummary(data: FundamentalsData, name: string, tier: CoverageTier): string {
   if (tier === "unavailable") {
     return `${name}(${data.symbol})의 공시 재무 데이터를 아직 불러오지 못했습니다. DART/EDGAR 원천 데이터가 없거나 아직 적재되지 않았을 수 있습니다.`;
@@ -169,27 +147,11 @@ function buildSummary(data: FundamentalsData, name: string, tier: CoverageTier):
   return `${name}(${data.symbol}) — ${prefix}`;
 }
 
-function buildTags(stock: StockInfo, data: FundamentalsData): string[] {
-  const tags: string[] = [];
-  const seen = new Set<string>();
-  const add = (tag: string | undefined) => {
-    const value = tag?.trim();
-    if (!value) return;
-    const norm = value.toUpperCase();
-    if (seen.has(norm)) return;
-    seen.add(norm);
-    tags.push(value);
-  };
-
-  add(stock.name.split(" ")[0] ?? data.symbol);
-  add(data.symbol);
-  if (stock.currency === "KRW") add("국내주식");
-  else add("미국주식");
-  if (data.dataSource === "dart") add("DART");
-  else if (data.dataSource === "edgar") add("EDGAR");
-  return tags;
-}
-
+/*
+「핵심 요약」 밴드의 태그(종목명·티커·국내주식·DART)도 함께 뺐다 — 넷 전부
+바로 위 헤더와 종목 헤더에 이미 있는 값이라, 한 줄을 통째로 써서 아무것도
+새로 말하지 않고 있었다(사용자 첨부 스크린샷 §9).
+*/
 export function mapFundamentalsToPanel(
   data: FundamentalsData,
   stock: Pick<StockInfo, "symbol" | "name" | "currency" | "market">,
@@ -202,7 +164,6 @@ export function mapFundamentalsToPanel(
   }
 
   const tier = data.coverageTier;
-  const score = computeScore(data, tier);
 
   const metrics: FundamentalMetric[] = [
     data.per != null
@@ -220,6 +181,13 @@ export function mapFundamentalsToPanel(
     metricFromValue("rev", "매출성장률", data.revenueGrowthYoy, (n) => fmtPercent(n, true), growthVerdict),
     metricFromValue("eps", "EPS성장률", data.epsGrowthYoy, (n) => fmtPercent(n, true), growthVerdict),
   ];
+
+  // PSR은 예전 「배수」 화면에만 있던 유일한 고유 지표였다. 그 화면을 없애면서
+  // 여기로 옮겼다 — 나머지 넷(PER·PBR·FWD·CY)은 이미 이 목록에 있었다.
+  const psr = computePSR(data);
+  if (psr != null) {
+    metrics.push(metricFromValue("psr", "PSR", psr, fmtMultiple, psrVerdict));
+  }
 
   if (data.fwdPer != null) {
     metrics.push(metricFromValue("fper", "FWD PER", data.fwdPer, fmtMultiple, perVerdict));
@@ -245,10 +213,7 @@ export function mapFundamentalsToPanel(
     calcStatus: data.calcStatus ?? "",
     dataSource: data.dataSource ?? "",
     fiscalYear: data.fiscalYear,
-    score,
-    rating: computeRating(score),
     summary: buildSummary(data, stock.name, tier),
-    tags: buildTags(stock as StockInfo, data),
     metrics,
     price: data.price,
   };

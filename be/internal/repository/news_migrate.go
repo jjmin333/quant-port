@@ -120,3 +120,17 @@ func columnExists(ctx context.Context, db *sql.DB, table, column string) (bool, 
 	}
 	return true, nil
 }
+
+/*
+MigrateNewsTranslateAttemptsIfNeeded adds the retry counter on an existing database.
+
+컬럼이 이미 있으면 아무것도 안 한다 — 새 DB는 마이그레이션 파일 전체를 순서대로
+돌리므로 이 함수는 **운영 중인 DB**만을 위한 길이다(다른 Migrate*IfNeeded 와 같다).
+*/
+func MigrateNewsTranslateAttemptsIfNeeded(ctx context.Context, db *sql.DB, migrationsDir string) error {
+	has, err := columnExists(ctx, db, "news_articles", "translate_attempts")
+	if err != nil || has {
+		return err
+	}
+	return applyMigrationFile(ctx, db, migrationsDir, "071_news_translate_attempts.sql", "번역 재시도 횟수")
+}

@@ -5,8 +5,9 @@
 - **Spec:** [`toss-openapi.json`](./toss-openapi.json) (OpenAPI 3.1, v1.2.4)
 - **Base URL:** `https://openapi.tossinvest.com`
 - **인증:** `POST /oauth2/token` — OAuth 2.0 Client Credentials
-  - `TOSS_CLIENT_ID` → `client_id`
-  - `TOSS_CLIENT_SECRET` → `client_secret`
+  - `TOSS_PRIMARY_CLIENT_ID` / `TOSS_PRIMARY_CLIENT_SECRET` → 기본 키 (`TOSS_CLIENT_ID` / `TOSS_CLIENT_SECRET` 도 같은 자리의 별칭)
+  - `TOSS_SECONDARY_CLIENT_ID` / `TOSS_SECONDARY_CLIENT_SECRET` → 한도 초과 시에만 쓰는 예비 키
+  - 한도 그룹(`MARKET_DATA` 등)별로 PRIMARY가 소진되면 그 그룹만 SECONDARY로 붙고, 리셋 후 PRIMARY로 돌아온다
 - **계좌 API:** `X-Tossinvest-Account` 헤더 (`GET /api/v1/accounts`의 `accountSeq`)
 
 백엔드 연동 시 `internal/toss/` 클라이언트 패키지에서 이 spec을 기준으로 엔드포인트·스키마를 맞춥니다.

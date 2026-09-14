@@ -3,9 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Stamp as StampIcon } from "lucide-react";
-import { PageHeader } from "@/components/layout/header";
 import { PageColumns } from "@/components/layout/page-columns";
-import { PageScrollShell } from "@/components/layout/page-content-shell";
+import { PageActions, PageScrollShell } from "@/components/layout/page-content-shell";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MenuEmptyState } from "@/components/common/menu-empty-state";
@@ -14,9 +13,11 @@ import {
   SampleModeButton,
   SampleRibbon,
   SampleWrap,
+  useAutoSample,
   useSampleMode,
 } from "@/components/common/sample-mode";
 import { useAuth } from "@/components/providers/auth-provider";
+import { useLoginGate } from "@/hooks/use-login-gate";
 import { StockAvatar } from "@/components/stocks/stock-avatar";
 import { StanceBadge } from "@/components/stamps/stamp-detail";
 import { StampCreateDialog } from "@/components/stamps/stamp-create-dialog";
@@ -27,10 +28,13 @@ import { StampSeal } from "@/components/stamps/stamp-seal";
 import { StampTargetGauge } from "@/components/stamps/stamp-target-gauge";
 import { StampsSideRail } from "@/components/stamps/stamps-side-rail";
 import { useStamps, type StampVerdictFilter } from "@/hooks/use-stamps";
-import { formatDateKST, formatDateTimeKST, formatPercent, formatPrice } from "@/lib/format";
+import { formatDateKST, formatDateTimeKST, formatPercent } from "@/lib/format";
 import { MENU_COPY } from "@/lib/menu-copy";
 import { HORIZON_LABELS, type Stamp, type StampStance } from "@/lib/stamp-types";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/providers/confirm-provider";
+import { PriceDisplay } from "@/components/ui/price-display";
+import { buttonVariants } from "@/components/ui/button";
 
 const COPY = MENU_COPY.stamps;
 
@@ -57,8 +61,10 @@ function toneClass(value: number | undefined): string {
 }
 
 export function StampsClient() {
+  const confirm = useConfirm();
   const params = useSearchParams();
   const { session } = useAuth();
+  const gate = useLoginGate("스탬프 찍기");
   const { active: sample, setActive: setSample } = useSampleMode();
   const {
     stamps,
@@ -91,7 +97,14 @@ export function StampsClient() {
 
   // 예시를 보고 있지 않고 진짜로 0건일 때만 안내 화면을 세운다. 로딩 중에 잠깐
   // 스쳐 지나가면 화면이 두 번 바뀌는 것처럼 보이므로 loading도 함께 본다.
-  const isEmpty = !sample && !loading && !error && totalCount === 0;
+  /*
+    「내 것이 아직 없다」 — **`sample`을 빼고** 잰다 (2026-09-14 사용자 요청 4).
+    이 값이 `useAutoSample`로 가서 예시를 켠다. `!sample`이 섞이면 켜짐 → 0건 아님 →
+    꺼짐이 무한히 반복된다. 안내 카드는 그 위에 `!sample`을 얹은 `isEmpty`로 선다.
+  */
+  const hasNothingYet = !loading && !error && totalCount === 0;
+  useAutoSample(hasNothingYet);
+  const isEmpty = !sample && hasNothingYet;
 
   // Deep link from the stamp button ("내 스탬프 보기").
   const symbolParam = params.get("symbol");
@@ -107,36 +120,47 @@ export function StampsClient() {
 
   return (
     <>
-      <PageHeader
-        title={COPY.title}
-        subtitle={COPY.subtitle}
-        actions={
-          <>
-            <SampleModeButton
-              active={sample}
-              onToggle={setSample}
-              emphasize={isEmpty || !session}
-            />
-            {session && !sample && (
-              <button
-                type="button"
-                onClick={() => setCreateOpen(true)}
-                className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[var(--brand)] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:opacity-90"
-              >
-                <StampIcon className="size-3.5" />
-                스탬프 찍기
-              </button>
-            )}
-          </>
-        }
-      />
       <PageScrollShell>
+        <PageActions>
+          {/* 0건 안내 카드가 같은 버튼을 들고 있다 (§R-2). */}
+          {!isEmpty && (
+            <SampleModeButton active={sample} onToggle={setSample} emphasize={!session} />
+          )}
+          {/*
+            **비로그인이어도 버튼을 보여 준다** (2026-09-04 사용자 요청 2).
+
+            전에는 `session &&`으로 통째로 숨겼다. 숨기면 401은 안 나지만, 비로그인
+            사용자는 이 화면에서 **무엇을 할 수 있는 곳인지** 알 수 없다 — 스탬프
+            목록만 있고 찍는 길이 화면 어디에도 없다. 앱의 나머지(종목 헤더의 셋)는
+            같은 상황에서 「로그인하고 저장」이라고 적힌 버튼을 보여 주므로, 여기만
+            사라지면 규칙이 화면마다 다르다.
+
+            예시 모드(`sample`)에서는 여전히 감춘다 — 그건 로그인 문제가 아니라
+            「지금 보고 있는 것이 내 데이터가 아니다」라서다.
+          */}
+          {!sample && (
+            <button
+              type="button"
+              onClick={() => gate.run(() => setCreateOpen(true))}
+              title={gate.authed ? undefined : "로그인하면 스탬프를 찍을 수 있습니다"}
+              className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-white hover:opacity-90")}
+            >
+              <StampIcon className="size-3.5" />
+              {gate.label("스탬프 찍기")}
+            </button>
+          )}
+        </PageActions>
         {sample && (
           <div className="mb-3">
             <SampleRibbon
               loggedIn={Boolean(session)}
               loginHref="/login?next=%2Fstamps"
               onDismiss={() => setSample(false)}
+              // 안내 카드가 들고 있던 첫 동작 — 카드가 예시 뒤로 물러났으니 여기 선다.
+              action={{
+                label: gate.label("스탬프 찍기"),
+                onClick: () => gate.run(() => setCreateOpen(true)),
+              }}
             />
           </div>
         )}
@@ -147,7 +171,12 @@ export function StampsClient() {
             headline={COPY.emptyHeadline}
             description={COPY.emptyDescription}
             steps={COPY.steps}
-            primary={{ label: "스탬프 찍기", onClick: () => setCreateOpen(true) }}
+            // 0건 안내 카드의 버튼도 위 툴바 버튼과 같은 게이트를 지난다 — 0건인
+            // 사용자는 대개 아직 로그인하지 않은 사용자다.
+            primary={{
+              label: gate.label("스탬프 찍기"),
+              onClick: () => gate.run(() => setCreateOpen(true)),
+            }}
             secondary={
               <SampleModeButton
                 active={false}
@@ -184,10 +213,10 @@ export function StampsClient() {
               <div className="flex items-center gap-3">
                 <HitRateRing value={summary?.hitRate} />
                 <div className="min-w-0">
-                  <p className="text-[11px] text-[var(--text-muted)]">
-                    적중률 <span className="text-[9px]">클릭 →</span>
+                  <p className="text-cell text-[var(--text-muted)]">
+                    적중률 <span className="text-micro">클릭 →</span>
                   </p>
-                  <p className="mt-0.5 text-[10px] leading-tight text-[var(--text-muted)]">
+                  <p className="mt-0.5 text-micro leading-tight text-[var(--text-muted)]">
                     판정 {summary?.judged ?? 0}건 중 {summary?.hits ?? 0}건 적중
                     {summary?.avgTargetError !== undefined && (
                       <>
@@ -288,7 +317,7 @@ export function StampsClient() {
               <div className="@container">
                 {grouped.map((group) => (
                   <section key={group.key}>
-                    <h3 className="border-b border-[var(--border)] bg-[var(--surface-elevated)]/50 px-4 py-1.5 text-[11px] font-medium text-[var(--text-muted)]">
+                    <h3 className="border-b border-[var(--border)] bg-[var(--surface-elevated)]/50 px-4 py-1.5 text-cell font-medium text-[var(--text-muted)]">
                       {group.label} · {group.items.length}건
                     </h3>
                     <ul className="divide-y divide-[var(--border)]">
@@ -320,9 +349,16 @@ export function StampsClient() {
         onOpenChange={(open) => !open && setDetailId(null)}
         onUpdate={(input) => updateStamp(detailStamp!.id, input)}
         onOpen={() => detailStamp && openStamp(detailStamp.id)}
-        onDelete={() => {
+        onDelete={async () => {
           if (!detailStamp) return;
-          if (window.confirm("이 스탬프를 삭제할까요? 당시 스냅샷은 복구할 수 없습니다.")) {
+          if (
+            await confirm({
+              title: "이 스탬프를 삭제할까요?",
+              description: "찍을 당시의 시세·점수·뉴스 스냅샷은 복구할 수 없습니다.",
+              confirmLabel: "삭제",
+              tone: "danger",
+            })
+          ) {
             removeStamp(detailStamp.id);
             setDetailId(null);
           }
@@ -360,7 +396,7 @@ function HitRateRing({ value }: { value?: number }) {
       aria-label={value === undefined ? "적중률 없음" : `적중률 ${Math.round(pct)}%`}
     >
       <span className="absolute inset-[7px] rounded-full bg-[var(--surface)]" />
-      <span className="absolute inset-0 grid place-items-center text-[13px] font-bold text-[var(--text-primary)]">
+      <span className="absolute inset-0 grid place-items-center text-note font-bold text-[var(--text-primary)]">
         {value === undefined ? "—" : `${Math.round(pct)}%`}
       </span>
     </div>
@@ -389,11 +425,11 @@ function Tile({
         onClick && "transition-colors hover:border-[var(--brand)]",
       )}
     >
-      <p className="text-[11px] text-[var(--text-muted)]">{label}</p>
+      <p className="text-cell text-[var(--text-muted)]">{label}</p>
       <p className={cn("mt-0.5 text-xl font-bold tracking-tight tabular-nums", valueClass)}>
         {value}
       </p>
-      <p className="mt-0.5 truncate text-[10px] text-[var(--text-muted)]">{foot}</p>
+      <p className="mt-0.5 truncate text-micro text-[var(--text-muted)]">{foot}</p>
     </Element>
   );
 }
@@ -420,24 +456,24 @@ function StampRow({ stamp, onOpen }: { stamp: Stamp; onOpen: () => void }) {
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
           <StockAvatar symbol={stamp.symbol} name={stamp.symbolName} size="xs" />
-          <span className="truncate text-[12.5px] font-semibold text-[var(--text-primary)]">
+          <span className="truncate text-cell font-semibold text-[var(--text-primary)]">
             {stamp.symbolName || stamp.symbol}
           </span>
           <StanceBadge stance={stamp.stance} />
-          <Badge className="px-1.5 py-0 text-[10px]">확신 {stamp.conviction}</Badge>
+          <Badge className="px-1.5 py-0 text-micro">확신 {stamp.conviction}</Badge>
         </div>
 
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10.5px] text-[var(--text-muted)]">
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-micro text-[var(--text-muted)]">
           <span>
             {formatDateTimeKST(stamp.stampedAt)} → {formatDateKST(stamp.dueAt)} 개봉
             <span className="ml-1 opacity-70">({HORIZON_LABELS[stamp.horizonKind]})</span>
           </span>
           <span className="tabular-nums text-[var(--text-secondary)]">
-            {formatPrice(stamp.price, currency)}
+            <PriceDisplay value={stamp.price} currency={currency} size="inherit" />
             {stamp.current && (
               <>
                 {" → "}
-                <b>{formatPrice(stamp.current.price, currency)}</b>
+                <b><PriceDisplay value={stamp.current.price} currency={currency} size="inherit" /></b>
                 <span className={cn("ml-1", toneClass(stamp.current.changeRate))}>
                   {stamp.current.changeRate === undefined
                     ? "—"
@@ -446,11 +482,11 @@ function StampRow({ stamp, onOpen }: { stamp: Stamp; onOpen: () => void }) {
               </>
             )}
           </span>
-          <span className="tabular-nums">목표 {formatPrice(stamp.targetPrice, currency)}</span>
+          <span className="tabular-nums">목표 <PriceDisplay value={stamp.targetPrice} currency={currency} size="inherit" /></span>
         </div>
 
         {stamp.note && (
-          <p className="mt-0.5 line-clamp-1 text-[10.5px] text-[var(--text-secondary)]">
+          <p className="mt-0.5 line-clamp-1 text-micro text-[var(--text-secondary)]">
             {stamp.note}
           </p>
         )}
@@ -477,7 +513,7 @@ function HorizonCell({ label, value }: { label: string; value?: number }) {
   const height = value === undefined ? 0 : Math.min(9, (Math.abs(value) / 10) * 9);
   return (
     <span className="w-[42px] text-center">
-      <span className="block text-[9px] text-[var(--text-muted)]">{label}</span>
+      <span className="block text-micro text-[var(--text-muted)]">{label}</span>
       <span className="relative my-0.5 block h-[18px]">
         <span className="absolute inset-x-[11px] top-[9px] h-px bg-[var(--border)]" />
         {value !== undefined && value !== 0 && (
@@ -492,7 +528,7 @@ function HorizonCell({ label, value }: { label: string; value?: number }) {
           />
         )}
       </span>
-      <span className={cn("block text-[10px] tabular-nums", toneClass(value))}>
+      <span className={cn("block text-micro tabular-nums", toneClass(value))}>
         {value === undefined ? "—" : value.toFixed(1)}
       </span>
     </span>
@@ -568,7 +604,7 @@ function FilterGroup({
           type="button"
           onClick={() => onChange(opt.id)}
           className={cn(
-            "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+            "rounded-md px-2.5 py-1 text-cell font-medium transition-colors",
             value === opt.id
               ? "bg-[var(--surface)] text-[var(--text-primary)] shadow-sm"
               : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]",

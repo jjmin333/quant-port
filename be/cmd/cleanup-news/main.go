@@ -25,7 +25,7 @@ func main() {
 
 	ctx := context.Background()
 
-	mysql, err := repository.NewMySQL(cfg.MySQLDSN)
+	mysql, err := repository.NewMySQLForCLI(cfg.MySQLDSN)
 	if err != nil {
 		log.Fatalf("mysql: %v", err)
 	}
@@ -48,7 +48,7 @@ func main() {
 	newsRepo := repository.NewNewsRepo(mysql.DB())
 	stockRepo := repository.NewStockRepo(mysql.DB())
 	watchlistRepo := repository.NewWatchlistRepo(mysql.DB())
-	newsStore := service.NewNewsStore(cfg.News, nil, nil, nil, nil, nil, nil, nil, newsRepo, nil, nil, stockRepo, watchlistRepo, nil, redisClient)
+	newsStore := service.NewNewsStore(cfg.News, nil, nil, nil, nil, nil, nil, newsRepo, nil, nil, stockRepo, watchlistRepo, nil, redisClient)
 
 	for _, m := range marketsToClean(*market) {
 		result, err := newsStore.CleanupIrrelevantArticles(ctx, m, *dryRun)

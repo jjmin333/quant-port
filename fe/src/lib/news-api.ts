@@ -113,7 +113,15 @@ function mapArticle(dto: NewsArticleDTO): NewsArticle {
   };
 }
 
-export async function fetchUsNews(filter: NewsListFilter): Promise<UsNewsResult> {
+export async function fetchUsNews(
+  filter: NewsListFilter,
+  /**
+   * 서버 렌더용 캐시 지정. 안 넘기면 예전 그대로 `no-store`(브라우저 폴링 경로).
+   * 서버에서 크롤러에게 보여 줄 첫 화면을 그릴 때는 `next: { revalidate }`를 넘겨
+   * 크롤러가 몇 번을 오든 BE 호출이 주기당 한 번이 되게 한다.
+   */
+  init?: RequestInit,
+): Promise<UsNewsResult> {
   const params = new URLSearchParams();
   params.set("sort", filter.sort);
   if (filter.sourceId && filter.sourceId !== "all") {
@@ -131,7 +139,7 @@ export async function fetchUsNews(filter: NewsListFilter): Promise<UsNewsResult>
     }
   }
 
-  const res = await fetch(`${getApiBaseUrl()}/api/v1/news/us?${params}`, mergeFetchInit({
+  const res = await fetch(`${getApiBaseUrl()}/api/v1/news/us?${params}`, mergeFetchInit(init ?? {
     cache: "no-store",
   }));
 
@@ -147,7 +155,11 @@ export async function fetchUsNews(filter: NewsListFilter): Promise<UsNewsResult>
   };
 }
 
-export async function fetchDomesticNews(filter: NewsListFilter): Promise<DomesticNewsResult> {
+export async function fetchDomesticNews(
+  filter: NewsListFilter,
+  /** `fetchUsNews`의 같은 인자 참조. */
+  init?: RequestInit,
+): Promise<DomesticNewsResult> {
   const params = new URLSearchParams();
   params.set("sort", filter.sort);
   if (filter.sourceId && filter.sourceId !== "all") {
@@ -165,7 +177,7 @@ export async function fetchDomesticNews(filter: NewsListFilter): Promise<Domesti
     }
   }
 
-  const res = await fetch(`${getApiBaseUrl()}/api/v1/news/domestic?${params}`, mergeFetchInit({
+  const res = await fetch(`${getApiBaseUrl()}/api/v1/news/domestic?${params}`, mergeFetchInit(init ?? {
     cache: "no-store",
   }));
 
@@ -183,8 +195,16 @@ export async function fetchDomesticNews(filter: NewsListFilter): Promise<Domesti
 
 export async function fetchDashboardNews(
   market: "domestic" | "us" = "domestic",
+  /**
+   * 본문까지 온전히 받을 기사 수.
+   *
+   * 홈 뉴스 카드는 옆의 브리핑 카드 높이를 채워야 해서 몇 줄을 그릴지가 화면 폭에 따라
+   * 달라진다. 뒤쪽 요약본은 모달을 열 수 없으므로(본문·링크가 없다) **그릴 수 있는 줄
+   * 수만큼은 온전한 기사여야 한다.** 서버 상한은 30이다.
+   */
+  full = 8,
 ): Promise<DashboardNewsResult> {
-  const path = `/api/v1/news/${market}/dashboard`;
+  const path = `/api/v1/news/${market}/dashboard?full=${full}`;
   // 서버도 이 목록을 15초 캐시한다. 여기 캐시는 그 위에서 **왕복 자체를** 없앤다 —
   // 홈을 떠났다 돌아오는 30초 안에는 회선을 아예 쓰지 않는다.
   return cachedGet(path, async () => {
@@ -327,4 +347,102 @@ export async function recordNewsView(id: string): Promise<void> {
   })).catch(() => {
     // non-blocking
   });
+}
+
+/* ── 오늘의 키워드 ─────────────────────────────────────────────────────────── */
+
+export type NewsKeywordCount = { keyword: string; count: number };
+
+export type NewsTopKeywords = {
+  keywords: NewsKeywordCount[];
+  /** 실제로 센 기사 수. 요청한 표본보다 적을 수 있다(쌓인 게 그것뿐인 시장). */
+  articleCount: number;
+  /** 목록에 들어가려면 최소 몇 건에 등장해야 하는지. 각주 문구가 쓴다. */
+  minMentions: number;
+};
+
+/**
+ * 「오늘의 키워드」를 **집계된 채로** 받는다.
+ *
+ * 예전에는 홈이 기사 목록(100건)을 통째로 받아 브라우저에서 셌다. 표본을 1,000건으로
+ * 넓히면서 서버로 옮겼다 — 요약본 1,000건은 300KB가 넘고, 그 전에 서버의 국내 200건
+ * 상한에 걸려 **1,000을 달라고 해도 200이 왔다**. 집계 규칙(한 기사당 1회 · 두 글자
+ * 이상 · 2건 이상)은 이제 서버 한 곳에만 있다.
+ *
+ * 서버도 5분 캐시하지만, 여기 캐시는 그 위에서 **왕복 자체를** 없앤다.
+ */
+export async function fetchTopKeywords(
+  market: "domestic" | "us",
+  limit = 14,
+): Promise<NewsTopKeywords> {
+  const path = `/api/v1/news/${market}/keywords?limit=${limit}`;
+  return cachedGet(
+    path,
+    async () => {
+      const res = await fetch(
+        `${getApiBaseUrl()}${path}`,
+        mergeFetchInit({ cache: "no-store" }),
+      );
+      if (!res.ok) throw new Error("Failed to load keywords");
+      const body = await parseJson<ApiResponse<NewsTopKeywords | null>>(res);
+      return {
+        keywords: body.data?.keywords ?? [],
+        articleCount: body.data?.articleCount ?? 0,
+        minMentions: body.data?.minMentions ?? 2,
+      };
+    },
+    60_000,
+  );
+}
+
+/* ── 많이 언급된 종목 ──────────────────────────────────────────────────────── */
+
+export type NewsSymbolCount = {
+  symbol: string;
+  /** 서버가 `stocks`에서 붙여 준 종목명. 화면은 이걸 그대로 쓴다. */
+  name: string;
+  count: number;
+};
+
+export type NewsTopSymbols = {
+  symbols: NewsSymbolCount[];
+  /** 실제로 센 기사 수. 요청한 표본보다 적을 수 있다. */
+  articleCount: number;
+  minMentions: number;
+};
+
+/**
+ * 「많이 언급된 종목」을 **집계된 채로** 받는다 — 「오늘의 키워드」와 같은 짝이다.
+ *
+ * 예전에는 화면이 목록(100건)을 세었다. 그런데 그 100건이 덮는 시간이 **34분**이라
+ * (실측 2026-09-01: 16:14~16:47) 「오늘 많이 언급된 종목」이 실은 「지난 30분」이었고,
+ * 새로고침마다 순위가 뒤집혔다. 서버는 최근 1,000건을 본다.
+ *
+ * 응답에 **종목명이 함께 온다.** 그래서 시세 배치가 돌아오기 전에도 화면이
+ * 종목코드를 대신 그릴 일이 없다. 국내 시장이면 서버가 해외 티커를 걸러 주므로
+ * 국내 뉴스 필터에 NVDA가 오르지 않는다 — 기사 하단 관련 종목 칩은 이 집계를 쓰지
+ * 않으니 거기서는 그대로 보인다.
+ */
+export async function fetchTopSymbols(
+  market: "domestic" | "us",
+  limit = 6,
+): Promise<NewsTopSymbols> {
+  const path = `/api/v1/news/${market}/symbols?limit=${limit}`;
+  return cachedGet(
+    path,
+    async () => {
+      const res = await fetch(
+        `${getApiBaseUrl()}${path}`,
+        mergeFetchInit({ cache: "no-store" }),
+      );
+      if (!res.ok) throw new Error("Failed to load top symbols");
+      const body = await parseJson<ApiResponse<NewsTopSymbols | null>>(res);
+      return {
+        symbols: body.data?.symbols ?? [],
+        articleCount: body.data?.articleCount ?? 0,
+        minMentions: body.data?.minMentions ?? 2,
+      };
+    },
+    60_000,
+  );
 }

@@ -1,110 +1,51 @@
 "use client";
 
-import { useMemo } from "react";
-import { Flame } from "lucide-react";
-import {
-  pickMarketIndices,
-  type IndexPulseFocus,
-} from "@/components/market/index-pulse-card";
-import { useMarketIndices } from "@/hooks/use-market-indices";
-import type { SymbolMention } from "@/lib/news-derive";
-import {
-  countArticlesByDashboardIndex,
-  type DashboardIndexId,
-} from "@/lib/news-dashboard-indices";
-import type { NewsArticle } from "@/lib/news-types";
+import type { NewsSymbolCount } from "@/lib/news-api";
 import type { QuoteSummary } from "@/lib/quotes-types";
 import { formatPercent } from "@/lib/format";
 import { trendTextClass } from "@/lib/trend-colors";
 import { cn } from "@/lib/utils";
 
-const pulseCardClass =
-  "min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-left transition-colors hover:border-[var(--text-muted)]";
-
 /**
- * A1 — 중앙 상단 지수·이슈 종목 스트립.
+ * 중앙 상단 이슈 종목 스트립 — **목록을 좁히는 유일한 자리**.
  *
- * 지수·종목 카드 모두 등락률 + 기사 N건을 보여 주고, 클릭하면 해당 키워드로 목록을
- * 좁힌다.
+ * 카드마다 등락률 + 기사 N건을 보여 주고, 누르면 그 종목이 나온 기사만 남는다.
+ *
+ * **지수 카드는 없다.** KOSPI·KOSDAQ·USD/KRW·S&P500·나스닥 다섯 장이 이 줄 앞머리를
+ * 차지하고 있었는데, 그것은 매일 같은 다섯 장이라 「오늘 무엇이 화제인가」를 말하는
+ * 이 줄의 성격과 어긋났다 — 화제인 종목을 보러 온 사람이 늘 같은 다섯 장을 지나야
+ * 했다. 지수 등락은 홈의 「오늘의 시장」 띠가 이미 열세 종을 들고 있고, 지수별로
+ * 기사를 좁히는 일은 지수 화면이 받는다.
+ *
+ * **종목명은 `mentions`가 들고 온다** — 시세 맵에서 꺼내지 않는다. 예전에는
+ * `quotes.get(symbol)?.name || symbol`이라, 시세 배치가 도는 동안 화면에
+ * 「000660 · —」이 떠 있다가 「SK하이닉스 · +1.37%」로 바뀌었다. 사용자에게 그건
+ * 로딩이 아니라 **종목코드가 뜨는 버그**로 보였다. 이름은 집계와 함께 서버가
+ * 붙여 주므로 이제 첫 프레임부터 이름이다. 시세는 붙으면 붙는 대로 더해진다.
+ *
+ * **모바일에서도 그린다.** 좁은 화면에서 숨겨 뒀던 이유는 이 카드들과 아래 pill 줄이
+ * 같은 일을 두 벌로 하고 있었기 때문인데, pill 줄에서 종목이 빠지면서 그 이유가
+ * 사라졌다. 대신 카드를 **두 줄 높이**로 줄였다 — 이름 한 줄, 등락률과 건수를 한 줄에
+ * 나란히. 예전에는 이름·등락률·건수가 각자 한 줄씩 써서 375px에서 카드 아홉 장이
+ * 299px을 먹었고, 그게 첫 기사를 1.6화면 아래로 밀어낸 값이었다.
  */
 export function NewsIssueStrip({
-  market,
-  articles,
   mentions,
   quotes,
   activeSymbol,
-  activeIndexId,
   onSelect,
-  onSelectIndex,
 }: {
-  market: IndexPulseFocus;
-  articles: NewsArticle[];
-  mentions: SymbolMention[];
+  mentions: NewsSymbolCount[];
   quotes: Map<string, QuoteSummary>;
   activeSymbol: string | null;
-  activeIndexId: DashboardIndexId | null;
   onSelect: (symbol: string) => void;
-  onSelectIndex: (indexId: DashboardIndexId) => void;
 }) {
-  const { indices } = useMarketIndices();
-  const indexRows = useMemo(() => pickMarketIndices(indices, market), [indices, market]);
-  const hasIndexData = indexRows.some((i) => i.value > 0);
-
-  const indexCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const idx of indexRows) {
-      counts.set(idx.id, countArticlesByDashboardIndex(articles, idx.id as DashboardIndexId));
-    }
-    return counts;
-  }, [articles, indexRows]);
-
-  if (!hasIndexData && mentions.length === 0) return null;
+  if (mentions.length === 0) return null;
 
   const maxMention = mentions[0]?.count || 1;
-  const maxIndexMention = Math.max(...indexRows.map((idx) => indexCounts.get(idx.id) ?? 0), 1);
 
   return (
-    <div className="grid grid-cols-3 gap-1.5 @2xl:grid-cols-6">
-      {hasIndexData &&
-        indexRows.map((idx) => {
-          const count = indexCounts.get(idx.id) ?? 0;
-          const active = activeIndexId === idx.id;
-
-          return (
-            <button
-              key={idx.id}
-              type="button"
-              onClick={() => onSelectIndex(idx.id as DashboardIndexId)}
-              aria-pressed={active}
-              className={cn(
-                pulseCardClass,
-                active && "border-[var(--brand)] bg-[var(--brand-muted)]",
-              )}
-            >
-              <div className="truncate text-[11px] font-semibold text-[var(--text-primary)]">
-                {idx.name}
-              </div>
-              <div
-                className={cn(
-                  "font-mono text-[13px] font-bold tabular-nums",
-                  trendTextClass(idx.changeRate),
-                )}
-              >
-                {formatPercent(idx.changeRate)}
-              </div>
-              <div className="text-[10px] text-[var(--text-muted)]">{count}건</div>
-              <div className="mt-1 h-[3px] overflow-hidden rounded-full bg-[var(--surface-elevated)]">
-                <i
-                  className="block h-full rounded-full bg-[var(--brand)]"
-                  style={{
-                    width: `${Math.max(8, (count / maxIndexMention) * 100)}%`,
-                  }}
-                />
-              </div>
-            </button>
-          );
-        })}
-
+    <div className="grid grid-cols-3 gap-1.5 @lg/news:grid-cols-4 @2xl/news:grid-cols-6">
       {mentions.map((mention) => {
         const quote = quotes.get(mention.symbol);
         const active = activeSymbol === mention.symbol;
@@ -117,24 +58,29 @@ export function NewsIssueStrip({
             onClick={() => onSelect(mention.symbol)}
             aria-pressed={active}
             className={cn(
-              pulseCardClass,
+              "min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-left transition-colors hover:border-[var(--text-muted)]",
               active && "border-[var(--brand)] bg-[var(--brand-muted)]",
             )}
           >
-            <div className="truncate text-[11px] font-semibold text-[var(--text-primary)]">
-              {quote?.name || mention.symbol}
+            <div className="truncate text-cell font-semibold text-[var(--text-primary)]">
+              {mention.name || mention.symbol}
             </div>
-            <div
-              className={cn(
-                "font-mono text-[13px] font-bold tabular-nums",
-                hasPrice ? trendTextClass(quote!.changeRate) : "text-[var(--text-muted)]",
-              )}
-            >
-              {hasPrice ? formatPercent(quote!.changeRate) : "—"}
-            </div>
-            <div className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
-              <span>{mention.count}건</span>
-              {mention.hasBreaking && <Flame className="size-3 text-[var(--loss)]" />}
+            {/*
+              등락률과 건수를 한 줄에 둔다. 따로 두면 카드가 한 줄만큼 높아지는데,
+              그 한 줄이 모바일에서 이 스트립을 숨기게 만들었던 높이다.
+            */}
+            <div className="flex min-w-0 items-baseline justify-between gap-1">
+              <span
+                className={cn(
+                  "font-num text-note font-bold tabular-nums",
+                  hasPrice ? trendTextClass(quote!.changeRate) : "text-[var(--text-muted)]",
+                )}
+              >
+                {hasPrice ? formatPercent(quote!.changeRate) : "—"}
+              </span>
+              <span className="shrink-0 font-num text-micro text-[var(--text-muted)]">
+                {mention.count}건
+              </span>
             </div>
             <div className="mt-1 h-[3px] overflow-hidden rounded-full bg-[var(--surface-elevated)]">
               <i

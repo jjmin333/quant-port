@@ -3,10 +3,17 @@
 //
 // Sources differ per index and each one is dated at the source, so no date is
 // ever inferred:
-//   - Toss indicator candles  → kospi, kosdaq, usd-krw
-//   - FRED series observations → nasdaq, nasdaq100, sp500, dow, vix
+//   - Toss indicator candles   → kospi, kosdaq
+//   - FRED series observations → nasdaq, nasdaq100, sp500, dow, vix, us10y and
+//     usd-krw (DEXKOUS — Toss returns 400 for the USD/KRW candle symbol, so the
+//     live source and the history source differ for that one index)
+//   - Upbit daily candles      → btc
 //   - stock_daily_closes       → nq100 (QQQ), sox (SOXX), which are ETFs we
 //     already store daily closes for, so this costs no API call
+//
+// The run ends by deleting poller rows that duplicate the previous close — FRED
+// publishes a day late, so the daily batch used to write yesterday's value under
+// today's date and leave a 0% change rate behind.
 //
 // Indices without a dated history source are skipped and reported; their rows
 // still accumulate going forward through the daily close batch.
@@ -45,7 +52,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeoutMin)*time.Minute)
 	defer cancel()
 
-	mysql, err := repository.NewMySQL(cfg.MySQLDSN)
+	mysql, err := repository.NewMySQLForCLI(cfg.MySQLDSN)
 	if err != nil {
 		log.Fatalf("mysql: %v", err)
 	}

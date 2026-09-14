@@ -1,14 +1,14 @@
 package toss
 
 type ExchangeRateResponse struct {
-	BaseCurrency    Currency `json:"baseCurrency"`
-	QuoteCurrency   Currency `json:"quoteCurrency"`
-	Rate            string   `json:"rate"`
-	MidRate         string   `json:"midRate"`
-	BasisPoint      string   `json:"basisPoint"`
-	RateChangeType  string   `json:"rateChangeType"`
-	ValidFrom       string   `json:"validFrom"`
-	ValidUntil      string   `json:"validUntil"`
+	BaseCurrency   Currency `json:"baseCurrency"`
+	QuoteCurrency  Currency `json:"quoteCurrency"`
+	Rate           string   `json:"rate"`
+	MidRate        string   `json:"midRate"`
+	BasisPoint     string   `json:"basisPoint"`
+	RateChangeType string   `json:"rateChangeType"`
+	ValidFrom      string   `json:"validFrom"`
+	ValidUntil     string   `json:"validUntil"`
 }
 
 type KrMarketCalendarResponse struct {
@@ -29,11 +29,11 @@ type KrMarketDay struct {
 }
 
 type UsMarketDay struct {
-	Date          string                `json:"date"`
-	DayMarket     *UsDayMarketSession   `json:"dayMarket"`
-	PreMarket     *UsPreMarketSession   `json:"preMarket"`
+	Date          string                  `json:"date"`
+	DayMarket     *UsDayMarketSession     `json:"dayMarket"`
+	PreMarket     *UsPreMarketSession     `json:"preMarket"`
 	RegularMarket *UsRegularMarketSession `json:"regularMarket"`
-	AfterMarket   *UsAfterMarketSession `json:"afterMarket"`
+	AfterMarket   *UsAfterMarketSession   `json:"afterMarket"`
 }
 
 type IntegratedHour struct {
@@ -55,9 +55,9 @@ type RegularMarketSession struct {
 }
 
 type AfterMarketSession struct {
-	StartTime                string  `json:"startTime"`
+	StartTime                 string  `json:"startTime"`
 	SinglePriceAuctionEndTime *string `json:"singlePriceAuctionEndTime"`
-	EndTime                  string  `json:"endTime"`
+	EndTime                   string  `json:"endTime"`
 }
 
 type UsDayMarketSession struct {

@@ -145,7 +145,7 @@ export function ScoreRadarChart({ breakdown, score, className }: ScoreRadarChart
               x={p.x}
               y={p.y + 3}
               textAnchor={anchor}
-              className="fill-muted-foreground text-[10px]"
+              className="fill-muted-foreground text-micro"
             >
               {axis.label}{" "}
               <tspan className="fill-foreground font-semibold">
@@ -157,7 +157,7 @@ export function ScoreRadarChart({ breakdown, score, className }: ScoreRadarChart
       </svg>
 
       {!canDraw && (
-        <p className="mt-1 text-center text-[11px] text-muted-foreground">
+        <p className="mt-1 text-center text-cell text-muted-foreground">
           축 데이터가 부족해 모양을 그리지 못했습니다
         </p>
       )}

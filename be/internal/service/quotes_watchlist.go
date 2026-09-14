@@ -89,6 +89,22 @@ func (s *QuotesService) enrichWatchlistQuotes(ctx context.Context, items []model
 	wg.Wait()
 }
 
+// DailyBars exposes the DB-backed 1d series (newest first) for callers outside
+// the package. Read-only: it never triggers a Toss backfill, so a demo request
+// cannot spend provider quota.
+func (s *QuotesService) DailyBars(ctx context.Context, symbol string, limit int) []model.Candle {
+	return s.listDailyBarsFromDB(ctx, strings.ToUpper(strings.TrimSpace(symbol)), limit)
+}
+
+// DailyCloseAtOrBefore is the exported form of dailyCloseAtOrBefore.
+//
+// 「담은 뒤 +12%」류의 숫자는 **담은 날의 실제 종가**가 있어야 말이 된다. 예시 픽스처가
+// 담은 날짜만 정하고 그날 가격은 DB에서 읽도록 하려고 연다 — 손으로 적어둔 가격은
+// 시세가 움직이는 순간부터 화면과 어긋난다.
+func (s *QuotesService) DailyCloseAtOrBefore(ctx context.Context, symbol string, cutoff time.Time) (float64, bool) {
+	return s.dailyCloseAtOrBefore(ctx, strings.ToUpper(strings.TrimSpace(symbol)), cutoff)
+}
+
 // dailyCloseAtOrBefore looks up one daily close via indexed DB query (symbol + bar_time <= cutoff).
 func (s *QuotesService) dailyCloseAtOrBefore(ctx context.Context, symbol string, cutoff time.Time) (float64, bool) {
 	if s.candles == nil || !s.candles.HasTable(ctx) || cutoff.IsZero() {
@@ -193,6 +209,23 @@ func (s *QuotesService) buildWatchlistMetrics(
 	item *model.QuoteSummary,
 	entry repository.WatchlistEntry,
 ) *model.WatchlistMetrics {
+	return s.WatchlistMetricsFor(ctx, item, entry.CreatedAt)
+}
+
+// WatchlistMetricsFor builds the 전일·전주·전월·52주 block for one quote.
+//
+// Split out of buildWatchlistMetrics so a caller that has no session — the
+// 「예시로 둘러보기」 fixtures — gets the numbers from the **same** code path the
+// signed-in list uses. A second implementation for the demo would drift, and the
+// whole point of the demo is that what it teaches transfers to the real screen.
+//
+// Mutates item.Change / item.ChangeRate: the baseline picked here (정규장 종가 vs
+// 전일 종가, by session) is the one the 전일 column must agree with.
+func (s *QuotesService) WatchlistMetricsFor(
+	ctx context.Context,
+	item *model.QuoteSummary,
+	addedAt time.Time,
+) *model.WatchlistMetrics {
 	if item == nil {
 		return nil
 	}
@@ -202,15 +235,13 @@ func (s *QuotesService) buildWatchlistMetrics(
 	}
 
 	sym := strings.ToUpper(strings.TrimSpace(item.Symbol))
-	session := s.marketSessionFor(ctx, sym)
 	prevClose, _ := s.resolvePrevClose(ctx, sym)
-	regularClose := s.resolveRegularClose(ctx, sym, item.AssetType, session)
-	change, changeRate := computeQuoteChange(current, prevClose, regularClose, session)
+	change, changeRate := computeQuoteChange(current, prevClose)
 	item.Change = change
 	item.ChangeRate = changeRate
 
 	metrics := &model.WatchlistMetrics{
-		AddedAt:             entry.CreatedAt.UTC().Format(time.RFC3339),
+		AddedAt:             addedAt.UTC().Format(time.RFC3339),
 		ChangeRatePrevClose: changeRate,
 		PrevClose:           prevClose,
 	}

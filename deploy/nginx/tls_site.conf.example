@@ -1,0 +1,23 @@
+# VM 마다 다른 값 — 리포에 커밋하지 않는다.
+# 배포 VM 에서:
+#   sudo mkdir -p /etc/quant-port
+#   sudo cp deploy/nginx/tls_site.conf.example /etc/quant-port/nginx-tls-site.conf
+#   sudo vi /etc/quant-port/nginx-tls-site.conf     # 도메인 3곳을 바꾼다
+#
+# nginx.tls.conf 의 :443 server {} 안에서 include 된다.
+
+server_name app.example.com;
+
+ssl_certificate         /etc/letsencrypt/live/app.example.com/fullchain.pem;
+ssl_certificate_key     /etc/letsencrypt/live/app.example.com/privkey.pem;
+ssl_trusted_certificate /etc/letsencrypt/live/app.example.com/chain.pem;
+
+# OCSP stapling — 클라이언트가 CA 에 따로 묻지 않아 첫 연결이 빨라진다.
+# chain.pem 이 있어야 verify 가 켜진다.
+ssl_stapling on;
+ssl_stapling_verify on;
+
+# HSTS — **인증서 갱신이 확실히 도는 것을 한 주기 확인한 뒤에 늘린다.**
+# 한 번 보낸 HSTS 는 브라우저가 max-age 동안 기억하므로, 인증서가 끊기면
+# 사용자가 사이트에 접근할 방법이 없다. 300초로 시작해서 확인 후 31536000 으로.
+add_header Strict-Transport-Security "max-age=300" always;

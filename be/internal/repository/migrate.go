@@ -23,8 +23,44 @@ var RequiredTables = []string{
 
 // EnsureSchema connects via MYSQL_DSN, verifies required tables exist,
 // and runs migrations/*.sql only when any table is missing.
+// schemaMigrationTimeout — EnsureSchema 전체에 걸리는 마감.
+//
+// 60초는 "이미 마이그레이션이 끝난 서버가 다시 뜨는" 평상시에 맞춘 값이다. 큰 표를
+// 건드리는 마이그레이션은 여기서 잘린다 — 그러면 api가 기동에 실패하고, 워커도
+// 스키마를 기다리다 함께 못 뜬다(전면 정지). 운영 DB는 1 ECPU에 스토리지 29 MiB/s라
+// 로컬보다 훨씬 느리므로, 그런 배포에서는 값을 올려 잡을 수 있어야 한다.
+//
+// 큰 ALTER는 배포에 섞지 말고 따로 돌리는 것이 원칙이다(docs/OCI_MIGRATION_PLAN.md §4.7).
+// 이 환경변수는 그 원칙을 못 지킨 배포가 서비스를 통째로 세우지 않게 하는 안전판이다.
+func schemaMigrationTimeout() time.Duration {
+	return time.Duration(envInt("SCHEMA_MIGRATION_TIMEOUT_SECONDS", 60)) * time.Second
+}
+
+/*
+EnsureSchema brings the database up to date and wires the caches that read it.
+
+# 왜 얇은 껍데기가 하나 있나 (2026-09-13)
+
+본체(`ensureSchema`)는 **여러 곳에서 일찍 돌아간다** — 필요한 표가 다 있으면
+중간에서, 새 DB면 끝에서. 스키마가 준비된 뒤에 해야 하는 일을 본체 안에 적으면
+그 출구 중 하나를 반드시 빠뜨린다. 실제로 한 번 빠뜨렸다: 별칭 캐시 배선을 본체
+끝에 뒀더니 **운영 DB(표가 다 있는 경로)에서는 한 번도 안 불렸고**, 그래도 아무
+오류가 안 났다 — 캐시는 씨앗으로 조용히 돌아가기 때문이다.
+
+그래서 「끝나고 하는 일」은 출구가 하나인 여기에 둔다.
+*/
 func EnsureSchema(ctx context.Context, db *sql.DB, migrationsDir string) error {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	if err := ensureSchema(ctx, db, migrationsDir); err != nil {
+		return err
+	}
+	// 별칭 캐시는 스키마를 보장하는 **모든** 프로세스(api·워커·cmd)가 쓴다.
+	// 프로세스마다 붙이면 빠뜨리는 곳이 생기고, 빠뜨려도 오류가 안 난다.
+	SetStockAliasSource(ctx, db)
+	return nil
+}
+
+func ensureSchema(ctx context.Context, db *sql.DB, migrationsDir string) error {
+	ctx, cancel := context.WithTimeout(ctx, schemaMigrationTimeout())
 	defer cancel()
 
 	if err := db.PingContext(ctx); err != nil {
@@ -88,6 +124,24 @@ func EnsureSchema(ctx context.Context, db *sql.DB, migrationsDir string) error {
 		if err := MigrateLLMBatchSettingsIfNeeded(ctx, db, migrationsDir); err != nil {
 			return err
 		}
+		if err := MigrateLLMBatchCapsIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateBatchHealthIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateOpsIncidentsIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateTossTradableIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateStockAliasesIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateNewsTranslateAttemptsIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
 		if err := MigrateDailyClosesIfNeeded(ctx, db, migrationsDir); err != nil {
 			return err
 		}
@@ -121,6 +175,9 @@ func EnsureSchema(ctx context.Context, db *sql.DB, migrationsDir string) error {
 		if err := MigrateResearchThumbnailIfNeeded(ctx, db, migrationsDir); err != nil {
 			return err
 		}
+		if err := MigrateResearchCommentLikesIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
 		if err := MigrateHoldingTradesIfNeeded(ctx, db, migrationsDir); err != nil {
 			return err
 		}
@@ -148,6 +205,9 @@ func EnsureSchema(ctx context.Context, db *sql.DB, migrationsDir string) error {
 		if err := MigratePerfIndexesIfNeeded(ctx, db, migrationsDir); err != nil {
 			return err
 		}
+		if err := MigrateNewsPopularIndexIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
 		if err := MigrateEarningsEventsIfNeeded(ctx, db, migrationsDir); err != nil {
 			return err
 		}
@@ -160,7 +220,20 @@ func EnsureSchema(ctx context.Context, db *sql.DB, migrationsDir string) error {
 		if err := MigrateDropBrokerLinkingIfNeeded(ctx, db, migrationsDir); err != nil {
 			return err
 		}
+		if err := MigrateEarningsSurpriseHistoryIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateEarningsSurpriseAnnouncedIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateStockScoreRankingsIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateStockSummaryNarrativesIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
 		log.Println("mysql: schema ok (all required tables present)")
+		CheckInnoDBBufferPool(ctx, db)
 		go migrateCandleBarsAsync(db)
 		return nil
 	}
@@ -271,6 +344,9 @@ func EnsureSchema(ctx context.Context, db *sql.DB, migrationsDir string) error {
 	if err := MigrateResearchThumbnailIfNeeded(ctx, db, migrationsDir); err != nil {
 		return err
 	}
+	if err := MigrateResearchCommentLikesIfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
 	if err := MigrateHoldingTradesIfNeeded(ctx, db, migrationsDir); err != nil {
 		return err
 	}
@@ -298,6 +374,9 @@ func EnsureSchema(ctx context.Context, db *sql.DB, migrationsDir string) error {
 	if err := MigratePerfIndexesIfNeeded(ctx, db, migrationsDir); err != nil {
 		return err
 	}
+	if err := MigrateNewsPopularIndexIfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
 	if err := MigrateEarningsEventsIfNeeded(ctx, db, migrationsDir); err != nil {
 		return err
 	}
@@ -308,6 +387,12 @@ func EnsureSchema(ctx context.Context, db *sql.DB, migrationsDir string) error {
 		return err
 	}
 	if err := MigrateDropBrokerLinkingIfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
+	if err := MigrateEarningsSurpriseHistoryIfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
+	if err := MigrateEarningsSurpriseAnnouncedIfNeeded(ctx, db, migrationsDir); err != nil {
 		return err
 	}
 	go migrateCandleBarsAsync(db)
@@ -442,5 +527,22 @@ func migrateCandleBarsAsync(db *sql.DB) {
 	defer cancel()
 	if err := MigrateCandleBarsV2IfNeeded(ctx, db); err != nil {
 		log.Printf("mysql: candle_bars migration (background): %v", err)
+		// bar_time이 DATETIME이 아니면 계층 마이그레이션의 전제가 깨진다.
+		// 롤업이 쓰는 버킷 산술이 DATETIME 함수이기 때문이다.
+		return
+	}
+	if err := MigrateCandleBarsTieringIfNeeded(ctx, db); err != nil {
+		log.Printf("mysql: candle_bars tiering migration (background): %v", err)
+		// 파티션이 준비되지 않았으면 아래 드롭도 의미가 없다.
+		return
+	}
+	// 60분봉 제거(2026-08-24). 계층 마이그레이션 **뒤에** 와야 한다 — 위에서
+	// 파티션을 새로 만드는 경우 이미 p_60m 없이 만들어지므로 이 호출은 no-op이다.
+	if err := DropCandleBars60mPartitionIfNeeded(ctx, db); err != nil {
+		log.Printf("mysql: candle_bars p_60m drop (background): %v", err)
+	}
+	// 뉴스 종목 필터 인덱스. 같은 비동기 경로에 둔다 — 부팅을 막을 이유가 없다.
+	if err := MigrateNewsSymbolsIndexIfNeeded(ctx, db); err != nil {
+		log.Printf("mysql: news symbols index (background): %v", err)
 	}
 }

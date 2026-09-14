@@ -1,3 +1,4 @@
+import { LabRailColumn } from "@/components/layout/page-rail-lab";
 import { cn } from "@/lib/utils";
 
 /**
@@ -74,7 +75,13 @@ export function PageColumns({ children, rail, leadRail, wideLead, className }: C
             {rail}
           </RailColumn>
         ) : (
-          <RailColumn sticky>{rail}</RailColumn>
+          /*
+            좌측 레일이 없는 평범한 2단 화면. 마크업은 `RailColumn sticky`와 같고,
+            **좁은 화면에서 레일을 어디에 세울지**만 레이아웃 실험대가 정한다
+            (`lib/layout-lab`). 실서비스 기본값(`stack`)에서는 예전과 한 글자도
+            다르지 않다 — 확정안이 정해지면 실험대와 함께 이 한 줄을 되돌린다.
+          */
+          <LabRailColumn>{rail}</LabRailColumn>
         ))}
     </div>
   );

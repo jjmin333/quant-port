@@ -17,7 +17,7 @@ export type AdminNewsStats = {
   usUpdated: string | null;
 };
 
-export type ApiQuotaCategory = "market" | "corp" | "news" | "translation" | "";
+export type ApiQuotaCategory = "market" | "corp" | "news" | "translation" | "llm" | "";
 
 export type ApiQuotaUsage = {
   provider: string;
@@ -47,6 +47,7 @@ export const API_QUOTA_CATEGORY_LABELS: Record<string, string> = {
   corp: "공시 · 재무",
   news: "뉴스",
   translation: "번역",
+  llm: "AI 요약",
 };
 
 function adminFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -140,6 +141,8 @@ export type StockSummaryPilotSymbolStatus = {
 export type StockSummaryStatus = {
   provider: string;
   enabled: boolean;
+  /** Distinct GEMINI_KR / GEMINI_US keys (separate RPD buckets). */
+  splitKeys?: boolean;
   symbols: StockSummaryPilotSymbolStatus[];
 };
 
@@ -210,6 +213,8 @@ export type LLMBatchMarketStatus = {
   nextDeadlineAt?: string;
   lastRun?: LLMBatchRun;
   history?: LLMBatchRun[];
+  callsRemaining: number;
+  tokensRemaining: number;
 };
 
 export type LLMBatchStatus = {
@@ -682,20 +687,89 @@ export type BatchJobRun = {
   result?: Record<string, unknown>;
 };
 
+/**
+ * 잡의 판정 상태. BE의 model.BatchHealth* 와 같은 값.
+ *
+ * 원장은 실행된 것만 알기 때문에, 실행되지 **않은** 것은 기대 시각을 따로 계산해야
+ * 보인다 — 휴장이라 안 돈 것과 죽어서 안 돈 것을 가르는 것이 이 값의 전부다.
+ */
+export type BatchHealth =
+  | "ok"
+  | "pending"
+  | "late"
+  | "failed"
+  | "stuck"
+  | "unmanaged";
+
+export const BATCH_HEALTH_LABELS: Record<BatchHealth, string> = {
+  ok: "정상",
+  pending: "대기",
+  late: "지연",
+  failed: "실패",
+  stuck: "멈춤",
+  unmanaged: "예약 없음",
+};
+
+/** 사람이 봐야 하는 상태인가. BE의 BatchHealthNeedsAttention과 같은 기준. */
+export function batchHealthNeedsAttention(health?: string): boolean {
+  return health === "late" || health === "failed" || health === "stuck";
+}
+
 export type BatchJobStatus = {
   spec: BatchJobSpec;
   lastRun?: BatchJobRun;
   running: boolean;
   coverage?: Record<string, unknown>;
+  health?: BatchHealth;
+  /** 이 잡이 가장 최근에 돌았어야 하는 시각. 예약이 없으면 없다. */
+  expectedAt?: string;
+};
+
+export type BatchJobHealth = {
+  jobId: string;
+  label: string;
+  health: BatchHealth;
+  expectedAt?: string;
+  lastSuccessAt?: string;
+  lastRunAt?: string;
+  lastStatus?: string;
+  message?: string;
+  lateBySeconds?: number;
+};
+
+export type BatchHealthReport = {
+  computedAt: string;
+  jobs: BatchJobHealth[];
+  unhealthy: number;
+  staleAfterSeconds: number;
+};
+
+/**
+ * report는 **읽는 순간 계산한** 판정이고, watchdog* 은 저장된 마지막 판정의 나이다.
+ * 워치독이 죽어도 판정은 옳게 나오되, 감시가 멈췄다는 사실을 함께 띄울 수 있어야 한다.
+ */
+export type BatchHealthView = {
+  report: BatchHealthReport;
+  watchdogAgeSeconds?: number;
+  watchdogStale: boolean;
 };
 
 export type BatchJobsResponse = {
   jobs: BatchJobStatus[];
   history: BatchJobRun[];
+  health?: BatchHealthView;
 };
 
 export function fetchAdminBatchJobs(): Promise<BatchJobsResponse> {
   return adminFetch<BatchJobsResponse>("/api/v1/admin/batch/jobs");
+}
+
+/**
+ * 판정만 가져오는 가벼운 입구 — 사이드바 뱃지가 모든 화면에서 주기적으로 부른다.
+ * 목록·커버리지·이력이 딸려 오는 fetchAdminBatchJobs와 용도가 다르다.
+ */
+export function fetchAdminBatchHealth(): Promise<BatchHealthView> {
+  return adminFetch<BatchHealthView>("/api/v1/admin/batch/health");
 }
 
 export function runAdminBatchJob(input: {
@@ -735,4 +809,71 @@ export function saveAdminBatchSchedule(markdown: string): Promise<BatchScheduleD
     method: "PUT",
     body: JSON.stringify({ markdown }),
   });
+}
+
+/* ---------------------------------------------------------------------------
+   종목 별칭 (`/admin/aliases`) — 2026-09-14 사용자 요청 1
+
+   무엇을 담는 표인지는 BE `migrations/070_stock_aliases.sql` 머리글에 있다.
+   화면이 알아야 하는 것은 갈래가 둘이고 대상의 뜻이 갈래마다 다르다는 것 하나다.
+--------------------------------------------------------------------------- */
+
+/** 갈래. BE `repository.AliasKinds`와 같은 값이어야 한다. */
+export type StockAliasKind = "brand" | "symbol";
+
+export type StockAlias = {
+  id: number;
+  alias: string;
+  kind: StockAliasKind;
+  /** brand면 영문 표기(소문자), symbol이면 종목 심볼(대문자). */
+  target: string;
+  /** seed(마이그레이션) · toss(배치) · manual(사람). 화면은 지우기 경고에 쓴다. */
+  source: string;
+  note: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type StockAliasList = {
+  items: StockAlias[];
+  /** 켜진 행의 수. 기동 로그가 말하는 수와 같은 것을 센다. */
+  summary: { brand: number; symbol: number; disabled: number };
+};
+
+export type StockAliasInput = {
+  alias: string;
+  kind: StockAliasKind;
+  target: string;
+  note?: string;
+  enabled?: boolean;
+};
+
+export function fetchAdminStockAliases(params: {
+  kind?: StockAliasKind | "";
+  q?: string;
+}): Promise<StockAliasList> {
+  const search = new URLSearchParams();
+  if (params.kind) search.set("kind", params.kind);
+  if (params.q?.trim()) search.set("q", params.q.trim());
+  const qs = search.toString();
+  return adminFetch<StockAliasList>(`/api/v1/admin/aliases${qs ? `?${qs}` : ""}`);
+}
+
+export function createAdminStockAlias(input: StockAliasInput): Promise<StockAlias> {
+  return adminFetch<StockAlias>("/api/v1/admin/aliases", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateAdminStockAlias(id: number, input: StockAliasInput): Promise<StockAlias> {
+  return adminFetch<StockAlias>(`/api/v1/admin/aliases/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteAdminStockAlias(id: number): Promise<void> {
+  await adminFetch<{ id: number }>(`/api/v1/admin/aliases/${id}`, { method: "DELETE" });
 }

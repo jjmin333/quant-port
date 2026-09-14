@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { earningsEventKey } from "@/components/earnings/earnings-shared";
 import type { EarningsCalendarEvent, EarningsEvent } from "@/lib/earnings-types";
 import { formatFinancialAmount } from "@/lib/format";
 
@@ -62,10 +63,10 @@ export function EarningsQuarterBars({
   return (
     <div>
       <div className="mb-1 flex items-baseline justify-between">
-        <p className="text-[11px] font-semibold">
+        <p className="text-cell font-semibold">
           분기 추이 — {metric === "eps" ? "EPS" : "영업이익"}
         </p>
-        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-2 text-micro text-muted-foreground">
           <Legend className="bg-muted-foreground/35" label="기대" />
           <Legend className="bg-[var(--profit)]" label="발표" />
           {next && <Legend dashed label="다음 발표" />}
@@ -73,11 +74,14 @@ export function EarningsQuarterBars({
       </div>
 
       <div className="flex items-end gap-1.5">
-        {bars.map((bar) => {
+        {bars.map((bar, i) => {
           const beat =
             bar.estimate != null && bar.actual != null ? bar.actual >= bar.estimate : true;
           return (
-            <div key={bar.label} className="flex min-w-0 flex-1 flex-col items-center gap-1">
+            <div
+              key={`${earningsEventKey(bar.event)}|${i}`}
+              className="flex min-w-0 flex-1 flex-col items-center gap-1"
+            >
               <div className="relative flex h-[96px] w-full items-end justify-center">
                 {/* 0 기준선 — 적자 분기가 있을 때만 의미가 있다. */}
                 {min < 0 && (
@@ -108,7 +112,7 @@ export function EarningsQuarterBars({
                   />
                 </div>
               </div>
-              <p className="truncate font-mono text-[9px] text-muted-foreground">{bar.label}</p>
+              <p className="truncate font-num text-micro text-muted-foreground">{bar.label}</p>
             </div>
           );
         })}
@@ -122,11 +126,11 @@ export function EarningsQuarterBars({
                 title={`${next.date} ${next.label}${next.estimateBasis ? ` · ${next.estimateBasis}` : ""}`}
               />
             </div>
-            <p className="truncate font-mono text-[9px] text-[var(--sample)]">다음</p>
+            <p className="truncate font-num text-micro text-[var(--sample)]">다음</p>
           </div>
         )}
       </div>
-      <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">
+      <p className="mt-1.5 text-micro leading-relaxed text-muted-foreground">
         굵은 막대가 <b>발표치</b>, 뒤 넓은 막대가 <b>컨센서스</b>입니다. 발표가 기대를 밑돈
         분기는 막대 색이 파랑입니다.
       </p>
@@ -184,7 +188,7 @@ function value(
   metric: "eps" | "opIncome",
   side: "estimate" | "actual",
 ): number | undefined {
-  return metric === "eps" ? event.eps[side] : event.opIncome[side];
+  return metric === "eps" ? event.eps?.[side] : event.opIncome?.[side];
 }
 
 function fmt(value: number | null | undefined, metric: "eps" | "opIncome", currency: string): string {

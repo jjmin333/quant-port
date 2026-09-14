@@ -160,8 +160,8 @@ export function HoldingsAllocationCard({
   if (!totals?.canTotalAssets || slices.length === 0) {
     return (
       <Card className="p-3">
-        <p className="mb-2 text-xs font-semibold">구성</p>
-        <p className="py-8 text-center text-[11px] text-muted-foreground">
+        <p className="mb-2 text-cell font-semibold">구성</p>
+        <p className="py-8 text-center text-cell text-muted-foreground">
           {totals && !totals.canTotalAssets
             ? "환율을 불러오는 중이라 비중을 계산하지 못했습니다"
             : "표시할 자산이 없습니다"}
@@ -173,7 +173,7 @@ export function HoldingsAllocationCard({
   return (
     <Card className="p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-semibold">구성</p>
+        <p className="text-cell font-semibold">구성</p>
         <div className="flex items-center gap-0.5 rounded-md bg-muted p-0.5">
           {(
             [
@@ -188,7 +188,7 @@ export function HoldingsAllocationCard({
               onClick={() => setMode(value)}
               aria-pressed={mode === value}
               className={cn(
-                "rounded px-2 py-0.5 text-[11px] transition-colors",
+                "rounded px-2 py-0.5 text-cell transition-colors",
                 mode === value
                   ? "bg-card font-semibold text-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground",
@@ -236,14 +236,14 @@ export function HoldingsAllocationCard({
 
         <ul className="min-w-0 flex-1 basis-40">
           {slices.map((s) => (
-            <li key={s.key} className="flex min-w-0 items-center gap-2 py-0.5 text-[11px]">
+            <li key={s.key} className="flex min-w-0 items-center gap-2 py-0.5 text-cell">
               <span
                 className="size-2 shrink-0 rounded-[2px]"
                 style={{ backgroundColor: s.color }}
                 aria-hidden
               />
               <span className="min-w-0 flex-1 truncate">{s.label}</span>
-              <b className="shrink-0 font-mono tabular-nums">{s.pct.toFixed(1)}%</b>
+              <b className="shrink-0 font-num tabular-nums">{s.pct.toFixed(1)}%</b>
             </li>
           ))}
         </ul>
@@ -287,8 +287,8 @@ export function HoldingsAllocationCard({
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex min-w-0 items-center justify-between gap-2 py-0.5">
-      <span className="shrink-0 text-[11px] text-muted-foreground">{label}</span>
-      <b className="min-w-0 truncate font-mono text-[11px] tabular-nums">{value}</b>
+      <span className="shrink-0 text-cell text-muted-foreground">{label}</span>
+      <b className="min-w-0 truncate font-num text-cell tabular-nums">{value}</b>
     </div>
   );
 }

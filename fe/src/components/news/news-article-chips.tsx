@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { NewsSymbolChips } from "@/components/news/news-symbol-chips";
+import { useQuickLook } from "@/components/providers/quick-look-provider";
 import {
   articleDashboardIndexIds,
   dashboardIndexLabel,
@@ -48,6 +49,7 @@ export function articleChipTotalCount(article: NewsArticle, indices: MarketIndex
 export function NewsArticleChips({
   article,
   quotes,
+  quotesLoading = false,
   indices,
   max = 3,
   className,
@@ -56,6 +58,7 @@ export function NewsArticleChips({
 }: {
   article: NewsArticle;
   quotes: Map<string, QuoteSummary>;
+  quotesLoading?: boolean;
   indices: MarketIndex[];
   max?: number;
   className?: string;
@@ -64,6 +67,9 @@ export function NewsArticleChips({
   /** 숨긴 칩 개수를 +N으로 표시한다. */
   overflowHint?: boolean;
 }) {
+  /* 지수 칩도 종목 칩과 같은 규칙 — 평범한 클릭은 창을 연다(news-symbol-chips 참조). */
+  const quickLook = useQuickLook();
+
   const allIndexRows = articleIndexRows(article, indices);
   const allSymbols = articleSymbolList(article);
   const indexRows = allIndexRows.slice(0, max);
@@ -73,7 +79,13 @@ export function NewsArticleChips({
     ? allIndexRows.length + allSymbols.length - indexRows.length - symbols.length
     : 0;
 
-  if (indexRows.length === 0 && symbols.length === 0) {
+  /*
+    칩이 한 개도 안 들어가는 줄이 있다 — 폭이 모자라면 `measureMetaChipLayout`이 0을
+    준다(2026-09-05). 그때도 **「+N」은 남긴다**: 「+11 · 11분 전」은 이 기사에 종목이
+    열한 개 걸려 있다는 사실을 말하지만, 아무것도 안 그리면 그 기사만 유독 종목이
+    없는 기사처럼 보인다.
+  */
+  if (indexRows.length === 0 && symbols.length === 0 && hiddenCount === 0) {
     return null;
   }
 
@@ -84,16 +96,22 @@ export function NewsArticleChips({
           key={id}
           href="/market"
           data-meta-chip=""
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!quickLook) return;
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+            e.preventDefault();
+            quickLook.openIndex(id);
+          }}
           className={cn(
-            "inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-1.5 py-px text-[10px] hover:border-[var(--brand)]",
+            "inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-1.5 py-px text-micro hover:border-[var(--brand)]",
             chipClassName,
           )}
         >
           <span className="truncate text-[var(--text-secondary)]">{dashboardIndexLabel(id)}</span>
           <span
             className={cn(
-              "shrink-0 font-mono font-bold tabular-nums",
+              "shrink-0 font-num font-bold tabular-nums",
               trendTextClass(index.changeRate),
             )}
           >
@@ -105,13 +123,20 @@ export function NewsArticleChips({
         <NewsSymbolChips
           symbols={symbols}
           quotes={quotes}
+          quotesLoading={quotesLoading}
           max={symbolMax}
           chipClassName={chipClassName}
-          className="min-w-0 flex-nowrap"
+          /*
+            `flex-nowrap` 이라 칩이 줄바꿈하지 않는데, 넘치는 만큼을 잘라 주지 않으면
+            **부모 밖으로 밀고 나간다** — 390px에서 종목 칩이 x=416까지 나갔고 그 줄에는
+            가로 스크롤 컨테이너도 없어 닿을 수 없었다. 넘친 칩은 잘라 낸다. 몇 개가
+            더 있는지는 옆의 `+N`이 이미 말해 준다.
+          */
+          className="min-w-0 flex-nowrap overflow-hidden"
         />
       )}
       {hiddenCount > 0 && (
-        <span className="shrink-0 text-[10px] text-[var(--text-muted)]">+{hiddenCount}</span>
+        <span className="shrink-0 text-micro text-[var(--text-muted)]">+{hiddenCount}</span>
       )}
     </div>
   );

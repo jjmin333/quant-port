@@ -76,7 +76,7 @@ export function WatchlistCell({
     <span className={cn(WL_CELL_H, WL_CELL_PAD, className)} title={title}>
       <span
         className={cn(
-          "block h-[19px] truncate text-[13px] font-semibold leading-[19px] tabular-nums",
+          "block h-[19px] truncate text-note font-semibold leading-[19px] tabular-nums",
           valueClassName,
         )}
       >
@@ -84,7 +84,7 @@ export function WatchlistCell({
       </span>
       <span
         className={cn(
-          "block h-[13px] truncate text-[10px] leading-[13px] text-[var(--text-muted)]",
+          "block h-[13px] truncate text-micro leading-[13px] text-[var(--text-muted)]",
           subClassName,
         )}
       >
@@ -128,7 +128,7 @@ export function WatchlistListHeader() {
         WL_ROW_OUTER,
         // 좌우 13px = 행의 `px-3`(12px) + 카드 테두리 1px. 12px로 두면 헤더 라벨이
         // 행의 값보다 정확히 1px 왼쪽에 서고, 표에서는 그 1px이 보인다.
-        "border-b px-[13px] pb-2 text-[10px] font-semibold tracking-wide text-[var(--text-muted)]",
+        "border-b px-[13px] pb-2 text-micro font-semibold tracking-wide text-[var(--text-muted)]",
       )}
       aria-hidden
     >

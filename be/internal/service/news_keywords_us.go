@@ -8,6 +8,7 @@ import (
 
 	"github.com/enact/quant-port/be/internal/marketdata"
 	"github.com/enact/quant-port/be/internal/model"
+	"github.com/enact/quant-port/be/internal/repository"
 )
 
 const (
@@ -23,12 +24,30 @@ var defaultUSPollSymbols = []string{
 	"SPY", "QQQ", "DIA",
 }
 
-// usNewsNameAliases — 한국어 헤드라인에서 흔히 쓰는 미국 종목 별칭.
-var usNewsNameAliases = map[string]string{
-	"마이크론": "MU", "마이크론테크놀로지": "MU",
-	"애플": "AAPL", "마이크로소프트": "MSFT", "엔비디아": "NVDA", "구글": "GOOGL",
-	"아마존": "AMZN", "메타": "META", "테슬라": "TSLA", "인텔": "INTC",
-	"퀄컴": "QCOM", "넷플릭스": "NFLX", "코인베이스": "COIN",
+/*
+usNewsNameAliases — 한국어 헤드라인에서 흔히 쓰는 미국 종목 별칭.
+
+# 손으로 적은 13개에서 표로 옮겼다 (2026-09-13 사용자 요청 1·4)
+
+예전에는 이 자리에 13개짜리 map 리터럴이 있었다. 그 목록에 「구글」은 있는데
+**「알파벳」은 없었고**, 늘리려면 배포를 해야 했다. 지금은 `stock_aliases` 표가
+출처이고(migration 070, 씨앗 120개) 여기서는 그 스냅샷을 읽는다 — 매칭은 여전히
+메모리에서 한다(기사 제목마다 훑는 자리라 SQL을 넣으면 느려진다).
+
+`repository.PrimarySymbolNameAliases()`가 사본을 주므로, 부르는 쪽이 지도를 고쳐도
+캐시가 망가지지 않는다. 다만 **한 번 부르고 그 사본을 쓴다** — 반복문 안에서 부르면
+기사마다 map 하나를 새로 만든다.
+
+# 왜 「대표」만인가 (2026-09-14 사용자 요청 1)
+
+표는 한 별칭에 대상을 여럿 담을 수 있게 됐다 — 「구글」에 GOOGL과 GOOG을 함께
+달 수 있다. 검색은 그 전부를 쓰지만 **태깅은 하나만 쓴다.** 여기서 둘을 다 붙이면
+「구글 실적 발표」 한 줄에 같은 회사가 두 번 서고 시세도 두 벌이 붙는데, 기사는
+회사 이야기이지 주식 종류 이야기가 아니다. 근거는 `PrimarySymbolNameAliases`
+머리글에 있고, 이 파일이 사는 「정밀도가 재현율보다 중요하다」 규칙의 연장이다.
+*/
+func usNewsNameAliases() map[string]string {
+	return repository.PrimarySymbolNameAliases()
 }
 
 func (st *NewsStore) trackedUSSymbols(ctx context.Context) []string {
@@ -238,6 +257,8 @@ func (st *NewsStore) extractUSSymbols(ctx context.Context, text string) []string
 	textLower := strings.ToLower(text)
 	st.mu.RLock()
 	idx := st.usNameIndex
+	tickers := st.usTickerIndex
+	aliases := st.usAliases
 	gen := st.usNameIndexGen
 	st.mu.RUnlock()
 
@@ -266,10 +287,22 @@ func (st *NewsStore) extractUSSymbols(ctx context.Context, text string) []string
 			add(sym)
 		}
 	}
+	/*
+		티커는 **원문 대소문자 그대로** 본다 — 티커는 대문자로 쓰이고, 소문자로
+		내려서 찾으면 "amid"·"high"·"move" 같은 평범한 낱말이 종목이 된다
+		(usTickerIndex 주석). 카탈로그 전 종목이 여기 들어 있으므로,
+		예전처럼 관심·보유 목록에 담긴 종목만 티커로 잡히던 제약도 사라진다.
+	*/
+	for ticker, sym := range tickers {
+		if usTickerTokenMatch(text, ticker) {
+			add(sym)
+		}
+	}
 	for _, sym := range st.usIndexSymbols(ctx) {
-		// 원문 대소문자 그대로 본다 — 티커는 대문자로 쓰이고, 소문자로 내려서
-		// 찾으면 "v"가 v 들어간 모든 단어에 걸린다(Visa가 기사 절반에 붙던 원인).
-		if usTickerTokenMatch(text, strings.ToUpper(sym)) {
+		// 관심·보유 종목은 카탈로그에 없어도 잡는다. 낱말 티커는 여기서도 막는다 —
+		// 누가 MOVE를 관심종목에 담았다고 "move"가 종목이 되면 안 된다.
+		up := strings.ToUpper(sym)
+		if !isWordLikeTicker(up) && usTickerTokenMatch(text, up) {
 			add(sym)
 		}
 	}
@@ -281,7 +314,9 @@ func (st *NewsStore) extractUSSymbols(ctx context.Context, text string) []string
 	for _, sym := range marketdata.ExtractCashtags(text) {
 		add(sym)
 	}
-	for alias, sym := range usNewsNameAliases {
+	// 별칭은 인덱스에도 들어가 있지만(아래 rebuildUSNameIndex), 인덱스가 아직
+	// 안 만들어졌을 때에도 「구글」은 잡혀야 한다 — 그 창이 이 반복문이다.
+	for alias, sym := range aliases {
 		if nameTokenMatch(textLower, alias) {
 			add(sym)
 		}
@@ -325,17 +360,28 @@ func (st *NewsStore) ensureUSNameIndex(ctx context.Context) {
 	}
 }
 
-func addUSNameIndexKeys(idx map[string]string, sym, englishName, localName string) {
+/*
+addUSNameIndexKeys — 한 종목이 본문에서 어떻게 불릴 수 있는지를 두 인덱스에 적는다.
+
+`names`는 **소문자 이름**, `tickers`는 **대문자 티커**다. 갈라 둔 이유는
+NewsStore.usTickerIndex 주석에 있다 — 한 줄로 줄이면, 티커를 소문자 이름 인덱스에
+넣으면 「amid」·「high」·「move」 같은 평범한 낱말이 종목이 된다.
+
+`tickers`가 nil이면 티커는 적지 않는다(이름만 필요한 호출자용).
+*/
+func addUSNameIndexKeys(idx, tickers map[string]string, sym, englishName, localName string) {
 	sym = strings.ToUpper(strings.TrimSpace(sym))
 	if sym == "" {
 		return
 	}
-	// 티커 자체는 **이름 인덱스에 넣지 않는다.** 예전에는 넣었고, 이름 인덱스는
-	// 경계 없는 부분 문자열로 맞추기 때문에 티커 "V"가 키 "v"가 되어 알파벳 v가
-	// 든 모든 기사에 Visa를 붙였다. 티커 매칭은 usTickerTokenMatch가 원문
-	// 대문자에 경계까지 보고 따로 처리한다.
-	if len(sym) >= usNameMinLen {
-		idx[strings.ToLower(sym)] = sym
+	/*
+		티커는 **대문자 인덱스**로 간다. 자유 본문에서 매치해도 되는 것만 —
+		흔한 영어 낱말과 같은 티커(AMID·HIGH·MOVE…)는 여기 안 들어가고
+		`$AMID`·`NASDAQ: AMID` 같은 명시 표기로만 붙는다
+		(`isWordLikeTicker` · news_symbol_wordlike.go).
+	*/
+	if tickers != nil && !isWordLikeTicker(sym) {
+		tickers[sym] = sym
 	}
 
 	addNameToken := func(name string) {
@@ -343,30 +389,90 @@ func addUSNameIndexKeys(idx map[string]string, sym, englishName, localName strin
 		if len(name) < usNameMinLen {
 			return
 		}
-		idx[name] = sym
+		/*
+			**이름이 티커 그 자체이면 이름 인덱스에 넣지 않는다** (2026-09-13).
+
+			위 티커 인덱스는 「흔한 영어 낱말과 같은 티커」를 빼 두는데, 소스가
+			이름 칸에도 같은 문자열을 주면 그 방어가 **이름 쪽 문으로 우회된다.**
+			실측: AMID(ARGENT MID CAP ETF)의 `stocks.name`이 그냥 「AMID」라서
+			이름 키 `amid`가 색인됐고, "OpenAI delaying IPO **amid** AI safety
+			concerns" 기사에 그 ETF가 붙었다(09-12~13 이틀에 20건).
+
+			그 종목을 잃지 않는다 — `$AMID`·`NASDAQ: AMID` 같은 명시 표기로는
+			그대로 붙는다. 빠지는 것은 **자유 본문 매치 하나**뿐이고, 그게 바로
+			`isWordLikeTicker`가 애초에 막으려던 것이다.
+		*/
+		if !strings.EqualFold(name, sym) || !isWordLikeTicker(sym) {
+			addIdxKey(idx, name, sym)
+		}
 		if cut := strings.IndexAny(name, ",("); cut > 0 {
 			token := strings.TrimSpace(name[:cut])
 			if len(token) >= usNameMinLen {
-				idx[token] = sym
+				addIdxKey(idx, token, sym)
 			}
 		}
 		// 헤드라인은 "Visa Inc."가 아니라 "Visa"라고 쓴다. 법인 접미사를 뗀
 		// 형태도 넣어 둔다 — 경계 검사는 그대로 걸리므로 정밀도는 유지된다.
 		short := trimCorporateSuffix(name)
 		if short != name && len(short) >= usNameMinLen {
-			idx[short] = sym
+			addIdxKey(idx, short, sym)
 		}
 		// 도메인·클래스 꼬리(`amazon.com`·`alphabet a`)도 같은 이유로 뗀다.
 		// 이게 없으면 "Amazon rising"이라고만 쓴 기사에 AMZN이 영원히 안 붙는다.
 		if bare := trimHeadlineNameTail(short); bare != short && len(bare) >= usNameMinLen {
-			idx[bare] = sym
+			addIdxKey(idx, bare, sym)
 		}
 	}
 
 	addNameToken(englishName)
-	if local := strings.TrimSpace(localName); local != "" && !containsHangul(local) {
-		addNameToken(local)
+	local := strings.TrimSpace(localName)
+	if local == "" {
+		return
 	}
+	if !containsHangul(local) {
+		addNameToken(local)
+		return
+	}
+	/*
+		**한국어 이름도 색인한다** (2026-09-12 사용자 요청 2).
+
+		예전에는 한글 이름을 통째로 버렸다. 그래서 「알파벳 A 주가」라고 쓴 기사에
+		GOOGL이 붙지 않았고, 손으로 적은 별칭 13개(`usNewsNameAliases`)가 그 구멍을
+		메우고 있었다 — 그 목록에 `구글`은 있고 **`알파벳 A`·`알파벳 C`는 없었다.**
+
+		그런데 이름의 출처는 이미 우리 DB에 있다: `stocks.name`은 토스가 준 한국어
+		종목명이고 주식 종류까지 들어 있다(GOOGL=알파벳 A · GOOG=알파벳 C ·
+		BRK.A=버크셔 해서웨이 A). 손으로 적을 것이 아니라 **가진 것을 쓰면 된다.**
+
+		# 왜 이제 안전한가
+
+		한글 이름의 위험은 「더 긴 낱말의 머리로 걸리는 것」인데, 그 판정은 이미
+		국내 종목이 쓰는 `nameTokenMatch`가 한다 — 이름 뒤에는 **조사로 쓰이는 음절만**
+		통과하므로 「애플리케이션」(리)·「메타버스」(버)·「비자 발급」(발)이 전부 막힌다.
+		즉 국내 13,000종목이 이미 통과하고 있는 규칙을 US에도 적용하는 것이다.
+
+		남는 위험은 **이름 자체가 일상어인 경우**이고(비자), 그건 국내와 같은 방식으로
+		목록에서 뺀다(`ambiguousUSLocalNames`).
+	*/
+	if _, ambiguous := ambiguousUSLocalNames[local]; ambiguous {
+		return
+	}
+	addIdxKey(idx, strings.ToLower(local), sym)
+}
+
+/*
+ambiguousUSLocalNames — 한국어 이름이 **일상어와 같은** 미국 종목.
+
+국내의 `ambiguousDomesticNames`와 같은 이유로 있다. 다른 점은 국내에는 6자리 코드가
+있어 「코드가 같이 나오면 인정」이 가능한데 US에는 그 장치가 없다는 것이다 — 그래서
+여기 있는 이름은 **색인하지 않는다.** 그 종목은 티커(`V`)와 영어 이름(`Visa`)으로
+붙으므로 재현율 손해가 크지 않고, 「비자 발급」 기사에 결제회사가 붙는 것보다 낫다.
+
+조사 규칙(`koreanParticleStarts`)이 이미 막는 것은 여기 넣지 않는다 — 「메타버스」는
+`버`가 조사가 아니어서 통과하지 못하므로 `메타`는 안전하다.
+*/
+var ambiguousUSLocalNames = map[string]struct{}{
+	"비자": {}, // V — 「비자 발급」·「비자 면제」
 }
 
 func (st *NewsStore) rebuildUSNameIndex(ctx context.Context) {
@@ -381,10 +487,11 @@ func (st *NewsStore) rebuildUSNameIndex(ctx context.Context) {
 		return
 	}
 	idx := make(map[string]string, len(symbols)*4)
+	tickers := make(map[string]string, len(symbols))
 	if st.stocks != nil {
 		if catalog, err := st.stocks.ListUSNameCatalog(ctx); err == nil && len(catalog) > 0 {
 			for _, s := range catalog {
-				addUSNameIndexKeys(idx, s.Symbol, s.EnglishName, s.Name)
+				addUSNameIndexKeys(idx, tickers, s.Symbol, s.EnglishName, s.Name)
 			}
 		} else {
 			stocks, err := st.stocks.ListBySymbols(ctx, symbols)
@@ -393,19 +500,22 @@ func (st *NewsStore) rebuildUSNameIndex(ctx context.Context) {
 					if s.Currency != model.CurrencyUSD {
 						continue
 					}
-					addUSNameIndexKeys(idx, s.Symbol, s.EnglishName, s.Name)
+					addUSNameIndexKeys(idx, tickers, s.Symbol, s.EnglishName, s.Name)
 				}
 			}
 		}
 	}
-	for alias, sym := range usNewsNameAliases {
+	aliases := usNewsNameAliases()
+	for alias, sym := range aliases {
 		idx[strings.ToLower(alias)] = sym
 	}
 	for _, sym := range symbols {
-		addUSNameIndexKeys(idx, sym, "", "")
+		addUSNameIndexKeys(idx, tickers, sym, "", "")
 	}
 	st.mu.Lock()
 	st.usNameIndex = idx
+	st.usTickerIndex = tickers
+	st.usAliases = aliases
 	st.usNameIndexAt = time.Now()
 	// 새 인덱스는 같은 본문에도 다른 심볼을 붙일 수 있다. 세대를 올려 예전 결과가
 	// 조용히 재사용되지 않게 한다 (usSymbolMemo).

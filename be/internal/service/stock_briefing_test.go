@@ -10,17 +10,17 @@ func f64(v float64) *float64 { return &v }
 
 func briefingTechnicals() *TechnicalIndicators {
 	return &TechnicalIndicators{
-		LastClose:       f64(1000),
-		SMA20:           f64(1100),
-		SMA50:           f64(1250),
-		SMA200:          f64(1500),
-		RSI14:           f64(37.7),
-		MACD:            f64(1.05),
-		MACDSignal:      f64(1.0),
-		High52Week:      f64(2050),
-		Low52Week:       f64(900),
-		RecentSwingHigh: f64(1180),
-		RecentSwingLow:  f64(950),
+		LastClose:         f64(1000),
+		SMA20:             f64(1100),
+		SMA50:             f64(1250),
+		SMA200:            f64(1500),
+		RSI14:             f64(37.7),
+		MACD:              f64(1.05),
+		MACDSignal:        f64(1.0),
+		High52Week:        f64(2050),
+		Low52Week:         f64(900),
+		RecentSwingHigh:   f64(1180),
+		RecentSwingLow:    f64(950),
 		PctFromHigh52Week: f64(-51.2),
 	}
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, type ReactNode } from "react";
 import type {
   EarningsDateStatus,
   EarningsEvent,
@@ -9,6 +10,7 @@ import type {
 } from "@/lib/earnings-types";
 import { formatFinancialAmount } from "@/lib/format";
 import { formatShortDate } from "@/lib/earnings-range";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 /**
@@ -48,11 +50,12 @@ export const DATE_STATUS_META: Record<
 
 export function DateStatusBadge({ status }: { status: EarningsDateStatus }) {
   const meta = DATE_STATUS_META[status];
+  if (!meta) return null;
   return (
     <span
       title={meta.title}
       className={cn(
-        "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none",
+        "shrink-0 rounded-full px-1.5 py-0.5 text-micro font-medium leading-none",
         meta.className,
       )}
     >
@@ -71,7 +74,7 @@ const SESSION_LABEL: Record<EarningsSession, string> = {
 export function SessionBadge({ session }: { session?: EarningsSession }) {
   if (!session) return null;
   return (
-    <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] leading-none text-muted-foreground">
+    <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-micro leading-none text-muted-foreground">
       {SESSION_LABEL[session]}
     </span>
   );
@@ -110,7 +113,7 @@ export function SurpriseValue({
     return (
       <span
         className={cn("font-medium text-[var(--text-secondary)]", className)}
-        title={`${SURPRISE_METRIC_LABEL[surprise.metric]} 기준치가 0 이하라 증감률을 낼 수 없습니다`}
+        title={`${SURPRISE_METRIC_LABEL[surprise.metric] ?? "실적"} 기준치가 0 이하라 증감률을 낼 수 없습니다`}
       >
         {surprise.label || "—"}
       </span>
@@ -122,15 +125,15 @@ export function SurpriseValue({
       // 상승=빨강. 이 앱 전체 규칙이라 여기서 뒤집으면 같은 색이 화면마다 다른
       // 뜻을 갖게 된다.
       className={cn(
-        "font-mono font-semibold tabular-nums",
+        "font-num font-semibold tabular-nums",
         up ? "text-[var(--profit)]" : "text-[var(--loss)]",
         className,
       )}
-      title={`${SURPRISE_METRIC_LABEL[surprise.metric]} 컨센서스 대비`}
+        title={`${SURPRISE_METRIC_LABEL[surprise.metric] ?? "실적"} 컨센서스 대비`}
     >
       {up ? "+" : ""}
       {surprise.pct.toFixed(1)}%
-      {surprise.label ? <span className="ml-1 text-[10px] font-normal">{surprise.label}</span> : null}
+      {surprise.label ? <span className="ml-1 text-micro font-normal">{surprise.label}</span> : null}
     </span>
   );
 }
@@ -153,7 +156,7 @@ export function EstimateActualPair({
       ? `${currency === "USD" ? "$" : ""}${v.toFixed(2)}`
       : formatFinancialAmount(v, currency === "USD" ? "USD" : "KRW");
   return (
-    <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+    <span className="font-num text-cell tabular-nums text-muted-foreground">
       기대 {render(surprise.estimate)} → {render(surprise.actual)}
     </span>
   );
@@ -164,20 +167,35 @@ export function eventName(event: EarningsEvent): string {
   return event.name || event.symbol;
 }
 
+/** `110,000원`, `$110.00` — 등락률만으로는 1년 전 주가 수준을 알 수 없어 실제 종가를 함께 적는다. */
+function formatReactionPrice(value: number, currency: string): string {
+  if (currency === "USD") return `$${value.toFixed(2)}`;
+  return `${Math.round(value).toLocaleString("ko-KR")}원`;
+}
+
 /**
- * 발표 후 첫 세션의 주가 반응 — `↗ +13.4%`.
+ * 발표 후 첫 세션의 주가 반응 — `110,000원 ↗ +13.4%`.
  *
  * **없을 때 `0%`가 아니라 「집계 중」이다.** 인접 거래일 종가가 없으면 서버가
  * 값을 내지 않는데(최근 세션 종가 커버리지가 얇다), 0%로 그리면 「시장이
  * 반응하지 않았다」는 전혀 다른 말이 된다.
+ *
+ * 등락률만 있으면 오래된 발표를 볼 때 그 시점 주가 수준을 알 수 없다 — 실제
+ * 종가(`reaction.close`)를 등락률 앞에 함께 적는다.
+ *
+ * 계산 안내는 **호버(PC) · 탭(모바일)** 으로만 연다. 표 행 클릭과 겹치지 않게
+ * 트리거에서 전파를 끊는다. 네이티브 `title`은 모바일에 없고 PC도 내용이 짧아
+ * 쓰지 않는다.
  */
 export function ReactionValue({
   reaction,
   status,
+  currency,
   className,
 }: {
   reaction?: EarningsReaction;
   status: EarningsDateStatus;
+  currency: string;
   className?: string;
 }) {
   // 예정·추정 발표에는 반응이 있을 수 없다. 「집계 중」이라고 적으면 곧 나온다는
@@ -187,33 +205,124 @@ export function ReactionValue({
   }
   if (!reaction) {
     return (
-      <span
-        className={cn("text-[10px] text-muted-foreground", className)}
-        title="발표 직후 거래일의 종가가 아직 없습니다"
+      <EarningsHint
+        className={className}
+        content={
+          <>
+            <p>발표 직후 거래일의 종가가 아직 없습니다.</p>
+            <p className="mt-1">
+              국내는 발표일 종가와 다음 거래일 종가를 비교하고, 그 종가가 들어오면
+              이 칸이 채워집니다.
+            </p>
+          </>
+        }
       >
-        집계 중
-      </span>
+        <span className="text-micro text-muted-foreground">집계 중</span>
+      </EarningsHint>
     );
   }
   const up = reaction.pct >= 0;
   return (
-    <span
-      className={cn(
-        "font-mono font-semibold tabular-nums",
-        up ? "text-[var(--profit)]" : "text-[var(--loss)]",
-        className,
-      )}
-      title={reactionTitle(reaction)}
-    >
-      {up ? "↗" : "↘"} {up ? "+" : ""}
-      {reaction.pct.toFixed(1)}%
-    </span>
+    <EarningsHint className={className} content={reactionHint(reaction)}>
+      <span className="font-num tabular-nums">
+        <span className="font-semibold">{formatReactionPrice(reaction.close, currency)}</span>{" "}
+        <span
+          className={cn("font-semibold", up ? "text-[var(--profit)]" : "text-[var(--loss)]")}
+        >
+          {up ? "↗" : "↘"} {up ? "+" : ""}
+          {reaction.pct.toFixed(1)}%
+        </span>
+      </span>
+    </EarningsHint>
   );
 }
 
-function reactionTitle(reaction: EarningsReaction): string {
-  const when = reaction.basis === "sameDay" ? "발표 당일(장전 발표)" : "다음 거래일";
-  return `${when} 종가 기준 · ${formatShortDate(reaction.baseDate)} → ${formatShortDate(reaction.date)}`;
+/** 열 머리글용 — 행마다 다른 날짜 쌍이 아니라 계산 규칙 자체. */
+export const REACTION_COLUMN_HINT = (
+  <>
+    <p>발표가 반영된 첫 세션의 종가 등락입니다.</p>
+    <p className="mt-1">
+      <b>장전·장중</b>은 전 거래일 종가와 발표일 종가,
+    </p>
+    <p>
+      <b>장후·국내</b>는 발표일 종가와 다음 거래일 종가를 비교합니다.
+    </p>
+  </>
+);
+
+function reactionHint(reaction: EarningsReaction): ReactNode {
+  const pair = `${formatShortDate(reaction.baseDate)} 종가 → ${formatShortDate(reaction.date)} 종가`;
+  if (reaction.basis === "sameDay") {
+    return (
+      <>
+        <p>장전·장중 발표는 그날 장에 반영됩니다.</p>
+        <p className="mt-1">전 거래일 종가와 발표일 종가를 비교합니다.</p>
+        <p className="mt-1 font-num tabular-nums">{pair}</p>
+      </>
+    );
+  }
+  return (
+    <>
+      <p>장후 발표(국내 잠정실적도 장후로 봅니다)는 다음 거래일에 반영됩니다.</p>
+      <p className="mt-1">발표일 종가와 다음 거래일 종가를 비교합니다.</p>
+      <p className="mt-1 font-num tabular-nums">{pair}</p>
+    </>
+  );
+}
+
+/**
+ * PC는 커서를 올리면, 모바일은 탭하면 안내가 뜬다.
+ *
+ * 표·레일 행이 통째로 클릭 대상이라, 안내만 보려다 모달이 열리면 안 된다 —
+ * 포인터·클릭 전파를 여기서 끊는다. 트리거를 `button`으로 두지 않는 이유는
+ * 바깥이 이미 `button`인 목록이 있어서다(중첩 버튼은 HTML이 깨진다).
+ */
+export function EarningsHint({
+  content,
+  children,
+  className,
+}: {
+  content: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip open={open} onOpenChange={setOpen}>
+        <TooltipTrigger asChild>
+          <span
+            tabIndex={0}
+            role="button"
+            className={cn("inline-flex cursor-help", className)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen((v) => !v);
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpen((v) => !v);
+              }
+            }}
+          >
+            {children}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent
+          side="top"
+          sideOffset={6}
+          className="max-w-[260px] px-2.5 py-2 text-left text-cell leading-relaxed"
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {content}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 }
 
 /**
@@ -242,7 +351,7 @@ export function DivergenceFlag({ event }: { event: EarningsEvent }) {
        * 자리가 없다 — 새 색 토큰을 만들지 않고 **반전 대비**로 눈에 띄게 한다.
        * 이건 시세 신호가 아니라 주석이므로 색보다 대비가 맞다.
        */
-      className="shrink-0 rounded bg-foreground px-1 py-0.5 text-[10px] font-medium leading-none text-background"
+      className="shrink-0 rounded bg-foreground px-1 py-0.5 text-micro font-medium leading-none text-background"
       title={
         beat
           ? "컨센서스를 넘겼는데 주가는 내렸습니다 — 시장이 다른 것을 봤다는 뜻입니다"
@@ -263,12 +372,12 @@ export function DivergenceFlag({ event }: { event: EarningsEvent }) {
 export function earningsEventKey(event: EarningsEvent): string {
   const anchor =
     event.surprise?.actual ??
-    event.opIncome.actual ??
-    event.opIncome.estimate ??
-    event.revenue.actual ??
-    event.revenue.estimate ??
-    event.eps.actual ??
-    event.eps.estimate ??
+    event.opIncome?.actual ??
+    event.opIncome?.estimate ??
+    event.revenue?.actual ??
+    event.revenue?.estimate ??
+    event.eps?.actual ??
+    event.eps?.estimate ??
     0;
   return [
     event.symbol,

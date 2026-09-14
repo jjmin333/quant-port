@@ -22,6 +22,8 @@ import type { HoldingMetrics } from "@/lib/holdings-calc";
 import type { StockScoreData } from "@/lib/stock-score-api";
 import { trendTextClass } from "@/lib/trend-colors";
 import { cn } from "@/lib/utils";
+import { toUserMessage } from "@/lib/error-message";
+import { PriceDisplay } from "@/components/ui/price-display";
 
 /**
  * 보유 종목 상세 — 공용 `StockQuickLookModal`에 보유 맥락만 얹는다.
@@ -131,7 +133,7 @@ export function HoldingDetailModal({
         m ? (
           <>
             {error && (
-              <p className="mb-3 rounded-md bg-[var(--danger)]/10 px-2 py-1.5 text-[11px] text-[var(--danger)]">
+              <p className="mb-3 rounded-md bg-[var(--danger)]/10 px-2 py-1.5 text-cell text-[var(--danger)]">
                 {error}
               </p>
             )}
@@ -161,7 +163,7 @@ export function HoldingDetailModal({
                   try {
                     await onSaveHolding(m.symbol, quantity, avgPrice);
                   } catch (err) {
-                    setError(err instanceof Error ? err.message : "저장 실패");
+                    setError(toUserMessage(err, "저장 실패"));
                   } finally {
                     setBusy(false);
                   }
@@ -175,7 +177,7 @@ export function HoldingDetailModal({
         m ? (
           confirmDelete ? (
             <>
-              <span className="self-center text-[10px] text-muted-foreground">
+              <span className="self-center text-micro text-muted-foreground">
                 매매 이력까지 삭제
               </span>
               <Button size="sm" variant="outline" onClick={() => setConfirmDelete(false)}>
@@ -191,7 +193,7 @@ export function HoldingDetailModal({
                     await onDeleteHolding(m.symbol);
                     onClose();
                   } catch (err) {
-                    setError(err instanceof Error ? err.message : "삭제 실패");
+                    setError(toUserMessage(err, "삭제 실패"));
                   } finally {
                     setBusy(false);
                   }
@@ -232,25 +234,25 @@ function HoldingContext({ metrics }: { metrics: HoldingMetrics }) {
     <QuickLookSection title="내 보유">
       <div className="rounded-lg border p-2.5">
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          <span className="text-[11px] text-muted-foreground">평가손익</span>
+          <span className="text-cell text-muted-foreground">평가손익</span>
           {m.unrealizedPnl == null || m.returnRate == null ? (
-            <span className="font-mono text-lg font-bold text-muted-foreground">—</span>
+            <span className="font-num text-lg font-bold text-muted-foreground">—</span>
           ) : (
             <span className="flex items-baseline gap-2">
-              <b className={cn("font-mono text-lg font-bold tabular-nums", tone)}>
+              <b className={cn("font-num text-lg font-bold tabular-nums", tone)}>
                 {formatPriceChange(
                   m.currency === "USD" ? m.unrealizedPnl : Math.round(m.unrealizedPnl),
                   m.currency,
                 )}
               </b>
-              <b className={cn("font-mono text-[12px] tabular-nums", tone)}>
+              <b className={cn("font-num text-cell tabular-nums", tone)}>
                 {formatPercent(m.returnRate)}
               </b>
             </span>
           )}
         </div>
         {m.unrealizedPnl == null && (
-          <p className="mt-0.5 text-[10px] text-muted-foreground">
+          <p className="mt-0.5 text-micro text-muted-foreground">
             평단가를 입력하면 손익이 계산됩니다
           </p>
         )}
@@ -355,7 +357,7 @@ function TradeSection({
       setAdding(false);
       onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "저장 실패");
+      setError(toUserMessage(err, "저장 실패"));
     } finally {
       setBusy(false);
     }
@@ -392,7 +394,7 @@ function TradeSection({
                 onClick={() => setSide(value)}
                 aria-pressed={side === value}
                 className={cn(
-                  "flex-1 rounded px-2 py-0.5 text-[11px] transition-colors",
+                  "flex-1 rounded px-2 py-0.5 text-cell transition-colors",
                   side === value
                     ? "bg-card font-semibold text-foreground shadow-xs"
                     : "text-muted-foreground hover:text-foreground",
@@ -409,7 +411,7 @@ function TradeSection({
                 onChange={(e) => setQuantity(e.target.value)}
                 inputMode="decimal"
                 placeholder="0"
-                className="h-9 font-mono text-sm"
+                className="h-9 font-num text-sm"
               />
             </Field>
             <Field label={`단가 (${currency})`}>
@@ -418,13 +420,13 @@ function TradeSection({
                 onChange={(e) => setPrice(e.target.value)}
                 inputMode="decimal"
                 placeholder="0"
-                className="h-9 font-mono text-sm"
+                className="h-9 font-num text-sm"
               />
             </Field>
           </div>
           <TradeDateField value={date} onChange={setDate} className="mt-2" />
           {isFirstTrade && holdingQuantity > 0 && (
-            <p className="mt-1.5 text-[10px] text-muted-foreground">
+            <p className="mt-1.5 text-micro text-muted-foreground">
               현재 보유 {holdingQuantity}주
               {holdingAvgPrice != null && holdingAvgPrice > 0
                 ? ` · 평단 ${formatPrice(holdingAvgPrice, currency)}`
@@ -435,7 +437,7 @@ function TradeSection({
           <Button size="sm" className="mt-2 w-full" disabled={busy} onClick={submit}>
             {side === "buy" ? "매수 기록" : "매도 기록"} 저장
           </Button>
-          <p className="mt-1 text-[10px] text-muted-foreground">
+          <p className="mt-1 text-micro text-muted-foreground">
             저장하면 수량·평단이 이력에서 다시 계산되고, 평가금액 추이에 그날부터 반영됩니다.
           </p>
         </div>
@@ -444,7 +446,7 @@ function TradeSection({
       {trades == null ? (
         <div className="h-7 animate-pulse rounded bg-muted" />
       ) : trades.length === 0 ? (
-        <p className="py-3 text-center text-[10px] leading-relaxed text-muted-foreground">
+        <p className="py-3 text-center text-micro leading-relaxed text-muted-foreground">
           기록된 매매가 없습니다.
           <br />
           매수 기록을 남기면 평가금액 추이 곡선에 이 종목이 포함됩니다.
@@ -454,12 +456,12 @@ function TradeSection({
           {trades.map((t) => (
             <li
               key={t.id}
-              className="flex min-w-0 items-center gap-2 border-b border-border/50 py-1 text-[11px] last:border-b-0"
+              className="flex min-w-0 items-center gap-2 border-b border-border/50 py-1 text-cell last:border-b-0"
             >
               <span className="w-[62px] shrink-0 text-muted-foreground">{t.tradeDate}</span>
               <span
                 className={cn(
-                  "w-8 shrink-0 rounded px-1 text-center text-[10px] font-semibold",
+                  "w-8 shrink-0 rounded px-1 text-center text-micro font-semibold",
                   t.side === "sell"
                     ? "bg-[var(--loss)]/10 text-[var(--loss)]"
                     : "bg-[var(--profit)]/10 text-[var(--profit)]",
@@ -467,8 +469,8 @@ function TradeSection({
               >
                 {t.side === "sell" ? "매도" : "매수"}
               </span>
-              <span className="min-w-0 flex-1 truncate text-right font-mono tabular-nums">
-                {t.quantity} × {formatPrice(t.price, t.currency === "USD" ? "USD" : "KRW")}
+              <span className="min-w-0 flex-1 truncate text-right font-num tabular-nums">
+                {t.quantity} × <PriceDisplay value={t.price} currency={t.currency === "USD" ? "USD" : "KRW"} size="inherit" />
               </span>
               <button
                 type="button"
@@ -481,7 +483,7 @@ function TradeSection({
                     await deleteHoldingTradeClient(t.id, symbol);
                     onChanged();
                   } catch (err) {
-                    setError(err instanceof Error ? err.message : "삭제 실패");
+                    setError(toUserMessage(err, "삭제 실패"));
                   } finally {
                     setBusy(false);
                   }
@@ -522,7 +524,7 @@ function ManualEdit({
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
             inputMode="decimal"
-            className="font-mono"
+            className="font-num"
           />
         </Field>
         <Field label={`평단가 (${metrics.currency})`}>
@@ -531,7 +533,7 @@ function ManualEdit({
             onChange={(e) => setAvgPrice(e.target.value)}
             inputMode="decimal"
             placeholder="모르면 비워둡니다"
-            className="font-mono"
+            className="font-num"
           />
         </Field>
       </div>
@@ -548,7 +550,7 @@ function ManualEdit({
       >
         저장
       </Button>
-      <p className="mt-1 text-[10px] text-muted-foreground">
+      <p className="mt-1 text-micro text-muted-foreground">
         평단가를 비우면 이 종목은 손익 계산에서 빠집니다(0원으로 계산하지 않습니다).
       </p>
     </QuickLookSection>
@@ -558,7 +560,7 @@ function ManualEdit({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block min-w-0">
-      <span className="mb-0.5 block text-[10px] text-muted-foreground">{label}</span>
+      <span className="mb-0.5 block text-micro text-muted-foreground">{label}</span>
       {children}
     </label>
   );

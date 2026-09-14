@@ -1,7 +1,5 @@
 package textparse
 
-
-
 import (
 
 	"regexp"
@@ -13,8 +11,6 @@ import (
 	"unicode"
 
 )
-
-
 
 var (
 
@@ -40,10 +36,7 @@ var (
 
 )
 
-
-
 type ParsedLine struct {
-
 	Name     string
 
 	Quantity float64
@@ -55,37 +48,24 @@ type ParsedLine struct {
 	ReturnRate *float64
 
 	Currency string
-
 }
-
-
 
 func ParseHoldingsText(text string) []ParsedLine {
-
 	return parseHoldingsBlocks(text)
-
 }
-
-
 
 // FilterParsedLines removes OCR noise rows before preview/resolver.
 
 func FilterParsedLines(items []ParsedLine) []ParsedLine {
-
 	out := make([]ParsedLine, 0, len(items))
 
 	for _, item := range items {
-
 		if IsValidParsedLine(item.Name, item.Quantity) {
-
 			out = append(out, item)
-
 		}
-
 	}
 
 	return out
-
 }
 
 // FilterQuoteListLines keeps name-only rows from watchlist/quote OCR.
@@ -100,177 +80,119 @@ func FilterQuoteListLines(items []ParsedLine) []ParsedLine {
 	return out
 }
 
-
-
 // IsValidParsedLine returns false for money-like OCR fragments and zero qty rows.
 
 func IsValidParsedLine(name string, qty float64) bool {
-
 	raw := strings.TrimSpace(name)
 	if qty <= 0 || raw == "" {
-
 		return false
-
 	}
 
 	if len([]rune(raw)) < 2 {
-
 		return false
-
 	}
 
 	if isGarbageName(raw) || looksLikeOCRFragment(raw) {
-
 		return false
-
 	}
 
 	name = NormalizeDisplayName(raw)
 
 	if isMoneyLikeName(name) || looksLikeMoneyOrPnL(name) || nameEmbedsAmount(name) {
-
 		return false
-
 	}
 
 	if isGarbageName(name) || headerNoise.MatchString(name) {
-
 		return false
-
 	}
 
 	if isBrokerAppNoise(name) {
-
 		return false
-
 	}
 
 	if looksLikeOCRFragment(name) {
-
 		return false
-
 	}
 
 	letters := 0
 
 	for _, r := range name {
-
 		if unicode.IsLetter(r) {
-
 			letters++
-
 		}
-
 	}
 
 	return letters >= 1
-
 }
 
-
-
 func recordLine(out *[]ParsedLine, seen map[string]struct{}, name string, qty float64) {
-
 	if !IsValidParsedLine(name, qty) {
-
 		return
-
 	}
 
 	key := name + "|" + strconv.FormatFloat(qty, 'f', -1, 64)
 
 	if _, dup := seen[key]; dup {
-
 		return
-
 	}
 
 	seen[key] = struct{}{}
 
 	*out = append(*out, ParsedLine{Name: name, Quantity: qty})
-
 }
 
-
-
 func isSkippableLine(line string) bool {
-
 	trimmed := strings.TrimSpace(line)
 
 	if trimmed == "" {
-
 		return true
-
 	}
 
 	if strings.Contains(trimmed, "주") {
-
 		return false
-
 	}
 
 	if percentQty.MatchString(trimmed) {
-
 		return false
-
 	}
 
 	if singleDigitQty.MatchString(trimmed) {
-
 		return false
-
 	}
 
 	if strings.HasSuffix(trimmed, "원") {
-
 		return true
-
 	}
 
 	if strings.HasPrefix(trimmed, "$") || strings.HasPrefix(trimmed, "-$") ||
 
 		strings.HasPrefix(trimmed, "+$") || strings.HasPrefix(trimmed, "~$") {
-
 		return true
-
 	}
 
 	if strings.Contains(trimmed, "%") && strings.ContainsAny(trimmed, "$+-~") {
-
 		return true
-
 	}
 
 	return looksLikeMoneyOrPnL(trimmed) || isMoneyLikeName(trimmed)
-
 }
 
-
-
 func isMoneyLikeName(s string) bool {
-
 	s = strings.TrimSpace(s)
 
 	if s == "" {
-
 		return true
-
 	}
 
 	if moneyLikeName.MatchString(s) {
-
 		return true
-
 	}
 
 	if strings.HasSuffix(s, "원") && digitRatio(s) >= 0.4 {
-
 		return true
-
 	}
 
 	return digitRatio(s) >= 0.75 && len([]rune(s)) >= 4
-
 }
 
 func nameEmbedsAmount(name string) bool {
@@ -288,58 +210,37 @@ func nameEmbedsAmount(name string) bool {
 	return false
 }
 
-
-
 func digitRatio(s string) float64 {
-
 	if s == "" {
-
 		return 0
-
 	}
 
 	digits := 0
 
 	for _, r := range s {
-
 		if r >= '0' && r <= '9' {
-
 			digits++
-
 		}
-
 	}
 
 	return float64(digits) / float64(len([]rune(s)))
-
 }
 
-
-
 func looksLikeMoneyOrPnL(s string) bool {
-
 	s = strings.TrimSpace(s)
 
 	if s == "" || strings.Contains(s, "주") {
-
 		return false
-
 	}
 
 	if bareQtyPattern.MatchString(s) || percentQty.MatchString(s) {
-
 		return false
-
 	}
 
 	if strings.HasPrefix(s, "-") || strings.HasPrefix(s, "+") || strings.HasPrefix(s, "~") {
-
 		if strings.ContainsAny(s, "$%(") {
-
 			return true
-
 		}
-
 	}
 
 	if hangulRunes(s) >= 2 {
@@ -347,16 +248,11 @@ func looksLikeMoneyOrPnL(s string) bool {
 	}
 
 	if !strings.ContainsAny(s, "$,.)") && !strings.HasSuffix(s, "원") {
-
 		return false
-
 	}
 
 	return digitRatio(s) >= 0.45
-
 }
-
-
 
 func ocrQtyHint(line, pendingName string) (float64, bool) {
 	trimmed := strings.TrimSpace(line)
@@ -458,26 +354,17 @@ func ocrConfusionDigit(c byte) (byte, bool) {
 
 var orphanQtySuffix = regexp.MustCompile(`^(\d{1,3})\s*주?$`)
 
-
 func shouldSkipGarbageName(name, pending string) bool {
-
 	if pending == "" {
-
 		return false
-
 	}
 
 	if len([]rune(pending)) < 3 {
-
 		return false
-
 	}
 
 	return isGarbageName(name)
-
 }
-
-
 
 func isBrokerAppNoise(name string) bool {
 	name = strings.TrimSpace(name)
@@ -522,21 +409,14 @@ func isOCRLatinDebris(name string) bool {
 }
 
 func isGarbageName(name string) bool {
-
 	return garbageName.MatchString(strings.TrimSpace(name))
-
 }
 
-
-
 func splitNameQtySuffix(line string) (string, float64, bool) {
-
 	m := nameQtySuffix.FindStringSubmatch(strings.TrimSpace(line))
 
 	if len(m) < 3 {
-
 		return "", 0, false
-
 	}
 
 	name := cleanName(m[1])
@@ -544,41 +424,27 @@ func splitNameQtySuffix(line string) (string, float64, bool) {
 	qty, err := parseQty(m[2])
 
 	if err != nil || qty <= 0 || qty > 1_000_000 {
-
 		return "", 0, false
-
 	}
 
 	if name == "" || len([]rune(name)) < 2 {
-
 		return "", 0, false
-
 	}
 
 	if isMoneyLikeName(name) || looksLikeMoneyOrPnL(name) || headerNoise.MatchString(name) {
-
 		return "", 0, false
-
 	}
 
 	return name, qty, true
-
 }
 
-
-
 func extractNameFromLine(line string) string {
-
 	if idx := strings.Index(line, "$"); idx > 0 {
-
 		line = strings.TrimSpace(line[:idx])
-
 	}
 
 	if idx := strings.Index(line, "원"); idx > 0 && digitRatio(line[:idx]) > 0.5 {
-
 		line = strings.TrimSpace(line[:idx])
-
 	}
 
 	line = strings.TrimLeft(line, "@«»_·•|- ")
@@ -586,47 +452,31 @@ func extractNameFromLine(line string) string {
 	name := cleanName(line)
 
 	if isMoneyLikeName(name) {
-
 		return ""
-
 	}
 
 	return name
-
 }
 
-
-
 func looksLikeQtyOnly(line string) bool {
-
 	stripped := strings.TrimSpace(qtyPattern.ReplaceAllString(line, ""))
 
 	return stripped == ""
-
 }
 
-
-
 func normalizeLine(s string) string {
-
 	s = strings.TrimSpace(s)
 
 	s = strings.ReplaceAll(s, "\t", " ")
 
 	for strings.Contains(s, "  ") {
-
 		s = strings.ReplaceAll(s, "  ", " ")
-
 	}
 
 	return s
-
 }
 
-
-
 func cleanName(s string) string {
-
 	replacer := strings.NewReplacer(
 
 		"|", " ",
@@ -648,37 +498,25 @@ func cleanName(s string) string {
 	parts := strings.Fields(s)
 
 	if len(parts) == 0 {
-
 		return ""
-
 	}
 
 	if len(parts) > 8 {
-
 		parts = parts[:8]
-
 	}
 
 	return strings.Join(parts, " ")
-
 }
 
-
-
 func parseQty(raw string) (float64, error) {
-
 	raw = strings.ReplaceAll(raw, ",", "")
 
 	raw = strings.ReplaceAll(strings.TrimSpace(raw), " ", "")
 
 	return strconv.ParseFloat(raw, 64)
-
 }
 
-
-
 func MergeParsedLines(items []ParsedLine) []ParsedLine {
-
 	quoteLines := FilterQuoteListLines(items)
 
 	items = FilterParsedLines(items)
@@ -692,17 +530,13 @@ func MergeParsedLines(items []ParsedLine) []ParsedLine {
 	order := []string{}
 
 	for _, item := range items {
-
 		key := mergeKey(item.Name)
 
 		if key == "" {
-
 			continue
-
 		}
 
 		if _, ok := merged[key]; !ok {
-
 			order = append(order, key)
 
 			display[key] = strings.TrimSpace(item.Name)
@@ -712,7 +546,6 @@ func MergeParsedLines(items []ParsedLine) []ParsedLine {
 			finance[key] = item
 
 			continue
-
 		}
 
 		existing := merged[key]
@@ -728,7 +561,6 @@ func MergeParsedLines(items []ParsedLine) []ParsedLine {
 		merged[key] += item.Quantity
 
 		finance[key] = mergeCombinedFinance(finance[key], item, merged[key])
-
 	}
 
 	out := make([]ParsedLine, 0, len(order))
@@ -736,7 +568,6 @@ func MergeParsedLines(items []ParsedLine) []ParsedLine {
 	seen := map[string]struct{}{}
 
 	for _, key := range order {
-
 		line := finance[key]
 
 		line.Name = display[key]
@@ -746,7 +577,6 @@ func MergeParsedLines(items []ParsedLine) []ParsedLine {
 		out = append(out, line)
 
 		seen[key] = struct{}{}
-
 	}
 
 	for _, q := range quoteLines {
@@ -761,15 +591,11 @@ func MergeParsedLines(items []ParsedLine) []ParsedLine {
 	}
 
 	return out
-
 }
-
-
 
 // MergeDualOCRPass combines two OCR parses of the same image without summing duplicate rows.
 
 func MergeDualOCRPass(items []ParsedLine) []ParsedLine {
-
 	items = FilterParsedLines(items)
 
 	merged := map[string]float64{}
@@ -781,17 +607,13 @@ func MergeDualOCRPass(items []ParsedLine) []ParsedLine {
 	order := []string{}
 
 	for _, item := range items {
-
 		key := mergeKey(item.Name)
 
 		if key == "" {
-
 			continue
-
 		}
 
 		if _, ok := merged[key]; !ok {
-
 			order = append(order, key)
 
 			display[key] = strings.TrimSpace(item.Name)
@@ -801,19 +623,16 @@ func MergeDualOCRPass(items []ParsedLine) []ParsedLine {
 			finance[key] = item
 
 			continue
-
 		}
 
 		merged[key] = mergeDualQty(merged[key], item.Quantity)
 
 		finance[key] = pickRicherFinance(finance[key], item)
-
 	}
 
 	out := make([]ParsedLine, 0, len(order))
 
 	for _, key := range order {
-
 		line := finance[key]
 
 		line.Name = display[key]
@@ -821,46 +640,30 @@ func MergeDualOCRPass(items []ParsedLine) []ParsedLine {
 		line.Quantity = merged[key]
 
 		out = append(out, line)
-
 	}
 
 	return out
-
 }
 
-
-
 func mergeDualQty(existing, next float64) float64 {
-
 	if existing <= 0 {
-
 		return next
-
 	}
 
 	if next <= 0 {
-
 		return existing
-
 	}
 
 	if existing == next {
-
 		return existing
-
 	}
 
 	if existing < next {
-
 		return existing
-
 	}
 
 	return next
-
 }
-
-
 
 func mergeKey(name string) string {
 	name = NormalizeDisplayName(name)
@@ -885,5 +688,3 @@ func mergeKey(name string) string {
 	}
 	return hangul.String()
 }
-
-

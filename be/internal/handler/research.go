@@ -334,6 +334,25 @@ func (h *ResearchHandler) DeleteComment(w http.ResponseWriter, r *http.Request) 
 	response.JSON(w, http.StatusOK, map[string]any{"data": map[string]int64{"id": commentID}})
 }
 
+// ToggleCommentLike — 댓글 추천 켜고 끄기 (2026-09-14 사용자 요청 3).
+//
+// 글 추천(`ToggleReaction`)과 같은 모양으로 돌려준다: 누른 **뒤의 상태**. 화면이
+// 낙관적으로 먼저 그리고 이 값으로 바로잡는다.
+func (h *ResearchHandler) ToggleCommentLike(w http.ResponseWriter, r *http.Request) {
+	commentID, ok := researchParamID(w, r, "commentId")
+	if !ok {
+		return
+	}
+	active, err := h.svc.ToggleCommentLike(r.Context(), commentID)
+	if err != nil {
+		h.writeResearchError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]any{
+		"data": map[string]any{"id": commentID, "active": active},
+	})
+}
+
 func (h *ResearchHandler) Rate(w http.ResponseWriter, r *http.Request) {
 	id, ok := researchIDParam(w, r)
 	if !ok {
@@ -476,6 +495,23 @@ func (h *ResearchHandler) writePublishError(w http.ResponseWriter, err error) {
 func (h *ResearchHandler) writeResearchError(w http.ResponseWriter, err error) {
 	if errors.Is(err, repository.ErrResearchNotFound) {
 		response.Error(w, http.StatusNotFound, "research call not found")
+		return
+	}
+	/*
+		댓글도 콜과 같다 — **없거나 내 것이 아니면 404**다.
+
+		이 줄이 없어서 남의 댓글을 고치거나 지우려는 요청이 `writeTossError`의
+		기본 분기로 떨어져 **502**로 나갔다(실측 2026-09-06: B가 A의 댓글에
+		PUT·DELETE → 둘 다 502). 권한은 제대로 막혀 있었고 A의 댓글도 그대로였지만,
+		평범한 권한 거부가 게이트웨이 장애로 보고돼 5xx 알람을 울렸고 클라이언트는
+		「다시 시도할 문제」와 「하면 안 되는 일」을 구분할 수 없었다.
+
+		리포지터리가 `user_id`까지 걸어 한 번에 조회하므로 「없음」과 「남의 것」은
+		여기서 구분되지 않는다 — 그리고 구분하지 않는 편이 맞다. 남의 댓글 ID를
+		찍어 보고 존재 여부를 알아내는 길을 열지 않는다.
+	*/
+	if errors.Is(err, repository.ErrResearchCommentNotFound) {
+		response.Error(w, http.StatusNotFound, "research comment not found")
 		return
 	}
 	writeServiceError(w, err)

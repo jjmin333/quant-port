@@ -7,6 +7,7 @@ import { fetchInsiderClient } from "@/lib/insider-api";
 import type { InsiderTabData, InsiderTransaction } from "@/lib/insider-types";
 import { formatPercent, formatPrice } from "@/lib/format";
 import type { QuoteCurrency } from "@/lib/quotes-types";
+import { toUserMessage } from "@/lib/error-message";
 
 type InsiderTabProps = {
   symbol: string;
@@ -27,7 +28,7 @@ export function InsiderTab({ symbol, currency }: InsiderTabProps) {
         if (!cancelled) setData(res);
       })
       .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "내부자 거래 정보 조회 실패");
+        if (!cancelled) setError(toUserMessage(e, "내부자 거래 정보 조회 실패"));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -39,14 +40,14 @@ export function InsiderTab({ symbol, currency }: InsiderTabProps) {
 
   if (loading) {
     return (
-      <Card className="flex min-h-[160px] items-center justify-center p-6 text-xs text-[var(--text-muted)]">
+      <Card className="flex min-h-[160px] items-center justify-center p-6 text-cell text-[var(--text-muted)]">
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
         내부자 거래 정보 불러오는 중…
       </Card>
     );
   }
   if (error) {
-    return <Card className="p-4 text-xs text-[var(--loss)]">{error}</Card>;
+    return <Card className="p-4 text-cell text-[var(--loss)]">{error}</Card>;
   }
 
   const isDomestic = data?.assetType === "domestic";
@@ -55,15 +56,15 @@ export function InsiderTab({ symbol, currency }: InsiderTabProps) {
   return (
     <div className="space-y-2.5">
       <Card className="p-3">
-        <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-[var(--text-primary)]">
+        <h3 className="mb-2 flex items-center gap-1.5 text-cell font-semibold text-[var(--text-primary)]">
           <UserRound className="h-3.5 w-3.5 text-[var(--text-muted)]" />
           {isDomestic ? "임원ㆍ주요주주 소유 변동" : "내부자 거래 (Form 4)"}
         </h3>
         {transactions.length === 0 ? (
-          <p className="text-xs text-[var(--text-muted)]">최근 내부자 거래 내역이 없습니다.</p>
+          <p className="text-cell text-[var(--text-muted)]">최근 내부자 거래 내역이 없습니다.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-left text-xs">
+            <table className="w-full min-w-[560px] text-left text-cell">
               <thead>
                 <tr className="border-b border-[var(--border)] text-[var(--text-muted)]">
                   <th className="py-1.5 pr-2 font-medium">날짜</th>
@@ -86,7 +87,7 @@ export function InsiderTab({ symbol, currency }: InsiderTabProps) {
 
       {data?.note && (
         <Card className="border-dashed p-3">
-          <p className="text-[10px] leading-relaxed text-[var(--text-muted)]">{data.note}</p>
+          <p className="text-micro leading-relaxed text-[var(--text-muted)]">{data.note}</p>
         </Card>
       )}
     </div>
@@ -116,7 +117,7 @@ function InsiderRow({
       <td className="whitespace-nowrap py-1.5 pr-2 tabular-nums text-[var(--text-secondary)]">{t.date}</td>
       <td className="py-1.5 pr-2">
         <p className="text-[var(--text-primary)]">{t.reporterName || "—"}</p>
-        {t.relation && <p className="text-[10px] text-[var(--text-muted)]">{t.relation}</p>}
+        {t.relation && <p className="text-micro text-[var(--text-muted)]">{t.relation}</p>}
       </td>
       <td className={`py-1.5 pr-2 whitespace-nowrap font-medium ${changeColor}`}>{t.transactionType || "—"}</td>
       <td className={`py-1.5 pr-2 tabular-nums ${changeColor}`}>

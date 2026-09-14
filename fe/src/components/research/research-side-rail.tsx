@@ -10,6 +10,7 @@ import { analysisSymbolHref } from "@/lib/analysis-tabs";
 import { formatPercent } from "@/lib/format";
 import type { ResearchCall, ResearchSummary } from "@/lib/research-types";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 
 /**
  * 리포트 목록 화면의 우측 레일.
@@ -27,8 +28,6 @@ import { cn } from "@/lib/utils";
 type ResearchSideRailProps = {
   summary: ResearchSummary | null;
   allCalls: ResearchCall[];
-  /** 목록의 퀵룩 모달을 연다. */
-  onOpenCall?: (id: number) => void;
   /** 종목으로 목록을 거른다. */
   onPickSymbol?: (symbol: string) => void;
   symbolFilter?: string | null;
@@ -37,15 +36,14 @@ type ResearchSideRailProps = {
 export function ResearchSideRail({
   summary,
   allCalls,
-  onOpenCall,
   onPickSymbol,
   symbolFilter,
 }: ResearchSideRailProps) {
   return (
     <>
       <ScorecardCard summary={summary} />
-      <DueSoonCard calls={allCalls} onOpenCall={onOpenCall} />
-      <NearLevelCard calls={allCalls} onOpenCall={onOpenCall} />
+      <DueSoonCard calls={allCalls} />
+      <NearLevelCard calls={allCalls} />
       <DirectionMixCard calls={allCalls} />
       <TopSymbolsCard calls={allCalls} onPickSymbol={onPickSymbol} symbolFilter={symbolFilter} />
       <MostReadCard calls={allCalls} />
@@ -62,13 +60,7 @@ export function ResearchSideRail({
  * 만기 종가로 알파가 확정되므로, 이 목록이 「이제 곧 결과가 나온다」를 말하는
  * 유일한 자리다. 목록 정렬(최신·조회·추천)로는 절대 위로 오지 않는다.
  */
-function DueSoonCard({
-  calls,
-  onOpenCall,
-}: {
-  calls: ResearchCall[];
-  onOpenCall?: (id: number) => void;
-}) {
+function DueSoonCard({ calls }: { calls: ResearchCall[] }) {
   const rows = useMemo(
     () =>
       calls
@@ -84,7 +76,7 @@ function DueSoonCard({
       title="곧 판정됩니다"
       action={
         rows.length > 0 ? (
-          <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">
+          <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-micro font-semibold text-amber-500">
             {rows.length}
           </span>
         ) : undefined
@@ -100,14 +92,13 @@ function DueSoonCard({
                 call.horizon?.return ?? call.current?.changeRate;
               return (
                 <li key={call.id}>
-                  <button
-                    type="button"
-                    onClick={() => onOpenCall?.(call.id)}
+                  <Link
+                    href={`/reports/${call.id}`}
                     className="grid w-full min-w-0 grid-cols-[38px_minmax(0,1fr)_46px] items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-accent"
                   >
                     <span
                       className={cn(
-                        "shrink-0 font-mono text-[11px] font-semibold tabular-nums",
+                        "shrink-0 font-num text-cell font-semibold tabular-nums",
                         days <= 7 ? "text-amber-500" : "text-muted-foreground",
                       )}
                     >
@@ -123,18 +114,18 @@ function DueSoonCard({
                     </span>
                     <span
                       className={cn(
-                        "shrink-0 text-right font-mono text-[11px] tabular-nums",
+                        "shrink-0 text-right font-num text-cell tabular-nums",
                         toneClass(ret),
                       )}
                     >
                       {ret === undefined ? "—" : formatPercent(ret)}
                     </span>
-                  </button>
+                  </Link>
                 </li>
               );
             })}
           </ul>
-          <p className="mt-1.5 text-[10px] leading-tight text-muted-foreground">
+          <p className="mt-1.5 text-micro leading-tight text-muted-foreground">
             막대 = 기간 진행. 만기 종가로 알파가 확정됩니다
           </p>
         </>
@@ -153,13 +144,7 @@ const NEAR_LEVEL_PCT = 5;
  * `toTargetPct`·`toStopPct`가 이미 응답에 있는데 목록 카드에서 한 번 지나가면
  * 끝이었다. 곧 결판날 콜을 위로 올리는 게 이 화면을 매일 볼 이유다.
  */
-function NearLevelCard({
-  calls,
-  onOpenCall,
-}: {
-  calls: ResearchCall[];
-  onOpenCall?: (id: number) => void;
-}) {
+function NearLevelCard({ calls }: { calls: ResearchCall[] }) {
   const rows = useMemo(
     () =>
       calls
@@ -195,15 +180,14 @@ function NearLevelCard({
       <ul className="min-w-0">
         {rows.map(({ call, kind, pct }) => (
           <li key={call.id}>
-            <button
-              type="button"
-              onClick={() => onOpenCall?.(call.id)}
+            <Link
+              href={`/reports/${call.id}`}
               className="flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-1.5 text-left hover:bg-accent"
             >
-              <span className="line-clamp-2 min-w-0 flex-1 text-xs leading-snug">{call.title}</span>
+              <span className="line-clamp-2 min-w-0 flex-1 text-cell leading-snug">{call.title}</span>
               <span
                 className={cn(
-                  "shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold",
+                  "shrink-0 rounded-md px-1.5 py-0.5 text-micro font-semibold",
                   kind === "stop"
                     ? "bg-[var(--loss)]/15 text-[var(--loss)]"
                     : "bg-amber-500/15 text-amber-500",
@@ -212,7 +196,7 @@ function NearLevelCard({
                 {kind === "stop" ? "손절" : "목표"} {pct > 0 ? "+" : ""}
                 {pct.toFixed(1)}%
               </span>
-            </button>
+            </Link>
           </li>
         ))}
       </ul>
@@ -241,10 +225,10 @@ function DirectionMixCard({ calls }: { calls: ResearchCall[] }) {
   if (!mix) return null;
 
   return (
-    <SectionCard title="의견 분포" action={<span className="text-[10px] text-muted-foreground">{mix.total}건 기준</span>}>
+    <SectionCard title="의견 분포" action={<span className="text-micro text-muted-foreground">{mix.total}건 기준</span>}>
       <div className="space-y-1">
         {mix.rows.map((r) => (
-          <div key={r.label} className="flex items-center gap-2 text-[11px]">
+          <div key={r.label} className="flex items-center gap-2 text-cell">
             <span className="w-7 shrink-0 text-muted-foreground">{r.label}</span>
             <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-accent">
               <span
@@ -252,7 +236,7 @@ function DirectionMixCard({ calls }: { calls: ResearchCall[] }) {
                 style={{ width: `${(r.n / mix.total) * 100}%` }}
               />
             </span>
-            <span className="w-8 shrink-0 text-right font-mono tabular-nums">
+            <span className="w-8 shrink-0 text-right font-num tabular-nums">
               {Math.round((r.n / mix.total) * 100)}%
             </span>
           </div>
@@ -318,17 +302,26 @@ function Metric({
 }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[11px] text-muted-foreground">{label}</dt>
+      <dt className="text-cell text-muted-foreground">{label}</dt>
       <dd
         className={cn(
-          "mt-0.5 font-mono text-base font-semibold tabular-nums",
+          "mt-0.5 font-num text-base font-semibold tabular-nums",
           muted && "text-muted-foreground",
           valueClass,
         )}
       >
         {value}
+        {/*
+          보조 설명은 **`dd` 안에** 둔다. 예전에는 `dd` 다음의 `<p>`였는데,
+          `dl` 안의 `div`는 `dt`·`dd`만 담을 수 있어서 그 한 줄이 목록 구조를
+          깨뜨렸다(axe `definition-list`: "div > p"). 보조기술에서는 값과 설명이
+          같은 항목에 속하는 것이 맞기도 하다 — 「적중률 · 62% · 8/13 판정」이
+          한 덩어리다.
+        */}
+        <span className="mt-px block font-sans text-micro font-normal leading-tight text-muted-foreground">
+          {hint}
+        </span>
       </dd>
-      <p className="text-[10px] leading-tight text-muted-foreground">{hint}</p>
     </div>
   );
 }
@@ -377,7 +370,7 @@ function TopSymbolsCard({
             <li key={row.symbol}>
               <div
                 className={cn(
-                  "flex h-[30px] min-w-0 items-center gap-2 rounded-md px-1 text-xs",
+                  "flex h-[30px] min-w-0 items-center gap-2 rounded-md px-1 text-cell",
                   symbolFilter === row.symbol ? "bg-accent font-medium" : "hover:bg-accent/60",
                 )}
               >
@@ -390,15 +383,15 @@ function TopSymbolsCard({
                   <StockAvatar symbol={row.symbol} name={row.name} size="xs" className="shrink-0" />
                   <span className="min-w-0 flex-1 truncate">{row.name}</span>
                 </button>
-                <span className="shrink-0 font-mono text-[11px] tabular-nums text-[var(--profit)]">
+                <span className="shrink-0 font-num text-cell tabular-nums text-[var(--profit)]">
                   {row.buy}
                 </span>
-                <span className="shrink-0 font-mono text-[11px] tabular-nums text-[var(--loss)]">
+                <span className="shrink-0 font-num text-cell tabular-nums text-[var(--loss)]">
                   {row.sell}
                 </span>
                 <Link
-                  href={analysisSymbolHref(row.symbol, "ai")}
-                  className="w-8 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground hover:text-foreground"
+                  href={analysisSymbolHref(row.symbol)}
+                  className="w-8 shrink-0 text-right font-num text-cell tabular-nums text-muted-foreground hover:text-foreground"
                   title="종목 분석 보기"
                 >
                   {row.total}건
@@ -436,12 +429,12 @@ function MostReadCard({ calls }: { calls: ResearchCall[] }) {
                 href={`/reports/${call.id}`}
                 className="flex min-w-0 gap-2 rounded-md px-1 py-1.5 hover:bg-accent"
               >
-                <span className="w-3 shrink-0 pt-px text-[11px] font-medium text-muted-foreground">
+                <span className="w-3 shrink-0 pt-px text-cell font-medium text-muted-foreground">
                   {i + 1}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="line-clamp-2 block text-xs leading-snug">{call.title}</span>
-                  <span className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <span className="line-clamp-2 block text-cell leading-snug">{call.title}</span>
+                  <span className="mt-1 flex items-center gap-1.5 text-cell text-muted-foreground">
                     <Eye className="size-3" />
                     {call.viewCount.toLocaleString("ko-KR")}
                     <span className="truncate">· {call.symbolName || call.symbol}</span>
@@ -461,7 +454,7 @@ function MostReadCard({ calls }: { calls: ResearchCall[] }) {
 function ComposeGuideCard() {
   return (
     <SectionCard title="리포트는 이렇게 채점됩니다">
-      <ol className="space-y-1.5 text-[11px] leading-relaxed text-muted-foreground">
+      <ol className="space-y-1.5 text-cell leading-relaxed text-muted-foreground">
         <li>
           <span className="font-medium text-foreground">1. 발행 시점이 박제됩니다.</span> 점수·시세·뉴스·공시를
           서버가 그 자리에서 기록합니다.
@@ -477,7 +470,7 @@ function ComposeGuideCard() {
       </ol>
       <Link
         href="/reports/new"
-        className="mt-2.5 flex items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium hover:bg-accent"
+        className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-2.5 hover:bg-accent")}
       >
         <PenLine className="size-3" />
         리포트 쓰기

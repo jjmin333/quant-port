@@ -8,6 +8,7 @@ import {
   type WatchlistTrendFilter,
 } from "@/lib/watchlist-calc";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 
 /**
  * 관심종목 정렬·필터.
@@ -105,8 +106,7 @@ function Chip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors",
+      className={cn(buttonVariants({ variant: "outline", size: "xs" }), "rounded-full",
         active
           ? "border-[var(--brand)]/35 bg-[var(--brand-muted)] font-semibold text-[var(--brand)]"
           : "border-[var(--border)] bg-card text-[var(--text-muted)] hover:text-[var(--text-primary)]",

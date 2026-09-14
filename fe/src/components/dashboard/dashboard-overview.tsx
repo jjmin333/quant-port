@@ -1,42 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { PriceDisplay } from "@/components/ui/price-display";
+import { useEffect, useMemo, useState } from "react";
+import { QuoteCell } from "@/components/ui/quote-cell";
+import { useLiveQuotes } from "@/hooks/use-live-quotes";
 import { MiniToggle } from "@/components/ui/mini-toggle";
+import { useOpenMarket } from "@/hooks/use-open-market";
 import {
   SectionCard,
   SectionEmpty,
   SectionSkeleton,
 } from "@/components/ui/section-card";
 import { useNewsArticleModal } from "@/components/news/news-article-modal-host";
-import { ResearchQuickLookModal } from "@/components/research/research-quick-look-modal";
 import { StockAvatar } from "@/components/stocks/stock-avatar";
 import { SymbolQuickLookModal } from "@/components/stocks/symbol-quick-look-modal";
 import { DashboardEventsCard } from "@/components/dashboard/dashboard-events-card";
 import {
+  DASHBOARD_NEWS_ROWS,
   LatestNewsCard,
-  TodayKeywordsCard,
 } from "@/components/dashboard/dashboard-news-cards";
-import { LatestReportsCard } from "@/components/dashboard/latest-reports-card";
+import { TrendingKeywordsCard } from "@/components/news/trending-keywords-card";
 import {
   MarketBriefingCard,
   useMarketBriefings,
 } from "@/components/dashboard/market-briefing-card";
+import { newsCardSharesBriefingRow } from "@/lib/dashboard-news-layout";
 import { fetchDashboardNews } from "@/lib/news-api";
 import { fetchQuotesBatchClient, fetchRankingsClient } from "@/lib/market-api";
 import {
   SCORE_TONE_TEXT,
   fetchScoreRankingsClient,
+  priceAsOfLabel,
   scoreTone,
 } from "@/lib/stock-score-api";
-import { formatPercent } from "@/lib/format";
 
+import { MARKET_RADAR_DEFAULT_COUNT, marketRadarHref } from "@/lib/market-radar-config";
 import type { MarketCountry } from "@/lib/market-radar-types";
 import type { NewsArticle } from "@/lib/news-types";
 import type { QuoteSummary } from "@/lib/quotes-types";
-import type { ResearchCall } from "@/lib/research-types";
 import type { ScoreRankingMarket, StockScoreListItem } from "@/lib/stock-score-api";
-import { trendTextClass } from "@/lib/trend-colors";
 import { cn } from "@/lib/utils";
 
 /**
@@ -60,14 +61,41 @@ type Block<T> = { status: "loading" | "ready" | "empty"; items: T[] };
 
 const LOADING: Block<never> = { status: "loading", items: [] };
 
+/**
+ * 「실시간 AI 추천 랭킹 TOP」과 「거래대금 상위」가 **같은 줄 수**로 선다
+ * (2026-09-05 사용자 요청 2).
+ *
+ * 둘은 같은 행의 이웃인데 점수는 여덟 줄, 거래대금은 일곱 줄이라 카드 높이가
+ * 44px 어긋나 있었다(실측 322px · 278px). 거래대금이 하나 모자랐던 것은 여덟을
+ * 받아 놓고 **시세가 없는 한 종목을 버렸기** 때문이다 — 그날은 386380(ETN)이라
+ * `/quotes/batch`가 일곱 건만 돌려줬다. 그래서 낮은 쪽에 맞춘다.
+ */
+const DASHBOARD_RANK_ROWS = 7;
+
+/*
+국내/해외의 **이름이 카드마다 다르다** — 랭킹은 domestic/overseas, 거래대금은 KR/US다.
+`useOpenMarket`은 「열린 쪽」만 판정하고 이름은 이 표에서 읽는다. 모듈 상수로 두는
+이유는 훅의 의존성이 값이라서다 — 렌더마다 새 객체를 주면 매 렌더 다시 묻는다.
+*/
+const SCORE_MARKET_PAIR = { domestic: "domestic", us: "overseas" } as const satisfies {
+  domestic: ScoreRankingMarket;
+  us: ScoreRankingMarket;
+};
+const MOVERS_MARKET_PAIR = { domestic: "KR", us: "US" } as const satisfies {
+  domestic: MarketCountry;
+  us: MarketCountry;
+};
+
 function settled<T>(items: T[]): Block<T> {
   return { status: items.length ? "ready" : "empty", items };
 }
 
-/* ── 오늘의 점수 TOP ───────────────────────────────────────────────────────── */
+/* ── AI 추천 랭킹 TOP ──────────────────────────────────────────────────────── */
 
 function ScoreTop({ onPick }: { onPick: (symbol: string) => void }) {
-  const [market, setMarket] = useState<ScoreRankingMarket>("domestic");
+  // 기본값은 **지금 열려 있는 시장**이다 (2026-09-11 사용자 요청 9) — 둘 다 열렸거나
+  // 둘 다 닫혔으면 국내. 정해지기 전에는 null이고 본문이 스켈레톤을 지킨다.
+  const [market, setMarket] = useOpenMarket(SCORE_MARKET_PAIR);
   /*
    * 시장을 바꾸면 `key`로 본문만 다시 마운트한다. 이펙트 안에서 로딩으로 되돌리면
    * 렌더가 한 번 더 돌고(react-hooks/set-state-in-effect), 그 한 프레임 동안 **국내
@@ -83,20 +111,20 @@ function ScoreTopBody({
   onMarketChange,
   onPick,
 }: {
-  market: ScoreRankingMarket;
+  market: ScoreRankingMarket | null;
   onMarketChange: (m: ScoreRankingMarket) => void;
   onPick: (symbol: string) => void;
 }) {
   const [block, setBlock] = useState<Block<StockScoreListItem>>(LOADING);
-  const [tradeDate, setTradeDate] = useState("");
 
   useEffect(() => {
+    if (market == null) return; // 어느 시장을 받을지 아직 모른다
     let alive = true;
-    fetchScoreRankingsClient(market, 8)
-      .then(({ items, tradeDate: date }) => {
+    // 홈 카드는 언제나 **종합 점수 · 최신 배치일**이다 — 축·기간은 랭킹 화면의 손잡이다.
+    fetchScoreRankingsClient({ market, limit: DASHBOARD_RANK_ROWS })
+      .then(({ items }) => {
         if (!alive) return;
         setBlock(settled(items));
-        setTradeDate(date);
       })
       .catch(() => {
         if (alive) setBlock(settled([]));
@@ -106,16 +134,28 @@ function ScoreTopBody({
     };
   }, [market]);
 
+  /*
+    점수는 **배치가 하루 한 번** 만든 값이고 가격은 **지금**이다 (2026-09-04 사용자 요청 6).
+
+    이 카드는 그동안 등락률만 그렸고 그 값도 배치 응답에 실려 온 종가 기준이라
+    화면을 열어 둔 채로는 움직이지 않았다. 이제 가격은 옆 「거래대금 상위」와 같은
+    경로로 받는다 — 그래서 제목도 「실시간」이 붙는다. 붙이는 것은 이름만이 아니라
+    **그 이름이 참이 되게 하는 데이터**다.
+  */
+  const liveSymbols = useMemo(() => block.items.map((i) => i.symbol), [block.items]);
+  const live = useLiveQuotes(liveSymbols);
+
   return (
     <SectionCard
-      title={
-        <span className="flex items-baseline gap-1.5">
-          오늘의 점수 TOP
-          {tradeDate && (
-            <span className="text-[10px] font-normal text-muted-foreground">{tradeDate}</span>
-          )}
-        </span>
-      }
+      /*
+        제목 옆에 **배치일을 붙이지 않는다** (2026-09-05 사용자 결정).
+
+        점수가 언제 것인지 말해 주는 값이었지만, 홈의 좁은 칸(4열)에서 제목을 두 줄로
+        접어 카드가 12px 높아졌다 — 옆 「거래대금 상위」와 높이를 맞추려고 줄 수를
+        일곱으로 통일한 그 작업의 마지막 12px이 이것이었다. 날짜는 「더보기」가 가는
+        `/analysis`에 그대로 있다.
+      */
+      title="실시간 AI 추천 랭킹 TOP"
       action={
         <MiniToggle
           options={[
@@ -126,23 +166,30 @@ function ScoreTopBody({
           onChange={onMarketChange}
         />
       }
+      href="/analysis"
+      /*
+       * 링크 문구는 기본값(「더보기」)을 쓴다. 「AI 추천 랭킹」이라고 적어 두었었는데
+       * 바로 왼쪽 제목과 같은 말이라, 좁은 홈 칸에서 제목이 「AI 추 / 천 랭 / 킹 TOP」
+       * 세 줄로 접히는 값을 치르고 아무 정보도 더하지 않았다.
+       */
     >
       {block.status === "loading" ? (
-        <SectionSkeleton rows={8} />
+        <SectionSkeleton rows={DASHBOARD_RANK_ROWS} />
       ) : block.items.length === 0 ? (
         <SectionEmpty text="아직 산출된 점수가 없습니다" />
       ) : (
-        <ul className="min-w-0">
+        <ul className="@container min-w-0">
           {block.items.map((item) => {
             const tone = scoreTone(item.score);
+            const q = live.get(item.symbol.toUpperCase());
             return (
               <li key={item.symbol}>
                 <button
                   type="button"
                   onClick={() => onPick(item.symbol)}
-                  className="flex h-[32px] w-full min-w-0 items-center gap-2 rounded-md px-1 text-left text-xs hover:bg-accent"
+                  className="flex h-[32px] w-full min-w-0 items-center gap-2 rounded-md px-1 text-left text-cell hover:bg-accent"
                 >
-                  <span className="w-3 shrink-0 text-right text-[11px] font-medium text-muted-foreground">
+                  <span className="w-3 shrink-0 text-right text-cell font-medium text-muted-foreground">
                     {item.rank}
                   </span>
                   <StockAvatar
@@ -154,25 +201,31 @@ function ScoreTopBody({
                     className="shrink-0"
                   />
                   <span className="min-w-0 flex-1 truncate">{item.name || item.symbol}</span>
-                  {typeof item.changeRate === "number" && (
-                    <span
-                      className={cn(
-                        "shrink-0 font-mono text-[11px] tabular-nums",
-                        trendTextClass(item.changeRate),
-                      )}
-                    >
-                      {formatPercent(item.changeRate)}
-                    </span>
-                  )}
+                  {/*
+                    가격 · 등락률은 `QuoteCell`이 그린다 — 「거래대금 상위처럼」이
+                    사용자가 요청 6에서 말한 기준이고, 그 카드도 같은 부품을 쓴다.
+                    색 규칙(0.00%에는 색이 없다)과 「좁으면 가격 생략」도 그쪽에 있다.
+
+                    툴팁의 `priceAsOf`는 남긴다 — 스트림이 아직 안 붙은 동안 보이는
+                    값이 언제 것인지는 여전히 질문이 된다.
+                  */}
+                  <span title={priceAsOfLabel(item.priceAsOf)} className="shrink-0">
+                    <QuoteCell
+                      price={q?.livePrice ?? item.closePrice ?? 0}
+                      changeRate={q?.liveChangeRate ?? item.changeRate ?? 0}
+                      currency={(q?.currency ?? item.currency ?? "KRW") as "KRW" | "USD"}
+                      symbol={item.symbol}
+                    />
+                  </span>
                   <span
                     className={cn(
-                      "w-10 shrink-0 text-right font-mono text-xs font-bold tabular-nums",
+                      "w-10 shrink-0 text-right font-num text-cell font-bold tabular-nums",
                       SCORE_TONE_TEXT[tone],
                     )}
                   >
                     {item.score}
                     {item.grade && (
-                      <span className="ml-0.5 text-[10px] font-medium">{item.grade}</span>
+                      <span className="ml-0.5 text-micro font-medium">{item.grade}</span>
                     )}
                   </span>
                 </button>
@@ -189,19 +242,11 @@ function ScoreTopBody({
 
 function TopMovers({
   onPick,
-  onSymbols,
-  onLoaded,
 }: {
   onPick: (quote: QuoteSummary) => void;
-  /**
-   * 랭킹이 오는 **즉시** 종목 코드만 위로 올린다. 「실적·공시」 칸이 물어보는 데
-   * 필요한 건 코드뿐인데, 예전에는 시세까지 기다리느라 3단으로 줄을 섰다.
-   */
-  onSymbols: (symbols: string[]) => void;
-  /** 「실적·공시」가 종목명을 채우도록 받아 온 시세를 위로 올린다. */
-  onLoaded: (quotes: QuoteSummary[]) => void;
 }) {
-  const [market, setMarket] = useState<MarketCountry>("KR");
+  // ScoreTop과 같은 규칙 — 열려 있는 시장이 기본값이다.
+  const [market, setMarket] = useOpenMarket(MOVERS_MARKET_PAIR);
   // ScoreTop과 같은 이유로 본문만 key로 다시 마운트한다.
   return (
     <TopMoversBody
@@ -209,8 +254,6 @@ function TopMovers({
       market={market}
       onMarketChange={setMarket}
       onPick={onPick}
-      onSymbols={onSymbols}
-      onLoaded={onLoaded}
     />
   );
 }
@@ -219,63 +262,66 @@ function TopMoversBody({
   market,
   onMarketChange,
   onPick,
-  onSymbols,
-  onLoaded,
 }: {
-  market: MarketCountry;
+  market: MarketCountry | null;
   onMarketChange: (m: MarketCountry) => void;
   onPick: (quote: QuoteSummary) => void;
-  onSymbols: (symbols: string[]) => void;
-  onLoaded: (quotes: QuoteSummary[]) => void;
 }) {
   const [block, setBlock] = useState<Block<QuoteSummary>>(LOADING);
 
   useEffect(() => {
+    if (market == null) return; // 어느 시장을 받을지 아직 모른다
     let alive = true;
     void (async () => {
       try {
+        /*
+          **일곱 줄을 채우려고 아홉을 받는다.** 랭킹에는 시세 배치가 못 채우는 종목이
+          섞인다(ETN·신규 상장 등) — 그런 줄은 종목코드만 남아 화면에 세울 수 없어
+          아래에서 버려진다. 딱 일곱만 받으면 그날의 카드가 여섯 줄이 되고, 옆
+          점수 카드와 높이를 맞추자던 이 작업이 되돌아간다.
+        */
         const res = await fetchRankingsClient({
           type: "MARKET_TRADING_AMOUNT",
           marketCountry: market,
           duration: "1d",
-          count: 8,
+          count: DASHBOARD_RANK_ROWS + 2,
         });
-        const symbols = res.rankings.map((r) => r.symbol).slice(0, 8);
+        const symbols = res.rankings.map((r) => r.symbol).slice(0, DASHBOARD_RANK_ROWS + 2);
         if (!alive) return;
-        /*
-         * 종목 코드를 **시세보다 먼저** 올린다. 「실적·공시」 칸은 코드만 있으면
-         * 물어볼 수 있어, 이 한 줄로 시세와 일정이 나란히 나간다 — 예전에는
-         * 랭킹 → 시세 → 일정 3단이었다.
-         */
-        onSymbols(symbols);
         // 랭킹 응답에는 종목명이 없다. 코드만 보여주면 훑을 수 없으므로 배치 시세로 채운다.
         const quotes = symbols.length ? await fetchQuotesBatchClient(symbols) : [];
         const bySymbol = new Map(quotes.map((q) => [q.symbol, q]));
         if (!alive) return;
         const ordered = symbols
           .map((s) => bySymbol.get(s))
-          .filter((q): q is QuoteSummary => Boolean(q));
+          .filter((q): q is QuoteSummary => Boolean(q))
+          .slice(0, DASHBOARD_RANK_ROWS);
         setBlock(settled(ordered));
-        onLoaded(ordered);
       } catch {
-        if (alive) {
-          setBlock(settled([]));
-          onSymbols([]);
-          onLoaded([]);
-        }
+        if (alive) setBlock(settled([]));
       }
     })();
     return () => {
       alive = false;
     };
-    // `onSymbols`·`onLoaded`는 부모의 setState라 렌더마다 같은 참조다. 의존성에
-    // 넣으면 시장이 바뀌지 않았는데도 이펙트가 다시 도는 길만 열린다.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [market]);
+
+  // 이 카드도 값이 살아 있어야 한다 — 랭킹 순위는 5분 스냅샷이지만 가격은 지금이다.
+  const liveSymbols = useMemo(() => block.items.map((q) => q.symbol), [block.items]);
+  const live = useLiveQuotes(liveSymbols);
 
   return (
     <SectionCard
       title="거래대금 상위"
+      /* 시장이 정해지기 전에는 「더보기」가 국내를 가리킨다 — 목적지 링크는 잠깐 뒤
+         갱신되고, 그 사이 링크가 없는 것보다 낫다. */
+      href={marketRadarHref({
+        market: market ?? "KR",
+        type: "MARKET_TRADING_AMOUNT",
+        duration: "realtime",
+        count: MARKET_RADAR_DEFAULT_COUNT,
+      })}
+      hrefLabel="실시간 차트"
       action={
         <MiniToggle
           options={[
@@ -288,19 +334,19 @@ function TopMoversBody({
       }
     >
       {block.status === "loading" ? (
-        <SectionSkeleton rows={8} />
+        <SectionSkeleton rows={DASHBOARD_RANK_ROWS} />
       ) : block.items.length === 0 ? (
         <SectionEmpty text="랭킹 데이터를 불러오지 못했습니다" />
       ) : (
-        <ul className="min-w-0">
+        <ul className="@container min-w-0">
           {block.items.map((q, i) => (
             <li key={q.symbol}>
               <button
                 type="button"
                 onClick={() => onPick(q)}
-                className="flex h-[32px] w-full min-w-0 items-center gap-2 rounded-md px-1 text-left text-xs hover:bg-accent"
+                className="flex h-[32px] w-full min-w-0 items-center gap-2 rounded-md px-1 text-left text-cell hover:bg-accent"
               >
-                <span className="w-3 shrink-0 text-right text-[11px] font-medium text-muted-foreground">
+                <span className="w-3 shrink-0 text-right text-cell font-medium text-muted-foreground">
                   {i + 1}
                 </span>
                 <StockAvatar
@@ -312,19 +358,17 @@ function TopMoversBody({
                   className="shrink-0"
                 />
                 <span className="min-w-0 flex-1 truncate">{q.name || q.symbol}</span>
-                <PriceDisplay
-                  value={q.currentPrice}
+                {/*
+                  값은 **스트림이 밀어 준 것**을 먼저 쓴다 (2026-09-04 사용자 요청 9).
+                  이 카드는 랭킹 응답과 배치 시세를 한 번씩 받고 그대로 서 있었다 —
+                  홈을 열어 둔 채로는 숫자가 하루 종일 안 움직였다.
+                */}
+                <QuoteCell
+                  price={live.get(q.symbol.toUpperCase())?.livePrice ?? q.currentPrice}
+                  changeRate={live.get(q.symbol.toUpperCase())?.liveChangeRate ?? q.changeRate}
                   currency={q.currency}
-                  className="shrink-0 font-mono text-[11px]"
+                  symbol={q.symbol}
                 />
-                <span
-                  className={cn(
-                    "w-14 shrink-0 text-right font-mono text-xs tabular-nums",
-                    trendTextClass(q.changeRate),
-                  )}
-                >
-                  {formatPercent(q.changeRate)}
-                </span>
               </button>
             </li>
           ))}
@@ -345,26 +389,24 @@ export function DashboardOverview() {
    * 알아서 심볼만 넘기고, 모달이 열릴 때 배치 시세를 한 번 부른다.
    */
   const [picked, setPicked] = useState<{ symbol: string; seed: QuoteSummary | null } | null>(null);
-  const [call, setCall] = useState<ResearchCall | null>(null);
 
   /*
-   * 기사는 **여기서 한 번만** 받아 목록 카드와 키워드 카드에 내려준다. 둘이 각자 부르면
-   * 같은 화면의 「기사 100건 중」과 목록이 서로 다른 스냅샷이 된다(그 사이에 기사가 들어온다).
+   * 키워드 카드는 국내 기사 전체를 받는다 — 「기사 100건 중 2회 이상」이 100건을
+   * 세야 한다. 실시간 뉴스 카드는 자기 시장을 따로 받아, 해외로 바꿔도 키워드가
+   * 따라가지 않는다.
    *
-   * 홈 전용 엔드포인트를 쓴다 — 뉴스 목록과 **건수는 같지만**(키워드 집계와 속보 수가
-   * 100건 전체를 세야 한다) 화면에 그리지 않는 92건은 제목·태그·키워드만 실려 온다.
-   * 98KB(gzip 29KB) → 35KB(gzip 10KB).
+   * 홈 전용 엔드포인트를 쓴다 — 뉴스 목록과 **건수는 같지만** 화면에 그리지 않는
+   * 92건은 제목·태그·키워드만 실려 온다. 98KB(gzip 29KB) → 35KB(gzip 10KB).
    */
   const [articles, setArticles] = useState<NewsArticle[] | null>(null);
-  // 앞 `fullCount`건만 본문·링크가 있다. 그 뒤 기사로 모달을 열면 빈 창이 뜬다.
-  const [fullCount, setFullCount] = useState(0);
+  const [newsPool, setNewsPool] = useState<NewsArticle[]>([]);
   useEffect(() => {
     let alive = true;
-    fetchDashboardNews("domestic")
+    // 옆의 뉴스 카드와 **같은 수**로 부른다 — 그래야 둘이 한 요청을 나눠 쓴다
+    // (`DASHBOARD_NEWS_ROWS` 주석 참조). 받는 목록의 길이는 어느 쪽이든 같다.
+    fetchDashboardNews("domestic", DASHBOARD_NEWS_ROWS)
       .then((res) => {
-        if (!alive) return;
-        setArticles(res.articles);
-        setFullCount(res.fullCount);
+        if (alive) setArticles(res.articles);
       })
       .catch(() => {
         if (alive) setArticles([]);
@@ -375,26 +417,23 @@ export function DashboardOverview() {
   }, []);
 
   /*
-   * 「다가오는 일정」은 거래대금 상위 종목을 그대로 쓴다. 종목을 따로 고르면 "왜 이
-   * 종목의 일정인지"를 설명할 길이 없는데, 바로 옆 칸이 방금 그 목록을 보여줬으므로
-   * 이유가 화면에 있다. 이름도 저 목록의 시세에서 오므로 마스터를 다시 부르지 않는다.
-   */
-  const [topSymbols, setTopSymbols] = useState<string[] | null>(null);
-  const [topQuotes, setTopQuotes] = useState<QuoteSummary[] | null>(null);
-
-  /*
    * 기사는 뉴스 화면과 **같은 방식**으로 연다(`useNewsArticleModal`). 예전에는 여기서
    * iframe 셸 하나를 문맥 없이 띄워, 홈에서 연 기사에는 관련 종목·지수 카드가 아예
    * 없었다 — 같은 기사가 뉴스 메뉴에서는 미니 차트까지 달고 열리는데도.
    *
-   * `pool`에는 **본문이 온전한 앞부분만** 넘긴다. 뒤쪽 요약본까지 넘기면 「같은 이슈」
-   * 목록에 링크 없는 기사가 섞여, 눌렀을 때 아무것도 없는 창이 뜬다.
+   * `pool`은 실시간 뉴스 카드가 지금 보여 주는 시장이다. 국내 키워드용 목록을 넘기면
+   * 해외 기사 모달에 국내 「같은 이슈」가 붙는다.
    */
   const newsModal = useNewsArticleModal({
-    pool: articles ? articles.slice(0, fullCount) : undefined,
+    pool: newsPool,
   });
 
   const briefings = useMarketBriefings();
+  const newsSharesRow = newsCardSharesBriefingRow({
+    loading: briefings.loading,
+    hasDomestic: Boolean(briefings.domestic),
+    hasUs: Boolean(briefings.us),
+  });
 
   return (
     <div className="space-y-3">
@@ -403,45 +442,71 @@ export function DashboardOverview() {
         브리핑이 아직 생성 전이면 뉴스가 전폭으로 늘어난다 — 빈 칸을 두고 "준비 중"이라
         적는 것보다 있는 것으로 채우는 편이 낫다.
       */}
+      {/*
+        **한 행에 설 때 행 높이는 브리핑이 정하고, 뉴스가 그 높이를 채운다.**
+
+        실측 1440px: 브리핑 535px · 뉴스 478px라 오른쪽 아래가 57px 비어 있었다. 그렇다고
+        뉴스 줄만 늘리면 이번엔 뉴스가 797px이 되어 **브리핑 아래가 262px 비는** 반대
+        증상이 된다(실제로 그렇게 나왔다) — 08-28에 고쳤던 「짧은 카드가 늘어나 안이
+        비는」 문제 그대로다.
+
+        그래서 뉴스 칸은 **행 높이 계산에 참여하지 않게** 한다: 칸은 자리만 잡고(`relative`)
+        카드를 그 안에 절대 배치한다. 절대 배치된 자식은 부모의 내용 높이에 기여하지
+        않으므로 행 높이는 브리핑 혼자 정하고, 늘어난 칸을 카드가 채운 뒤 넘치는 기사는
+        카드 안에서 스크롤된다.
+
+        `lg:min-h-[22rem]`은 바닥이다 — 브리핑이 유난히 짧은 날 뉴스가 두어 줄로 눌리지
+        않게 한다. 모바일은 위아래로 쌓여 맞출 상대가 없으므로 전부 자연 높이 그대로다.
+      */}
+      {/*
+        **행을 나눠 쓰는가**는 세 자리(그리드·칸·카드)가 같은 답을 써야 한다 —
+        2026-09-05에 그리드만 「전폭」으로 가고 칸·카드는 절대 배치를 그대로 둬서,
+        브리핑이 없는 날 PC 뉴스가 352px 안에 갇혀 **다섯 줄만** 보였다.
+        판단은 `newsCardSharesBriefingRow` 한 곳에 있다.
+      */}
       <div
         className={cn(
-          "grid min-w-0 gap-3",
-          !briefings.loading && !briefings.domestic && !briefings.us
-            ? "grid-cols-1"
-            : "lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]",
+          "grid min-w-0 items-start gap-3",
+          newsSharesRow
+            ? "lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-stretch"
+            : "grid-cols-1",
         )}
       >
         <MarketBriefingCard briefings={briefings} className="min-w-0" />
-        {/*
-          목록 카드에는 **본문이 온전한 것만** 준다. 키워드 카드는 반대로 전체를
-          받아야 한다 — 「기사 100건 중 2회 이상」이라는 문장이 100건을 세서 나온다.
-        */}
-        <LatestNewsCard
-          articles={articles ? articles.slice(0, fullCount) : null}
-          onPick={newsModal.open}
-        />
+        <div className={cn("min-w-0", newsSharesRow && "lg:relative lg:min-h-[22rem]")}>
+          <LatestNewsCard
+            onPick={newsModal.open}
+            onPoolChange={setNewsPool}
+            fillRow={newsSharesRow}
+            className={cn(newsSharesRow && "lg:absolute lg:inset-0")}
+          />
+        </div>
       </div>
 
-      <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid min-w-0 items-start gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <ScoreTop onPick={(symbol) => setPicked({ symbol, seed: null })} />
-        <TopMovers
-          onPick={(quote) => setPicked({ symbol: quote.symbol, seed: quote })}
-          onSymbols={setTopSymbols}
-          onLoaded={setTopQuotes}
-        />
-        <DashboardEventsCard symbols={topSymbols} quotes={topQuotes} />
-        <TodayKeywordsCard articles={articles} />
+        <TopMovers onPick={(quote) => setPicked({ symbol: quote.symbol, seed: quote })} />
+        <DashboardEventsCard onPick={(symbol) => setPicked({ symbol, seed: null })} />
+        {/*
+          뉴스 레일과 **같은 부품**이다 (2026-09-05 사용자 요청 7).
+          홈에서는 접힘·각주를 달고(`variant="full"` 기본), 누르면 뉴스 화면으로
+          검색어를 싣고 나간다 — 홈에는 볼 기사가 열넷뿐이라 좁히는 일은 목록이
+          다 있는 쪽에서 하는 게 맞다.
+        */}
+        <TrendingKeywordsCard market="domestic" articles={articles} />
       </div>
 
-      <LatestReportsCard onPick={setCall} />
-
+      {/*
+        「최신 투자 리포트」 카드는 뺐다(2026-09-03 사용자 결정). 홈에서 전폭 한 줄을
+        통째로 쓰면서, 위 네 카드처럼 훑고 지나가는 물건이 아니라 하나를 정독하는
+        물건이라 그 자리 값을 못 했다. 리포트는 `/reports`가 제 자리다.
+      */}
       <SymbolQuickLookModal
         symbol={picked?.symbol ?? null}
         seed={picked?.seed}
         onClose={() => setPicked(null)}
       />
       {newsModal.modal}
-      <ResearchQuickLookModal call={call} open={call != null} onClose={() => setCall(null)} />
     </div>
   );
 }

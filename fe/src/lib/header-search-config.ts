@@ -9,6 +9,14 @@ export type HeaderSearchConfig = {
   mode: HeaderSearchMode;
   placeholder: string;
   debounceMs: number;
+  /**
+   * 좁은 화면에서 입력줄 대신 **돋보기 아이콘**으로 접어 둔다(누르면 펼쳐진다).
+   *
+   * 검색은 여전히 어느 화면에서나 닿을 수 있어야 한다(아래 HIDDEN_PREFIXES 주석).
+   * 다만 이미 한 종목을 열어 놓은 화면에서는 입력줄이 늘 펼쳐져 있을 이유가 약하고,
+   * 그 43px이 비싸다 — 종목 상세는 헤더·탭바만으로 375×812의 33%를 쓰고 있었다.
+   */
+  collapsible?: boolean;
 };
 
 /**
@@ -25,10 +33,17 @@ export function resolveHeaderSearchConfig(pathname: string): HeaderSearchConfig 
     return { mode: "hidden", placeholder: "", debounceMs: 0 };
   }
 
+  /*
+   * 뉴스 검색창의 문구는 **무엇을 넣어야 하는지**가 아니라 무엇을 해 주는지를 적는다.
+   *
+   * 「국내 뉴스 검색 (종목명, 키워드, 005930…)」은 375px에서 275px을 써서 칸을
+   * 거의 가득 채웠다. 예시를 괄호로 나열하는 만큼 길어지는데, 그 예시가 알려 주는
+   * 것("종목명도 되고 키워드도 된다")은 한 번 써 보면 바로 아는 종류다.
+   */
   if (pathname === "/news/domestic" || pathname.startsWith("/news/domestic/")) {
     return {
       mode: "news-domestic",
-      placeholder: "국내 뉴스 검색 (종목명, 키워드, 005930…)",
+      placeholder: "관심 키워드를 똑똑하게 찾아드릴게요",
       debounceMs: 400,
     };
   }
@@ -36,7 +51,7 @@ export function resolveHeaderSearchConfig(pathname: string): HeaderSearchConfig 
   if (pathname === "/news/us" || pathname.startsWith("/news/us/")) {
     return {
       mode: "news-us",
-      placeholder: "해외 뉴스 검색 (티커, 키워드…)",
+      placeholder: "관심 키워드를 똑똑하게 찾아드릴게요",
       debounceMs: 400,
     };
   }
@@ -55,6 +70,15 @@ export function resolveHeaderSearchConfig(pathname: string): HeaderSearchConfig 
       mode: "quotes",
       placeholder: "종목명 · 심볼 검색…",
       debounceMs: 150,
+    };
+  }
+
+  if (pathname === "/stocks" || pathname.startsWith("/stocks/")) {
+    return {
+      mode: "stock",
+      placeholder: "종목명 · 심볼 검색…",
+      debounceMs: 200,
+      collapsible: true,
     };
   }
 

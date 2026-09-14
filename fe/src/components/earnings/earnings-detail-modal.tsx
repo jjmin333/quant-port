@@ -27,6 +27,7 @@ import type { EarningsEvent, EarningsTabData } from "@/lib/earnings-types";
 import { formatShortDate } from "@/lib/earnings-range";
 import { formatFinancialAmount } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 
 /**
  * 실적 전용 상세 모달 (W2).
@@ -91,11 +92,11 @@ export function EarningsDetailModal({
                   className="shrink-0"
                 />
                 <span className="min-w-0 truncate">{eventName(event)}</span>
-                <span className="shrink-0 font-mono text-[11px] font-normal text-muted-foreground">
+                <span className="shrink-0 font-num text-cell font-normal text-muted-foreground">
                   {event.symbol}
                 </span>
               </DialogTitle>
-              <DialogDescription className="text-left text-[11px]">
+              <DialogDescription className="text-left text-cell">
                 {periodLabel(event)} · {event.date.replace(/-/g, ".")} 발표
                 {event.revisedAt && (
                   <span title={`${event.revisedAt}에 정정 공시 — 수치는 정정본입니다`}>
@@ -127,7 +128,7 @@ export function EarningsDetailModal({
 
               <Link
                 href={`/stocks/${encodeURIComponent(event.symbol)}`}
-                className="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium hover:bg-muted"
+                className={cn(buttonVariants({ variant: "outline", size: "default" }), "hover:bg-muted")}
               >
                 종목 상세로 이동
                 <ArrowRight className="size-3.5" />
@@ -145,8 +146,8 @@ function HeadlineRow({ event }: { event: EarningsEvent }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg bg-muted/50 p-3">
       <div className="min-w-0">
-        <p className="text-[10px] text-muted-foreground">
-          {event.surprise ? `${SURPRISE_METRIC_LABEL[event.surprise.metric]} 서프라이즈` : "발표 상태"}
+        <p className="text-micro text-muted-foreground">
+          {event.surprise ? `${SURPRISE_METRIC_LABEL[event.surprise.metric] ?? "실적"} 서프라이즈` : "발표 상태"}
         </p>
         {event.surprise ? (
           <SurpriseValue surprise={event.surprise} className="text-lg" />
@@ -158,18 +159,19 @@ function HeadlineRow({ event }: { event: EarningsEvent }) {
         )}
       </div>
       <div className="min-w-0">
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-micro text-muted-foreground">
           {event.reaction?.basis === "sameDay" ? "발표 당일 주가" : "다음 거래일 주가"}
         </p>
         <ReactionValue
           reaction={event.reaction}
           status={event.dateStatus}
+          currency={event.currency}
           className="text-lg"
         />
       </div>
       <DivergenceFlag event={event} />
       {event.estimateBasis && (
-        <p className="text-[10px] text-[var(--sample)]">{event.estimateBasis}</p>
+        <p className="text-micro text-[var(--sample)]">{event.estimateBasis}</p>
       )}
     </div>
   );
@@ -181,11 +183,11 @@ function MetricTiles({ event }: { event: EarningsEvent }) {
     { label: "매출", pair: event.revenue },
     { label: "영업이익", pair: event.opIncome },
     { label: "순이익", pair: event.netIncome },
-  ].filter((t) => t.pair.actual != null || t.pair.estimate != null);
+  ].filter((t) => t.pair != null && (t.pair.actual != null || t.pair.estimate != null));
 
   if (tiles.length === 0) {
     // 미국 종목은 매출/EPS만 오고 영업이익·순이익이 없다.
-    if (event.eps.actual == null && event.eps.estimate == null) return null;
+    if (event.eps?.actual == null && event.eps?.estimate == null) return null;
     return (
       <div className="grid grid-cols-2 gap-2">
         <Tile label="EPS 기대" value={epsText(event.eps.estimate, event.currency)} />
@@ -230,12 +232,12 @@ function Tile({
 }) {
   return (
     <div className="min-w-0 rounded-lg border p-2">
-      <p className="text-[10px] text-muted-foreground">{label}</p>
-      <p className="truncate font-mono text-xs font-semibold tabular-nums">{value}</p>
+      <p className="text-micro text-muted-foreground">{label}</p>
+      <p className="truncate font-num text-cell font-semibold tabular-nums">{value}</p>
       {qoq != null && (
         <p
           className={cn(
-            "font-mono text-[10px] tabular-nums",
+            "font-num text-micro tabular-nums",
             qoq >= 0 ? "text-[var(--profit)]" : "text-[var(--loss)]",
           )}
           // YoY로 착각하면 성장률을 완전히 잘못 읽는다. 실측으로 QoQ임을 확인했다.
@@ -245,7 +247,7 @@ function Tile({
           {qoq.toFixed(1)}%
         </p>
       )}
-      {sub && <p className="truncate text-[10px] text-muted-foreground">{sub}</p>}
+      {sub && <p className="truncate text-micro text-muted-foreground">{sub}</p>}
     </div>
   );
 }
@@ -264,18 +266,18 @@ function HistoryStrip({ detail }: { detail: EarningsTabData | null }) {
       {hit && (
         <>
           <div>
-            <p className="text-[10px] text-muted-foreground">컨센서스 적중 이력</p>
-            <p className="text-xs font-bold">
+            <p className="text-micro text-muted-foreground">컨센서스 적중 이력</p>
+            <p className="text-cell font-bold">
               <span className="text-[var(--profit)]">{hit.beats}</span>
               <span className="font-normal text-muted-foreground"> / {hit.quarters}분기 상회</span>
             </p>
           </div>
           {hit.medianPct != null && (
             <div>
-              <p className="text-[10px] text-muted-foreground">서프라이즈 중위</p>
+              <p className="text-micro text-muted-foreground">서프라이즈 중위</p>
               <p
                 className={cn(
-                  "font-mono text-xs font-bold tabular-nums",
+                  "font-num text-cell font-bold tabular-nums",
                   hit.medianPct >= 0 ? "text-[var(--profit)]" : "text-[var(--loss)]",
                 )}
               >
@@ -283,7 +285,7 @@ function HistoryStrip({ detail }: { detail: EarningsTabData | null }) {
                 {hit.medianPct.toFixed(1)}%
               </p>
               {hit.avgPct != null && (
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-micro text-muted-foreground">
                   평균 {hit.avgPct >= 0 ? "+" : ""}
                   {hit.avgPct.toFixed(1)}%
                 </p>
@@ -294,13 +296,13 @@ function HistoryStrip({ detail }: { detail: EarningsTabData | null }) {
       )}
       {next && (
         <div>
-          <p className="text-[10px] text-muted-foreground">다음 발표</p>
-          <p className="flex items-center gap-1 text-xs font-bold">
+          <p className="text-micro text-muted-foreground">다음 발표</p>
+          <p className="flex items-center gap-1 text-cell font-bold">
             {next.dateStatus && <DateStatusBadge status={next.dateStatus} />}
-            <span className="font-mono tabular-nums">{formatShortDate(next.date)}</span>
+            <span className="font-num tabular-nums">{formatShortDate(next.date)}</span>
           </p>
           {next.estimateBasis && (
-            <p className="text-[10px] text-[var(--sample)]">{next.estimateBasis}</p>
+            <p className="text-micro text-[var(--sample)]">{next.estimateBasis}</p>
           )}
         </div>
       )}
@@ -325,7 +327,7 @@ function AlternatesBlock({ event }: { event: EarningsEvent }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-[11px] hover:bg-muted/50"
+        className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-cell hover:bg-muted/50"
       >
         <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
         <span className="text-muted-foreground">
@@ -334,22 +336,22 @@ function AlternatesBlock({ event }: { event: EarningsEvent }) {
       </button>
       {open && (
         <div className="border-t px-3 py-2">
-          {alternates.map((alt) => (
+          {alternates.map((alt, i) => (
             <div
-              key={`${alt.basis}-${alt.fiscalPeriod}`}
-              className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 py-1 text-[11px]"
+              key={`${alt.basis ?? ""}-${alt.fiscalPeriod}-${alt.date}-${i}`}
+              className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 py-1 text-cell"
             >
-              <span className="rounded bg-muted px-1 py-0.5 text-[10px]">{alt.basis || "기타"}</span>
+              <span className="rounded bg-muted px-1 py-0.5 text-micro">{alt.basis || "기타"}</span>
               {alt.opIncome.estimate != null && alt.opIncome.actual != null && (
-                <span className="font-mono text-muted-foreground">
+                <span className="font-num text-muted-foreground">
                   기대 {formatFinancialAmount(alt.opIncome.estimate, "KRW")} →{" "}
                   {formatFinancialAmount(alt.opIncome.actual, "KRW")}
                 </span>
               )}
-              <SurpriseValue surprise={alt.surprise} className="text-[11px]" />
+              <SurpriseValue surprise={alt.surprise} className="text-cell" />
             </div>
           ))}
-          <p className="mt-1 border-t pt-1 text-[10px] leading-relaxed text-muted-foreground">
+          <p className="mt-1 border-t pt-1 text-micro leading-relaxed text-muted-foreground">
             국내 실적 보도의 기준은 <b>연결</b>이라 그쪽을 대표로 보여줍니다. 지주회사처럼
             개별이 의미 있는 경우가 있어 지우지 않고 접어 둡니다.
           </p>

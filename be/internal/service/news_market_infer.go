@@ -9,18 +9,18 @@ import (
 )
 
 const (
-	marketScoreTitleWeight        = 3.0
-	marketScoreSummaryWeight      = 1.0
-	marketScoreStructuralUnknown  = 2.0
-	marketScoreUnknownUSHint      = 0.5
+	marketScoreTitleWeight       = 3.0
+	marketScoreSummaryWeight     = 1.0
+	marketScoreStructuralUnknown = 2.0
+	marketScoreUnknownUSHint     = 0.5
 )
 
 type symbolMarketEvidence struct {
-	symbol      string
-	currency    model.QuoteCurrency
-	inTitle     bool
-	known       bool
-	structural  bool
+	symbol     string
+	currency   model.QuoteCurrency
+	inTitle    bool
+	known      bool
+	structural bool
 }
 
 // inferNewsMarket decides whether a newly ingested article belongs in domestic or US feeds.

@@ -64,7 +64,7 @@ func (e *ResearchInconsistentError) Error() string { return e.Reason }
 
 // ResearchSymbolCooldownError carries the wait so the UI can say when.
 type ResearchSymbolCooldownError struct {
-	Symbol       string
+	Symbol        string
 	DaysRemaining int
 }
 
@@ -74,13 +74,13 @@ func (e *ResearchSymbolCooldownError) Error() string {
 
 // ResearchPublishRequest is the client payload. Nothing factual is in here.
 type ResearchPublishRequest struct {
-	Symbol      string
-	Title       string
-	Direction   string
-	TargetPrice *float64
-	StopPrice   *float64
-	HorizonDays int
-	Conviction  int
+	Symbol       string
+	Title        string
+	Direction    string
+	TargetPrice  *float64
+	StopPrice    *float64
+	HorizonDays  int
+	Conviction   int
 	BodyMD       string
 	ThumbnailURL string
 	Tags         []string
@@ -136,12 +136,12 @@ func NewResearchService(
 	return &ResearchService{repo: repo, closes: closes, indexCloses: indexCloses, stocks: stocks, candles: candles}
 }
 
-func (s *ResearchService) SetQuotes(q *QuotesService)               { s.quotes = q }
-func (s *ResearchService) SetScores(sc *ScoreService)               { s.scores = sc }
-func (s *ResearchService) SetNews(n *NewsStore)                     { s.news = n }
-func (s *ResearchService) SetIndexStore(i *MarketIndexStore)        { s.indexStore = i }
-func (s *ResearchService) SetMarketStore(m *MarketDataStore)        { s.marketStore = m }
-func (s *ResearchService) SetStockSummary(v *StockSummaryService)   { s.stockSummary = v }
+func (s *ResearchService) SetQuotes(q *QuotesService)             { s.quotes = q }
+func (s *ResearchService) SetScores(sc *ScoreService)             { s.scores = sc }
+func (s *ResearchService) SetNews(n *NewsStore)                   { s.news = n }
+func (s *ResearchService) SetIndexStore(i *MarketIndexStore)      { s.indexStore = i }
+func (s *ResearchService) SetMarketStore(m *MarketDataStore)      { s.marketStore = m }
+func (s *ResearchService) SetStockSummary(v *StockSummaryService) { s.stockSummary = v }
 
 // ---------------------------------------------------------------- publish
 
@@ -152,7 +152,21 @@ func (s *ResearchService) Publish(ctx context.Context, req ResearchPublishReques
 	}
 	symbol := strings.ToUpper(strings.TrimSpace(req.Symbol))
 	if symbol == "" {
-		return model.ResearchView{}, errors.New("symbol required")
+		return model.ResearchView{}, invalidInput("symbol required")
+	}
+	/*
+		본문 없이 발행할 수 없다.
+
+		발행은 되돌릴 수 없고(삭제 API가 없다) 하루 한도와 30일 쿨다운을 소모하는데,
+		예전에는 종목만 고른 채 「발행하기」를 한 번 누르면 본문이 빈 공개 리포트가
+		커뮤니티 피드에 그대로 올라갔다(실측: 상세 화면에 "본문이 없습니다.").
+
+		화면에서도 막지만 서버에서도 막는 이유는, 이 규칙이 화면 상태가 아니라
+		**발행물의 최소 조건**이기 때문이다. 화면 검증만 두면 다음에 다른 진입점이
+		생길 때 같은 구멍이 다시 열린다.
+	*/
+	if strings.TrimSpace(req.BodyMD) == "" {
+		return model.ResearchView{}, invalidInput("본문을 작성해 주세요")
 	}
 
 	now := time.Now().UTC()
@@ -462,7 +476,7 @@ func (s *ResearchService) Preview(ctx context.Context, req ResearchPreviewReques
 	}
 	symbol := strings.ToUpper(strings.TrimSpace(req.Symbol))
 	if symbol == "" {
-		return model.ResearchPreview{}, errors.New("symbol required")
+		return model.ResearchPreview{}, invalidInput("symbol required")
 	}
 
 	call, err := s.capture(ctx, symbol, time.Now().UTC(), req.Interval)
@@ -492,6 +506,16 @@ func (s *ResearchService) Preview(ctx context.Context, req ResearchPreviewReques
 		ok, reason := researchEligible(call.Currency, call.Evidence.MarketCap)
 		return ok, reason
 	}()
+
+	out.DailyCap = researchDailyCap
+	out.DailyRemaining = researchDailyCap
+	if n, err := s.repo.CountSince(ctx, userID, time.Now().UTC().Add(-24*time.Hour)); err == nil {
+		if left := researchDailyCap - n; left >= 0 {
+			out.DailyRemaining = left
+		} else {
+			out.DailyRemaining = 0
+		}
+	}
 
 	if req.TargetPrice != nil && *req.TargetPrice > 0 && s.candles != nil {
 		points, err := s.candles.DailyCloseSeries(ctx, symbol, researchOddsHistoryBars)
@@ -720,24 +744,40 @@ func (s *ResearchService) decorate(
 		}
 	}
 
+	/*
+		종가는 **한 번의 왕복으로** 받는다.
+
+		예전에는 심볼마다 `ClosesSince`를 한 번씩 불렀다. 쿼리 하나는 PK 레인지
+		스캔이라 싸지만(50종목 표본에서 각 0.05ms) 왕복이 심볼 수만큼 생기고
+		그동안 커넥션을 붙잡는다 — 피드 한 페이지가 100종목이면 100왕복,
+		판정 배치는 열린 콜 1,000건까지 훑는다(docs/PERFORMANCE_AUDIT.md P1-7).
+		같은 함수의 `attachSocial`은 이미 배치화돼 있었고 종가만 빠져 있었다.
+
+		하한은 심볼마다 그대로 유지한다 — 공통 하한으로 묶으면 문장은 짧아지지만
+		필요 없는 행을 읽는다(실측 2,738행 vs 1,660행). 읽는 범위를 바꾸지 않는다.
+	*/
 	priceSeries := map[string]closeSeries{}
-	if s.closes != nil {
+	if s.closes != nil && len(earliestBySymbol) > 0 {
+		reqs := make([]repository.SeriesRequest, 0, len(earliestBySymbol))
 		for symbol, since := range earliestBySymbol {
-			points, err := s.closes.ClosesSince(ctx, symbol, since)
-			if err != nil {
-				continue
+			reqs = append(reqs, repository.SeriesRequest{Key: symbol, Since: since})
+		}
+		if byKey, err := s.closes.ClosesSinceMulti(ctx, reqs); err == nil {
+			for symbol, points := range byKey {
+				priceSeries[symbol] = newCloseSeries(points)
 			}
-			priceSeries[symbol] = newCloseSeries(points)
 		}
 	}
 	benchSeries := map[string]closeSeries{}
-	if s.indexCloses != nil {
+	if s.indexCloses != nil && len(benchmarks) > 0 {
+		reqs := make([]repository.SeriesRequest, 0, len(benchmarks))
 		for id, since := range benchmarks {
-			points, err := s.indexCloses.ClosesSince(ctx, id, since)
-			if err != nil {
-				continue
+			reqs = append(reqs, repository.SeriesRequest{Key: id, Since: since})
+		}
+		if byKey, err := s.indexCloses.ClosesSinceMulti(ctx, reqs); err == nil {
+			for id, points := range byKey {
+				benchSeries[id] = newCloseSeries(points)
 			}
-			benchSeries[id] = newCloseSeries(points)
 		}
 	}
 
@@ -878,24 +918,40 @@ func (s *ResearchService) RunVerdicts(ctx context.Context) (map[string]any, stri
 			}
 		}
 	}
+	/*
+		종가는 **한 번의 왕복으로** 받는다.
+
+		예전에는 심볼마다 `ClosesSince`를 한 번씩 불렀다. 쿼리 하나는 PK 레인지
+		스캔이라 싸지만(50종목 표본에서 각 0.05ms) 왕복이 심볼 수만큼 생기고
+		그동안 커넥션을 붙잡는다 — 피드 한 페이지가 100종목이면 100왕복,
+		판정 배치는 열린 콜 1,000건까지 훑는다(docs/PERFORMANCE_AUDIT.md P1-7).
+		같은 함수의 `attachSocial`은 이미 배치화돼 있었고 종가만 빠져 있었다.
+
+		하한은 심볼마다 그대로 유지한다 — 공통 하한으로 묶으면 문장은 짧아지지만
+		필요 없는 행을 읽는다(실측 2,738행 vs 1,660행). 읽는 범위를 바꾸지 않는다.
+	*/
 	priceSeries := map[string]closeSeries{}
-	if s.closes != nil {
+	if s.closes != nil && len(earliestBySymbol) > 0 {
+		reqs := make([]repository.SeriesRequest, 0, len(earliestBySymbol))
 		for symbol, since := range earliestBySymbol {
-			points, err := s.closes.ClosesSince(ctx, symbol, since)
-			if err != nil {
-				continue
+			reqs = append(reqs, repository.SeriesRequest{Key: symbol, Since: since})
+		}
+		if byKey, err := s.closes.ClosesSinceMulti(ctx, reqs); err == nil {
+			for symbol, points := range byKey {
+				priceSeries[symbol] = newCloseSeries(points)
 			}
-			priceSeries[symbol] = newCloseSeries(points)
 		}
 	}
 	benchSeries := map[string]closeSeries{}
-	if s.indexCloses != nil {
+	if s.indexCloses != nil && len(benchmarks) > 0 {
+		reqs := make([]repository.SeriesRequest, 0, len(benchmarks))
 		for id, since := range benchmarks {
-			points, err := s.indexCloses.ClosesSince(ctx, id, since)
-			if err != nil {
-				continue
+			reqs = append(reqs, repository.SeriesRequest{Key: id, Since: since})
+		}
+		if byKey, err := s.indexCloses.ClosesSinceMulti(ctx, reqs); err == nil {
+			for id, points := range byKey {
+				benchSeries[id] = newCloseSeries(points)
 			}
-			benchSeries[id] = newCloseSeries(points)
 		}
 	}
 

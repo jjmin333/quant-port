@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"net/http"
@@ -20,6 +21,7 @@ import (
 	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/repository"
 	"github.com/enact/quant-port/be/internal/safego"
+	"github.com/enact/quant-port/be/internal/translate"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -59,15 +61,33 @@ type newsKeyword struct {
 }
 
 type NewsStore struct {
-	cfg          config.NewsConfig
-	naver        *marketdata.NaverNewsClient
-	kakao        *marketdata.KakaoNewsClient
-	rss          *marketdata.RSSNewsClient
-	finnhubNews  *marketdata.FinnhubNewsClient
-	rssUS        *marketdata.RSSNewsClient
-	googleNews   *marketdata.GoogleNewsRSSClient
-	papago       *marketdata.PapagoClient
-	llm          *llm.Client
+	cfg         config.NewsConfig
+	naver       *marketdata.NaverNewsClient
+	kakao       *marketdata.KakaoNewsClient
+	rss         *marketdata.RSSNewsClient
+	finnhubNews *marketdata.FinnhubNewsClient
+	rssUS       *marketdata.RSSNewsClient
+	googleNews  *marketdata.GoogleNewsRSSClient
+	/*
+		translator — 해외 제목 EN→KO. **엔진을 직접 들지 않는다.**
+
+		예전에는 여기가 `papago` 하나였고 `news_translate.go`가 그걸 직접 불렀다.
+		그러면 구현을 바꾸려면 호출부를 고쳐야 하고, 무엇보다 두 엔진을 나란히 돌려
+		비교할 수가 없다 — 자체 모델로 갈아타기 전에 꼭 해야 하는 일이 그것인데.
+
+		Papago는 이제 코드에 없다 — 자격증명이 만료됐고 갱신하지 않기로 했다(09-03).
+		지금 엔진은 자체 모델 하나뿐이라, 사슬이 실패하면 그 제목은 **영어로 남는다**.
+	*/
+	translator *translate.Chain
+	/*
+		translateBudgetLogged — 번역 예산 소진을 **한 번만** 적기 위한 빗장.
+
+		소진은 사고가 아니라 상태다. 하루 한도에 닿으면 남은 하루 내내 같은 오류가
+		오고 수집 경로는 새 기사마다 부르므로, 그대로 찍으면 하루 수백 줄이 된다.
+		다시 통과하면 내려가 다음 소진이 한 줄을 받는다(`translateHeadlines`).
+	*/
+	translateBudgetLogged atomic.Bool
+	llm          *llm.Pool
 	repo         *repository.NewsRepo
 	keywords     *repository.NewsKeywordRepo
 	pollSettings *repository.NewsPollSettingsRepo
@@ -99,8 +119,32 @@ type NewsStore struct {
 	usUpdatedAt     time.Time
 	usKeywordCursor int
 	usGoogleCursor  int
-	usNameIndex     map[string]string // lowercase name -> US symbol
-	usNameIndexAt   time.Time         // when usNameIndex was last built
+	// finnhubCategoryCursor는 해외 일반 뉴스 카테고리 로테이션이다. 한 회차에
+	// 한 갈래만 부른다 — 이유는 refreshFinnhubUSGeneral 머리글에.
+	finnhubCategoryCursor int
+	usNameIndex           map[string]string // lowercase name -> US symbol
+	/*
+		usTickerIndex — **대문자 티커** -> 심볼. 이름 인덱스와 갈라 둔 이유가 이
+		파일에서 제일 중요한 한 가지다.
+
+		예전에는 티커도 소문자로 이름 인덱스에 들어갔다. 그 인덱스는 소문자로
+		내린 본문에 맞추므로 「stocks fall **amid** rate fears」가 AMID(ARGENT MID
+		CAP ETF) 기사가 되고 「**high** yield」가 HIGH(SIMPLIFY ENHANCED INCOME
+		ETF) 기사가 됐다 — 실측 1,000건에서 MOVE 30 · AMID 20 · ALTO 18 · PALO 18 ·
+		HIGH 17 · LIVE 15 · TECH 14 …
+
+		티커는 **대문자로 쓰인다.** 원문 대소문자 그대로 경계까지 보고 맞추면
+		(`usTickerTokenMatch`) 소문자 낱말과는 애초에 부딪히지 않는다.
+	*/
+	usTickerIndex map[string]string // UPPERCASE ticker -> US symbol
+	// usAliases — `stock_aliases` 표의 한글 별칭 스냅샷. 인덱스와 **같은 주기로**
+	// 갈아 끼운다(`rebuildUSNameIndex`). 기사마다 표를 다시 받아 오면 기사 수만큼
+	// map 사본이 생기는데, 여기는 목록 요청 하나가 기사 100건을 만드는 자리다.
+	usAliases map[string]string // 한글 별칭 -> US symbol
+	// usCompanySweeping — 종목별 해외 뉴스 회차가 지금 돌고 있는가. 그 회차는
+	// 고루틴으로 나가므로(Run의 select 참조) 겹침을 여기서 막는다.
+	usCompanySweeping atomic.Bool
+	usNameIndexAt     time.Time // when usNameIndex was last built
 	// 관심·보유에서 모은 미국 티커. extractUSSymbols가 **기사마다** 부르는데 그
 	// 안쪽은 watchlist 쿼리 + 포트폴리오 조회 + stocks.ListBySymbols라, 목록 한 번에
 	// DB 수백 회가 나갔다 (실측: /news/us 한 요청에 portfolio Redis GET만 200회).
@@ -127,7 +171,6 @@ func NewNewsStore(
 	finnhubNews *marketdata.FinnhubNewsClient,
 	rssUS *marketdata.RSSNewsClient,
 	googleNews *marketdata.GoogleNewsRSSClient,
-	papago *marketdata.PapagoClient,
 	repo *repository.NewsRepo,
 	keywords *repository.NewsKeywordRepo,
 	pollSettings *repository.NewsPollSettingsRepo,
@@ -144,7 +187,6 @@ func NewNewsStore(
 		finnhubNews:        finnhubNews,
 		rssUS:              rssUS,
 		googleNews:         googleNews,
-		papago:             papago,
 		repo:               repo,
 		keywords:           keywords,
 		pollSettings:       pollSettings,
@@ -156,14 +198,15 @@ func NewNewsStore(
 		ogHTTP:             &http.Client{Timeout: 3 * time.Second},
 		nameIndex:          make(map[string]string),
 		usNameIndex:        make(map[string]string),
+		usTickerIndex:      make(map[string]string),
 		adminKeywordsCache: make(map[string]cachedKeywords),
 		pollSettingsCache:  model.DefaultNewsPollSettings(),
 		listBuild:          newQuoteRefreshCoordinator(),
 	}
 }
 
-func (st *NewsStore) SetLLM(client *llm.Client) {
-	st.llm = client
+func (st *NewsStore) SetLLM(pool *llm.Pool) {
+	st.llm = pool
 }
 
 func (st *NewsStore) Run(ctx context.Context) {
@@ -179,7 +222,7 @@ func (st *NewsStore) Run(ctx context.Context) {
 	go st.backfillUSTranslations(ctx)
 	// 종목 추출 규칙이 바뀐 뒤 한 번 소급 적용한다. DB만 읽고 쓰므로 외부
 	// 할당량을 쓰지 않고, 시장별 Redis 표식으로 재기동마다 반복되지 않는다.
-	go safego.Call("news-retag", func() { st.retagOnceIfNeeded(ctx) })
+	go safego.Call("news-retag", func() { st.retagUntilDone(ctx) })
 	go safego.Call("news-remigrate-market", func() { st.remigrateMarketOnceIfNeeded(ctx) })
 
 	// The five same-interval sources are offset against each other so they do
@@ -210,14 +253,96 @@ func (st *NewsStore) Run(ctx context.Context) {
 		case <-googleNewsTicker:
 			st.refreshUSGoogleNews(ctx)
 		case <-finnhubCompanyTicker:
-			st.refreshFinnhubUSCompany(ctx)
+			/*
+				**이 회차만 고루틴으로 낸다.** 종목별 뉴스는 종목마다 2초씩 스스로
+				쉬므로 한 회차가 약 64초를 쓰는데(32종목), 이 select 루프는 뉴스
+				소스 **전부**가 공유하는 한 줄이다. 여기서 붙잡고 있으면 그 사이
+				naver·rss 틱이 버려진다(`staggeredTicker`는 큐가 아니라 버린다) —
+				바로 위 `refreshFinnhubUSGeneral` 머리글이 「기다리게 하지 않는다」를
+				택한 이유가 그것이었다.
+
+				겹치지 않게 하는 것은 `usCompanySweeping`이다. 주기(8분)가 한 회차
+				(64초)보다 훨씬 길어 평시에는 겹칠 일이 없지만, 상대가 느려지면
+				회차가 쌓여 한도를 두 배로 쓴다 — 그때는 **거르는 쪽**이 맞다.
+			*/
+			if st.usCompanySweeping.CompareAndSwap(false, true) {
+				go safego.Call("news-us-company", func() {
+					defer st.usCompanySweeping.Store(false)
+					st.refreshFinnhubUSCompany(ctx)
+				})
+			}
 		}
 	}
+}
+
+/*
+weekendTickGate — 주말에는 폴링 틱을 솎아 낸다.
+
+**평일은 손대지 않는다.** 뉴스 신선도는 이 서비스의 체감 품질이고, 실적·공시
+뉴스가 장 마감 뒤에도 나오므로 「장외에는 늦게 받아도 된다」가 성립하지 않는다.
+그리고 뉴스 폴링은 사용자 수와 무관한 **고정 비용**이라 트래픽이 늘어도 커지지
+않는다 — 이번 성능 작업의 기준(「트래픽이 늘면 무너지는가」)에 걸리지 않는다.
+
+주말만 다르다. 장이 열리지 않아 기사 생산량 자체가 적어서, 주기를 늘려도
+**실시간성 손실이 사실상 0**이면서 고정 소비의 상당 부분을 아낀다.
+실측(2026-08-23, 사용자 0명): naver 일 5,538 / 한도 24,000(23%),
+**kakao 일 1,170 / 한도 3,000(39%)** — kakao가 한도에 가장 가깝다.
+
+# 벽시계 분으로 세다가 해외 뉴스를 통째로 잃었다 (2026-09-13)
+
+예전 구현은 `now.Minute()%14 != 0`이면 건너뛰었다. 「14분에 한 번」이라고 읽히지만
+그것은 **매 분 한 번씩 물어볼 때만** 맞는 말이다. 우리 티커는 매 분이 아니라
+**자기 격자 위에서만** 깨어난다:
+
+	· 2분 주기 티커는 한 시간에 30번, 전부 **같은 홀짝의 분**에 깨어난다. 격자가
+	  홀수 쪽이면 {0,14,28,42,56}과 **영원히 겹치지 않는다** — 그 소스는 주말 내내
+	  한 번도 안 돈다. 어느 쪽이 될지는 프로세스가 언제 떴는가로 정해진다.
+	· 8분 주기 티커(해외 종목별 뉴스)는 분이 4의 배수 간격으로만 서서 {14, 42}
+	  둘만 잡는다. 의도한 14분이 아니라 **평균 60분**이다.
+
+실측(2026-09-13 일요일, 20시간): `finnhub_news` 호출 **10건**(의도대로면 약 85건),
+로그에 남은 종목별 뉴스 틱은 03:18·04:43·05:15·06:42·07:14·08:42·09:14·10:42 —
+**42분과 14분만** 남아 있다. 해외 일반 뉴스와 구글 뉴스는 그 20시간 동안 사실상
+0이었고, 사용자가 「해외 뉴스를 못 가져온다」고 지적한 것이 이 상태다.
+
+병은 「완화가 과했다」가 아니라 **판정 기준이 티커와 다른 축에 있었다**는 것이다.
+그래서 벽시계 분을 보지 않고 **그 티커가 마지막으로 통과한 뒤 얼마나 지났는지**를
+본다. 격자·오프셋·주기가 무엇이든 주말 실효 주기가 14분 이상으로 일정해지고,
+주기가 14분보다 긴 티커는 원래 주기 그대로 돈다(늦추지 않는다).
+
+게이트는 **티커마다 하나**다. 하나를 공유하면 먼저 깨어난 소스가 나머지의 몫을
+써 버려, 지금 고치는 것과 같은 「어떤 소스는 영원히 안 돈다」가 다시 생긴다.
+*/
+type weekendTickGate struct {
+	lastPassed time.Time
+}
+
+// weekendNewsMinGap — 주말에 한 티커가 두 번 통과하는 사이의 최소 간격.
+const weekendNewsMinGap = 14 * time.Minute
+
+func isWeekendKST(now time.Time) bool {
+	switch now.In(kst).Weekday() {
+	case time.Saturday, time.Sunday:
+		return true
+	default:
+		return false
+	}
+}
+
+// allow reports whether this ticker may fire now, and records the pass.
+func (g *weekendTickGate) allow(now time.Time) bool {
+	if isWeekendKST(now) && !g.lastPassed.IsZero() && now.Sub(g.lastPassed) < weekendNewsMinGap {
+		return false
+	}
+	g.lastPassed = now
+	return true
 }
 
 // staggeredTicker fires every interval, with the first tick delayed by offset.
 // Ticks are dropped rather than queued when the consumer is busy, matching
 // time.Ticker semantics. The goroutine exits when ctx is cancelled.
+//
+// 주말 완화는 이 고루틴이 가진 게이트가 판정한다 — weekendTickGate 머리글 참조.
 func staggeredTicker(ctx context.Context, interval, offset time.Duration) <-chan time.Time {
 	ch := make(chan time.Time, 1)
 	go func() {
@@ -231,6 +356,7 @@ func staggeredTicker(ctx context.Context, interval, offset time.Duration) <-chan
 			case <-delay.C:
 			}
 		}
+		var gate weekendTickGate
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -238,6 +364,9 @@ func staggeredTicker(ctx context.Context, interval, offset time.Duration) <-chan
 			case <-ctx.Done():
 				return
 			case now := <-ticker.C:
+				if !gate.allow(now) {
+					continue
+				}
 				select {
 				case ch <- now:
 				default:
@@ -264,6 +393,9 @@ type newsListCacheEntry struct {
 	articles  []model.NewsArticle
 	updatedAt time.Time
 	builtAt   time.Time
+	// canonical — 필터에 사용자 입력이 없는 키인가. 축출 계층을 가른다
+	// (rememberList 헤더 참조).
+	canonical bool
 }
 
 func newsListCacheKey(f model.NewsListFilter) string {
@@ -293,25 +425,114 @@ func (st *NewsStore) listFromCacheAllowStale(key string) (articles []model.NewsA
 	return entry.articles, entry.updatedAt, time.Since(entry.builtAt) <= listCacheTTL, true
 }
 
-func (st *NewsStore) rememberList(key string, articles []model.NewsArticle, at time.Time) {
+/*
+캐시 상한과 축출 정책.
+
+키에는 `Query`·`Symbol` 같은 **사용자 입력**이 들어가므로 키 공간이 무한하다.
+예전 코드도 그걸 알고 상한 64를 뒀지만, 넘치면 **통째로 비웠다**. 그래서
+서로 다른 검색어 64개가 들어오면 **기본 목록(실사용자가 실제로 보는 것)까지
+함께 날아갔다** — 종목 상세가 `?symbol=`을 붙여 뉴스를 읽으므로, 사용자 64명이
+서로 다른 종목을 보기만 해도 그렇게 됐다.
+
+두 계층으로 가른다:
+
+	canonical — 필터에 사용자 입력이 없는 키(market×source×sort×limit). 조합이
+	            유한하고(대략 수십 개) **실사용자가 대부분 보는 것**이다.
+	ad-hoc    — 검색어·종목이 섞인 키. 무한히 늘 수 있으므로 LRU로 자른다.
+
+canonical은 ad-hoc이 아무리 몰려도 밀려나지 않는다. 이게 이 변경의 전부다.
+*/
+const (
+	newsListCanonicalMax = 64
+	newsListAdHocMax     = 48
+)
+
+// isCanonicalListKey reports whether the filter carries no user-supplied text.
+func isCanonicalListKey(f model.NewsListFilter) bool {
+	return strings.TrimSpace(f.Query) == "" && strings.TrimSpace(f.Symbol) == ""
+}
+
+func (st *NewsStore) rememberList(key string, canonical bool, articles []model.NewsArticle, at time.Time) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	if st.listCache == nil {
 		st.listCache = map[string]newsListCacheEntry{}
 	}
-	// 필터 조합(검색어·종목)은 사용자가 만드는 값이라 키가 무한히 늘 수 있다.
-	// 만료된 것부터 걷어내고, 그래도 넘치면 통째로 비운다.
-	if len(st.listCache) >= 64 {
-		for k, v := range st.listCache {
-			if time.Since(v.builtAt) > listCacheTTL {
-				delete(st.listCache, k)
+
+	limit := newsListAdHocMax
+	if canonical {
+		limit = newsListCanonicalMax
+	}
+	st.evictListLocked(canonical, limit)
+
+	st.listCache[key] = newsListCacheEntry{
+		articles: articles, updatedAt: at, builtAt: time.Now(), canonical: canonical,
+	}
+}
+
+/*
+evictListLocked — 같은 계층에서만 자리를 만든다.
+
+만료된 것을 먼저 걷고, 그래도 넘치면 **가장 오래 전에 만들어진 것 하나**를
+지운다. 전면 삭제가 아니라 1건 축출이라는 점이 예전 코드와의 차이다.
+
+`builtAt` 기준이라 엄밀히는 LRU가 아니라 FIFO다. 목록 캐시는 TTL이 15초로
+짧아 「오래 안 쓰인 것」과 「오래 전에 만들어진 것」이 사실상 같고, 접근 시각을
+따로 갱신하면 읽기 경로가 쓰기 잠금을 잡아야 한다 — 그 대가가 이득보다 크다.
+*/
+func (st *NewsStore) evictListLocked(canonical bool, limit int) {
+	count := func() int {
+		n := 0
+		for _, v := range st.listCache {
+			if v.canonical == canonical {
+				n++
 			}
 		}
-		if len(st.listCache) >= 64 {
-			st.listCache = map[string]newsListCacheEntry{}
+		return n
+	}
+
+	if count() < limit {
+		return
+	}
+	for k, v := range st.listCache {
+		if v.canonical == canonical && time.Since(v.builtAt) > listCacheTTL {
+			delete(st.listCache, k)
 		}
 	}
-	st.listCache[key] = newsListCacheEntry{articles: articles, updatedAt: at, builtAt: time.Now()}
+	for count() >= limit {
+		var oldestKey string
+		var oldestAt time.Time
+		for k, v := range st.listCache {
+			if v.canonical != canonical {
+				continue
+			}
+			if oldestKey == "" || v.builtAt.Before(oldestAt) {
+				oldestKey, oldestAt = k, v.builtAt
+			}
+		}
+		if oldestKey == "" {
+			return
+		}
+		delete(st.listCache, oldestKey)
+	}
+}
+
+/*
+dropListCacheForMarket — 한 시장의 목록 캐시만 버린다.
+
+캐시 키는 `market`을 **맨 앞 필드**로 만든다(newsListCacheKey). 그래서 접두사
+비교로 그 시장 것만 고를 수 있다. 호출자가 이미 st.mu를 잡고 있다.
+*/
+func (st *NewsStore) dropListCacheForMarket(market string) {
+	if market == "" {
+		market = "domestic"
+	}
+	prefix := market + "\x00"
+	for k := range st.listCache {
+		if strings.HasPrefix(k, prefix) {
+			delete(st.listCache, k)
+		}
+	}
 }
 
 func (st *NewsStore) List(ctx context.Context, filter model.NewsListFilter) ([]model.NewsArticle, time.Time) {
@@ -358,7 +579,7 @@ func (st *NewsStore) List(ctx context.Context, filter model.NewsListFilter) ([]m
 			}
 			at, _ := st.repo.LatestUpdatedAt(buildCtx, market)
 			out := st.filterArticles(buildCtx, articles, filterWithoutTextSearch(filter))
-			st.rememberList(cacheKey, out, at)
+			st.rememberList(cacheKey, isCanonicalListKey(filter), out, at)
 		}
 
 		/*
@@ -846,12 +1067,23 @@ func (st *NewsStore) mergeArticlesForMarket(ctx context.Context, incoming []mode
 		st.articles = merged
 		st.updatedAt = at
 	}
-	// 새 기사가 들어왔으니 이미 만들어 둔 목록은 낡았다. TTL을 기다리지 않고
-	// 지금 버린다 — 폴러가 방금 넣은 기사가 다음 요청에 바로 뜨게.
-	// 총 건수도 같은 이유로 함께 버린다(목록만 새 기사를 반영하고 카운트는
-	// 옛 값이면 화면의 두 숫자가 어긋난다).
-	st.listCache = nil
-	st.countCache = nil
+	/*
+		새 기사가 들어왔으니 이미 만들어 둔 목록은 낡았다. TTL을 기다리지 않고
+		지금 버린다 — 폴러가 방금 넣은 기사가 다음 요청에 바로 뜨게. 총 건수도
+		같은 이유로 함께 버린다(목록만 새 기사를 반영하고 카운트는 옛 값이면
+		화면의 두 숫자가 어긋난다).
+
+		**단, 이 market 것만 버린다.** 예전에는 `listCache = nil`로 통째로 비웠다.
+		그런데 뉴스 폴러는 2분 주기이고 국내·해외를 따로 적재하므로, **미국 기사
+		하나가 들어올 때마다 국내 목록 캐시까지 날아갔다.** 캐시 수명의 상한이
+		사실상 폴링 주기(2분)로 묶여 있었고, 그래서 미스가 반복됐다 —
+		미스 1건의 비용은 실측 298~320ms다.
+
+		시장이 둘뿐이라 키를 훑어 지우는 비용은 무시할 만하다(항목 수가 아래
+		newsListCacheMaxEntries로 묶여 있다).
+	*/
+	st.dropListCacheForMarket(market)
+	delete(st.countCache, market)
 	st.mu.Unlock()
 
 	st.persistSnapshotRedis(ctx, merged, at, market)

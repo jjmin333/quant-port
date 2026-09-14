@@ -126,10 +126,10 @@ var adminTableCatalog = []TableSpec{
 	// ---- market data ----
 	{
 		Name: "candle_bars", Group: GroupMarket, Label: "캔들 봉",
-		Purpose:    "완성된 1분·일봉 OHLCV. 차트의 과거 데이터 원본이며 가장 큰 테이블입니다.",
+		Purpose:    "완성된 OHLCV. 차트의 과거 데이터 원본이며 가장 큰 테이블입니다. bar_interval별로 파티션되어 있고, 인트라데이는 오래될수록 1m→5m→10m→30m→60m으로 접힙니다(src_bars = 그 봉을 만든 1분봉 수).",
 		Access:     AccessReadOnly,
 		PrimaryKey: []string{"symbol", "bar_interval", "bar_time"}, DefaultSort: "bar_time DESC",
-		Note:       "폴러/백필이 계속 upsert합니다. 수동 편집은 차트 정합성을 깨뜨릴 수 있어 읽기 전용입니다.",
+		Note: "폴러/백필이 계속 upsert하고 롤업 배치가 계층을 옮깁니다. 수동 편집은 차트 정합성을 깨뜨릴 수 있어 읽기 전용입니다.",
 	},
 	{
 		Name: "quote_snapshots", Group: GroupMarket, Label: "시세 스냅샷",
@@ -178,7 +178,7 @@ var adminTableCatalog = []TableSpec{
 		Purpose:    "랭킹 순위의 시계열 이력. 종목별 랭킹 추이 스파크라인에 사용됩니다.",
 		Access:     AccessFull,
 		PrimaryKey: []string{"id"}, DefaultSort: "ranked_at DESC",
-		Note:       "무제한 증가하는 테이블입니다. 오래된 구간은 주기적으로 삭제해도 됩니다.",
+		Note: "무제한 증가하는 테이블입니다. 오래된 구간은 주기적으로 삭제해도 됩니다.",
 	},
 
 	// ---- news ----
@@ -229,7 +229,7 @@ var adminTableCatalog = []TableSpec{
 		// the chart.
 		Access:     AccessReadOnly,
 		PrimaryKey: []string{"symbol", "trade_date"}, DefaultSort: "trade_date DESC",
-		Note:       "적재 전용(단방향 투영). 값 수정은 backfill-daily-closes 재실행으로 처리하세요.",
+		Note: "적재 전용(단방향 투영). 값 수정은 backfill-daily-closes 재실행으로 처리하세요.",
 	},
 	{
 		Name: "index_daily_closes", Group: GroupMarket, Label: "지수 일별 종가",
@@ -244,7 +244,7 @@ var adminTableCatalog = []TableSpec{
 		// exists to provide.
 		Access:     AccessReadOnly,
 		PrimaryKey: []string{"symbol", "trade_date"}, DefaultSort: "trade_date DESC",
-		Note:       "배치 산출물. 재계산은 관리자 > 점수 관리에서 실행하세요.",
+		Note: "배치 산출물. 재계산은 관리자 > 점수 관리에서 실행하세요.",
 	},
 
 	// ---- ops ----
@@ -265,7 +265,7 @@ var adminTableCatalog = []TableSpec{
 		Purpose:    "종합 점수의 축별 기본 가중치와 커버리지 하한·수축 지점. 단일 행입니다.",
 		Access:     AccessFull,
 		PrimaryKey: []string{"id"}, DefaultSort: "id ASC",
-		Note:       "변경 후 점수에 반영하려면 관리자 > 점수 관리에서 재계산이 필요합니다.",
+		Note: "변경 후 점수에 반영하려면 관리자 > 점수 관리에서 재계산이 필요합니다.",
 	},
 	{
 		Name: "score_symbol_weights", Group: GroupOps, Label: "점수 가중치 (종목별)",
@@ -280,25 +280,6 @@ var adminTableCatalog = []TableSpec{
 		// Machine-written audit trail; editing it would only falsify history.
 		Access:     AccessReadOnly,
 		PrimaryKey: []string{"id"}, DefaultSort: "started_at DESC",
-	},
-
-	// ---- legacy backups ----
-	// Kept reachable but read-only: both are pre-migration copies awaiting a
-	// manual DROP, and being able to inspect them is the whole point of
-	// holding them. Editing them would be meaningless.
-	{
-		Name: "candle_bars_legacy_v1", Group: GroupOps, Label: "레거시 캔들 백업",
-		Purpose:    "candle_bars DATETIME 전환(026) 이전 사본. 확인 후 수동 DROP 대상입니다.",
-		Access:     AccessReadOnly,
-		PrimaryKey: []string{"symbol", "bar_interval", "bar_time"}, DefaultSort: "bar_time DESC",
-		Note:       "마이그레이션 백업. 검증이 끝났으면 삭제해 용량을 회수하세요.",
-	},
-	{
-		Name: "old_stock_fundamentals", Group: GroupOps, Label: "레거시 재무 백업",
-		Purpose:    "stock_fundamentals 재구축 이전 사본. 확인 후 수동 DROP 대상입니다.",
-		Access:     AccessReadOnly,
-		PrimaryKey: []string{"symbol"}, DefaultSort: "symbol ASC",
-		Note:       "마이그레이션 백업.",
 	},
 }
 

@@ -135,7 +135,7 @@ func (s *StampService) Create(ctx context.Context, req StampCreateRequest) (mode
 	}
 	symbol := strings.ToUpper(strings.TrimSpace(req.Symbol))
 	if symbol == "" {
-		return model.StampView{}, errors.New("symbol required")
+		return model.StampView{}, invalidInput("symbol required")
 	}
 
 	now := time.Now().UTC()
@@ -653,6 +653,20 @@ func (s *StampService) Annotate(ctx context.Context, id int64, req StampAnnotate
 	return s.decorate(ctx, []model.Stamp{updated})[0], nil
 }
 
+/*
+predictionLocked — 예측을 더 이상 고칠 수 없는가.
+
+시각 판정만 따로 뗀 이유는 **테스트할 수 있게 하려고**다. `time.Since`를 호출부에
+두면 이 규칙을 확인하는 방법이 5분을 기다리는 것뿐이고, e2e는 임의 대기를 쓰지
+않는다는 원칙이 있어 그 경계가 어디에서도 안 지켜지고 있었다
+(`e2e/README.md`의 「아직 검증하지 못한 것」).
+
+경계는 `>`다 — 정확히 유예 시간일 때는 **아직 열려 있다**.
+*/
+func predictionLocked(stampedAt, now time.Time) bool {
+	return now.Sub(stampedAt) > stampPredictionGrace
+}
+
 // Revise rewrites the target price and deadline, but only while the stamp is
 // still fresh. A prediction the user can move after seeing where the price went
 // is not a prediction, and the hit rate would stop meaning anything.
@@ -665,7 +679,7 @@ func (s *StampService) Revise(ctx context.Context, id int64, req StampPrediction
 	if err != nil {
 		return model.StampView{}, err
 	}
-	if time.Since(existing.StampedAt) > stampPredictionGrace {
+	if predictionLocked(existing.StampedAt, time.Now()) {
 		return model.StampView{}, ErrStampPredictionLocked
 	}
 	if err := validateTargetPrice(existing.Price, req.TargetPrice); err != nil {

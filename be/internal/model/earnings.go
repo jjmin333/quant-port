@@ -67,7 +67,8 @@ type EarningsEvent struct {
 	Name   string `json:"name,omitempty"`
 	Market string `json:"market"`
 
-	// "2026-08-03". 정정 공시가 와도 원 발표일을 유지한다.
+	// "2026-08-03". API read paths shift US amc/dmh rows +1 day for KST calendar
+	// display; DB keeps the US trading day for reactions.
 	Date       string `json:"date"`
 	DateStatus string `json:"dateStatus"`
 	Session    string `json:"session,omitempty"`
@@ -126,6 +127,7 @@ type EarningsEvent struct {
 // # 어느 세션을 세는가 (하루 잘못 읽지 않으려면)
 //
 //	장전(bmo)  발표가 개장 전 → **그날** 종가가 첫 반응. 기준은 전 거래일 종가.
+//	장중(dmh)  발표가 거래 시간 중 → **그날** 종가가 첫 반응. 기준은 전 거래일 종가.
 //	장후(amc)  발표가 마감 후 → **다음 거래일** 종가가 첫 반응. 기준은 그날 종가.
 //	국내·미공개 잠정실적은 통상 마감 후 공시 → 장후와 같게 본다.
 type EarningsReaction struct {

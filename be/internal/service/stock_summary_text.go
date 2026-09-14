@@ -154,6 +154,9 @@ func signedPercent(v float64) string {
 // fallback (only non-empty fields win) and computes the news sentiment
 // aggregate from its per-article labels.
 func applyStockSummaryLLMOutput(out *model.StockSummaryView, llmOut *llm.StockSummaryLLMOutput, articles []model.NewsArticle) {
+	if llmOut.Overview != "" {
+		out.Overview = llmOut.Overview
+	}
 	if llmOut.Valuation != "" {
 		out.Valuation = llmOut.Valuation
 	}
@@ -172,6 +175,74 @@ func applyStockSummaryLLMOutput(out *model.StockSummaryView, llmOut *llm.StockSu
 	if len(llmOut.Keywords) > 0 {
 		out.Keywords = llmOut.Keywords
 	}
+}
+
+/*
+composeOverview — 네 섹션에서 개요 한 문단을 엮는다.
+
+# 언제 쓰이나
+
+LLM이 `overview`를 써 주면 그쪽이 이긴다. 이 함수는 그 밖의 모든 경우다:
+LLM이 꺼져 있을 때, 호출이 실패했을 때, 그리고 **이 필드가 생기기 전에 만들어진
+캐시**(며칠은 남아 있다). 그때도 개요는 네 갈래를 다 거쳐야 한다 — 그러지 않으면
+「밸류에이션만 보여 주던」 예전 화면으로 조용히 되돌아간다.
+
+# 왜 첫 문장만인가
+
+섹션마다 최대 세 문장이라 통째로 이으면 열두 문장이 되는데, 개요 카드는 네 줄에서
+잘린다(`line-clamp-4`). 각 섹션의 첫 문장이 그 섹션의 결론인 구조라 — 프롬프트가
+「우선순위: 가장 크게 바꾸는 것부터」를 요구한다 — 첫 문장만 모아도 네 갈래가 다
+한 번씩 말한다.
+
+「최근 관련 뉴스가 없습니다」류의 규칙 기반 공백 문장은 **뺀다.** 개요 네 줄 중
+한 줄을 「없다」에 쓰는 것은 손해다.
+*/
+func composeOverview(view *model.StockSummaryView) string {
+	if view == nil {
+		return ""
+	}
+	sections := []string{view.Valuation, view.Technical, view.Insider, view.News}
+	parts := make([]string, 0, len(sections))
+	for _, section := range sections {
+		if s := firstSentence(section); s != "" && !isEmptySectionText(s) {
+			parts = append(parts, s)
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+// firstSentence cuts at the first sentence end. Korean prose here always ends
+// sentences with a period, so a plain scan is enough — no tokenizer.
+func firstSentence(text string) string {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return ""
+	}
+	if idx := strings.Index(trimmed, ". "); idx >= 0 {
+		return strings.TrimSpace(trimmed[:idx+1])
+	}
+	return trimmed
+}
+
+/*
+isEmptySectionText — 「데이터가 없다」고만 말하는 규칙 기반 문장인가.
+
+`ruleBasedStockSummary`가 재료가 없을 때 내놓는 문장들이다. 정보를 담고 있지
+않으므로 개요에 넣지 않는다. 접두사로 보는 이유는 뒤에 건수 등이 붙는 변형이
+있어서다.
+*/
+func isEmptySectionText(text string) bool {
+	for _, prefix := range []string{
+		"밸류에이션 데이터가 충분하지 않습니다",
+		"기술적 지표를 계산할 캔들 데이터가 부족합니다",
+		"최근 내부자 거래 내역이 없습니다",
+		"최근 관련 뉴스가 없습니다",
+	} {
+		if strings.HasPrefix(text, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func aggregateNewsSentiment(articles []model.NewsArticle, labels []llm.ArticleSentimentLabel) *model.NewsSentimentSummary {

@@ -1,7 +1,13 @@
 import { Suspense } from "react";
 import { AuthRequiredShell } from "@/components/auth/auth-required-shell";
-import { MENU_COPY } from "@/lib/menu-copy";
 import { HoldingsData } from "./holdings-data";
+import { pageMetadata } from "@/lib/seo";
+
+export const metadata = pageMetadata({
+  title: "내 포트폴리오",
+  description: "보유 종목의 손익과 비중을 한 화면에서 봅니다.",
+  noindex: true,
+});
 
 export default function HoldingsPage() {
   return (
@@ -13,8 +19,6 @@ export default function HoldingsPage() {
       }
     >
       <AuthRequiredShell
-        title={MENU_COPY.holdings.title}
-        subtitle={MENU_COPY.holdings.subtitle}
         loginNext="/holdings"
         menu="holdings"
       >

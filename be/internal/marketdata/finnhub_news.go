@@ -30,6 +30,17 @@ func (c *FinnhubNewsClient) Enabled() bool {
 	return c != nil && c.apiKey != ""
 }
 
+// CompanyNewsPace — 종목별 뉴스를 여러 번 부르는 배치가 **스스로 간격을 두도록**
+// 예산 설정을 그대로 내준다. Check는 "지금 부를 수 있나"만 답하므로, 기다리면
+// 되는 제약이면 얼마나 기다려야 하는지를 호출부가 알아야 한다
+// (apibudget.MinInterval 머리글).
+func (c *FinnhubNewsClient) CompanyNewsPace() time.Duration {
+	if c == nil || c.budget == nil {
+		return 0
+	}
+	return c.budget.MinInterval(apibudget.ProviderFinnhubNewsCompany)
+}
+
 // MarketNews fetches market-wide news (category: general, forex, crypto, merger).
 func (c *FinnhubNewsClient) MarketNews(ctx context.Context, category string) ([]RawNewsItem, error) {
 	if !c.Enabled() {
@@ -89,7 +100,7 @@ func (c *FinnhubNewsClient) CompanyNews(ctx context.Context, symbol, from, to st
 		return nil, fmt.Errorf("finnhub company news: empty symbol")
 	}
 	if c.budget != nil {
-		if err := c.budget.Check(ctx, apibudget.ProviderFinnhubNews); err != nil {
+		if err := c.budget.Check(ctx, apibudget.ProviderFinnhubNewsCompany); err != nil {
 			return nil, err
 		}
 	}
@@ -112,7 +123,7 @@ func (c *FinnhubNewsClient) CompanyNews(ctx context.Context, symbol, from, to st
 	defer res.Body.Close()
 	if res.StatusCode == http.StatusTooManyRequests {
 		if c.budget != nil {
-			c.budget.BlockFor(ctx, apibudget.ProviderFinnhubNews, apibudget.ParseRetryAfter(res.Header.Get("Retry-After")))
+			c.budget.BlockFor(ctx, apibudget.ProviderFinnhubNewsCompany, apibudget.ParseRetryAfter(res.Header.Get("Retry-After")))
 		}
 		return nil, fmt.Errorf("finnhub company news rate limited")
 	}
@@ -125,7 +136,7 @@ func (c *FinnhubNewsClient) CompanyNews(ctx context.Context, symbol, from, to st
 		return nil, err
 	}
 	if c.budget != nil {
-		c.budget.Record(ctx, apibudget.ProviderFinnhubNews)
+		c.budget.Record(ctx, apibudget.ProviderFinnhubNewsCompany)
 	}
 	return mapFinnhubNewsArticles(payload), nil
 }

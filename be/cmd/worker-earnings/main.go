@@ -95,12 +95,15 @@ func runOverseasLoop(ctx context.Context, deps *service.WorkerDeps) {
 
 func runOverseasLiveLoop(ctx context.Context, deps *service.WorkerDeps) {
 	runOverseasLiveOnce(ctx, deps)
+	// 한 슬롯은 한 번만 (service.SlotGate 머리글 — 실측으로 예약 잡이 두 번 돌았다).
+	gate := service.NewSlotGate()
 	for {
 		slot := service.NextOverseasLiveSlot(time.Now())
-		select {
-		case <-ctx.Done():
+		if !service.WaitForSlot(ctx, slot) {
 			return
-		case <-time.After(time.Until(slot)):
+		}
+		if !gate.Allow(slot) {
+			continue
 		}
 		runOverseasLiveOnce(ctx, deps)
 	}
@@ -127,12 +130,14 @@ func runOverseasLiveOnce(ctx context.Context, deps *service.WorkerDeps) {
 }
 
 func runDomesticSchedule(ctx context.Context, deps *service.WorkerDeps) {
+	gate := service.NewSlotGate()
 	for {
 		slot := service.NextDomesticSlot(time.Now())
-		select {
-		case <-ctx.Done():
+		if !service.WaitForSlot(ctx, slot) {
 			return
-		case <-time.After(time.Until(slot)):
+		}
+		if !gate.Allow(slot) {
+			continue
 		}
 		months := service.DomesticMonthsForSlot(slot)
 		service.RunScheduledJob(ctx, deps.Runs, model.BatchEarningsDomestic,
@@ -143,12 +148,14 @@ func runDomesticSchedule(ctx context.Context, deps *service.WorkerDeps) {
 }
 
 func runOverseasSchedule(ctx context.Context, deps *service.WorkerDeps) {
+	gate := service.NewSlotGate()
 	for {
 		slot := service.NextOverseasSlot(time.Now())
-		select {
-		case <-ctx.Done():
+		if !service.WaitForSlot(ctx, slot) {
 			return
-		case <-time.After(time.Until(slot)):
+		}
+		if !gate.Allow(slot) {
+			continue
 		}
 		service.RunScheduledJob(ctx, deps.Runs, model.BatchEarningsOverseas,
 			func(ctx context.Context) (map[string]any, string, error) {

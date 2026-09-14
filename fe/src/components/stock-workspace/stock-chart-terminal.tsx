@@ -10,6 +10,7 @@ import { useExchangeRate } from "@/hooks/use-exchange-rate";
 import { useQuoteCandles } from "@/hooks/use-quote-candles";
 import { formatPercent } from "@/lib/format";
 import type { CandleInterval, ChartStyle, OrderBook, QuoteDetail, TradeTick } from "@/lib/quotes-types";
+import { isLiveSession } from "@/lib/market-session";
 import { quoteChangeBaseline } from "@/lib/quotes-types";
 import { trendTextClass } from "@/lib/trend-colors";
 import { cn } from "@/lib/utils";
@@ -19,7 +20,6 @@ const intervals: { id: CandleInterval; label: string }[] = [
   { id: "5m", label: "5" },
   { id: "10m", label: "10" },
   { id: "30m", label: "30" },
-  { id: "60m", label: "60" },
   { id: "1d", label: "일" },
   { id: "1w", label: "주" },
   { id: "1M", label: "월" },
@@ -53,13 +53,23 @@ export function StockChartTerminal({
   const chartRef = useRef<CandlestickChartHandle>(null);
   const { interval, chartStyle, setInterval, setChartStyle } = useQuotesChartPrefs();
   const exchangeRate = useExchangeRate(true);
+  /*
+    마감 세션에서는 봉 갱신을 멈춘다 — 서버가 판정한 세션을 그대로 넘긴다
+    (`use-quote-candles`의 `live` 인자). 세션을 아직 모르는 첫 프레임은 live로 두고
+    첫 스냅샷을 받는다: 모른다는 이유로 멈추면 장중에 차트가 안 자란다.
+  */
   const {
     candles,
     loading: candlesLoading,
     loadMore,
     hasMore,
     loadingMore,
-  } = useQuoteCandles(symbol, interval, detail?.currentPrice ?? 0);
+  } = useQuoteCandles(
+    symbol,
+    interval,
+    detail?.currentPrice ?? 0,
+    detail?.marketSession !== "closed",
+  );
 
   if (loading && !detail) {
     return (
@@ -104,7 +114,7 @@ export function StockChartTerminal({
         value={value}
         currency={currency}
         size="sm"
-        className={cn("text-xs font-medium", priceClassName)}
+        className={cn("text-cell font-medium", priceClassName)}
       />
     );
   }
@@ -133,7 +143,7 @@ export function StockChartTerminal({
         >
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2">
             <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
-              <h3 className="shrink-0 text-xs font-medium text-[var(--text-secondary)]">차트</h3>
+              <h3 className="shrink-0 text-cell font-medium text-[var(--text-secondary)]">차트</h3>
               <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] p-0.5">
                 {intervals.map((item) => (
                   <button
@@ -141,7 +151,7 @@ export function StockChartTerminal({
                     type="button"
                     onClick={() => setInterval(item.id)}
                     className={cn(
-                      "shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
+                      "shrink-0 rounded-md px-2.5 py-1 text-cell font-medium transition-colors",
                       interval === item.id
                         ? "bg-[var(--chart-toolbar-active-bg)] text-[var(--chart-toolbar-active-text)]"
                         : "text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text-secondary)]",
@@ -192,6 +202,8 @@ export function StockChartTerminal({
               hasMore={hasMore}
               loadingMore={loadingMore}
               onLoadMore={loadMore}
+              /* 현재가 표는 이 화면 헤더가 적는 값 그대로 — 사용자 지적 4 */
+              livePrice={detail.currentPrice}
             />
           </div>
         </section>
@@ -203,11 +215,15 @@ export function StockChartTerminal({
           )}
         >
           <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-3 py-2">
-            <h3 className="text-xs font-medium text-[var(--text-secondary)]">체결</h3>
-            <span className="text-[10px] text-[var(--text-muted)]">실시간</span>
+            <h3 className="text-cell font-medium text-[var(--text-secondary)]">체결</h3>
+            {/* 장이 닫혀 있으면 이 표는 갱신되지 않는다 — 그때 「실시간」이라고
+                적어 두면 빈 표가 「지금 체결이 없다」로 읽힌다. */}
+            <span className="text-micro text-[var(--text-muted)]">
+              {isLiveSession(detail?.marketSession) ? "실시간" : "장 마감"}
+            </span>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <table className="w-full text-[11px]">
+            <table className="w-full text-cell">
               <thead className="sticky top-0 bg-[var(--surface)]">
                 <tr className="text-[var(--text-muted)]">
                   <th className="px-3 py-1.5 text-left font-normal">시간</th>
@@ -233,12 +249,12 @@ export function StockChartTerminal({
                         key={`${trade.id}-${index}`}
                         className="border-t border-[var(--border)]/40 hover:bg-[var(--surface-elevated)]/50"
                       >
-                        <td className="px-3 py-1 font-mono text-[var(--text-muted)]">
+                        <td className="px-3 py-1 font-num text-[var(--text-muted)]">
                           {formatTradeTime(trade.time)}
                         </td>
                         <td
                           className={cn(
-                            "px-3 py-1 text-right font-mono font-medium",
+                            "px-3 py-1 text-right font-num font-medium",
                             trade.side === "buy" && "text-[var(--profit)]",
                             trade.side === "sell" && "text-[var(--loss)]",
                             trade.side !== "buy" &&
@@ -248,12 +264,12 @@ export function StockChartTerminal({
                         >
                           <DetailPrice value={trade.price} />
                         </td>
-                        <td className="px-3 py-1 text-right font-mono text-[var(--text-secondary)]">
+                        <td className="px-3 py-1 text-right font-num text-[var(--text-secondary)]">
                           {trade.quantity.toLocaleString("ko-KR")}
                         </td>
                         <td
                           className={cn(
-                            "px-3 py-1 text-right font-mono",
+                            "px-3 py-1 text-right font-num",
                             trendTextClass(tickRate),
                           )}
                         >
@@ -277,14 +293,14 @@ export function StockChartTerminal({
         )}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-3 py-2">
-          <h3 className="text-xs font-medium text-[var(--text-secondary)]">호가</h3>
-          <span className="text-[10px] text-[var(--text-muted)]">
+          <h3 className="text-cell font-medium text-[var(--text-secondary)]">호가</h3>
+          <span className="text-micro text-[var(--text-muted)]">
             {orderBook?.timestamp
               ? new Date(orderBook.timestamp).toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul" })
               : "—"}
           </span>
         </div>
-        <div className="grid shrink-0 grid-cols-3 px-2 py-1 text-[10px] text-[var(--text-muted)]">
+        <div className="grid shrink-0 grid-cols-3 px-2 py-1 text-micro text-[var(--text-muted)]">
           <span>호가</span>
           <span className="text-center">잔량</span>
           <span className="text-right">건수</span>
@@ -400,7 +416,7 @@ function OrderBookRow({
   const barWidth = `${(quantity / maxQty) * 100}%`;
 
   return (
-    <div className="relative flex items-center py-0.5 text-[11px]">
+    <div className="relative flex items-center py-0.5 text-cell">
       <div
         className={cn(
           "absolute inset-y-0 opacity-25",
@@ -418,10 +434,10 @@ function OrderBookRow({
           value={price}
           currency={currency}
           size="sm"
-          className="text-[11px] font-medium"
+          className="text-cell font-medium"
         />
       </span>
-      <span className="relative z-10 flex-1 text-center font-mono text-[var(--text-primary)]">
+      <span className="relative z-10 flex-1 text-center font-num text-[var(--text-primary)]">
         {quantity.toLocaleString("ko-KR")}
       </span>
       <span className="relative z-10 w-[18%] text-right text-[var(--text-muted)]">

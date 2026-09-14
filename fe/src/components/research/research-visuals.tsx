@@ -2,11 +2,12 @@
 
 import { useMemo } from "react";
 import { StockAvatar } from "@/components/stocks/stock-avatar";
-import { formatPrice } from "@/lib/format";
+
 import { candleTimeSortKey } from "@/lib/chart-time";
 import type { CandleInterval } from "@/lib/quotes-types";
 import type { ResearchCall } from "@/lib/research-types";
 import { cn } from "@/lib/utils";
+import { PriceDisplay } from "@/components/ui/price-display";
 
 /**
  * 리포트 목록·모달의 시각 조각.
@@ -154,19 +155,19 @@ export function ResearchSparkline({
       </svg>
 
       {showLegend && (
-        <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] text-[var(--text-muted)]">
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 text-micro text-[var(--text-muted)]">
           <span className="inline-flex items-center gap-1">
             <span className="inline-block size-1.5 rounded-full bg-[var(--brand)]" />
-            발행 {formatPrice(call.basePrice, currency)}
+            발행 <PriceDisplay value={call.basePrice} currency={currency} size="inherit" />
           </span>
           {call.targetPrice !== undefined && (
             <span className="text-[var(--profit)]">
-              ┈ 목표 {formatPrice(call.targetPrice, currency)}
+              ┈ 목표 <PriceDisplay value={call.targetPrice} currency={currency} size="inherit" />
             </span>
           )}
           {call.stopPrice !== undefined && (
             <span className="text-[var(--loss)]">
-              ┈ 손절 {formatPrice(call.stopPrice, currency)}
+              ┈ 손절 <PriceDisplay value={call.stopPrice} currency={currency} size="inherit" />
             </span>
           )}
         </p>
@@ -237,11 +238,11 @@ export function ResearchLevelAxis({ call, className }: { call: ResearchCall; cla
           style={{ left: `${nowPos}%` }}
         />
       </div>
-      <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-[var(--text-muted)]">
+      <div className="mt-1 flex items-center justify-between gap-2 text-micro text-[var(--text-muted)]">
         <span className="truncate">
-          발행 {formatPrice(call.basePrice, call.currency ?? "KRW")}
+          발행 <PriceDisplay value={call.basePrice} currency={call.currency ?? "KRW"} size="inherit" />
         </span>
-        <span className="shrink-0 font-mono tabular-nums">
+        <span className="shrink-0 font-num tabular-nums">
           {call.toTargetPct !== undefined && (
             <span className="text-[var(--profit)]">
               목표까지 {call.toTargetPct > 0 ? "+" : ""}
@@ -273,14 +274,14 @@ export function ResearchAxisBars({ call, className }: { call: ResearchCall; clas
     <div className={cn("space-y-1", className)}>
       {axes.map((a) => (
         <div key={a.label} className="flex items-center gap-1.5">
-          <span className="w-8 shrink-0 text-[10px] text-[var(--text-muted)]">{a.label}</span>
+          <span className="w-8 shrink-0 text-micro text-[var(--text-muted)]">{a.label}</span>
           <span className="h-1 flex-1 overflow-hidden rounded-full bg-[var(--surface-elevated)]">
             <span
               className="block h-full rounded-full bg-[var(--brand)]"
               style={{ width: `${Math.max(0, Math.min(100, a.value))}%` }}
             />
           </span>
-          <span className="w-5 shrink-0 text-right font-mono text-[10px] tabular-nums text-[var(--text-secondary)]">
+          <span className="w-5 shrink-0 text-right font-num text-micro tabular-nums text-[var(--text-secondary)]">
             {Math.round(a.value)}
           </span>
         </div>

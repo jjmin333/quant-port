@@ -22,7 +22,7 @@ export function Markdown({ source, className }: { source: string; className?: st
   const blocks = parseMarkdown(source);
   if (blocks.length === 0) return null;
   return (
-    <div className={cn("markdown-body space-y-4 text-[15px] leading-[1.85]", className)}>
+    <div className={cn("markdown-body space-y-4 text-article", className)}>
       {blocks.map((block, i) => (
         <Block key={i} node={block} />
       ))}
@@ -104,8 +104,8 @@ function Block({ node }: { node: BlockNode }): ReactNode {
 
     case "code":
       return (
-        <pre className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-3 text-xs leading-relaxed">
-          <code className="font-mono text-[var(--text-secondary)]">{node.value}</code>
+        <pre className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-3 text-cell leading-relaxed">
+          <code className="font-code text-[var(--text-secondary)]">{node.value}</code>
         </pre>
       );
 
@@ -200,7 +200,7 @@ function InlineNodeView({ node }: { node: InlineNode }): ReactNode {
       );
     case "code":
       return (
-        <code className="rounded bg-[var(--surface-elevated)] px-1.5 py-0.5 font-mono text-[0.85em] text-[var(--text-primary)]">
+        <code className="rounded bg-[var(--surface-elevated)] px-1.5 py-0.5 font-code text-[0.85em] text-[var(--text-primary)]">
           {node.value}
         </code>
       );

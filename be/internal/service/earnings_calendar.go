@@ -20,11 +20,19 @@ import (
 // (AGENT_STATE 응답 속도 원칙 #2)을 지킨다.
 type EarningsCalendarService struct {
 	events *repository.EarningsEventRepo
-	redis  *redis.Client
+	// history — 발표일 없는 과거 서프라이즈(해외 전용). 「꾸준히 기대를 넘는
+	// 기업」 카드 **하나만** 이걸 읽는다. 캘린더 본문·히트맵은 절대 읽지 않는다 —
+	// 이 표에는 발표일이 없어서 날짜 축에 올릴 수 없다(migrations/055).
+	history *repository.EarningsSurpriseHistoryRepo
+	redis   *redis.Client
 }
 
-func NewEarningsCalendarService(events *repository.EarningsEventRepo, redisClient *redis.Client) *EarningsCalendarService {
-	return &EarningsCalendarService{events: events, redis: redisClient}
+func NewEarningsCalendarService(
+	events *repository.EarningsEventRepo,
+	history *repository.EarningsSurpriseHistoryRepo,
+	redisClient *redis.Client,
+) *EarningsCalendarService {
+	return &EarningsCalendarService{events: events, history: history, redis: redisClient}
 }
 
 const (
@@ -59,7 +67,8 @@ func (s *EarningsCalendarService) Calendar(
 	if s == nil || s.events == nil {
 		return []model.EarningsEvent{}, 0, nil
 	}
-	stored, err := s.events.ListRange(ctx, from, to, market, symbols)
+	queryFrom := model.ExpandUSQueryFrom(from, market)
+	stored, err := s.events.ListRange(ctx, queryFrom, to, market, symbols)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -73,16 +82,14 @@ func (s *EarningsCalendarService) Calendar(
 		}
 	}
 
+	stored = s.prepareCalendarRows(ctx, stored, from, to, market)
+
 	sort.SliceStable(stored, func(i, j int) bool {
 		if stored[i].Date != stored[j].Date {
 			return stored[i].Date < stored[j].Date
 		}
 		return stored[i].Symbol < stored[j].Symbol
 	})
-	// 연결/개별·해외 회계연도 중복을 접고, 어제보다 오래된 해외 「예정」을
-	// 빼는 것은 **자르기 전**이다. 뒤에 하면 300행 안에 같은 회사가 두 번
-	// 들어오거나, 히트맵은 줄었는데 목록은 잔류 예정이 남는다.
-	stored = model.CollapseCalendarEvents(stored)
 
 	total := len(stored)
 	// 자르는 것은 정렬 **뒤**다. 앞에서 자르면 날짜순의 앞부분이 아니라 DB가
@@ -93,11 +100,23 @@ func (s *EarningsCalendarService) Calendar(
 	if stored == nil {
 		stored = []model.EarningsEvent{}
 	}
-	// 반응·시가총액은 **자른 뒤에** 붙인다 — 내보내지 않을 3,000행의 종가를
-	// 받아 올 이유가 없다.
-	s.AttachReactions(ctx, stored)
 	s.AttachMarketCaps(ctx, stored)
 	return stored, total, nil
+}
+
+// prepareCalendarRows collapses, attaches reactions, shifts US dates to KST
+// calendar days, then filters to the requested window. DB dates stay US trading
+// days until the display shift — reactions must attach first.
+func (s *EarningsCalendarService) prepareCalendarRows(
+	ctx context.Context, events []model.EarningsEvent, from, to time.Time, market string,
+) []model.EarningsEvent {
+	events = model.CollapseCalendarEvents(events)
+	s.AttachReactions(ctx, events)
+	model.ApplyOverseasDisplayDates(events)
+	if market == string(model.AssetUS) || market == "" {
+		events = model.FilterEventsByCalendarDate(events, from, to)
+	}
+	return events
 }
 
 // AttachMarketCaps fills 발행주식수 × 최근 종가 for the rows being returned.
@@ -140,7 +159,8 @@ func (s *EarningsCalendarService) Stats(
 	if s == nil || s.events == nil {
 		return model.EarningsStats{}, nil
 	}
-	stored, err := s.events.ListRange(ctx, from, to, market, nil)
+	queryFrom := model.ExpandUSQueryFrom(from, market)
+	stored, err := s.events.ListRange(ctx, queryFrom, to, market, nil)
 	if err != nil {
 		return model.EarningsStats{}, err
 	}
@@ -149,7 +169,7 @@ func (s *EarningsCalendarService) Stats(
 			stored = append(stored, estimated...)
 		}
 	}
-	stored = model.CollapseCalendarEvents(stored)
+	stored = s.prepareCalendarRows(ctx, stored, from, to, market)
 	// 랭킹과 **같은** 유의성 하한을 쓴다. 다르게 두면 스코어보드의 「최대 상회」와
 	// 서프라이즈 목록 1위가 서로 다른 종목이 된다.
 	return model.BuildEarningsStats(stored, materialSurprise), nil
@@ -166,7 +186,8 @@ func (s *EarningsCalendarService) Summary(
 	// SQL 집계만 쓰면 연결·개별·해외 회계연도 중복이 같은 날 두 번 잡히고,
 	// 어제보다 오래된 해외 「예정」 잔류도 칸을 부풀린다. 상세와 같은 collapse
 	// 규칙을 적용한 뒤 날짜별로 센다 — 구간 상한(31일)이라 행 수는 감당 가능하다.
-	rows, err := s.events.ListRange(ctx, from, to, market, nil)
+	queryFrom := model.ExpandUSQueryFrom(from, market)
+	rows, err := s.events.ListRange(ctx, queryFrom, to, market, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +197,7 @@ func (s *EarningsCalendarService) Summary(
 			rows = append(rows, estimated...)
 		}
 	}
-	rows = model.CollapseCalendarEvents(rows)
+	rows = s.prepareCalendarRows(ctx, rows, from, to, market)
 
 	byDay := map[string]*model.EarningsDaySummary{}
 	for _, ev := range rows {
@@ -250,11 +271,12 @@ func (s *EarningsCalendarService) Surprises(
 	if s == nil || s.events == nil {
 		return []model.EarningsEvent{}, nil
 	}
-	rows, err := s.events.Announced(ctx, from, to, market)
+	queryFrom := model.ExpandUSQueryFrom(from, market)
+	rows, err := s.events.Announced(ctx, queryFrom, to, market)
 	if err != nil {
 		return nil, err
 	}
-	rows = model.CollapseCalendarEvents(rows)
+	rows = s.prepareCalendarRows(ctx, rows, from, to, market)
 	ranked := make([]model.EarningsEvent, 0, len(rows))
 	for _, ev := range rows {
 		if ev.Surprise == nil || ev.Surprise.Pct == nil {

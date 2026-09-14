@@ -34,7 +34,7 @@ export function NewsCardThumbnail({ imageUrl, className, compact = false }: News
         <span
           className={cn(
             "px-1 text-center text-[var(--text-muted)]",
-            compact ? "text-[9px] leading-none" : "text-[11px] leading-snug",
+            compact ? "text-micro leading-none" : "text-cell leading-snug",
           )}
         >
           이미지 없음

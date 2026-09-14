@@ -1,12 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PageHeader } from "@/components/layout/header";
 import { PageColumns } from "@/components/layout/page-columns";
-import { PageScrollShell } from "@/components/layout/page-content-shell";
+import { PageActions, PageScrollShell } from "@/components/layout/page-content-shell";
 import { Card } from "@/components/ui/card";
 import { MiniToggle } from "@/components/ui/mini-toggle";
 import { SectionEmpty, SectionSkeleton } from "@/components/ui/section-card";
+import { EarningsDayStrip } from "@/components/earnings/earnings-day-strip";
 import { EarningsMonthGrid } from "@/components/earnings/earnings-month-grid";
 import { EarningsWeekBoard } from "@/components/earnings/earnings-week-board";
 import { EarningsSideRail } from "@/components/earnings/earnings-side-rail";
@@ -34,7 +34,11 @@ import {
   weekEndOf,
   weekStartOf,
 } from "@/lib/earnings-range";
+import { isEarningsRangeEmpty } from "@/lib/earnings-empty";
 import { setEarningsRangeMode, useEarningsRangeMode } from "@/lib/earnings-view";
+import { useCalendarLayout } from "@/lib/layout-lab";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import type {
   EarningsEvent,
   EarningsDaySummary,
@@ -105,10 +109,11 @@ const COPY: Record<EarningsMarket, { title: string; subtitle: string; source: Re
     source: (
       <>
         자료: <b>Finnhub</b> 실적 캘린더(EPS·매출 컨센서스와 실적, 발표 시각) · 주가 반응은 우리
-        일별 종가. 날짜는 <b>미국 거래일</b>입니다(장후는 한국 다음날 아침). 서프라이즈는{" "}
-        <b>EPS</b> 기준입니다 — 발표치는 회계 기준(GAAP) EPS인데 컨센서스는 조정 EPS라, 수백 %대
-        차이는 대개 일회성 항목입니다. 지난날은 실적이 확인된 행만 보여 줍니다. Finnhub가 숫자를
-        안 준 「예정」은 어제보다 오래되면 목록에서 빼며, 나중에 실적이 오면 다시 나타납니다.
+        일별 종가. 날짜는 <b>한국 시간 기준</b>입니다 — 장후(amc)·장중(dmh) 발표는 미국 거래일
+        다음날 새벽(한국)에 해당합니다. 서프라이즈는 <b>EPS</b> 기준입니다 — 발표치는 회계
+        기준(GAAP) EPS인데 컨센서스는 조정 EPS라, 수백 %대 차이는 대개 일회성 항목입니다.
+        지난날은 실적이 확인된 행만 보여 줍니다. Finnhub가 숫자를 안 준 「예정」은 해당
+        날짜가 지나면 목록에서 빼며, 나중에 실적이 오면 다시 나타납니다.
       </>
     ),
   },
@@ -116,6 +121,13 @@ const COPY: Record<EarningsMarket, { title: string; subtitle: string; source: Re
 
 export function EarningsClient({ market }: { market: EarningsMarket }) {
   const [view, setView] = useState<"calendar" | "surprise">("calendar");
+  /*
+    달력을 띠로 눕힐지 — 실서비스 기본은 `grid`(지금 그대로)이고, 시안 화면만
+    `strip`을 넘긴다(`lib/layout-lab`). `gridOpen`은 그 띠에서 「달력」을 눌러
+    격자를 잠깐 편 상태다.
+  */
+  const calendarLayout = useCalendarLayout();
+  const [gridOpen, setGridOpen] = useState(false);
   // 보기 단위는 사람마다 고정된 습관이라 기억한다. `useSyncExternalStore`를 쓰는
   // 이유는 §earnings-view.ts 주석 참고(캐스케이드 렌더·하이드레이션 어긋남 회피).
   const mode = useEarningsRangeMode();
@@ -248,23 +260,24 @@ export function EarningsClient({ market }: { market: EarningsMarket }) {
       ? `${formatShortDate(week)} – ${formatShortDate(weekEndOf(week))}`
       : `${month.slice(0, 4)}. ${month.slice(5, 7)} 전체`;
 
+  /*
+   * 이 달에 한 건도 없는가 — 스코어보드를 감출지와 달력에 문구를 낼지를 **같은 값**으로
+   * 정한다(`lib/earnings-empty`). 「월」 보기에서만 본다: 주·일 보기는 구간이 짧아
+   * 비어 있는 것이 정상이고, 그 경우는 아래 목록 카드가 이미 말한다.
+   */
+  const monthIsEmpty = mode === "month" && isEarningsRangeEmpty(days);
+
   const copy = COPY[market];
 
   return (
     <>
-      <PageHeader
-        title={copy.title}
-        subtitle={copy.subtitle}
-        actions={
-          <div className="flex flex-wrap items-center gap-1.5">
-            {view === "calendar" && (
-              <MiniToggle options={MODES} value={mode} onChange={changeMode} />
-            )}
-            <MiniToggle options={VIEWS} value={view} onChange={setView} />
-          </div>
-        }
-      />
       <PageScrollShell>
+        <PageActions>
+          {view === "calendar" && (
+            <MiniToggle options={MODES} value={mode} onChange={changeMode} />
+          )}
+          <MiniToggle options={VIEWS} value={view} onChange={setView} />
+        </PageActions>
         <PageColumns
           rail={
             <EarningsSideRail
@@ -279,22 +292,59 @@ export function EarningsClient({ market }: { market: EarningsMarket }) {
             <EarningsSurpriseView market={market} onPickEvent={setOpenEvent} />
           ) : (
             <div className="space-y-3">
-              <EarningsScoreboard stats={stats} rangeLabel={rangeLabel} />
+              {/*
+                # 빈 달에는 **스코어보드를 세우지 않는다** (2026-09-05 사용자 지적 8)
 
-              {mode === "month" && (
-                <EarningsMonthGrid
-                  month={month}
-                  days={days}
-                  selected={resolvedSelected}
-                  loading={days === null}
-                  onSelect={pickDate}
-                  onMonthChange={(next) => {
-                    setMonth(next);
-                    // 다른 달에서 특정 날짜를 고를 근거가 없다 — 히트맵을 보고 고르게 한다.
-                    pickDate(null);
-                  }}
-                />
-              )}
+                셀 다섯이 「0건」과 「—」로 채워진 카드는 아무 말도 하지 않으면서 화면
+                맨 위를 차지한다. 할 말(「9월에는 일정이 없습니다」)은 바로 아래 달력
+                카드가 정중앙에서 한 번만 한다 — 같은 사실을 두 카드가 나눠 말하면
+                어느 쪽이 답인지 흐려진다.
+              */}
+              {!monthIsEmpty && <EarningsScoreboard stats={stats} rangeLabel={rangeLabel} />}
+
+              {mode === "month" &&
+                (calendarLayout === "strip" && !gridOpen ? (
+                  /*
+                    # 달력을 눕힌 보기 (2026-09-06 사용자 선택 · 실험대)
+
+                    스코어보드와 아래 상세 표는 그대로 두고 **격자만** 띠로 바꾼다.
+                    375px 실측에서 상단이 573px(뷰포트의 70%)이라 첫 회사가 화면
+                    밖이었고, 사용자가 유지하기로 한 둘 중 줄일 수 있는 것이 이것뿐이다.
+                    띠는 격자와 같은 것을 말한다 — `earnings-day-strip` 머리말 참조.
+                  */
+                  <EarningsDayStrip
+                    month={month}
+                    days={days}
+                    selected={resolvedSelected}
+                    loading={days === null}
+                    market={market}
+                    onSelect={pickDate}
+                    onMonthChange={(next) => {
+                      setMonth(next);
+                      pickDate(null);
+                    }}
+                    onExpand={() => setGridOpen(true)}
+                  />
+                ) : (
+                  <EarningsMonthGrid
+                    month={month}
+                    days={days}
+                    selected={resolvedSelected}
+                    loading={days === null}
+                    market={market}
+                    onSelect={(date) => {
+                      pickDate(date);
+                      // 띠에서 펼친 격자는 날짜를 고르면 도로 접는다 — 고른 뒤에도
+                      // 격자가 남아 있으면 띠로 바꾼 이유(세로 예산)가 사라진다.
+                      if (calendarLayout === "strip") setGridOpen(false);
+                    }}
+                    onMonthChange={(next) => {
+                      setMonth(next);
+                      // 다른 달에서 특정 날짜를 고를 근거가 없다 — 히트맵을 보고 고르게 한다.
+                      pickDate(null);
+                    }}
+                  />
+                ))}
               {mode === "week" && (
                 <EarningsWeekBoard
                   weekStart={week}
@@ -321,7 +371,7 @@ export function EarningsClient({ market }: { market: EarningsMarket }) {
 
               <Card className="p-3">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-xs font-semibold text-foreground">
+                  <h2 className="text-section font-semibold text-foreground">
                     {rangeLabel}
                     <span className="ml-1.5 font-normal text-muted-foreground">
                       {events
@@ -360,13 +410,13 @@ export function EarningsClient({ market }: { market: EarningsMarket }) {
                 )}
 
                 {truncated && (
-                  <p className="mt-2 rounded-md bg-muted/50 px-2 py-1.5 text-[10px] text-muted-foreground">
+                  <p className="mt-2 rounded-md bg-muted/50 px-2 py-1.5 text-micro text-muted-foreground">
                     이 기간은 발표가 많아 <b>앞쪽 {events?.length}건</b>만 보여줍니다. 위에서
                     날짜를 고르면 그날 전체를 봅니다.
                   </p>
                 )}
 
-                <p className="mt-2 border-t pt-2 text-[10px] leading-relaxed text-muted-foreground">
+                <p className="mt-2 border-t pt-2 text-micro leading-relaxed text-muted-foreground">
                   {copy.source}
                 </p>
               </Card>
@@ -402,7 +452,7 @@ function DayNavigator({
       <button
         type="button"
         onClick={() => shift(-1)}
-        className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="rounded-md px-2 py-1 text-cell text-muted-foreground hover:bg-muted hover:text-foreground"
       >
         ← 전날
       </button>
@@ -412,7 +462,7 @@ function DayNavigator({
           <button
             type="button"
             onClick={() => onChange(todayKST())}
-            className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+            className="rounded-full bg-muted px-2 py-0.5 text-micro text-muted-foreground hover:text-foreground"
           >
             오늘로
           </button>
@@ -421,7 +471,7 @@ function DayNavigator({
       <button
         type="button"
         onClick={() => shift(1)}
-        className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="rounded-md px-2 py-1 text-cell text-muted-foreground hover:bg-muted hover:text-foreground"
       >
         다음날 →
       </button>
@@ -452,13 +502,14 @@ function MineToggle({
           ? "관심 종목과 보유 종목만 봅니다"
           : "관심 종목이나 보유 종목을 담으면 사용할 수 있습니다"
       }
-      className={
-        "shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors " +
-        (on
+      className={cn(
+        buttonVariants({ variant: "outline", size: "xs" }),
+        "rounded-full",
+        on
           ? "border-foreground bg-foreground text-background"
-          : "border-border text-muted-foreground hover:text-foreground") +
-        (available ? "" : " cursor-not-allowed opacity-50")
-      }
+          : "border-border text-muted-foreground hover:text-foreground",
+        !available && "cursor-not-allowed opacity-50",
+      )}
     >
       내 종목만
     </button>

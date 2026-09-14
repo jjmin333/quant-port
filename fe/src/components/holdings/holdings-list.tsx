@@ -5,6 +5,7 @@ import { LayoutGrid, Table as TableIcon } from "lucide-react";
 import { StockAvatar } from "@/components/stocks/stock-avatar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ValueFlash } from "@/components/ui/value-flash";
 import {
   formatKRW,
   formatPercent,
@@ -58,11 +59,11 @@ function formatMarketValueDisplay(m: HoldingMetrics, exchangeRate: number): stri
 function DayChangeBadge({ rate }: { rate: number }) {
   return (
     <div className="shrink-0 text-right leading-none">
-      <p className="mb-0.5 text-[9px] font-medium text-muted-foreground">전일대비</p>
+      <p className="mb-0.5 text-micro font-medium text-muted-foreground">전일대비</p>
       <span
         style={heatStyle(rate)}
         className={cn(
-          "inline-block rounded px-1.5 py-0.5 font-mono text-xs tabular-nums",
+          "inline-block rounded px-1.5 py-0.5 font-num text-cell tabular-nums",
           trendTextClass(rate),
         )}
       >
@@ -88,7 +89,7 @@ export function HoldingsViewToggle() {
           onClick={() => setHoldingsView(value as HoldingsView)}
           aria-pressed={view === value}
           className={cn(
-            "flex h-6 items-center gap-1 rounded px-2 text-[11px] transition-colors",
+            "flex h-6 items-center gap-1 rounded px-2 text-cell transition-colors",
             view === value
               ? "bg-card font-semibold text-foreground shadow-xs"
               : "text-muted-foreground hover:text-foreground",
@@ -124,7 +125,7 @@ export function HoldingsList(props: ListProps) {
 
   if (loading) {
     return (
-      <Card className="p-6 text-center text-xs text-muted-foreground">
+      <Card className="p-6 text-center text-cell text-muted-foreground">
         보유 종목을 불러오는 중…
       </Card>
     );
@@ -132,7 +133,7 @@ export function HoldingsList(props: ListProps) {
 
   if (filtered.length === 0) {
     return (
-      <Card className="p-8 text-center text-xs text-muted-foreground">
+      <Card className="p-8 text-center text-cell text-muted-foreground">
         {filterQuery.trim() ? "검색 결과가 없습니다." : "등록된 보유 종목이 없습니다."}
       </Card>
     );
@@ -199,7 +200,7 @@ function HoldingTable({ metrics, exchangeRate, onSelect }: ListProps) {
   return (
     <Card className="p-0">
       {usesUsd && (
-        <p className="border-b px-3 py-1.5 text-[10px] text-muted-foreground">
+        <p className="border-b px-3 py-1.5 text-micro text-muted-foreground">
           달러 종목은 현재 환율 {exchangeRate > 0 ? formatKRW(exchangeRate) : "—"} 기준으로
           환산했습니다.
           매입 시점 환율이 없어 환차손익은 따로 떼어내지 않습니다.
@@ -207,22 +208,32 @@ function HoldingTable({ metrics, exchangeRate, onSelect }: ListProps) {
       )}
       {/* 표는 좁은 화면에서 자기 안에서 가로 스크롤한다 — 페이지가 가로로 밀리면 안 된다. */}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[680px] border-collapse text-xs">
+        <table className="w-full min-w-[680px] border-collapse text-cell">
           <thead>
             <tr>
               {COLUMNS.map((col) => (
                 <th
                   key={col.key}
+                  aria-sort={sort === col.key ? (desc ? "descending" : "ascending") : "none"}
                   className={cn(
-                    "border-b px-2 py-1.5 text-right text-[11px] font-medium whitespace-nowrap",
+                    "border-b text-right text-cell font-medium whitespace-nowrap",
                     col.className,
                     sort === col.key ? "font-semibold text-foreground" : "text-muted-foreground",
                   )}
                 >
+                  {/*
+                    버튼이 헤더 칸 전체를 채운다. 예전에는 글자에만 클릭이 걸려 있어
+                    칸의 여백(px-2 py-1.5)을 누르면 아무 반응이 없었고, 정렬 화살표가
+                    보이는데도 「정렬이 안 된다」로 읽혔다. 여백을 th가 아니라
+                    버튼이 갖게 해서 보이는 영역과 누를 수 있는 영역을 일치시킨다.
+                  */}
                   <button
                     type="button"
                     onClick={() => toggle(col.key)}
-                    className="hover:text-foreground"
+                    className={cn(
+                      "w-full cursor-pointer px-2 py-1.5 hover:text-foreground",
+                      col.className?.includes("text-left") ? "text-left" : "text-right",
+                    )}
                   >
                     {col.label}
                     {sort === col.key ? (desc ? " ▾" : " ▴") : ""}
@@ -235,8 +246,20 @@ function HoldingTable({ metrics, exchangeRate, onSelect }: ListProps) {
             {rows.map((m) => (
               <tr
                 key={m.symbol}
+                /*
+                  행은 `role="row"`인 채로 둔다 — button으로 덮으면 표 구조가
+                  스크린리더에서 사라진다. 대신 포커스와 Enter·Space만 얹어
+                  카드 보기와 같은 키보드 조작을 준다.
+                */
+                tabIndex={0}
+                aria-label={`${m.name} ${m.symbol}`}
                 onClick={() => onSelect(m.symbol)}
-                className="cursor-pointer border-b border-border/55 hover:bg-accent"
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" && e.key !== " ") return;
+                  e.preventDefault();
+                  onSelect(m.symbol);
+                }}
+                className="cursor-pointer border-b border-border/55 hover:bg-accent focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--brand)]"
               >
                 <td className="max-w-0 px-2 py-1.5">
                   <div className="flex min-w-0 items-center gap-2">
@@ -250,23 +273,31 @@ function HoldingTable({ metrics, exchangeRate, onSelect }: ListProps) {
                     />
                     <span className="min-w-0 truncate">
                       {m.name}
-                      <span className="ml-1 text-[10px] text-muted-foreground">{m.symbol}</span>
+                      <span className="ml-1 text-micro text-muted-foreground">{m.symbol}</span>
                     </span>
                   </div>
                 </td>
-                <td className="px-2 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
+                <td className="px-2 py-1.5 text-right font-num tabular-nums whitespace-nowrap">
                   {m.quantity}
                 </td>
-                <td className="px-2 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
+                <td className="px-2 py-1.5 text-right font-num tabular-nums whitespace-nowrap">
                   {m.avgPrice == null ? (
                     <span className="text-muted-foreground">—</span>
                   ) : (
                     formatPrice(m.avgPrice, m.currency)
                   )}
                 </td>
-                <td className="px-2 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
+                {/*
+                  시세를 따라 움직이는 칸은 **전부** 플래시를 준다 (2026-09-04 사용자 요청 4).
+                  현재가·평가금액·평가손익 셋이다. 바로 위 평단은 감싸지 않는다 —
+                  사용자가 매수한 값이라 시세로 움직이지 않고, 감싸면 화면을 처음 열 때만
+                  한 번 뜨는 색이 되어 뜻이 없다.
+                */}
+                <td className="px-2 py-1.5 text-right font-num tabular-nums whitespace-nowrap">
                   {m.hasQuote ? (
-                    formatPrice(m.currentPrice, m.currency)
+                    <ValueFlash value={m.currentPrice} resetKey={m.symbol}>
+                      {formatPrice(m.currentPrice, m.currency)}
+                    </ValueFlash>
                   ) : (
                     <span className="text-muted-foreground">—</span>
                   )}
@@ -276,7 +307,7 @@ function HoldingTable({ metrics, exchangeRate, onSelect }: ListProps) {
                     <span
                       style={heatStyle(m.changeRate)}
                       className={cn(
-                        "inline-block min-w-[58px] rounded px-1 text-right font-mono tabular-nums",
+                        "inline-block min-w-[58px] rounded px-1 text-right font-num tabular-nums",
                         trendTextClass(m.changeRate),
                       )}
                     >
@@ -286,20 +317,26 @@ function HoldingTable({ metrics, exchangeRate, onSelect }: ListProps) {
                     <span className="text-muted-foreground">—</span>
                   )}
                 </td>
-                <td className="px-2 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
-                  {formatMarketValueDisplay(m, exchangeRate)}
+                <td className="px-2 py-1.5 text-right font-num tabular-nums whitespace-nowrap">
+                  <ValueFlash value={m.marketValueKRW} resetKey={m.symbol}>
+                    {formatMarketValueDisplay(m, exchangeRate)}
+                  </ValueFlash>
                 </td>
                 <td className="px-2 py-1.5 text-right whitespace-nowrap">
                   {m.unrealizedPnlKRW == null || m.returnRate == null ? (
                     <span className="text-muted-foreground">—</span>
                   ) : (
-                    <span className={cn("font-mono tabular-nums", trendTextClass(m.unrealizedPnlKRW))}>
+                    <ValueFlash
+                      value={m.unrealizedPnlKRW}
+                      resetKey={m.symbol}
+                      className={cn("font-num tabular-nums", trendTextClass(m.unrealizedPnlKRW))}
+                    >
                       {formatPriceChange(Math.round(m.unrealizedPnlKRW), "KRW")}
-                      <span className="block text-[10px]">{formatPercent(m.returnRate)}</span>
-                    </span>
+                      <span className="block text-micro">{formatPercent(m.returnRate)}</span>
+                    </ValueFlash>
                   )}
                 </td>
-                <td className="px-2 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
+                <td className="px-2 py-1.5 text-right font-num tabular-nums whitespace-nowrap">
                   {m.weight == null ? (
                     <span className="text-muted-foreground">—</span>
                   ) : (
@@ -322,20 +359,20 @@ function HoldingTable({ metrics, exchangeRate, onSelect }: ListProps) {
               <tr className="font-semibold">
                 <td className="px-2 pt-2 text-left">합계</td>
                 <td colSpan={4} />
-                <td className="px-2 pt-2 text-right font-mono tabular-nums">
+                <td className="px-2 pt-2 text-right font-num tabular-nums">
                   {formatKRW(totals.value)}
                 </td>
                 <td className="px-2 pt-2 text-right">
                   {totals.pnl == null || totals.rate == null ? (
                     <span className="text-muted-foreground">—</span>
                   ) : (
-                    <span className={cn("font-mono tabular-nums", trendTextClass(totals.pnl))}>
+                    <span className={cn("font-num tabular-nums", trendTextClass(totals.pnl))}>
                       {formatPriceChange(Math.round(totals.pnl), "KRW")}
-                      <span className="block text-[10px]">{formatPercent(totals.rate)}</span>
+                      <span className="block text-micro">{formatPercent(totals.rate)}</span>
                     </span>
                   )}
                 </td>
-                <td className="px-2 pt-2 text-right font-mono tabular-nums">100%</td>
+                <td className="px-2 pt-2 text-right font-num tabular-nums">100%</td>
               </tr>
             </tfoot>
           )}
@@ -353,8 +390,16 @@ function HoldingCards({ metrics, exchangeRate, onSelect }: ListProps) {
       {rows.map((m) => (
         <Card
           key={m.symbol}
+          role="button"
+          tabIndex={0}
           onClick={() => onSelect(m.symbol)}
-          className="cursor-pointer p-3 transition-colors hover:bg-accent"
+          onKeyDown={(e) => {
+            if (e.key !== "Enter" && e.key !== " ") return;
+            e.preventDefault();
+            onSelect(m.symbol);
+          }}
+          aria-label={`${m.name} ${m.symbol}`}
+          className="cursor-pointer p-3 transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--brand)]"
         >
           <div className="flex min-w-0 items-start gap-2">
             <StockAvatar
@@ -367,7 +412,7 @@ function HoldingCards({ metrics, exchangeRate, onSelect }: ListProps) {
             />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">{m.name}</p>
-              <p className="truncate text-[10px] text-muted-foreground">
+              <p className="truncate text-micro text-muted-foreground">
                 {m.symbol} · {m.currency}
                 {m.row.brokerHint ? ` · ${m.row.brokerHint}` : ""}
               </p>
@@ -377,49 +422,55 @@ function HoldingCards({ metrics, exchangeRate, onSelect }: ListProps) {
 
           <div className="mt-2 flex items-end justify-between gap-2 border-t pt-2">
             <div className="min-w-0">
-              <p className="text-[10px] text-muted-foreground">평가금액</p>
+              <p className="text-micro text-muted-foreground">평가금액</p>
+              {/* 모바일 카드도 표와 같은 신호를 준다 — 좁은 화면이라고 값이 말없이
+                  바뀌면, 같은 앱을 폰으로 볼 때만 시장이 멈춘 것처럼 보인다. */}
               <p
                 className={cn(
-                  "font-mono font-bold tabular-nums",
+                  "font-num font-bold tabular-nums",
                   m.currency === "USD" ? "text-sm leading-snug" : "text-base",
                 )}
               >
-                {formatMarketValueDisplay(m, exchangeRate)}
+                <ValueFlash value={m.marketValueKRW} resetKey={m.symbol}>
+                  {formatMarketValueDisplay(m, exchangeRate)}
+                </ValueFlash>
               </p>
             </div>
             <div className="min-w-0 text-right">
-              <p className="text-[10px] text-muted-foreground">평가손익</p>
+              <p className="text-micro text-muted-foreground">평가손익</p>
               {m.unrealizedPnlKRW == null || m.returnRate == null ? (
-                <p className="font-mono text-sm text-muted-foreground">—</p>
+                <p className="font-num text-sm text-muted-foreground">—</p>
               ) : (
                 <p
                   className={cn(
-                    "font-mono text-sm font-semibold tabular-nums",
+                    "font-num text-sm font-semibold tabular-nums",
                     trendTextClass(m.unrealizedPnlKRW),
                   )}
                 >
-                  {formatPercent(m.returnRate)}
-                  <span className="block text-[10px] font-normal">
-                    {formatPriceChange(Math.round(m.unrealizedPnlKRW), "KRW")}
-                  </span>
+                  <ValueFlash value={m.unrealizedPnlKRW} resetKey={m.symbol}>
+                    {formatPercent(m.returnRate)}
+                    <span className="block text-micro font-normal">
+                      {formatPriceChange(Math.round(m.unrealizedPnlKRW), "KRW")}
+                    </span>
+                  </ValueFlash>
                 </p>
               )}
             </div>
           </div>
 
-          <div className="mt-1.5 grid grid-cols-3 gap-1 text-[10px] text-muted-foreground">
+          <div className="mt-1.5 grid grid-cols-3 gap-1 text-micro text-muted-foreground">
             <span>
-              수량 <b className="font-mono text-foreground">{m.quantity}</b>
+              수량 <b className="font-num text-foreground">{m.quantity}</b>
             </span>
             <span>
               평단{" "}
-              <b className="font-mono text-foreground">
+              <b className="font-num text-foreground">
                 {m.avgPrice == null ? "—" : formatPrice(m.avgPrice, m.currency)}
               </b>
             </span>
             <span className="text-right">
               비중{" "}
-              <b className="font-mono text-foreground">
+              <b className="font-num text-foreground">
                 {m.weight == null ? "—" : `${m.weight.toFixed(1)}%`}
               </b>
             </span>
@@ -442,7 +493,7 @@ export function HoldingsToolbar({
 }) {
   return (
     <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-      <p className="text-xs font-semibold">보유 종목 {count}</p>
+      <p className="text-cell font-semibold">보유 종목 {count}</p>
       <div className="flex items-center gap-2">
         {children}
         <HoldingsViewToggle />

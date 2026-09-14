@@ -68,7 +68,7 @@ export function NewsArticleContext({
     <div className="space-y-2.5">
       {hasEntities && (
         <div>
-          <p className="mb-1.5 text-[11px] font-semibold text-[var(--text-muted)]">
+          <p className="mb-1.5 text-cell font-semibold text-[var(--text-muted)]">
             관련 종목 · 지수
           </p>
           <NewsRelatedEntityPanel

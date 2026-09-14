@@ -332,3 +332,81 @@ func trimHeadlineNameTail(name string) string {
 	}
 	return out
 }
+
+/*
+usNameStopwords — 이름 인덱스에 넣으면 안 되는 흔한 영어 단어.
+
+이름 인덱스는 소문자 본문에 부분문자열(경계 검사 포함)로 맞춘다. 그래서 회사명에서
+뽑은 토큰이 **일반 단어와 겹치면** 그 단어가 든 모든 기사에 그 종목이 붙는다.
+
+실측(2026-08-24, 최근 3일 기사):
+
+	HERE 49건 · BOND 39 · OPEN 27 · GOLD 26 · HONG 14 · FIVE 11
+
+「금값」·「채권」·「홍콩」 기사에 GOLD.COM INC · PIMCO ACTIVE BOND ETF ·
+LEVERAGE SHARES 2X HON이 붙었다. 그 태그는 화면 품질만 해친 게 아니라,
+뉴스 브리핑을 통해 폴러의 시청 집합까지 밀어 올려 상류 호출을 만들었다.
+
+**티커를 지우자는 게 아니다.** 그 종목들은 실재하고, 기사가 진짜로 그 종목을
+다루면 `usTickerTokenMatch`(원문 대문자 + 경계)나 `$GOLD`·`NYSE: GOLD` 같은
+명시 표기가 잡는다. 여기서 막는 것은 **이름으로 오인되는 경로**뿐이다.
+
+목록은 「금융 기사에 흔히 나오면서 미국 티커와 겹치는 단어」로 한정한다.
+길게 만들수록 진짜 회사명을 놓칠 위험이 커지므로, 실측으로 확인된 것과
+같은 부류만 넣는다.
+*/
+/*
+usNameStopwords — **이름**으로 매치하면 안 되는 낱말.
+
+티커가 낱말인 경우(AMID·HIGH·MOVE…)는 여기가 아니라 `isWordLikeTicker`가 막는다
+— 티커는 이제 대문자 인덱스로 가므로 소문자 낱말과 애초에 안 부딪힌다
+(news_symbol_wordlike.go). 여기 남는 것은 **회사의 진짜 이름이 낱말인** 경우다.
+
+둘로 나뉜다:
+
+  ① 그 이름이 실은 **지수·시장 이름**이다. NDAQ의 상호는 "Nasdaq, Inc."라서
+     나스닥 지수를 말하는 기사 전부가 이 회사 기사가 됐다 — 실측 1,000건 중 55건,
+     엔비디아 다음으로 많았다. 진짜 Nasdaq Inc. 기사는 `$NDAQ`·`NASDAQ: NDAQ`로 잡는다.
+
+  ② 그 이름이 **금융 기사에서 낱말로 훨씬 자주** 쓰인다. TGT의 상호는 "Target
+     Corporation"인데, 증권 기사에서 target은 거의 언제나 「목표주가」다
+     (실측 18건). 소매업체 타깃 기사는 `$TGT`로 잡는다.
+
+이름을 막는 것은 **정보를 버리는 선택**이라 실측 없이 넣지 않는다. 위 둘은
+2026-09-03 최근 1,000건 집계에서 오탐률이 사실상 100%였다.
+*/
+var usNameStopwords = map[string]struct{}{
+	"gold": {}, "bond": {}, "open": {}, "here": {}, "hong": {}, "five": {},
+	"cash": {}, "fund": {}, "growth": {}, "value": {}, "income": {},
+	"real": {}, "core": {}, "next": {}, "best": {}, "safe": {}, "wall": {},
+	"main": {}, "peak": {}, "wave": {}, "boss": {}, "hope": {}, "well": {},
+	// ① 지수·시장 이름
+	"nasdaq": {}, "nasdaq inc": {}, "dow jones": {}, "russell": {},
+	"nyse": {}, "cboe": {}, "nikkei": {}, "ftse": {},
+	// ② 금융 기사의 상용어와 겹치는 상호
+	"target": {}, "target corp": {}, "target corporation": {},
+	// ③ 중앙은행·기관 약어. 헤드라인에서 「Fed's …」·「BoJ's …」로 자주 나오고,
+	//    그때 말하는 것은 통화정책이지 같은 글자로 시작하는 ETF가 아니다.
+	"fed": {}, "boc": {}, "boj": {}, "ecb": {}, "pboc": {}, "rba": {},
+	"snb": {}, "bok": {}, "imf": {}, "opec": {}, "commerce": {},
+	// ④ 회사 이름을 줄이면 흔한 낱말이 되는 경우. 실측: "Hold Post Q2 Earnings?"가
+	//    포스트 홀딩스(POST) 기사로 잡혔다 — 여기서 post는 「~ 이후」다.
+	"post": {},
+}
+
+/*
+addIdxKey — 이름 인덱스에 키를 넣되, 불용어는 거른다.
+
+인덱스에 쓰는 모든 지점이 이 함수를 거쳐야 한다. 한 곳이라도 맵에 직접 넣으면
+그 경로만 조용히 오탐을 만든다 — 실제로 티커를 직접 넣던 한 줄이 그랬다.
+*/
+func addIdxKey(idx map[string]string, key, sym string) {
+	key = strings.ToLower(strings.TrimSpace(key))
+	if key == "" || len(key) < usNameMinLen {
+		return
+	}
+	if _, blocked := usNameStopwords[key]; blocked {
+		return
+	}
+	idx[key] = sym
+}

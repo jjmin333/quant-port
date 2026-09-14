@@ -21,6 +21,18 @@ func NewMarketHandler(svc *service.MarketService, dataSettings *service.MarketDa
 	return &MarketHandler{svc: svc, dataSettings: dataSettings}
 }
 
+/*
+MarketClocks — 국내·해외 세션을 한 응답에 담는다.
+
+화면(홈 카드의 국내/해외 토글)이 기본값을 정하는 데 쓴다. 달력이 캐시돼 있어
+상류 호출이 없고, 응답이 작아 캐시 헤더도 짧게만 둔다 — 세션 경계(09:00,
+15:30, 22:30/23:30)를 1분 안에 따라가야 한다.
+*/
+func (h *MarketHandler) MarketClocks(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "public, max-age=30")
+	response.JSON(w, http.StatusOK, map[string]any{"data": h.svc.MarketClocks(r.Context())})
+}
+
 func (h *MarketHandler) ExchangeRate(w http.ResponseWriter, r *http.Request) {
 	base := r.URL.Query().Get("baseCurrency")
 	if base == "" {
@@ -91,6 +103,41 @@ func (h *MarketHandler) Rankings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, http.StatusOK, map[string]any{"data": result})
+}
+
+/*
+RankingPrices — 랭킹 목록의 가격·등락률만. 화면이 5초마다 부른다.
+
+`/rankings`와 **같은 파라미터**를 받는다: 화면이 심볼 목록을 실어 보내지 않아도
+되고, 화면이 보는 목록과 서버가 아는 목록이 어긋나지 않는다.
+*/
+func (h *MarketHandler) RankingPrices(w http.ResponseWriter, r *http.Request) {
+	rankingType := r.URL.Query().Get("type")
+	if rankingType == "" {
+		response.Error(w, http.StatusBadRequest, "type is required")
+		return
+	}
+	marketCountry := r.URL.Query().Get("marketCountry")
+	if marketCountry == "" {
+		marketCountry = string(toss.MarketKR)
+	}
+	duration := r.URL.Query().Get("duration")
+	if duration == "" {
+		duration = string(toss.RankingRealtime)
+	}
+	count, _ := strconv.Atoi(r.URL.Query().Get("count"))
+
+	rows, err := h.svc.RankingPrices(r.Context(), toss.GetRankingsParams{
+		Type:          toss.RankingType(rankingType),
+		MarketCountry: toss.MarketCountry(marketCountry),
+		Duration:      toss.RankingDuration(duration),
+		Count:         count,
+	})
+	if err != nil {
+		writeTossError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]any{"data": rows})
 }
 
 func (h *MarketHandler) RankingHistory(w http.ResponseWriter, r *http.Request) {

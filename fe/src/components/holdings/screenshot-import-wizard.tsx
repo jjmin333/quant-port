@@ -24,6 +24,8 @@ import {
 } from "@/lib/import-image-format";
 import type { ImportImageMeta, ImportPreviewRow } from "@/lib/user-holdings-types";
 import { cn } from "@/lib/utils";
+import { toUserMessage } from "@/lib/error-message";
+import { buttonVariants } from "@/components/ui/button";
 
 const PREVIEW_GRID =
   "grid grid-cols-[minmax(7rem,1.2fr)_minmax(5rem,0.75fr)_minmax(4rem,0.45fr)_minmax(5.5rem,0.75fr)_5.5rem] gap-2";
@@ -266,7 +268,7 @@ export function ScreenshotImportWizard({
       setJobId(id);
       setStep("processing");
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "업로드 실패");
+      setUploadError(toUserMessage(err, "업로드 실패"));
     } finally {
       setUploading(false);
     }
@@ -329,7 +331,7 @@ export function ScreenshotImportWizard({
       setStep("done");
       onCommitted();
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "저장 실패");
+      setUploadError(toUserMessage(err, "저장 실패"));
     } finally {
       setCommitting(false);
     }
@@ -407,7 +409,7 @@ export function ScreenshotImportWizard({
   const wizardHeader = isRail ? (
     <DialogHeader className="text-left">
       <DialogTitle className="text-base">스크린샷으로 가져오기</DialogTitle>
-      <DialogDescription className="text-xs">
+      <DialogDescription className="text-cell">
         증권앱 보유종목 화면을 최대 {MAX_IMAGES}장까지 올리면 종목과 수량을 불러옵니다. 저장 전에 꼭 확인해
         주세요.
       </DialogDescription>
@@ -425,7 +427,7 @@ export function ScreenshotImportWizard({
         <button
           type="button"
           onClick={() => setExpanded(false)}
-          className="shrink-0 rounded-md border px-2.5 py-1 text-[11px] hover:bg-accent"
+          className={cn(buttonVariants({ variant: "outline", size: "xs" }), "hover:bg-accent")}
         >
           접기
         </button>
@@ -471,12 +473,12 @@ export function ScreenshotImportWizard({
             <span className="text-sm font-medium text-[var(--text-primary)]">
               보유 화면 스크린샷을 붙여넣거나 끌어다 놓아 주세요
             </span>
-            <span className="mt-1 text-xs text-[var(--text-muted)]">
+            <span className="mt-1 text-cell text-[var(--text-muted)]">
               Ctrl+V · jpg, png · 최대 {MAX_IMAGES}장
             </span>
             <button
               type="button"
-              className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--brand)] hover:bg-[var(--brand-muted)]/20"
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-4 border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] hover:border-[var(--brand)] hover:bg-[var(--brand-muted)]/20")}
               onClick={(event) => {
                 event.stopPropagation();
                 fileInputRef.current?.click();
@@ -501,7 +503,7 @@ export function ScreenshotImportWizard({
                   <div
                     key={`${f.name}-${idx}`}
                     className={cn(
-                      "flex items-center gap-1 rounded-md border px-2 py-1 text-xs",
+                      "flex items-center gap-1 rounded-md border px-2 py-1 text-cell",
                       idx === activeIdx
                         ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--text-primary)]"
                         : "border-[var(--border)] text-[var(--text-secondary)]",
@@ -541,7 +543,7 @@ export function ScreenshotImportWizard({
             <button
               type="button"
               disabled={uploading || files.length === 0}
-              className="rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              className={cn(buttonVariants({ variant: "default", size: "default" }), "bg-[var(--brand)] text-white disabled:opacity-50")}
               onClick={() => void startImport()}
             >
               {uploading ? "업로드 중…" : "불러오기"}
@@ -587,7 +589,7 @@ export function ScreenshotImportWizard({
 
           <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
             <div className="min-w-[36rem] p-2">
-              <div className={cn(PREVIEW_GRID, "px-1 pb-2 text-xs font-medium text-[var(--text-muted)]")}>
+              <div className={cn(PREVIEW_GRID, "px-1 pb-2 text-cell font-medium text-[var(--text-muted)]")}>
                 <span>종목명</span>
                 <span>종목코드</span>
                 <span>수량</span>
@@ -617,14 +619,14 @@ export function ScreenshotImportWizard({
                           {displayName}
                         </p>
                         {row.needsReview && (
-                          <p className="text-xs text-[var(--brand)]">확인 필요</p>
+                          <p className="text-cell text-[var(--brand)]">확인 필요</p>
                         )}
                       </div>
 
                       <div className="min-w-0">
                         {editing ? (
                           <input
-                            className="w-full min-w-0 rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 font-mono text-xs"
+                            className="w-full min-w-0 rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 font-num text-cell"
                             value={row.symbol ?? symbolSearch[row.id] ?? ""}
                             placeholder="검색/코드"
                             onChange={(e) => {
@@ -634,12 +636,12 @@ export function ScreenshotImportWizard({
                             }}
                           />
                         ) : (
-                          <p className="truncate py-1.5 font-mono text-sm text-[var(--text-primary)]">
+                          <p className="truncate py-1.5 font-num text-sm text-[var(--text-primary)]">
                             {row.symbol || "—"}
                           </p>
                         )}
                         {row.name && row.name !== displayName && (
-                          <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">{row.name}</p>
+                          <p className="mt-0.5 truncate text-cell text-[var(--text-muted)]">{row.name}</p>
                         )}
                       </div>
 
@@ -651,7 +653,7 @@ export function ScreenshotImportWizard({
                               min={0}
                               step={1}
                               className={cn(
-                                "w-full min-w-0 rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 font-mono text-xs",
+                                "w-full min-w-0 rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 font-num text-cell",
                                 NO_SPINNER,
                               )}
                               value={row.quantity || ""}
@@ -662,10 +664,10 @@ export function ScreenshotImportWizard({
                                 })
                               }
                             />
-                            <span className="shrink-0 text-xs text-[var(--text-muted)]">주</span>
+                            <span className="shrink-0 text-cell text-[var(--text-muted)]">주</span>
                           </div>
                         ) : (
-                          <p className="py-1.5 font-mono text-sm text-[var(--text-primary)]">
+                          <p className="py-1.5 font-num text-sm text-[var(--text-primary)]">
                             {row.quantity > 0 ? `${row.quantity}주` : "—"}
                           </p>
                         )}
@@ -678,7 +680,7 @@ export function ScreenshotImportWizard({
                           step={1}
                           inputMode="numeric"
                           className={cn(
-                            "w-full min-w-0 rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 font-mono text-xs",
+                            "w-full min-w-0 rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 font-num text-cell",
                             NO_SPINNER,
                           )}
                           value={row.avgPrice ?? ""}
@@ -697,7 +699,7 @@ export function ScreenshotImportWizard({
                         <button
                           type="button"
                           className={cn(
-                            "flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-[11px] font-medium leading-none transition-colors",
+                            "flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-cell font-medium leading-none transition-colors",
                             editing
                               ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--brand)]"
                               : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:border-[var(--brand)] hover:text-[var(--brand)]",
@@ -710,7 +712,7 @@ export function ScreenshotImportWizard({
                         </button>
                         <button
                           type="button"
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--surface)] text-[11px] font-medium leading-none text-[var(--text-secondary)] transition-colors hover:border-[var(--loss)] hover:text-[var(--loss)]"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--surface)] text-cell font-medium leading-none text-[var(--text-secondary)] transition-colors hover:border-[var(--loss)] hover:text-[var(--loss)]"
                           onClick={() => removeRow(row.id)}
                         >
                           삭제
@@ -725,7 +727,7 @@ export function ScreenshotImportWizard({
 
           <button
             type="button"
-            className="rounded-lg border border-dashed border-[var(--border)] px-3 py-2 text-sm text-[var(--text-secondary)] hover:border-[var(--brand)]"
+            className={cn(buttonVariants({ variant: "outline", size: "default" }), "border-dashed border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--brand)]")}
             onClick={addManualRow}
           >
             + 종목 수동 추가
@@ -766,7 +768,7 @@ export function ScreenshotImportWizard({
           <p className="mt-2 text-sm text-[var(--text-muted)]">시세는 아래 목록에서 확인할 수 있습니다.</p>
           <button
             type="button"
-            className="mt-4 rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white"
+            className={cn(buttonVariants({ variant: "default", size: "default" }), "mt-4 bg-[var(--brand)] text-white")}
             onClick={closeWizard}
           >
             확인
@@ -780,7 +782,7 @@ export function ScreenshotImportWizard({
     return (
       <>
         <SectionCard title="스크린샷으로 가져오기">
-          <p className="text-[10px] leading-relaxed text-muted-foreground">
+          <p className="text-micro leading-relaxed text-muted-foreground">
             증권앱 보유종목 화면을 올리면 종목과 수량을 한 번에 불러옵니다
           </p>
           <Button
@@ -813,15 +815,15 @@ export function ScreenshotImportWizard({
     return (
       <Card className="flex flex-wrap items-center justify-between gap-2 border-[var(--brand)]/30 px-3 py-2">
         <div className="min-w-0">
-          <p className="text-xs font-semibold">스크린샷으로 가져오기</p>
-          <p className="truncate text-[10px] text-muted-foreground">
+          <p className="text-cell font-semibold">스크린샷으로 가져오기</p>
+          <p className="truncate text-micro text-muted-foreground">
             증권앱 보유종목 화면을 올리면 종목과 수량을 한 번에 불러옵니다
           </p>
         </div>
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="shrink-0 rounded-md border px-2.5 py-1 text-[11px] hover:bg-accent"
+          className={cn(buttonVariants({ variant: "outline", size: "xs" }), "hover:bg-accent")}
         >
           펼치기
         </button>

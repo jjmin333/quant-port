@@ -4,6 +4,7 @@ import * as React from "react"
 import { XIcon } from "lucide-react"
 import { Dialog as SheetPrimitive } from "radix-ui"
 
+import { suppressAutoFocusOnTouch } from "@/lib/modal-autofocus"
 import { cn } from "@/lib/utils"
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
@@ -44,11 +45,16 @@ function SheetOverlay({
   )
 }
 
+/**
+ * 시트 본문. `DialogContent`와 같은 이유로 **폰·태블릿에서는 열릴 때 키보드를
+ * 올리지 않는다** — 시트는 애초에 좁은 화면의 것이라 이 규칙이 더 자주 걸린다.
+ */
 function SheetContent({
   className,
   children,
   side = "right",
   showCloseButton = true,
+  onOpenAutoFocus,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left"
@@ -59,6 +65,11 @@ function SheetContent({
       <SheetOverlay />
       <SheetPrimitive.Content
         data-slot="sheet-content"
+        onOpenAutoFocus={(event) => {
+          onOpenAutoFocus?.(event)
+          if (event.defaultPrevented) return
+          suppressAutoFocusOnTouch(event)
+        }}
         className={cn(
           "fixed z-50 flex flex-col gap-4 bg-background shadow-lg transition ease-in-out data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:animate-in data-[state=open]:duration-500",
           side === "right" &&

@@ -1,7 +1,13 @@
 import { Suspense } from "react";
 import { AuthRequiredShell } from "@/components/auth/auth-required-shell";
 import { JournalClient } from "@/components/journal/journal-client";
-import { MENU_COPY } from "@/lib/menu-copy";
+import { pageMetadata } from "@/lib/seo";
+
+export const metadata = pageMetadata({
+  title: "메모장",
+  description: "종목과 함께 남긴 투자 메모입니다.",
+  noindex: true,
+});
 
 export default function JournalPage() {
   return (
@@ -13,8 +19,6 @@ export default function JournalPage() {
       }
     >
       <AuthRequiredShell
-        title={MENU_COPY.journal.title}
-        subtitle={MENU_COPY.journal.subtitle}
         loginNext="/journal"
         menu="journal"
       >

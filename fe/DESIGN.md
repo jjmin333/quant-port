@@ -31,13 +31,32 @@ Bloomberg / 토스증권 / 키움 HTS의 장점을 결합하되, **통합 자산
 
 ---
 
-## 타이포그래피
+## 타이포그래피 (v1.0.0)
 
-- **본문·UI 기본**: Pretendard Variable (`font-sans`, `body`) — 신규 화면도 별도 요청 없으면 동일
-- **숫자/금액/수익률**: Geist Mono (`font-mono`)
-- **총자산**: `text-4xl ~ 5xl`, `font-bold`
-- **카드 수치**: `text-xl`
-- **라벨**: `text-xs`, `text-muted`
+**폰트는 Pretendard Variable 한 벌이다.** 숫자도 같은 글꼴을 쓰고 `tabular-nums`로 자릿수를 맞춘다.
+
+| 클래스 | 뜻 |
+|---|---|
+| `font-num` | 숫자 칸 — Pretendard + `tabular-nums`. 예전 `font-mono`(Geist Mono)를 대체 |
+| `font-code` | 코드·식별자 — 시스템 고정폭. 관리자 화면의 Redis 키·SQL·컬럼명, 마크다운 `<code>` |
+
+크기는 이름 있는 계단 일곱 개다. 정의는 `src/app/globals.css`의 `@theme inline` **한 곳**:
+
+| 토큰 | 크기 | 용도 |
+|---|---|---|
+| `text-micro` | 11px | 배지·칩·각주·메타 — **하한** |
+| `text-cell` | 12px | 표 셀·목록 본문·기본 UI |
+| `text-note` | 13px | 강조된 보조 · 위젯 제목 |
+| `text-read` | 14px / 1.7 | **읽는 글** |
+| `text-article` | 15px / 1.85 | 문서 본문(리포트·기사) |
+| `text-section` | 15px | 섹션 제목 |
+| `text-page` | 19px | 페이지 제목 |
+
+- 총자산·KPI는 Tailwind 기본 계단(`text-2xl` 이상)을 그대로 쓴다
+- **긴 문단에 `text-cell`을 쓰지 않는다** — 두세 문장이 넘으면 `text-read`
+- 새 계단을 추가하면 `src/lib/utils.ts`의 `TEXT_SCALE`에도 넣는다 (안 넣으면 `cn()`이 조용히 지운다)
+
+자세한 규칙과 실측 근거 → **[docs/UI_SPEC.md §14](../docs/UI_SPEC.md)** · 실물 견본 → `/dev/typography`
 
 ---
 

@@ -4,7 +4,7 @@ import { PriceDisplay } from "@/components/ui/price-display";
 import { formatChangeRate } from "@/lib/format";
 import type { FundamentalsData } from "@/lib/fundamentals-types";
 import type { QuoteDetail } from "@/lib/quotes-types";
-import { quoteChangeBaseline, quoteChangeBasisLabel } from "@/lib/quotes-types";
+import { quoteChangeBaseline, QUOTE_CHANGE_BASIS_LABEL } from "@/lib/quotes-types";
 import { trendTextClass } from "@/lib/trend-colors";
 import { cn } from "@/lib/utils";
 
@@ -68,7 +68,7 @@ function buildQuoteMetricGroups(quote: QuoteDetail): MetricGroup[] {
         { label: "고가", price: quote.high },
         { label: "저가", price: quote.low },
         {
-          label: quoteChangeBasisLabel(quote),
+          label: QUOTE_CHANGE_BASIS_LABEL,
           text: formatChangeRate(quote.changeRate, changeBaseline > 0),
           tone: quote.changeRate,
         },
@@ -88,7 +88,7 @@ function MetricSection({
 }) {
   return (
     <section className="border-b border-[var(--border)] last:border-b-0">
-      <h3 className="bg-[var(--surface-elevated)]/50 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+      <h3 className="bg-[var(--surface-elevated)]/50 px-2.5 py-1.5 text-micro font-semibold uppercase tracking-wide text-[var(--text-muted)]">
         {title}
       </h3>
       <dl>
@@ -97,10 +97,10 @@ function MetricSection({
             key={row.label}
             className="flex items-center justify-between gap-2 border-t border-[var(--border)]/50 px-2.5 py-1.5"
           >
-            <dt className="text-[10px] text-[var(--text-muted)]">{row.label}</dt>
+            <dt className="text-micro text-[var(--text-muted)]">{row.label}</dt>
             <dd
               className={cn(
-                "text-right text-[11px] font-medium tabular-nums",
+                "text-right text-cell font-medium tabular-nums",
                 "tone" in row && row.tone != null
                   ? trendTextClass(row.tone)
                   : "text-[var(--text-primary)]",
@@ -108,7 +108,7 @@ function MetricSection({
             >
               {"price" in row ? (
                 row.price > 0 ? (
-                  <PriceDisplay value={row.price} currency={currency} size="sm" className="text-[11px]" />
+                  <PriceDisplay value={row.price} currency={currency} size="sm" className="text-cell" />
                 ) : (
                   "—"
                 )
@@ -183,7 +183,7 @@ export function StockMetricsColumn({
       // the loading placeholder rendered a 220px dead column on phones.
       <aside
         className={cn(
-          "w-[220px] shrink-0 items-center justify-center border-r border-[var(--border)] bg-[var(--surface)] text-[11px] text-[var(--text-muted)]",
+          "w-[220px] shrink-0 items-center justify-center border-r border-[var(--border)] bg-[var(--surface)] text-cell text-[var(--text-muted)]",
           railVisibility,
           className,
         )}
@@ -214,16 +214,16 @@ export function StockMetricsColumn({
       ))}
       {quote.week52High > 0 && quote.week52Low > 0 && (
         <div className="border-b border-[var(--border)] px-2.5 py-2">
-          <p className="text-[10px] text-[var(--text-muted)]">52주 범위</p>
-          <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-[var(--text-muted)]">
-            <PriceDisplay value={quote.week52Low} currency={currency} size="sm" className="text-[10px]" />
+          <p className="text-micro text-[var(--text-muted)]">52주 범위</p>
+          <div className="mt-1.5 flex items-center gap-1.5 text-micro text-[var(--text-muted)]">
+            <PriceDisplay value={quote.week52Low} currency={currency} size="sm" className="text-micro" />
             <div className="relative h-1 flex-1 rounded-full bg-[var(--surface-elevated)]">
               <div
                 className="absolute top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--text-primary)]"
                 style={{ left: `${Math.min(100, Math.max(0, range52))}%` }}
               />
             </div>
-            <PriceDisplay value={quote.week52High} currency={currency} size="sm" className="text-[10px]" />
+            <PriceDisplay value={quote.week52High} currency={currency} size="sm" className="text-micro" />
           </div>
         </div>
       )}
@@ -258,7 +258,7 @@ export function StockMetricsGrid({
             key={group.title}
             className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2.5"
           >
-            <h3 className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+            <h3 className="text-micro font-semibold uppercase tracking-wide text-[var(--text-muted)]">
               {group.title}
             </h3>
             {/* Two columns even at 375px: 시세 rows are short label/value pairs,
@@ -266,10 +266,10 @@ export function StockMetricsGrid({
             <dl className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
               {group.rows.map((row) => (
                 <div key={row.label} className="flex items-baseline justify-between gap-2">
-                  <dt className="shrink-0 text-[11px] text-[var(--text-muted)]">{row.label}</dt>
+                  <dt className="shrink-0 text-cell text-[var(--text-muted)]">{row.label}</dt>
                   <dd
                     className={cn(
-                      "truncate text-right text-[12px] font-medium tabular-nums",
+                      "truncate text-right text-cell font-medium tabular-nums",
                       "tone" in row && row.tone != null
                         ? trendTextClass(row.tone)
                         : "text-[var(--text-primary)]",
@@ -281,7 +281,7 @@ export function StockMetricsGrid({
                           value={row.price}
                           currency={currency}
                           size="sm"
-                          className="text-[12px]"
+                          className="text-cell"
                         />
                       ) : (
                         "—"
@@ -299,18 +299,18 @@ export function StockMetricsGrid({
 
       {quote.week52High > 0 && quote.week52Low > 0 && (
         <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2.5">
-          <h3 className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+          <h3 className="text-micro font-semibold uppercase tracking-wide text-[var(--text-muted)]">
             52주 범위
           </h3>
-          <div className="mt-2 flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
-            <PriceDisplay value={quote.week52Low} currency={currency} size="sm" className="text-[11px]" />
+          <div className="mt-2 flex items-center gap-2 text-cell text-[var(--text-muted)]">
+            <PriceDisplay value={quote.week52Low} currency={currency} size="sm" className="text-cell" />
             <div className="relative h-1.5 flex-1 rounded-full bg-[var(--surface-elevated)]">
               <div
                 className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--text-primary)]"
                 style={{ left: `${Math.min(100, Math.max(0, range52))}%` }}
               />
             </div>
-            <PriceDisplay value={quote.week52High} currency={currency} size="sm" className="text-[11px]" />
+            <PriceDisplay value={quote.week52High} currency={currency} size="sm" className="text-cell" />
           </div>
         </section>
       )}

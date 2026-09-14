@@ -131,6 +131,7 @@ func (s *EarningsTabService) announcements(ctx context.Context, symbol string) [
 	if s.reactions != nil {
 		s.reactions.AttachReactions(ctx, events)
 	}
+	model.ApplyOverseasDisplayDates(events)
 	return events
 }
 
@@ -266,8 +267,10 @@ func (s *EarningsTabService) usCalendar(ctx context.Context, symbol string) []mo
 	if s.events != nil {
 		bySymbol, err := s.events.ListForSymbols(ctx, []string{sym})
 		if err == nil {
-			out := make([]model.EarningsCalendarEvent, 0, len(bySymbol[sym]))
-			for _, ev := range bySymbol[sym] {
+			rows := model.CollapseCalendarEvents(bySymbol[sym])
+			model.ApplyOverseasDisplayDates(rows)
+			out := make([]model.EarningsCalendarEvent, 0, len(rows))
+			for _, ev := range rows {
 				if ev.DateStatus != model.EarningsDateScheduled {
 					continue
 				}
@@ -341,4 +344,3 @@ func snapshotsToQuarters(snaps []model.FinancialSnapshot) []model.EarningsQuarte
 	}
 	return out
 }
-

@@ -18,12 +18,20 @@ type XBRLFact struct {
 	Filed string
 }
 
+// 태그 목록은 **우선순위 순**이다 — `pickConceptFacts`가 사실이 하나라도 있는
+// 첫 태그에서 멈춘다. 존재하지 않는 태그를 적어 두는 비용은 0이지만(조회가
+// 그냥 빗나간다), 개념이 다른 태그를 적으면 틀린 값이 들어오므로 **진짜 동의어만**
+// 넣는다.
 var revenueConceptFallbacks = []string{
 	"RevenueFromContractWithCustomerExcludingAssessedTax",
+	"RevenueFromContractWithCustomerIncludingAssessedTax",
 	"Revenues",
 	"SalesRevenueNet",
 	"SalesRevenueGoodsNet",
-	"Revenue",
+	"SalesRevenueServicesNet",
+	// 은행·증권은 매출 대신 「이자비용 차감 후 수익」을 대표 수익으로 신고한다.
+	"RevenuesNetOfInterestExpense",
+	"Revenue", // ifrs-full
 }
 
 var sharesConceptFallbacks = []string{
@@ -36,6 +44,9 @@ var sharesConceptFallbacks = []string{
 var operatingIncomeConceptFallbacks = []string{
 	"OperatingIncomeLoss",
 	"OperatingProfitLoss",
+	// IFRS 제출인(해외 소재 등)은 영업이익을 이 이름으로 낸다.
+	"ProfitLossFromOperatingActivities",
+	"ResultsFromOperatingActivities",
 }
 
 var netIncomeConceptFallbacks = []string{
@@ -68,11 +79,14 @@ var currentLiabilitiesConceptFallbacks = []string{
 var epsBasicConceptFallbacks = []string{
 	"EarningsPerShareBasic",
 	"BasicEarningsLossPerShare",
+	// 기본과 희석이 같으면 한 태그로 합쳐 신고하는 제출인이 있다.
+	"EarningsPerShareBasicAndDiluted",
 }
 
 var epsDilutedConceptFallbacks = []string{
 	"EarningsPerShareDiluted",
 	"DilutedEarningsLossPerShare",
+	"EarningsPerShareBasicAndDiluted",
 }
 
 func pickConceptFacts(facts map[string]map[string][]XBRLFact, tags []string) []XBRLFact {

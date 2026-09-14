@@ -1,0 +1,895 @@
+2026/08/22 02:55:02 projection skipped (-skip-projection)
+2026/08/22 02:55:02 fetch-history(symbols-file tmp/closes-gap-2025.txt): 771 symbols
+2026/08/22 02:55:02 fetch-history batch: 771 symbols this run (771 incomplete before limit)
+2026/08/22 02:55:02 fetch-history ok AAON: 308 rows
+2026/08/22 02:55:03 daily close history fetch AB: toss api 404 stock-not-found: 종목을 찾을 수 없습니다. (requestId=mtbmHYTE0QmYkHfT)
+2026/08/22 02:55:03 fetch-history ok ABOS: 308 rows
+2026/08/22 02:55:04 fetch-history ok ABX: 308 rows
+2026/08/22 02:55:04 fetch-history ok ACDC: 308 rows
+2026/08/22 02:55:05 fetch-history ok ACIW: 308 rows
+2026/08/22 02:55:05 fetch-history ok ACNB: 308 rows
+2026/08/22 02:55:06 fetch-history ok ACRS: 308 rows
+2026/08/22 02:55:07 fetch-history ok ACU: 308 rows
+2026/08/22 02:55:07 fetch-history ok AGEN: 308 rows
+2026/08/22 02:55:08 fetch-history ok AGO: 308 rows
+2026/08/22 02:55:08 fetch-history ok AHR: 308 rows
+2026/08/22 02:55:09 fetch-history ok AIOT: 308 rows
+2026/08/22 02:55:09 fetch-history ok AIRI: 308 rows
+2026/08/22 02:55:10 fetch-history ok AIRS: 308 rows
+2026/08/22 02:55:10 fetch-history ok ALCO: 308 rows
+2026/08/22 02:55:11 fetch-history ok ALEC: 308 rows
+2026/08/22 02:55:11 fetch-history ok ALGS: 308 rows
+2026/08/22 02:55:12 fetch-history ok ALLE: 308 rows
+2026/08/22 02:55:13 fetch-history ok ALLO: 308 rows
+2026/08/22 02:55:13 fetch-history ok ALT: 308 rows
+2026/08/22 02:55:14 fetch-history ok ALTG: 308 rows
+2026/08/22 02:55:14 fetch-history ok ALXO: 308 rows
+2026/08/22 02:55:15 fetch-history ok AMAL: 308 rows
+2026/08/22 02:55:15 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=0 resetSec=1
+2026/08/22 02:55:15 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:55:16 fetch-history ok AMLX: 308 rows
+2026/08/22 02:55:17 fetch-history ok AMN: 308 rows
+2026/08/22 02:55:17 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:55:18 fetch-history ok AMPH: 308 rows
+2026/08/22 02:55:19 fetch-history ok AMTM: 308 rows
+2026/08/22 02:55:19 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:55:21 fetch-history ok AMTX: 308 rows
+2026/08/22 02:55:21 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=3 resetSec=1
+2026/08/22 02:55:21 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=1 resetSec=1
+2026/08/22 02:55:21 fetch-history ok AN: 308 rows
+2026/08/22 02:55:22 fetch-history ok ANIP: 308 rows
+2026/08/22 02:55:22 fetch-history ok APEI: 308 rows
+2026/08/22 02:55:23 fetch-history ok APGE: 308 rows
+2026/08/22 02:55:23 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=3 resetSec=1
+2026/08/22 02:55:23 fetch-history ok ARCT: 308 rows
+2026/08/22 02:55:24 fetch-history ok ARLO: 308 rows
+2026/08/22 02:55:24 fetch-history ok ARQ: 308 rows
+2026/08/22 02:55:25 fetch-history ok ARTNA: 308 rows
+2026/08/22 02:55:25 fetch-history ok ARTV: 308 rows
+2026/08/22 02:55:26 fetch-history ok ARW: 308 rows
+2026/08/22 02:55:26 fetch-history ok ASB: 308 rows
+2026/08/22 02:55:27 fetch-history ok ASIC: 301 rows
+2026/08/22 02:55:27 fetch-history ok ASLE: 308 rows
+2026/08/22 02:55:28 fetch-history ok ASPN: 308 rows
+2026/08/22 02:55:29 fetch-history ok ASTH: 308 rows
+2026/08/22 02:55:29 fetch-history ok AVBH: 261 rows
+2026/08/22 02:55:30 fetch-history ok AVPT: 308 rows
+2026/08/22 02:55:30 fetch-history ok AVY: 308 rows
+2026/08/22 02:55:31 fetch-history ok AXP: 308 rows
+2026/08/22 02:55:31 fetch-history ok AXR: 308 rows
+2026/08/22 02:55:32 fetch-history ok BAER: 308 rows
+2026/08/22 02:55:32 fetch-history ok BANC: 308 rows
+2026/08/22 02:55:33 fetch-history ok BANF: 308 rows
+2026/08/22 02:55:33 fetch-history ok BARK: 308 rows
+2026/08/22 02:55:34 fetch-history ok BC: 308 rows
+2026/08/22 02:55:34 fetch-history ok BCDA: 308 rows
+2026/08/22 02:55:35 fetch-history ok BCIC: 308 rows
+2026/08/22 02:55:35 fetch-history ok BCML: 308 rows
+2026/08/22 02:55:36 fetch-history ok BCPC: 308 rows
+2026/08/22 02:55:37 fetch-history ok BDX: 308 rows
+2026/08/22 02:55:37 fetch-history ok BETR: 308 rows
+2026/08/22 02:55:38 fetch-history ok BFH: 308 rows
+2026/08/22 02:55:38 fetch-history ok BFS: 308 rows
+2026/08/22 02:55:39 fetch-history ok BFST: 308 rows
+2026/08/22 02:55:39 fetch-history ok BHRB: 308 rows
+2026/08/22 02:55:40 fetch-history ok BHVN: 308 rows
+2026/08/22 02:55:40 fetch-history ok BIIB: 308 rows
+2026/08/22 02:55:41 fetch-history ok BKSY: 308 rows
+2026/08/22 02:55:41 fetch-history ok BKV: 308 rows
+2026/08/22 02:55:42 fetch-history ok BLNK: 308 rows
+2026/08/22 02:55:43 fetch-history ok BMRN: 308 rows
+2026/08/22 02:55:43 fetch-history ok BODI: 308 rows
+2026/08/22 02:55:44 fetch-history ok BOLD: 308 rows
+2026/08/22 02:55:44 fetch-history ok BPOP: 308 rows
+2026/08/22 02:55:45 fetch-history ok BRLT: 308 rows
+2026/08/22 02:55:45 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=0 resetSec=1
+2026/08/22 02:55:45 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:55:46 fetch-history ok BRNS: 308 rows
+2026/08/22 02:55:47 fetch-history ok BSY: 308 rows
+2026/08/22 02:55:47 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:55:48 fetch-history ok BTMD: 308 rows
+2026/08/22 02:55:49 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=2 resetSec=1
+2026/08/22 02:55:49 fetch-history ok BTSG: 308 rows
+2026/08/22 02:55:49 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:55:51 fetch-history ok BWFG: 308 rows
+2026/08/22 02:55:51 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=2 resetSec=1
+2026/08/22 02:55:51 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=0 resetSec=1
+2026/08/22 02:55:51 fetch-history ok BWIN: 308 rows
+2026/08/22 02:55:52 fetch-history ok BWMN: 308 rows
+2026/08/22 02:55:52 fetch-history ok BX: 308 rows
+2026/08/22 02:55:53 fetch-history ok BXSL: 308 rows
+2026/08/22 02:55:53 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:55:54 fetch-history ok BY: 308 rows
+2026/08/22 02:55:55 fetch-history ok BYD: 308 rows
+2026/08/22 02:55:55 fetch-history ok CASS: 308 rows
+2026/08/22 02:55:56 fetch-history ok CBFV: 308 rows
+2026/08/22 02:55:56 fetch-history ok CBLL: 308 rows
+2026/08/22 02:55:57 fetch-history ok CBRE: 308 rows
+2026/08/22 02:55:58 fetch-history ok CBU: 308 rows
+2026/08/22 02:55:58 fetch-history ok CCAP: 308 rows
+2026/08/22 02:55:59 fetch-history ok CCLD: 308 rows
+2026/08/22 02:55:59 fetch-history ok CENX: 308 rows
+2026/08/22 02:56:00 fetch-history ok CGBD: 308 rows
+2026/08/22 02:56:00 fetch-history ok CGON: 308 rows
+2026/08/22 02:56:01 fetch-history ok CGTX: 308 rows
+2026/08/22 02:56:01 fetch-history ok CHDN: 308 rows
+2026/08/22 02:56:02 fetch-history ok CION: 308 rows
+2026/08/22 02:56:02 fetch-history ok CIVB: 308 rows
+2026/08/22 02:56:03 fetch-history ok CLB: 308 rows
+2026/08/22 02:56:03 fetch-history progress: 100/771 in batch · filled=99 empty=0 failed=1
+2026/08/22 02:56:04 fetch-history ok CLDX: 308 rows
+2026/08/22 02:56:04 fetch-history ok CLF: 308 rows
+2026/08/22 02:56:05 fetch-history ok CLNE: 308 rows
+2026/08/22 02:56:05 fetch-history ok CLYM: 308 rows
+2026/08/22 02:56:06 fetch-history ok CNNE: 308 rows
+2026/08/22 02:56:06 fetch-history ok CNTY: 308 rows
+2026/08/22 02:56:07 fetch-history ok COLL: 308 rows
+2026/08/22 02:56:07 fetch-history ok COUR: 308 rows
+2026/08/22 02:56:08 fetch-history ok CPK: 308 rows
+2026/08/22 02:56:08 fetch-history ok CRBP: 308 rows
+2026/08/22 02:56:09 fetch-history ok CRC: 308 rows
+2026/08/22 02:56:09 fetch-history ok CRS: 308 rows
+2026/08/22 02:56:10 fetch-history ok CRVO: 308 rows
+2026/08/22 02:56:10 fetch-history ok CRVS: 308 rows
+2026/08/22 02:56:11 fetch-history ok CSBR: 308 rows
+2026/08/22 02:56:12 fetch-history ok CSV: 308 rows
+2026/08/22 02:56:12 fetch-history ok CSW: 308 rows
+2026/08/22 02:56:13 fetch-history ok CTEV: 308 rows
+2026/08/22 02:56:13 fetch-history ok CTM: 308 rows
+2026/08/22 02:56:14 fetch-history ok CTMX: 308 rows
+2026/08/22 02:56:14 fetch-history ok CTVA: 308 rows
+2026/08/22 02:56:15 fetch-history ok CUBE: 308 rows
+2026/08/22 02:56:15 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=1 resetSec=1
+2026/08/22 02:56:15 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:56:16 fetch-history ok CUBI: 308 rows
+2026/08/22 02:56:17 fetch-history ok CVLG: 308 rows
+2026/08/22 02:56:17 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:56:18 fetch-history ok CWBC: 308 rows
+2026/08/22 02:56:19 fetch-history ok CYN: 308 rows
+2026/08/22 02:56:19 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:56:21 fetch-history ok CYRX: 308 rows
+2026/08/22 02:56:21 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=1 resetSec=1
+2026/08/22 02:56:21 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:56:22 fetch-history ok CYTK: 308 rows
+2026/08/22 02:56:23 fetch-history ok CZNC: 308 rows
+2026/08/22 02:56:23 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=4 resetSec=1
+2026/08/22 02:56:23 fetch-history ok DAVE: 308 rows
+2026/08/22 02:56:24 fetch-history ok DBX: 308 rows
+2026/08/22 02:56:24 fetch-history ok DCO: 308 rows
+2026/08/22 02:56:25 fetch-history ok DCOM: 308 rows
+2026/08/22 02:56:25 fetch-history ok DCTH: 308 rows
+2026/08/22 02:56:26 fetch-history ok DECK: 308 rows
+2026/08/22 02:56:26 fetch-history ok DERM: 308 rows
+2026/08/22 02:56:27 fetch-history ok DFDV: 308 rows
+2026/08/22 02:56:28 fetch-history ok DFIN: 308 rows
+2026/08/22 02:56:28 fetch-history ok DFLI: 308 rows
+2026/08/22 02:56:29 fetch-history ok DGX: 308 rows
+2026/08/22 02:56:29 fetch-history ok DH: 308 rows
+2026/08/22 02:56:30 fetch-history ok DIBS: 308 rows
+2026/08/22 02:56:30 fetch-history ok DIN: 308 rows
+2026/08/22 02:56:31 fetch-history ok DK: 308 rows
+2026/08/22 02:56:31 daily close history fetch DKL: toss api 404 stock-not-found: 종목을 찾을 수 없습니다. (requestId=mrdCxu5CpTX8Ru9n)
+2026/08/22 02:56:32 fetch-history ok DLPN: 308 rows
+2026/08/22 02:56:32 fetch-history ok DMAC: 308 rows
+2026/08/22 02:56:33 fetch-history ok DNA: 308 rows
+2026/08/22 02:56:33 fetch-history ok DNLI: 308 rows
+2026/08/22 02:56:34 fetch-history ok DOV: 308 rows
+2026/08/22 02:56:34 fetch-history ok DOW: 308 rows
+2026/08/22 02:56:35 fetch-history ok DRCT: 308 rows
+2026/08/22 02:56:35 fetch-history ok DRH: 308 rows
+2026/08/22 02:56:36 fetch-history ok DRVN: 308 rows
+2026/08/22 02:56:36 fetch-history ok DSP: 308 rows
+2026/08/22 02:56:37 fetch-history ok DTI: 308 rows
+2026/08/22 02:56:38 fetch-history ok DV: 308 rows
+2026/08/22 02:56:38 fetch-history ok DXPE: 308 rows
+2026/08/22 02:56:39 fetch-history ok DYAI: 308 rows
+2026/08/22 02:56:39 fetch-history ok EBC: 308 rows
+2026/08/22 02:56:40 fetch-history ok ECPG: 308 rows
+2026/08/22 02:56:40 fetch-history ok ECVT: 308 rows
+2026/08/22 02:56:41 fetch-history ok EDIT: 308 rows
+2026/08/22 02:56:41 fetch-history ok EE: 308 rows
+2026/08/22 02:56:42 fetch-history ok EEFT: 308 rows
+2026/08/22 02:56:42 fetch-history ok EFOR: 308 rows
+2026/08/22 02:56:43 fetch-history ok EFSI: 308 rows
+2026/08/22 02:56:43 fetch-history ok ELAN: 308 rows
+2026/08/22 02:56:44 fetch-history ok ELVN: 308 rows
+2026/08/22 02:56:44 fetch-history ok EMBC: 308 rows
+2026/08/22 02:56:45 fetch-history ok ENOV: 308 rows
+2026/08/22 02:56:45 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:56:47 fetch-history ok ENTX: 308 rows
+2026/08/22 02:56:47 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:56:48 fetch-history ok ENVA: 308 rows
+2026/08/22 02:56:49 fetch-history ok EPSN: 308 rows
+2026/08/22 02:56:49 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:56:50 fetch-history ok ERII: 308 rows
+2026/08/22 02:56:51 fetch-history ok ES: 308 rows
+2026/08/22 02:56:51 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:56:52 fetch-history ok ESQ: 308 rows
+2026/08/22 02:56:53 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=3 resetSec=1
+2026/08/22 02:56:53 fetch-history ok EVCM: 308 rows
+2026/08/22 02:56:53 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:56:55 fetch-history ok EVGO: 308 rows
+2026/08/22 02:56:55 fetch-history ok EVH: 308 rows
+2026/08/22 02:56:56 fetch-history ok EXFY: 308 rows
+2026/08/22 02:56:56 fetch-history ok EXOD: 308 rows
+2026/08/22 02:56:57 fetch-history ok EYE: 308 rows
+2026/08/22 02:56:57 fetch-history ok EYPT: 308 rows
+2026/08/22 02:56:58 fetch-history ok FA: 308 rows
+2026/08/22 02:56:58 fetch-history ok FBRX: 308 rows
+2026/08/22 02:56:59 fetch-history ok FCNCA: 308 rows
+2026/08/22 02:56:59 fetch-history ok FCX: 308 rows
+2026/08/22 02:57:00 fetch-history ok FDUS: 308 rows
+2026/08/22 02:57:00 fetch-history ok FIG: 267 rows
+2026/08/22 02:57:01 fetch-history ok FISI: 308 rows
+2026/08/22 02:57:02 fetch-history ok FLGT: 308 rows
+2026/08/22 02:57:02 fetch-history ok FLL: 308 rows
+2026/08/22 02:57:03 fetch-history ok FLNC: 308 rows
+2026/08/22 02:57:03 fetch-history ok FLYW: 308 rows
+2026/08/22 02:57:04 fetch-history ok FNKO: 308 rows
+2026/08/22 02:57:04 fetch-history ok FOSL: 308 rows
+2026/08/22 02:57:05 fetch-history ok FOXF: 308 rows
+2026/08/22 02:57:05 fetch-history ok FRPT: 308 rows
+2026/08/22 02:57:06 fetch-history ok FRST: 308 rows
+2026/08/22 02:57:06 fetch-history progress: 200/771 in batch · filled=198 empty=0 failed=2
+2026/08/22 02:57:06 fetch-history ok FSK: 308 rows
+2026/08/22 02:57:07 fetch-history ok FSP: 308 rows
+2026/08/22 02:57:08 fetch-history ok FSTR: 308 rows
+2026/08/22 02:57:08 fetch-history ok FTCI: 308 rows
+2026/08/22 02:57:09 fetch-history ok FTDR: 308 rows
+2026/08/22 02:57:09 fetch-history ok FTEK: 308 rows
+2026/08/22 02:57:10 fetch-history ok FTH: 308 rows
+2026/08/22 02:57:10 fetch-history ok FTI: 308 rows
+2026/08/22 02:57:11 fetch-history ok FTK: 308 rows
+2026/08/22 02:57:11 fetch-history ok FTRE: 308 rows
+2026/08/22 02:57:12 fetch-history ok FUN: 308 rows
+2026/08/22 02:57:12 fetch-history ok FVR: 308 rows
+2026/08/22 02:57:13 fetch-history ok FWONA: 308 rows
+2026/08/22 02:57:13 fetch-history ok FWRD: 308 rows
+2026/08/22 02:57:14 fetch-history ok GAIA: 308 rows
+2026/08/22 02:57:15 fetch-history ok GATX: 308 rows
+2026/08/22 02:57:15 fetch-history ok GBCI: 308 rows
+2026/08/22 02:57:15 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:57:17 fetch-history ok GCT: 308 rows
+2026/08/22 02:57:17 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=4 resetSec=1
+2026/08/22 02:57:17 fetch-history ok GCTS: 308 rows
+2026/08/22 02:57:18 fetch-history ok GDRX: 308 rows
+2026/08/22 02:57:18 fetch-history ok GECC: 308 rows
+2026/08/22 02:57:19 fetch-history ok GEF: 308 rows
+2026/08/22 02:57:19 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=1 resetSec=1
+2026/08/22 02:57:19 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:57:20 fetch-history ok GERN: 308 rows
+2026/08/22 02:57:21 fetch-history ok GEVO: 308 rows
+2026/08/22 02:57:21 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:57:22 fetch-history ok GHM: 308 rows
+2026/08/22 02:57:23 fetch-history ok GL: 308 rows
+2026/08/22 02:57:23 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=1 resetSec=1
+2026/08/22 02:57:23 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=0 resetSec=1
+2026/08/22 02:57:24 fetch-history ok GLP: 308 rows
+2026/08/22 02:57:24 fetch-history ok GLUE: 308 rows
+2026/08/22 02:57:25 fetch-history ok GLXY: 308 rows
+2026/08/22 02:57:25 fetch-history ok GNE: 308 rows
+2026/08/22 02:57:26 fetch-history ok GNL: 308 rows
+2026/08/22 02:57:26 fetch-history ok GO: 308 rows
+2026/08/22 02:57:27 fetch-history ok GOGO: 308 rows
+2026/08/22 02:57:27 fetch-history ok GOLF: 308 rows
+2026/08/22 02:57:28 fetch-history ok GPCR: 308 rows
+2026/08/22 02:57:28 fetch-history ok GPGI: 308 rows
+2026/08/22 02:57:29 fetch-history ok GPRO: 308 rows
+2026/08/22 02:57:29 fetch-history ok GRAL: 308 rows
+2026/08/22 02:57:30 fetch-history ok GRND: 308 rows
+2026/08/22 02:57:30 fetch-history ok GRNT: 308 rows
+2026/08/22 02:57:31 fetch-history ok GROV: 308 rows
+2026/08/22 02:57:31 fetch-history ok GRPN: 308 rows
+2026/08/22 02:57:32 fetch-history ok GSAT: 308 rows
+2026/08/22 02:57:33 fetch-history ok GSBD: 308 rows
+2026/08/22 02:57:33 fetch-history ok GSHD: 308 rows
+2026/08/22 02:57:34 fetch-history ok GTE: 308 rows
+2026/08/22 02:57:34 fetch-history ok GTN: 308 rows
+2026/08/22 02:57:35 fetch-history ok GTX: 308 rows
+2026/08/22 02:57:35 fetch-history ok GTY: 308 rows
+2026/08/22 02:57:36 fetch-history ok GWRS: 308 rows
+2026/08/22 02:57:36 fetch-history ok GYRE: 308 rows
+2026/08/22 02:57:37 fetch-history ok HBNC: 308 rows
+2026/08/22 02:57:37 fetch-history ok HBT: 308 rows
+2026/08/22 02:57:38 fetch-history ok HCI: 308 rows
+2026/08/22 02:57:38 fetch-history ok HCSG: 308 rows
+2026/08/22 02:57:39 fetch-history ok HE: 308 rows
+2026/08/22 02:57:39 fetch-history ok HFFG: 308 rows
+2026/08/22 02:57:40 fetch-history ok HFWA: 308 rows
+2026/08/22 02:57:41 fetch-history ok HGTY: 308 rows
+2026/08/22 02:57:41 fetch-history ok HIPO: 308 rows
+2026/08/22 02:57:42 fetch-history ok HLLY: 308 rows
+2026/08/22 02:57:42 fetch-history ok HLT: 308 rows
+2026/08/22 02:57:43 fetch-history ok HLX: 308 rows
+2026/08/22 02:57:43 fetch-history ok HNRG: 308 rows
+2026/08/22 02:57:44 fetch-history ok HNST: 308 rows
+2026/08/22 02:57:44 fetch-history ok HOWL: 308 rows
+2026/08/22 02:57:45 fetch-history ok HPK: 308 rows
+2026/08/22 02:57:45 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:57:46 fetch-history ok HPP: 308 rows
+2026/08/22 02:57:47 fetch-history ok HQI: 308 rows
+2026/08/22 02:57:47 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:57:49 fetch-history ok HRTX: 308 rows
+2026/08/22 02:57:49 fetch-history ok HSCS: 308 rows
+2026/08/22 02:57:49 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:57:51 fetch-history ok HSIC: 308 rows
+2026/08/22 02:57:51 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=0 resetSec=1
+2026/08/22 02:57:51 fetch-history ok HTB: 308 rows
+2026/08/22 02:57:52 fetch-history ok HTH: 308 rows
+2026/08/22 02:57:52 fetch-history ok HUMA: 308 rows
+2026/08/22 02:57:53 fetch-history ok HXL: 308 rows
+2026/08/22 02:57:53 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:57:54 fetch-history ok HYMC: 308 rows
+2026/08/22 02:57:55 fetch-history ok IBP: 308 rows
+2026/08/22 02:57:55 fetch-history ok ICFI: 308 rows
+2026/08/22 02:57:56 fetch-history ok IE: 308 rows
+2026/08/22 02:57:56 fetch-history ok IHRT: 308 rows
+2026/08/22 02:57:57 fetch-history ok III: 308 rows
+2026/08/22 02:57:58 fetch-history ok IMAX: 308 rows
+2026/08/22 02:57:58 fetch-history ok IMDX: 308 rows
+2026/08/22 02:57:59 fetch-history ok IMRX: 308 rows
+2026/08/22 02:57:59 fetch-history ok INAB: 308 rows
+2026/08/22 02:58:00 fetch-history ok INBK: 308 rows
+2026/08/22 02:58:00 fetch-history ok INFU: 308 rows
+2026/08/22 02:58:01 fetch-history ok INLX: 308 rows
+2026/08/22 02:58:01 fetch-history ok INR: 308 rows
+2026/08/22 02:58:02 fetch-history ok INSE: 308 rows
+2026/08/22 02:58:02 fetch-history ok INSW: 308 rows
+2026/08/22 02:58:03 fetch-history ok INTA: 308 rows
+2026/08/22 02:58:03 fetch-history ok INTT: 308 rows
+2026/08/22 02:58:04 fetch-history ok INVA: 308 rows
+2026/08/22 02:58:04 fetch-history ok INVE: 308 rows
+2026/08/22 02:58:05 fetch-history ok IPAR: 308 rows
+2026/08/22 02:58:06 fetch-history ok IPI: 308 rows
+2026/08/22 02:58:06 fetch-history ok IRD: 308 rows
+2026/08/22 02:58:07 fetch-history ok IRDM: 308 rows
+2026/08/22 02:58:07 fetch-history progress: 300/771 in batch · filled=298 empty=0 failed=2
+2026/08/22 02:58:07 fetch-history ok IRMD: 308 rows
+2026/08/22 02:58:08 fetch-history ok IRON: 308 rows
+2026/08/22 02:58:08 daily close history fetch ISSC: toss api 404 stock-not-found: 종목을 찾을 수 없습니다. (requestId=mwzk3rQQbqQtC5GL)
+2026/08/22 02:58:09 fetch-history ok JANX: 308 rows
+2026/08/22 02:58:09 fetch-history ok JOB: 308 rows
+2026/08/22 02:58:10 fetch-history ok JOUT: 308 rows
+2026/08/22 02:58:10 fetch-history ok JRSH: 308 rows
+2026/08/22 02:58:11 fetch-history ok JRVR: 308 rows
+2026/08/22 02:58:11 fetch-history ok JYNT: 308 rows
+2026/08/22 02:58:12 fetch-history ok KALU: 308 rows
+2026/08/22 02:58:12 fetch-history ok KBDC: 308 rows
+2026/08/22 02:58:13 fetch-history ok KIDS: 308 rows
+2026/08/22 02:58:14 fetch-history ok KINS: 308 rows
+2026/08/22 02:58:14 fetch-history ok KLTR: 308 rows
+2026/08/22 02:58:15 fetch-history ok KN: 308 rows
+2026/08/22 02:58:15 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=0 resetSec=1
+2026/08/22 02:58:15 fetch-history ok KNTK: 308 rows
+2026/08/22 02:58:16 fetch-history ok KNX: 308 rows
+2026/08/22 02:58:16 fetch-history ok KOP: 308 rows
+2026/08/22 02:58:17 fetch-history ok KPLT: 308 rows
+2026/08/22 02:58:17 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:58:18 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=4 resetSec=1
+2026/08/22 02:58:19 fetch-history ok KPRX: 308 rows
+2026/08/22 02:58:19 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=1 resetSec=1
+2026/08/22 02:58:19 fetch-history ok KRNY: 308 rows
+2026/08/22 02:58:20 fetch-history ok KRO: 308 rows
+2026/08/22 02:58:20 fetch-history ok KRP: 308 rows
+2026/08/22 02:58:21 fetch-history ok KRRO: 308 rows
+2026/08/22 02:58:21 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:58:22 fetch-history ok KRT: 308 rows
+2026/08/22 02:58:23 fetch-history ok KTB: 308 rows
+2026/08/22 02:58:24 fetch-history ok KVHI: 308 rows
+2026/08/22 02:58:24 fetch-history ok LAD: 308 rows
+2026/08/22 02:58:25 fetch-history ok LADR: 308 rows
+2026/08/22 02:58:25 fetch-history ok LAW: 308 rows
+2026/08/22 02:58:26 fetch-history ok LB: 308 rows
+2026/08/22 02:58:26 fetch-history ok LBRT: 308 rows
+2026/08/22 02:58:27 fetch-history ok LCID: 308 rows
+2026/08/22 02:58:27 fetch-history ok LCTX: 308 rows
+2026/08/22 02:58:28 fetch-history ok LCUT: 308 rows
+2026/08/22 02:58:28 fetch-history ok LDI: 308 rows
+2026/08/22 02:58:29 fetch-history ok LESL: 308 rows
+2026/08/22 02:58:29 fetch-history ok LFCR: 308 rows
+2026/08/22 02:58:30 fetch-history ok LFMD: 308 rows
+2026/08/22 02:58:31 fetch-history ok LFST: 308 rows
+2026/08/22 02:58:31 fetch-history ok LGVN: 308 rows
+2026/08/22 02:58:32 fetch-history ok LII: 308 rows
+2026/08/22 02:58:32 fetch-history ok LILA: 308 rows
+2026/08/22 02:58:33 fetch-history ok LINC: 308 rows
+2026/08/22 02:58:33 fetch-history ok LIVN: 308 rows
+2026/08/22 02:58:34 fetch-history ok LMAT: 308 rows
+2026/08/22 02:58:34 fetch-history ok LMB: 308 rows
+2026/08/22 02:58:35 fetch-history ok LMT: 308 rows
+2026/08/22 02:58:35 fetch-history ok LNTH: 308 rows
+2026/08/22 02:58:36 fetch-history ok LOAR: 308 rows
+2026/08/22 02:58:36 fetch-history ok LOB: 308 rows
+2026/08/22 02:58:37 fetch-history ok LOCL: 308 rows
+2026/08/22 02:58:38 fetch-history ok LPSN: 308 rows
+2026/08/22 02:58:38 fetch-history ok LQDA: 308 rows
+2026/08/22 02:58:39 fetch-history ok LTC: 308 rows
+2026/08/22 02:58:39 fetch-history ok LUV: 308 rows
+2026/08/22 02:58:40 fetch-history ok LVLU: 308 rows
+2026/08/22 02:58:40 fetch-history ok LW: 308 rows
+2026/08/22 02:58:41 fetch-history ok LYEL: 308 rows
+2026/08/22 02:58:41 fetch-history ok MANH: 308 rows
+2026/08/22 02:58:42 fetch-history ok MAT: 308 rows
+2026/08/22 02:58:42 fetch-history ok MBI: 308 rows
+2026/08/22 02:58:43 fetch-history ok MBLY: 308 rows
+2026/08/22 02:58:43 fetch-history ok MCBS: 308 rows
+2026/08/22 02:58:44 fetch-history ok MCHX: 308 rows
+2026/08/22 02:58:45 fetch-history ok MCRB: 308 rows
+2026/08/22 02:58:45 fetch-history ok MEC: 308 rows
+2026/08/22 02:58:45 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:58:47 fetch-history ok MEDP: 308 rows
+2026/08/22 02:58:47 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=0 resetSec=1
+2026/08/22 02:58:47 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:58:48 fetch-history ok MFIC: 308 rows
+2026/08/22 02:58:49 fetch-history ok MG: 308 rows
+2026/08/22 02:58:49 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=0 resetSec=1
+2026/08/22 02:58:49 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:58:50 fetch-history ok MGEE: 308 rows
+2026/08/22 02:58:51 fetch-history ok MGNI: 308 rows
+2026/08/22 02:58:51 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:58:52 fetch-history ok MGRC: 308 rows
+2026/08/22 02:58:53 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=4 resetSec=1
+2026/08/22 02:58:53 fetch-history ok MGY: 308 rows
+2026/08/22 02:58:53 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:58:55 fetch-history ok MHH: 308 rows
+2026/08/22 02:58:55 fetch-history ok MHK: 308 rows
+2026/08/22 02:58:56 fetch-history ok MHO: 308 rows
+2026/08/22 02:58:56 fetch-history ok MITK: 308 rows
+2026/08/22 02:58:57 fetch-history ok MITT: 308 rows
+2026/08/22 02:58:57 fetch-history ok MLAB: 308 rows
+2026/08/22 02:58:58 fetch-history ok MLR: 308 rows
+2026/08/22 02:58:58 daily close history fetch MMLP: toss api 404 stock-not-found: 종목을 찾을 수 없습니다. (requestId=mlE0txIyjDrZyBND)
+2026/08/22 02:58:59 fetch-history ok MNKD: 308 rows
+2026/08/22 02:58:59 daily close history fetch MNR: toss api 404 stock-not-found: 종목을 찾을 수 없습니다. (requestId=mNpt1DU4DQxvyk9u)
+2026/08/22 02:59:00 fetch-history ok MNST: 308 rows
+2026/08/22 02:59:00 fetch-history ok MNTK: 308 rows
+2026/08/22 02:59:01 fetch-history ok MOH: 308 rows
+2026/08/22 02:59:01 fetch-history ok MOS: 308 rows
+2026/08/22 02:59:02 fetch-history ok MPAA: 308 rows
+2026/08/22 02:59:02 fetch-history ok MPB: 308 rows
+2026/08/22 02:59:03 fetch-history ok MQ: 308 rows
+2026/08/22 02:59:04 fetch-history ok MRAM: 308 rows
+2026/08/22 02:59:04 fetch-history ok MRBK: 308 rows
+2026/08/22 02:59:05 fetch-history ok MRTN: 308 rows
+2026/08/22 02:59:05 fetch-history ok MRVI: 308 rows
+2026/08/22 02:59:06 fetch-history ok MSDL: 308 rows
+2026/08/22 02:59:06 fetch-history ok MSIF: 308 rows
+2026/08/22 02:59:07 fetch-history ok MTDR: 308 rows
+2026/08/22 02:59:07 fetch-history ok MTX: 308 rows
+2026/08/22 02:59:08 fetch-history ok MUX: 308 rows
+2026/08/22 02:59:08 fetch-history progress: 400/771 in batch · filled=395 empty=0 failed=5
+2026/08/22 02:59:08 fetch-history ok MVIS: 308 rows
+2026/08/22 02:59:09 fetch-history ok MVST: 308 rows
+2026/08/22 02:59:09 fetch-history ok MXL: 308 rows
+2026/08/22 02:59:10 fetch-history ok MYFW: 308 rows
+2026/08/22 02:59:10 fetch-history ok MYO: 308 rows
+2026/08/22 02:59:11 fetch-history ok NAGE: 308 rows
+2026/08/22 02:59:12 fetch-history ok NATL: 308 rows
+2026/08/22 02:59:12 fetch-history ok NBBK: 308 rows
+2026/08/22 02:59:13 fetch-history ok NCDL: 308 rows
+2026/08/22 02:59:13 fetch-history ok NEOG: 308 rows
+2026/08/22 02:59:14 fetch-history ok NEON: 308 rows
+2026/08/22 02:59:14 fetch-history ok NEPH: 308 rows
+2026/08/22 02:59:15 fetch-history ok NEWT: 308 rows
+2026/08/22 02:59:15 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=1 resetSec=1
+2026/08/22 02:59:15 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:59:16 fetch-history ok NGVT: 308 rows
+2026/08/22 02:59:17 fetch-history ok NHI: 308 rows
+2026/08/22 02:59:17 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:59:18 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=3 resetSec=1
+2026/08/22 02:59:18 fetch-history ok NINE: 100 rows
+2026/08/22 02:59:19 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=4 resetSec=1
+2026/08/22 02:59:19 fetch-history ok NKSH: 308 rows
+2026/08/22 02:59:19 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:59:21 fetch-history ok NKTX: 308 rows
+2026/08/22 02:59:21 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=4 resetSec=1
+2026/08/22 02:59:21 fetch-history ok NNI: 308 rows
+2026/08/22 02:59:21 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:59:23 fetch-history ok NOG: 308 rows
+2026/08/22 02:59:23 fetch-history ok NOVT: 308 rows
+2026/08/22 02:59:24 fetch-history ok NRDS: 308 rows
+2026/08/22 02:59:24 fetch-history ok NRDY: 308 rows
+2026/08/22 02:59:25 fetch-history ok NRG: 308 rows
+2026/08/22 02:59:25 fetch-history ok NRIM: 308 rows
+2026/08/22 02:59:26 fetch-history ok NSC: 308 rows
+2026/08/22 02:59:26 fetch-history ok NSLR: 308 rows
+2026/08/22 02:59:27 fetch-history ok NTLA: 308 rows
+2026/08/22 02:59:28 fetch-history ok NUTX: 308 rows
+2026/08/22 02:59:28 fetch-history ok NVR: 308 rows
+2026/08/22 02:59:29 fetch-history ok NVTS: 308 rows
+2026/08/22 02:59:29 fetch-history ok NWFL: 308 rows
+2026/08/22 02:59:30 fetch-history ok NWN: 308 rows
+2026/08/22 02:59:30 fetch-history ok NXST: 308 rows
+2026/08/22 02:59:31 fetch-history ok NXT: 308 rows
+2026/08/22 02:59:31 fetch-history ok NXXT: 308 rows
+2026/08/22 02:59:32 fetch-history ok OBDC: 308 rows
+2026/08/22 02:59:32 fetch-history ok OBK: 308 rows
+2026/08/22 02:59:33 fetch-history ok OC: 308 rows
+2026/08/22 02:59:34 fetch-history ok OCFC: 308 rows
+2026/08/22 02:59:34 fetch-history ok OCGN: 308 rows
+2026/08/22 02:59:35 fetch-history ok OEC: 308 rows
+2026/08/22 02:59:35 fetch-history ok OII: 308 rows
+2026/08/22 02:59:36 fetch-history ok OKUR: 308 rows
+2026/08/22 02:59:36 fetch-history ok OLP: 308 rows
+2026/08/22 02:59:37 fetch-history ok OMC: 308 rows
+2026/08/22 02:59:38 fetch-history ok ONB: 308 rows
+2026/08/22 02:59:38 fetch-history ok ONT: 308 rows
+2026/08/22 02:59:39 fetch-history ok OPAL: 308 rows
+2026/08/22 02:59:39 fetch-history ok OPBK: 308 rows
+2026/08/22 02:59:40 fetch-history ok OPHC: 308 rows
+2026/08/22 02:59:40 fetch-history ok OPRX: 308 rows
+2026/08/22 02:59:41 fetch-history ok OPTT: 308 rows
+2026/08/22 02:59:41 fetch-history ok ORA: 308 rows
+2026/08/22 02:59:42 fetch-history ok ORC: 308 rows
+2026/08/22 02:59:43 fetch-history ok ORGO: 308 rows
+2026/08/22 02:59:43 fetch-history ok ORLY: 308 rows
+2026/08/22 02:59:44 fetch-history ok OSBC: 308 rows
+2026/08/22 02:59:44 fetch-history ok OSG: 308 rows
+2026/08/22 02:59:45 fetch-history ok OSPN: 308 rows
+2026/08/22 02:59:45 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=0 resetSec=1
+2026/08/22 02:59:45 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:59:46 fetch-history ok OSUR: 308 rows
+2026/08/22 02:59:47 fetch-history ok OTF: 300 rows
+2026/08/22 02:59:47 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:59:48 fetch-history ok OUT: 308 rows
+2026/08/22 02:59:49 fetch-history ok OXBR: 308 rows
+2026/08/22 02:59:49 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:59:50 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=0 resetSec=1
+2026/08/22 02:59:51 fetch-history ok OXSQ: 308 rows
+2026/08/22 02:59:51 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=3 resetSec=1
+2026/08/22 02:59:51 fetch-history ok PAA: 308 rows
+2026/08/22 02:59:52 fetch-history ok PAGP: 308 rows
+2026/08/22 02:59:52 fetch-history ok PANL: 308 rows
+2026/08/22 02:59:53 fetch-history ok PAR: 308 rows
+2026/08/22 02:59:53 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=0 resetSec=1
+2026/08/22 02:59:53 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 02:59:54 fetch-history ok PARR: 308 rows
+2026/08/22 02:59:55 fetch-history ok PAYS: 308 rows
+2026/08/22 02:59:55 fetch-history ok PBYI: 308 rows
+2026/08/22 02:59:56 fetch-history ok PCAR: 308 rows
+2026/08/22 02:59:56 fetch-history ok PCB: 308 rows
+2026/08/22 02:59:57 fetch-history ok PCT: 308 rows
+2026/08/22 02:59:58 fetch-history ok PCVX: 308 rows
+2026/08/22 02:59:58 fetch-history ok PDFS: 308 rows
+2026/08/22 02:59:59 fetch-history ok PDLB: 308 rows
+2026/08/22 02:59:59 fetch-history ok PECO: 308 rows
+2026/08/22 03:00:00 fetch-history ok PEG: 308 rows
+2026/08/22 03:00:00 fetch-history ok PENN: 308 rows
+2026/08/22 03:00:01 fetch-history ok PEPG: 308 rows
+2026/08/22 03:00:01 fetch-history ok PETS: 308 rows
+2026/08/22 03:00:02 fetch-history ok PEW: 308 rows
+2026/08/22 03:00:02 fetch-history ok PFLT: 308 rows
+2026/08/22 03:00:03 fetch-history ok PFSI: 308 rows
+2026/08/22 03:00:03 fetch-history ok PFX: 308 rows
+2026/08/22 03:00:04 fetch-history ok PGC: 308 rows
+2026/08/22 03:00:04 fetch-history ok PHIO: 308 rows
+2026/08/22 03:00:05 fetch-history ok PHM: 308 rows
+2026/08/22 03:00:06 fetch-history ok PHUN: 308 rows
+2026/08/22 03:00:06 fetch-history ok PII: 308 rows
+2026/08/22 03:00:07 fetch-history ok PIII: 308 rows
+2026/08/22 03:00:07 fetch-history ok PINE: 308 rows
+2026/08/22 03:00:08 fetch-history ok PKG: 308 rows
+2026/08/22 03:00:08 fetch-history ok PKOH: 308 rows
+2026/08/22 03:00:09 fetch-history ok PLBY: 308 rows
+2026/08/22 03:00:09 fetch-history ok PLNT: 308 rows
+2026/08/22 03:00:10 fetch-history ok PLTK: 308 rows
+2026/08/22 03:00:10 fetch-history ok PLX: 308 rows
+2026/08/22 03:00:10 fetch-history progress: 500/771 in batch · filled=495 empty=0 failed=5
+2026/08/22 03:00:11 fetch-history ok PLXS: 308 rows
+2026/08/22 03:00:11 fetch-history ok PMN: 308 rows
+2026/08/22 03:00:12 fetch-history ok PMT: 308 rows
+2026/08/22 03:00:13 fetch-history ok PMTS: 308 rows
+2026/08/22 03:00:13 fetch-history ok PNNT: 308 rows
+2026/08/22 03:00:14 fetch-history ok PNR: 308 rows
+2026/08/22 03:00:14 fetch-history ok PNW: 308 rows
+2026/08/22 03:00:15 fetch-history ok PODC: 308 rows
+2026/08/22 03:00:15 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=2 resetSec=1
+2026/08/22 03:00:15 fetch-history ok POOL: 308 rows
+2026/08/22 03:00:16 fetch-history ok POWW: 308 rows
+2026/08/22 03:00:16 fetch-history ok PR: 308 rows
+2026/08/22 03:00:17 fetch-history ok PRAA: 308 rows
+2026/08/22 03:00:17 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=1 resetSec=1
+2026/08/22 03:00:17 fetch-history ok PRG: 308 rows
+2026/08/22 03:00:18 fetch-history ok PRGO: 308 rows
+2026/08/22 03:00:18 fetch-history ok PRKS: 308 rows
+2026/08/22 03:00:19 fetch-history ok PRMB: 308 rows
+2026/08/22 03:00:19 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:00:20 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:00:22 fetch-history ok PRME: 308 rows
+2026/08/22 03:00:22 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=3 resetSec=1
+2026/08/22 03:00:22 fetch-history ok PRSU: 308 rows
+2026/08/22 03:00:23 fetch-history ok PRTH: 308 rows
+2026/08/22 03:00:23 fetch-history ok PRTS: 308 rows
+2026/08/22 03:00:24 fetch-history ok PRU: 308 rows
+2026/08/22 03:00:24 fetch-history ok PRVA: 308 rows
+2026/08/22 03:00:25 fetch-history ok PSBD: 308 rows
+2026/08/22 03:00:25 fetch-history ok PSIX: 308 rows
+2026/08/22 03:00:26 fetch-history ok PTEN: 308 rows
+2026/08/22 03:00:26 fetch-history ok PTGX: 308 rows
+2026/08/22 03:00:27 fetch-history ok PTHS: 308 rows
+2026/08/22 03:00:27 fetch-history ok PTLO: 308 rows
+2026/08/22 03:00:28 fetch-history ok PUBM: 308 rows
+2026/08/22 03:00:29 fetch-history ok PVLA: 308 rows
+2026/08/22 03:00:29 fetch-history ok PZZA: 308 rows
+2026/08/22 03:00:30 fetch-history ok QBTS: 308 rows
+2026/08/22 03:00:30 fetch-history ok QCRH: 308 rows
+2026/08/22 03:00:31 fetch-history ok QMCO: 308 rows
+2026/08/22 03:00:31 fetch-history ok QRHC: 308 rows
+2026/08/22 03:00:32 fetch-history ok QS: 308 rows
+2026/08/22 03:00:32 fetch-history ok QSI: 308 rows
+2026/08/22 03:00:33 fetch-history ok QTI: 143 rows
+2026/08/22 03:00:33 fetch-history ok QTTB: 308 rows
+2026/08/22 03:00:34 fetch-history ok R: 308 rows
+2026/08/22 03:00:34 fetch-history ok RAPP: 308 rows
+2026/08/22 03:00:35 fetch-history ok RBBN: 308 rows
+2026/08/22 03:00:35 fetch-history ok RC: 308 rows
+2026/08/22 03:00:36 fetch-history ok RCKT: 308 rows
+2026/08/22 03:00:37 fetch-history ok RDVT: 308 rows
+2026/08/22 03:00:37 fetch-history ok REGN: 308 rows
+2026/08/22 03:00:38 fetch-history ok REI: 308 rows
+2026/08/22 03:00:38 fetch-history ok REKR: 308 rows
+2026/08/22 03:00:39 fetch-history ok RELL: 308 rows
+2026/08/22 03:00:39 fetch-history ok REPX: 308 rows
+2026/08/22 03:00:40 fetch-history ok REVB: 308 rows
+2026/08/22 03:00:40 fetch-history ok REXR: 308 rows
+2026/08/22 03:00:41 fetch-history ok REZI: 308 rows
+2026/08/22 03:00:41 fetch-history ok RGCO: 308 rows
+2026/08/22 03:00:42 fetch-history ok RGLD: 308 rows
+2026/08/22 03:00:42 fetch-history ok RGNX: 308 rows
+2026/08/22 03:00:43 fetch-history ok RGP: 308 rows
+2026/08/22 03:00:44 fetch-history ok RJF: 308 rows
+2026/08/22 03:00:44 fetch-history ok RLAY: 308 rows
+2026/08/22 03:00:45 fetch-history ok RLJ: 308 rows
+2026/08/22 03:00:45 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:00:46 fetch-history ok RLMD: 308 rows
+2026/08/22 03:00:47 fetch-history ok RNAC: 308 rows
+2026/08/22 03:00:47 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=0 resetSec=1
+2026/08/22 03:00:47 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:00:48 fetch-history ok RNXT: 308 rows
+2026/08/22 03:00:49 fetch-history ok ROAD: 308 rows
+2026/08/22 03:00:49 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:00:51 fetch-history ok ROOT: 308 rows
+2026/08/22 03:00:51 fetch-history ok RPAY: 308 rows
+2026/08/22 03:00:52 fetch-history ok RSVR: 308 rows
+2026/08/22 03:00:52 fetch-history ok RUM: 308 rows
+2026/08/22 03:00:53 fetch-history ok RUN: 308 rows
+2026/08/22 03:00:53 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=0 resetSec=1
+2026/08/22 03:00:53 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:00:54 fetch-history ok RVLV: 308 rows
+2026/08/22 03:00:55 fetch-history ok RVMD: 308 rows
+2026/08/22 03:00:55 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=0 resetSec=1
+2026/08/22 03:00:55 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:00:56 fetch-history ok RXRX: 308 rows
+2026/08/22 03:00:57 fetch-history ok RYAM: 308 rows
+2026/08/22 03:00:58 fetch-history ok SAFT: 308 rows
+2026/08/22 03:00:58 fetch-history ok SAH: 308 rows
+2026/08/22 03:00:59 fetch-history ok SAM: 308 rows
+2026/08/22 03:00:59 fetch-history ok SANA: 308 rows
+2026/08/22 03:01:00 fetch-history ok SARO: 308 rows
+2026/08/22 03:01:00 fetch-history ok SBC: 308 rows
+2026/08/22 03:01:01 fetch-history ok SBGI: 308 rows
+2026/08/22 03:01:01 fetch-history ok SCHL: 308 rows
+2026/08/22 03:01:02 fetch-history ok SCHW: 308 rows
+2026/08/22 03:01:02 fetch-history ok SCOR: 308 rows
+2026/08/22 03:01:03 fetch-history ok SD: 308 rows
+2026/08/22 03:01:03 fetch-history ok SDGR: 308 rows
+2026/08/22 03:01:04 fetch-history ok SDHC: 308 rows
+2026/08/22 03:01:05 fetch-history ok SDRL: 308 rows
+2026/08/22 03:01:05 fetch-history ok SEAT: 308 rows
+2026/08/22 03:01:06 fetch-history ok SEG: 308 rows
+2026/08/22 03:01:06 fetch-history ok SEIC: 308 rows
+2026/08/22 03:01:07 fetch-history ok SENS: 308 rows
+2026/08/22 03:01:07 fetch-history ok SEPN: 308 rows
+2026/08/22 03:01:08 fetch-history ok SERA: 308 rows
+2026/08/22 03:01:08 fetch-history ok SERV: 308 rows
+2026/08/22 03:01:09 fetch-history ok SEZL: 308 rows
+2026/08/22 03:01:09 fetch-history ok SF: 308 rows
+2026/08/22 03:01:10 fetch-history ok SFBS: 308 rows
+2026/08/22 03:01:10 fetch-history ok SG: 308 rows
+2026/08/22 03:01:11 fetch-history ok SGA: 308 rows
+2026/08/22 03:01:12 fetch-history ok SGC: 308 rows
+2026/08/22 03:01:12 fetch-history progress: 600/771 in batch · filled=595 empty=0 failed=5
+2026/08/22 03:01:12 fetch-history ok SHBI: 308 rows
+2026/08/22 03:01:13 fetch-history ok SHIM: 308 rows
+2026/08/22 03:01:13 fetch-history ok SHLS: 308 rows
+2026/08/22 03:01:14 fetch-history ok SHO: 308 rows
+2026/08/22 03:01:14 fetch-history ok SI: 267 rows
+2026/08/22 03:01:15 fetch-history ok SIGI: 308 rows
+2026/08/22 03:01:15 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=2 resetSec=1
+2026/08/22 03:01:15 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:01:16 fetch-history ok SKIN: 308 rows
+2026/08/22 03:01:17 fetch-history ok SKY: 308 rows
+2026/08/22 03:01:17 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:01:18 fetch-history ok SKYH: 308 rows
+2026/08/22 03:01:19 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=2 resetSec=1
+2026/08/22 03:01:19 fetch-history ok SKYX: 308 rows
+2026/08/22 03:01:19 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:01:21 fetch-history ok SLDE: 296 rows
+2026/08/22 03:01:21 fetch-history ok SLDP: 308 rows
+2026/08/22 03:01:22 fetch-history ok SLND: 308 rows
+2026/08/22 03:01:22 fetch-history ok SLNH: 308 rows
+2026/08/22 03:01:23 fetch-history ok SLRC: 308 rows
+2026/08/22 03:01:23 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=1 resetSec=1
+2026/08/22 03:01:23 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:01:24 fetch-history ok SMA: 308 rows
+2026/08/22 03:01:25 fetch-history ok SMBC: 308 rows
+2026/08/22 03:01:25 fetch-history ok SMBK: 308 rows
+2026/08/22 03:01:26 fetch-history ok SMMT: 308 rows
+2026/08/22 03:01:26 fetch-history ok SNDA: 308 rows
+2026/08/22 03:01:27 fetch-history ok SNES: 308 rows
+2026/08/22 03:01:27 fetch-history ok SOC: 308 rows
+2026/08/22 03:01:28 fetch-history ok SOLV: 308 rows
+2026/08/22 03:01:29 fetch-history ok SPCE: 308 rows
+2026/08/22 03:01:29 fetch-history ok SPRO: 308 rows
+2026/08/22 03:01:30 fetch-history ok SPRY: 308 rows
+2026/08/22 03:01:30 fetch-history ok SRCE: 308 rows
+2026/08/22 03:01:31 fetch-history ok SRI: 308 rows
+2026/08/22 03:01:31 fetch-history ok SRTA: 308 rows
+2026/08/22 03:01:32 fetch-history ok SRZN: 308 rows
+2026/08/22 03:01:32 fetch-history ok SSB: 308 rows
+2026/08/22 03:01:33 fetch-history ok SSNC: 308 rows
+2026/08/22 03:01:33 fetch-history ok SSP: 308 rows
+2026/08/22 03:01:34 fetch-history ok SST: 308 rows
+2026/08/22 03:01:34 fetch-history ok SSTI: 308 rows
+2026/08/22 03:01:35 fetch-history ok STAA: 308 rows
+2026/08/22 03:01:35 fetch-history ok STBA: 308 rows
+2026/08/22 03:01:36 fetch-history ok STKS: 308 rows
+2026/08/22 03:01:36 fetch-history ok STWD: 308 rows
+2026/08/22 03:01:37 fetch-history ok SUN: 308 rows
+2026/08/22 03:01:38 fetch-history ok SVC: 308 rows
+2026/08/22 03:01:38 fetch-history ok SVCO: 308 rows
+2026/08/22 03:01:39 fetch-history ok SWIM: 308 rows
+2026/08/22 03:01:39 fetch-history ok SYF: 308 rows
+2026/08/22 03:01:40 fetch-history ok SYM: 308 rows
+2026/08/22 03:01:40 fetch-history ok SYRE: 308 rows
+2026/08/22 03:01:41 fetch-history ok TALO: 308 rows
+2026/08/22 03:01:41 fetch-history ok TARS: 308 rows
+2026/08/22 03:01:42 fetch-history ok TASK: 308 rows
+2026/08/22 03:01:42 fetch-history ok TBCH: 308 rows
+2026/08/22 03:01:43 fetch-history ok TBLA: 308 rows
+2026/08/22 03:01:43 fetch-history ok TCBI: 308 rows
+2026/08/22 03:01:44 fetch-history ok TCBK: 308 rows
+2026/08/22 03:01:44 fetch-history ok TCBX: 308 rows
+2026/08/22 03:01:45 fetch-history ok TCPC: 308 rows
+2026/08/22 03:01:45 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:01:47 fetch-history ok TDOC: 308 rows
+2026/08/22 03:01:47 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=4 resetSec=1
+2026/08/22 03:01:47 fetch-history ok TDUP: 308 rows
+2026/08/22 03:01:48 fetch-history ok TEAD: 308 rows
+2026/08/22 03:01:48 fetch-history ok TECX: 308 rows
+2026/08/22 03:01:49 fetch-history ok TELA: 308 rows
+2026/08/22 03:01:49 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:01:50 fetch-history ok TFIN: 308 rows
+2026/08/22 03:01:51 fetch-history ok TGEN: 308 rows
+2026/08/22 03:01:51 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:01:52 fetch-history ok TGLS: 308 rows
+2026/08/22 03:01:53 fetch-history ok TH: 308 rows
+2026/08/22 03:01:53 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:01:55 fetch-history ok THRM: 308 rows
+2026/08/22 03:01:55 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=2 resetSec=1
+2026/08/22 03:01:55 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=0 resetSec=1
+2026/08/22 03:01:55 fetch-history ok TIC: 308 rows
+2026/08/22 03:01:56 fetch-history ok TKNO: 308 rows
+2026/08/22 03:01:56 fetch-history ok TLPH: 308 rows
+2026/08/22 03:01:57 fetch-history ok TLRY: 308 rows
+2026/08/22 03:01:57 fetch-history ok TLS: 308 rows
+2026/08/22 03:01:58 fetch-history ok TMC: 308 rows
+2026/08/22 03:01:58 fetch-history ok TMO: 308 rows
+2026/08/22 03:01:59 fetch-history ok TNL: 308 rows
+2026/08/22 03:01:59 fetch-history ok TNYA: 308 rows
+2026/08/22 03:02:00 fetch-history ok TPB: 308 rows
+2026/08/22 03:02:00 fetch-history ok TPC: 308 rows
+2026/08/22 03:02:01 fetch-history ok TPVG: 308 rows
+2026/08/22 03:02:01 fetch-history ok TRLV: 51 rows
+2026/08/22 03:02:02 fetch-history ok TRNS: 308 rows
+2026/08/22 03:02:02 fetch-history ok TRST: 308 rows
+2026/08/22 03:02:03 fetch-history ok TRU: 308 rows
+2026/08/22 03:02:04 fetch-history ok TRVI: 308 rows
+2026/08/22 03:02:04 fetch-history ok TSCO: 308 rows
+2026/08/22 03:02:05 fetch-history ok TSQ: 308 rows
+2026/08/22 03:02:05 fetch-history ok TTEC: 308 rows
+2026/08/22 03:02:06 fetch-history ok TTGT: 308 rows
+2026/08/22 03:02:06 fetch-history ok TWFG: 308 rows
+2026/08/22 03:02:07 fetch-history ok TXT: 308 rows
+2026/08/22 03:02:07 fetch-history ok TYRA: 308 rows
+2026/08/22 03:02:08 fetch-history ok UBSI: 308 rows
+2026/08/22 03:02:08 fetch-history ok UEIC: 308 rows
+2026/08/22 03:02:09 fetch-history ok UHAL: 308 rows
+2026/08/22 03:02:10 fetch-history ok UNIT: 308 rows
+2026/08/22 03:02:10 fetch-history ok UNP: 308 rows
+2026/08/22 03:02:11 fetch-history ok UP: 308 rows
+2026/08/22 03:02:11 fetch-history ok URGN: 308 rows
+2026/08/22 03:02:12 fetch-history ok URI: 308 rows
+2026/08/22 03:02:12 fetch-history ok USCB: 308 rows
+2026/08/22 03:02:13 fetch-history ok USFD: 308 rows
+2026/08/22 03:02:13 fetch-history ok USNA: 308 rows
+2026/08/22 03:02:13 fetch-history progress: 700/771 in batch · filled=695 empty=0 failed=5
+2026/08/22 03:02:14 fetch-history ok USPH: 308 rows
+2026/08/22 03:02:15 fetch-history ok UVE: 308 rows
+2026/08/22 03:02:15 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=2 resetSec=1
+2026/08/22 03:02:15 fetch-history ok UVSP: 308 rows
+2026/08/22 03:02:16 fetch-history ok UVV: 308 rows
+2026/08/22 03:02:16 fetch-history ok UWMC: 308 rows
+2026/08/22 03:02:17 fetch-history ok VAC: 308 rows
+2026/08/22 03:02:17 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:02:18 fetch-history ok VC: 308 rows
+2026/08/22 03:02:19 fetch-history ok VECO: 308 rows
+2026/08/22 03:02:19 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:02:20 fetch-history ok VELO: 254 rows
+2026/08/22 03:02:21 fetch-history ok VENU: 308 rows
+2026/08/22 03:02:21 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:02:22 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:02:23 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=1 resetSec=1
+2026/08/22 03:02:24 fetch-history ok VERI: 308 rows
+2026/08/22 03:02:24 fetch-history ok VERU: 308 rows
+2026/08/22 03:02:25 fetch-history ok VFF: 308 rows
+2026/08/22 03:02:25 fetch-history ok VICR: 308 rows
+2026/08/22 03:02:26 fetch-history ok VITL: 308 rows
+2026/08/22 03:02:26 fetch-history ok VKTX: 308 rows
+2026/08/22 03:02:27 fetch-history ok VLY: 308 rows
+2026/08/22 03:02:27 fetch-history ok VMI: 308 rows
+2026/08/22 03:02:28 fetch-history ok VNT: 308 rows
+2026/08/22 03:02:28 fetch-history ok VRCA: 308 rows
+2026/08/22 03:02:29 fetch-history ok VRDN: 308 rows
+2026/08/22 03:02:30 fetch-history ok VSAT: 308 rows
+2026/08/22 03:02:30 fetch-history ok VTOL: 308 rows
+2026/08/22 03:02:31 fetch-history ok VTRS: 308 rows
+2026/08/22 03:02:31 fetch-history ok VTSI: 308 rows
+2026/08/22 03:02:32 fetch-history ok VTVT: 308 rows
+2026/08/22 03:02:32 fetch-history ok VUZI: 308 rows
+2026/08/22 03:02:33 fetch-history ok VYGR: 308 rows
+2026/08/22 03:02:33 fetch-history ok VYX: 308 rows
+2026/08/22 03:02:34 fetch-history ok WAL: 308 rows
+2026/08/22 03:02:34 fetch-history ok WASH: 308 rows
+2026/08/22 03:02:35 fetch-history ok WATT: 308 rows
+2026/08/22 03:02:35 fetch-history ok WBTN: 308 rows
+2026/08/22 03:02:36 fetch-history ok WD: 308 rows
+2026/08/22 03:02:36 fetch-history ok WFRD: 308 rows
+2026/08/22 03:02:37 fetch-history ok WH: 308 rows
+2026/08/22 03:02:37 fetch-history ok WHWK: 308 rows
+2026/08/22 03:02:38 fetch-history ok WKC: 308 rows
+2026/08/22 03:02:39 fetch-history ok WKHS: 308 rows
+2026/08/22 03:02:39 fetch-history ok WLDN: 308 rows
+2026/08/22 03:02:40 fetch-history ok WLFC: 308 rows
+2026/08/22 03:02:40 fetch-history ok WNC: 308 rows
+2026/08/22 03:02:41 fetch-history ok WRB: 308 rows
+2026/08/22 03:02:41 fetch-history ok WRBY: 308 rows
+2026/08/22 03:02:42 fetch-history ok WRLD: 308 rows
+2026/08/22 03:02:42 fetch-history ok WSBC: 308 rows
+2026/08/22 03:02:43 fetch-history ok WST: 308 rows
+2026/08/22 03:02:43 fetch-history ok WTBA: 308 rows
+2026/08/22 03:02:44 fetch-history ok WTFC: 308 rows
+2026/08/22 03:02:44 fetch-history ok WTI: 308 rows
+2026/08/22 03:02:45 fetch-history ok WTM: 308 rows
+2026/08/22 03:02:45 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:02:47 fetch-history ok WTRG: 308 rows
+2026/08/22 03:02:47 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=3 resetSec=1
+2026/08/22 03:02:47 fetch-history ok WU: 308 rows
+2026/08/22 03:02:47 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:02:49 fetch-history ok WW: 285 rows
+2026/08/22 03:02:49 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=2 resetSec=1
+2026/08/22 03:02:49 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:02:50 fetch-history ok WWW: 308 rows
+2026/08/22 03:02:51 fetch-history ok XAIR: 308 rows
+2026/08/22 03:02:51 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:02:52 fetch-history ok XENE: 308 rows
+2026/08/22 03:02:53 fetch-history ok XMTR: 308 rows
+2026/08/22 03:02:53 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:02:54 fetch-history ok XPEL: 308 rows
+2026/08/22 03:02:55 toss api rate-limit low: GET /api/v1/candles limit=20 remaining=1 resetSec=1
+2026/08/22 03:02:55 toss api rate-limit exceeded: GET /api/v1/candles limit=20 remaining=0 resetSec=1 retryAfterSec=1
+2026/08/22 03:02:56 fetch-history ok XPER: 308 rows
+2026/08/22 03:02:57 fetch-history ok XPOF: 308 rows
+2026/08/22 03:02:57 fetch-history ok XRAY: 308 rows
+2026/08/22 03:02:58 fetch-history ok XRN: 308 rows
+2026/08/22 03:02:58 fetch-history ok YORW: 308 rows
+2026/08/22 03:02:59 fetch-history ok YOU: 308 rows
+2026/08/22 03:02:59 fetch-history ok ZD: 308 rows
+2026/08/22 03:03:00 fetch-history ok ZION: 308 rows
+2026/08/22 03:03:00 fetch-history ok ZIP: 308 rows
+2026/08/22 03:03:01 fetch-history ok ZNTL: 308 rows
+2026/08/22 03:03:01 fetch-history ok ZVIA: 308 rows
+2026/08/22 03:03:02 fetch-history ok ZVRA: 308 rows
+2026/08/22 03:03:02 fetch-history(symbols-file, >2025-06-01): attempted=771 filled=766 no-data=0 failed=5
+2026/08/22 03:03:05 stock_daily_closes since 2025-06-01: 3128423 rows across 16233 symbols (2025-06-02T00:00:00+09:00 … 2026-08-21T00:00:00+09:00)
+2026/08/22 03:03:05 coverage: 16233/13499 active master symbols have closes since 2025-06-01 (market=us)

@@ -7,6 +7,8 @@ import (
 	"log"
 	"strings"
 
+	"github.com/enact/quant-port/be/internal/llm"
+
 	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/repository"
 )
@@ -28,6 +30,17 @@ import (
 type IndexScoreService struct {
 	db      *sql.DB
 	indices *repository.IndexDailyCloseRepo
+
+	// llm is optional. Nil (or disabled) means every index keeps the rule
+	// sentence and no paragraph is written — see index_llm_note.go.
+	llm *llm.Pool
+}
+
+// SetLLM wires the model pool used by GenerateNotes. Batch and admin only.
+func (s *IndexScoreService) SetLLM(pool *llm.Pool) {
+	if s != nil {
+		s.llm = pool
+	}
 }
 
 func NewIndexScoreService(db *sql.DB, indices *repository.IndexDailyCloseRepo) *IndexScoreService {
@@ -162,7 +175,10 @@ func (s *IndexScoreService) RecomputeAll(ctx context.Context) (int, error) {
 		ti := indexTechnicals(sr.closes)
 		score := scoreIndexSeries(ti, len(sr.closes))
 		summary := indexSummaryText(indexDisplayName(id), ti)
-		if score == nil && summary == "" {
+		// 키워드는 요약과 같은 재료에서 나온다(index_tags.go) — 화면이 읽는 건
+		// 이쪽이고, 요약 문장은 지수 모달에서 그 근거를 편다.
+		tags := encodeIndexTags(indexTags(ti, sr.closes))
+		if score == nil && summary == "" && tags == "" {
 			continue
 		}
 
@@ -175,9 +191,9 @@ func (s *IndexScoreService) RecomputeAll(ctx context.Context) (int, error) {
 		latest := sr.dates[len(sr.dates)-1]
 		res, err := s.db.ExecContext(ctx, `
 			UPDATE index_daily_closes
-			   SET score = ?, grade = ?, ai_summary = ?
+			   SET score = ?, grade = ?, ai_summary = ?, tags = ?
 			 WHERE index_id = ? AND trade_date = ?`,
-			scoreVal, grade, summary, id, latest)
+			scoreVal, grade, summary, tags, id, latest)
 		if err != nil {
 			log.Printf("index score %s: %v", id, err)
 			continue
@@ -199,7 +215,6 @@ func indexDisplayName(id string) string {
 	return strings.ToUpper(id)
 }
 
-
 // IndexScoreSummary is one index's latest score and rule-based read, for the
 // dashboard cards.
 type IndexScoreSummary struct {
@@ -207,7 +222,19 @@ type IndexScoreSummary struct {
 	TradeDate string `json:"tradeDate"`
 	Score     *int   `json:"score"`
 	Grade     string `json:"grade,omitempty"`
+	// AISummary is the **rule-built** indicator line. 이름의 「AI」는 남아 있는 옛 이름이다 —
+	// 이 문장에는 모델이 관여하지 않는다. 열세 지수 전부에 언제나 있다.
 	AISummary string `json:"aiSummary,omitempty"`
+	/*
+		LLMNote는 그 지표들이 **함께 가리키는 국면**을 적은 한 문단이다. 배치가 실제로
+		돌았을 때만 있다 — 모델이 꺼져 있거나 실패한 지수는 비어 오고, 그때 화면은
+		위 규칙 문장만 보여 준다(`index_llm_note.go`).
+	*/
+	LLMNote   string `json:"llmNote,omitempty"`
+	LLMStance string `json:"llmStance,omitempty"`
+	// Tags are the state keywords the strip renders in place of the score
+	// badge — codes, not labels (see index_tags.go).
+	Tags []string `json:"tags,omitempty"`
 }
 
 // LatestAll returns every index's newest scored row in one query.
@@ -220,7 +247,8 @@ func (s *IndexScoreService) LatestAll(ctx context.Context) ([]IndexScoreSummary,
 		return nil, nil
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT d.index_id, DATE_FORMAT(d.trade_date, '%Y-%m-%d'), d.score, d.grade, d.ai_summary
+		SELECT d.index_id, DATE_FORMAT(d.trade_date, '%Y-%m-%d'), d.score, d.grade, d.ai_summary, d.tags,
+		       d.llm_note, d.llm_stance
 		  FROM index_daily_closes d
 		  JOIN (
 		      SELECT index_id, MAX(trade_date) AS newest
@@ -240,16 +268,23 @@ func (s *IndexScoreService) LatestAll(ctx context.Context) ([]IndexScoreSummary,
 			score   sql.NullInt64
 			grade   sql.NullString
 			summary sql.NullString
+			tags    sql.NullString
+			note    sql.NullString
+			stance  sql.NullString
 		)
-		if err := rows.Scan(&item.IndexID, &item.TradeDate, &score, &grade, &summary); err != nil {
+		if err := rows.Scan(&item.IndexID, &item.TradeDate, &score, &grade, &summary, &tags,
+			&note, &stance); err != nil {
 			return nil, err
 		}
+		item.LLMNote = note.String
+		item.LLMStance = stance.String
 		if score.Valid {
 			v := int(score.Int64)
 			item.Score = &v
 		}
 		item.Grade = grade.String
 		item.AISummary = summary.String
+		item.Tags = decodeIndexTags(tags.String)
 		out = append(out, item)
 	}
 	return out, rows.Err()

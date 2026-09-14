@@ -311,6 +311,11 @@ type ResearchPreview struct {
 	// Eligible reports whether this symbol may be published publicly (§14 게이트).
 	Eligible         bool   `json:"eligible"`
 	IneligibleReason string `json:"ineligibleReason,omitempty"`
+	// DailyCap / DailyRemaining 은 발행 확인 화면이 「오늘 몇 건 남았는지」를
+	// 말할 수 있게 한다. 발행은 되돌릴 수 없고 한도를 소모하므로, 누르기 전에
+	// 남은 수를 보여주지 않으면 사용자는 그 대가를 모르고 결정하게 된다.
+	DailyCap       int `json:"dailyCap"`
+	DailyRemaining int `json:"dailyRemaining"`
 }
 
 // ResearchSummary is the author's scorecard.
@@ -373,6 +378,29 @@ type ResearchComment struct {
 	CreatedAt  time.Time         `json:"createdAt"`
 	UpdatedAt  time.Time         `json:"updatedAt"`
 	Replies    []ResearchComment `json:"replies,omitempty"`
+
+	/*
+		추천 (2026-09-14 사용자 요청 3).
+
+		한 글 아래 스무 줄이 쌓이면 **읽을 만한 반론이 어느 것인지**를 읽는 사람이
+		알 수 없다. 글 자체에는 추천이 있는데(`research_reactions`) 댓글에는 없어서
+		좋은 반박이 스무 번째 줄에 그대로 묻혔다. 표는 `research_comment_likes`
+		(migration 072)이고, 카운터는 비정규화하지 않는다 — 그 이유는 거기 머리글에.
+	*/
+	LikeCount int  `json:"likeCount"`
+	Liked     bool `json:"liked"`
+
+	/*
+		글쓴이의 **누적 활동 수** — 발행한 리포트 + 남긴 댓글 (2026-09-14 요청 3).
+
+		처음 보는 이름이 단 반론과 백 번 써 온 사람의 반론을 같은 무게로 읽게 두면,
+		읽는 사람은 매번 글쓴이를 눌러 프로필을 확인해야 한다. 숫자를 **그대로**
+		보내고 화면이 구간으로 접는다(100+·300+…) — 정확한 수는 읽는 사람에게
+		아무 결정도 바꾸지 않으면서 그 사람의 활동량을 필요 이상으로 드러낸다.
+
+		재료는 전부 공개 자료다(공개 리포트와 공개 댓글). 삭제한 댓글은 세지 않는다.
+	*/
+	AuthorActivity int `json:"authorActivity,omitempty"`
 }
 
 // ResearchRating is a reader's 3-axis score of the *argument*, not the outcome.

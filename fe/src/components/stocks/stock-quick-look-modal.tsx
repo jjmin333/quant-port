@@ -1,14 +1,18 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
+import { DailyCloseMiniTable } from "@/components/charts/daily-close-mini-table";
+import { DailyCloseRangeToggle } from "@/components/charts/daily-close-range-toggle";
 import { PriceHistoryChart } from "@/components/charts/price-history-chart";
 import { useNewsArticleModal } from "@/components/news/news-article-modal-host";
 import { StockAvatar } from "@/components/stocks/stock-avatar";
+import { StockQuickLookActions } from "@/components/stocks/stock-quick-look-actions";
 import { StockScoreChip } from "@/components/stocks/stock-score-chip";
 import { WatchlistRangeBar } from "@/components/watchlist/watchlist-range-bar";
 import { Button } from "@/components/ui/button";
+import { MiniToggle } from "@/components/ui/mini-toggle";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +22,13 @@ import {
 } from "@/components/ui/dialog";
 import { useSparklineCandles } from "@/hooks/use-sparkline-candles";
 import { analysisSymbolHref } from "@/lib/analysis-tabs";
+import { fetchStockDailyCloses } from "@/lib/daily-close-api";
+import type { DailyCloseRow } from "@/lib/daily-close-types";
+import {
+  availableBarSteps,
+  DAILY_CLOSE_MAX_BARS,
+  resolveBarStep,
+} from "@/lib/daily-close-window";
 import { fetchEarningsClient } from "@/lib/earnings-api";
 import { formatEarningsDateLabel } from "@/lib/earnings-date";
 import type { EarningsCalendarEvent } from "@/lib/earnings-types";
@@ -27,6 +38,7 @@ import {
   formatPriceChange,
   formatRelativeTime,
 } from "@/lib/format";
+import { leaveModal } from "@/lib/modal-history";
 import { fetchStockNews } from "@/lib/news-api";
 import type { NewsArticle } from "@/lib/news-types";
 import type { QuoteAssetType, QuoteCurrency } from "@/lib/quotes-types";
@@ -35,6 +47,7 @@ import {
   SCORE_AXIS_ORDER,
   type StockScoreData,
 } from "@/lib/stock-score-api";
+import { firstSentences, hasMoreThan } from "@/lib/summary-sentences";
 import { trendTextClass } from "@/lib/trend-colors";
 import { cn } from "@/lib/utils";
 
@@ -109,8 +122,34 @@ export function StockQuickLookModal({
     rows: EarningsCalendarEvent[];
   } | null>(null);
   const [newsState, setNewsState] = useState<{ key: string; rows: NewsArticle[] } | null>(null);
+  const [closes, setCloses] = useState<{ key: string; rows: DailyCloseRow[] } | null>(null);
+  const [bars, setBars] = useState(60);
+  // AI 핵심 요약의 간단/상세. 기본값 간단 — 이유는 그 자리의 주석에.
+  const [aiDetail, setAiDetail] = useState<"brief" | "full">("brief");
 
   const { points, times } = useSparklineCandles(symbol, open);
+
+  /*
+    일별 종가를 **한 번에 최대치로** 받는다 (2026-09-05 사용자 요청 7-1·7-2).
+
+    이 한 응답이 세 블록을 먹인다 — 차트(기간 토글은 이 배열을 자를 뿐 요청을 더 만들지
+    않는다), 「AI 핵심 요약」, 「최근 일별」 표. 점수·해설·전일비가 전부 이 행들에 이미
+    실려 온다(`daily_close.go`), 그래서 요청은 여전히 종목당 하나다.
+  */
+  useEffect(() => {
+    if (!open || !symbol) return;
+    let alive = true;
+    fetchStockDailyCloses(symbol, DAILY_CLOSE_MAX_BARS)
+      .then((series) => {
+        if (alive) setCloses({ key: symbol, rows: series.rows ?? [] });
+      })
+      .catch(() => {
+        if (alive) setCloses({ key: symbol, rows: [] });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, symbol]);
 
   useEffect(() => {
     if (!open || !symbol) return;
@@ -140,6 +179,62 @@ export function StockQuickLookModal({
 
   const events = eventsState?.key === symbol ? eventsState.rows : null;
   const news = newsState?.key === symbol ? newsState.rows : null;
+  const dailyRows = closes?.key === symbol ? closes.rows : null;
+
+  /*
+    일별 종가는 **최신순**으로 온다(BE가 전일비를 다음 행에서 계산한다). 차트는 왼쪽이
+    과거여야 하므로 뒤집는다 — 정렬 없이 자르면 가장 오래된 구간을 거꾸로 그리게 된다.
+    지수 모달이 같은 처리를 한다.
+  */
+  const chrono = useMemo(
+    () => (dailyRows ? [...dailyRows].reverse().filter((r) => r.close > 0) : []),
+    [dailyRows],
+  );
+
+  /*
+    일별 종가가 **아직 안 쌓인 종목**이 있다(신규 상장·ETN 등). 그때는 예전처럼 일봉
+    스냅샷 40포인트로 그리고, 제목을 「최근 흐름」으로 되돌린다 — 「일별 종가」라고
+    적어 놓고 다른 재료를 그리면 그건 다른 이야기가 된다.
+  */
+  const usingCandleFallback = dailyRows != null && chrono.length < 2;
+
+  const steps = useMemo(() => availableBarSteps(chrono.length), [chrono.length]);
+  const activeStep = resolveBarStep(steps, bars);
+  const windowed = chrono.slice(-activeStep);
+  const chartPoints = usingCandleFallback ? points : windowed.map((r) => r.close);
+  const chartTimes = usingCandleFallback ? times : windowed.map((r) => r.tradeDate);
+
+  /*
+    「AI 핵심 요약」에 쓸 **가장 최신 LLM 추출값** (2026-09-05 사용자 요청 7-2).
+
+    행마다 `analysisSource`가 `llm` / `rule` / 빈 값 중 하나다. 규칙이 만든 문장까지
+    「AI」라고 부르면 그 이름이 아무것도 구분하지 못하므로 **`llm`인 행만** 고른다.
+    오늘 배치가 아직 안 돌았어도 어제 것이 있으면 그것을 보여 준다 — 없는 날 자리를
+    비워 두면 「이 종목은 요약이 없다」로 읽히는데, 사실은 오늘 것만 없다.
+  */
+  const llmDaily = useMemo(
+    () =>
+      (dailyRows ?? []).find(
+        (r) => r.analysisSource === "llm" && r.aiSummary.trim() !== "",
+      ) ?? null,
+    [dailyRows],
+  );
+
+  /*
+    「간단」이 보여 줄 **짧은 판** (2026-09-14 사용자 요청 2).
+
+    예전에는 해설 전문에 `line-clamp-3`을 걸었다. 그건 줄 수로 자르는 장치라 어디서
+    끊길지를 글자 너비가 정하고, 실제로 사용자 화면에서는 「…효과를 상쇄하」에서
+    낱말 가운데가 잘렸다. 「간단」은 짧은 판이어야지 잘린 판이면 안 된다.
+
+    종목 개요 탭의 간단은 원래 그렇게 안 한다 — 서버가 갈래마다 **첫 문장**만 뽑아
+    엮은 요약을 쓴다(BE `composeOverview`). 모달에는 그 서버 요약이 없고 일별 해설
+    한 덩어리만 오므로, 같은 규칙을 화면에서 적용한다. 두 문장인 이유는 개요 탭의
+    요약(네 갈래 × 첫 문장)과 대략 같은 분량이면서 한 문장보다 덜 잘리기 때문이다.
+  */
+  const aiBrief = useMemo(() => firstSentences(llmDaily?.aiSummary, 2), [llmDaily]);
+  // 요약이 원문과 같으면 토글이 아무 일도 안 한다 — 그 버튼은 안 세운다.
+  const aiHasMore = hasMoreThan(aiBrief, llmDaily?.aiSummary);
 
   /*
    * 기사는 앱 전체와 **같은 방식**으로 연다 — 여기서 부르는 목록이 이 종목 기사라
@@ -161,6 +256,20 @@ export function StockQuickLookModal({
     if (!open && newsModal.article) newsModal.close();
   }
 
+  /*
+   * 종목을 옮기면 AI 요약을 **다시 접는다** (2026-09-14 사용자 요청 2).
+   *
+   * 기본값이 「간단」인 이유가 「창으로 종목을 훑을 때 한눈에 보기」인데, 한 종목에서
+   * 상세를 편 것이 다음 종목까지 따라오면 그 목적이 두 번째 종목부터 사라진다.
+   * 위 `wasOpen`과 같은 **렌더 중 조정**이다 — 이펙트로 하면 펼쳐진 프레임이 한 번
+   * 더 그려진다.
+   */
+  const [lastSymbol, setLastSymbol] = useState(symbol);
+  if (lastSymbol !== symbol) {
+    setLastSymbol(symbol);
+    setAiDetail("brief");
+  }
+
   const hasRange =
     stock?.week52Low != null && stock.week52Low > 0 && stock?.week52High != null && stock.week52High > 0;
 
@@ -175,7 +284,31 @@ export function StockQuickLookModal({
         <DialogContent className="flex max-h-[88dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
           {stock ? (
             <>
-              <DialogHeader className="shrink-0 border-b px-4 py-3 pr-10 text-left">
+              <DialogHeader className="shrink-0 gap-1.5 border-b px-4 py-3 pr-10 text-left">
+                {/*
+                  # 동작 다섯은 **가격 위**에 선다 (2026-09-05 사용자 요청 7-4)
+
+                  관심 · 메모장 · 보유 · 스탬프 · 목표가. 지금까지 이 다섯은 랭킹 목록의
+                  행과 종목 상세 헤더에 나뉘어 있어서, 뉴스나 홈에서 종목을 눌러 창을 연
+                  사람은 무엇도 할 수 없었다(`stock-quick-look-actions.tsx` 머리말).
+
+                  `pr-10`이 오른쪽 위 닫기(×) 자리를 비워 두므로 그 아래 줄에 오른쪽
+                  정렬로 붙인다 — 바로 아래 가격·등락률과 같은 축이다.
+                */}
+                <div className="flex flex-wrap items-center justify-end gap-1">
+                  <StockQuickLookActions
+                    stock={{
+                      symbol: stock.symbol,
+                      name: stock.name || stock.symbol,
+                      currency: stock.currency,
+                      assetType: stock.assetType,
+                      marketLabel: stock.marketLabel,
+                      price: stock.hasQuote ? stock.currentPrice : undefined,
+                      week52High: stock.week52High,
+                      week52Low: stock.week52Low,
+                    }}
+                  />
+                </div>
                 <DialogTitle className="flex min-w-0 items-center gap-2 text-sm">
                   <StockAvatar
                     symbol={stock.symbol}
@@ -187,13 +320,13 @@ export function StockQuickLookModal({
                   />
                   <span className="min-w-0 flex-1 truncate">{stock.name || stock.symbol}</span>
                   <span className="shrink-0 text-right">
-                    <span className="block font-mono text-base font-bold tabular-nums">
+                    <span className="block font-num text-base font-bold tabular-nums">
                       {stock.hasQuote ? formatPrice(stock.currentPrice, stock.currency) : "—"}
                     </span>
                     {stock.hasQuote && (
                       <span
                         className={cn(
-                          "block font-mono text-[11px] tabular-nums",
+                          "block font-num text-cell tabular-nums",
                           trendTextClass(stock.changeRate),
                         )}
                       >
@@ -203,7 +336,7 @@ export function StockQuickLookModal({
                     )}
                   </span>
                 </DialogTitle>
-                <DialogDescription className="text-[11px]">
+                <DialogDescription className="text-cell">
                   {stock.symbol} · {stock.marketLabel || (market === "us" ? "US" : "KRX")}
                   {stock.isHeld ? " · 보유 중" : ""}
                   {score?.score != null ? ` · 점수 ${score.score}${score.grade ?? ""}` : ""}
@@ -211,14 +344,37 @@ export function StockQuickLookModal({
               </DialogHeader>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-                <PriceHistoryChart
-                  points={points}
-                  times={times}
-                  currency={stock.currency}
-                  markerPrice={markerPrice ?? undefined}
-                  markerLabel={markerLabel}
-                  className="mb-4"
-                />
+                {/*
+                  # 「최근 흐름」 → 「일별 종가」 (2026-09-05 사용자 요청 7-1)
+
+                  예전에는 일봉 스냅샷 **40포인트 고정**이었다(`useSparklineCandles`).
+                  이름이 「최근 흐름」이었던 것은 그 40개가 며칠치인지 화면도 모르기
+                  때문이다 — 커버리지가 성근 종목은 40봉이 8개월에 걸쳐 있다.
+
+                  지금은 지수 모달과 **같은 재료·같은 토글**을 쓴다: 일별 종가를 최대치로
+                  한 번 받아 20일 / 60일 / 전체로 자른다. 기간을 바꿔도 요청은 나가지
+                  않는다. 이력이 얕은 종목은 토글이 줄거나 사라지고, 아예 없으면 예전
+                  스파크라인으로 되돌아가며 제목도 「최근 흐름」으로 돌아간다.
+                */}
+                <QuickLookSection
+                  title={usingCandleFallback ? "최근 흐름" : "일별 종가"}
+                  action={
+                    <DailyCloseRangeToggle steps={steps} active={activeStep} onChange={setBars} />
+                  }
+                >
+                  {dailyRows === null ? (
+                    <div className="h-[96px] animate-pulse rounded bg-muted" />
+                  ) : (
+                    <PriceHistoryChart
+                      points={chartPoints}
+                      times={chartTimes}
+                      currency={stock.currency}
+                      markerPrice={markerPrice ?? undefined}
+                      markerLabel={markerLabel}
+                      title=""
+                    />
+                  )}
+                </QuickLookSection>
 
                 {hasRange && (
                   <QuickLookSection title="52주 레인지">
@@ -228,7 +384,7 @@ export function StockQuickLookModal({
                       high={stock.week52High ?? undefined}
                       currency={stock.currency}
                     />
-                    <p className="mt-1 text-center text-[11px] text-muted-foreground">
+                    <p className="mt-1 text-center text-cell text-muted-foreground">
                       저점 대비{" "}
                       <b className={cn(trendTextClass(stock.changeRateWeek52Low ?? 0))}>
                         {stock.changeRateWeek52Low != null
@@ -264,7 +420,7 @@ export function StockQuickLookModal({
                   }
                 >
                   {score?.score == null ? (
-                    <p className="py-3 text-center text-[11px] text-muted-foreground">
+                    <p className="py-3 text-center text-cell text-muted-foreground">
                       산출된 점수가 없습니다
                     </p>
                   ) : (
@@ -276,7 +432,7 @@ export function StockQuickLookModal({
                             key={axis}
                             className="grid grid-cols-[3.5rem_1fr_1.75rem] items-center gap-2"
                           >
-                            <span className="text-[11px] text-muted-foreground">
+                            <span className="text-cell text-muted-foreground">
                               {SCORE_AXIS_LABELS[axis]}
                             </span>
                             <span className="h-1.5 overflow-hidden rounded-full bg-muted">
@@ -289,24 +445,102 @@ export function StockQuickLookModal({
                                 />
                               )}
                             </span>
-                            <span className="text-right font-mono text-[11px] tabular-nums">
+                            <span className="text-right font-num text-cell tabular-nums">
                               {value == null ? "—" : Math.round(value)}
                             </span>
                           </div>
                         );
                       })}
-                      <p className="pt-1 text-[10px] leading-relaxed text-muted-foreground">
-                        {score.tradeDate} 기준 · 점수는 정보이지 매매 신호가 아닙니다.
-                      </p>
+                      {/*
+                        기준일·면책 문구는 뺐다 (2026-09-05 사용자 요청 7-3). 기준일은
+                        제목 옆 점수 배지가 이미 달고 있고(`StockScoreChip`), 면책은
+                        모든 창에서 같은 말을 반복하며 읽히지 않는 줄이 됐다.
+                      */}
                     </div>
                   )}
                 </QuickLookSection>
+
+                {/*
+                  # AI 핵심 요약 (2026-09-05 사용자 요청 7-2)
+
+                  일별 종가 응답에 **이미 실려 오는** LLM 추출값이다(추가 요청 0). 지금까지
+                  이 문장은 종목 상세의 「AI 분석」 탭에서만 볼 수 있어서, 창으로 종목을
+                  훑는 사람은 점수 다섯 줄만 보고 **왜 그 점수인지**는 알 수 없었다.
+
+                  `llm`인 행이 하나도 없으면 이 블록은 아예 뜨지 않는다 — 「요약 없음」
+                  이라는 빈 상자를 세우면 창이 길어지기만 한다.
+                */}
+                {llmDaily && (
+                  <QuickLookSection
+                    title={
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles className="size-3.5 text-[var(--brand)]" aria-hidden />
+                        AI 핵심 요약
+                        <span className="font-num text-micro font-normal tabular-nums">
+                          {llmDaily.tradeDate} 기준
+                        </span>
+                      </span>
+                    }
+                    /*
+                      간단/상세 (2026-09-14 사용자 요청 2).
+
+                      종목 상세의 AI 카드가 같은 토글을 달고 있다 — 같은 글을 두
+                      화면에서 다른 방식으로 접으면 사용자가 「모달에서는 왜 다
+                      나오지」를 매번 다시 배운다. **기본값은 간단**이고, 종목을
+                      옮길 때마다 되돌아온다(상태를 저장하지 않는다 — 창으로 종목을
+                      훑는 일의 목적이 한눈에 보기다).
+
+                      모달에는 서버가 만든 짧은 요약이 없고 일별 해설 한 덩어리뿐이라,
+                      「간단」은 그 해설의 **앞 두 문장**이다(`aiBrief`). 예전에는 줄
+                      수로 잘랐는데(`line-clamp-3`) 그러면 끊기는 자리를 글자 너비가
+                      정해 낱말 가운데가 잘렸다 — 사용자가 보낸 화면이 그것이다.
+
+                      요약이 원문과 같으면 토글을 아예 안 세운다. 눌러도 아무것도 안
+                      바뀌는 버튼은 「고장났나」로 읽힌다.
+                    */
+                    action={
+                      aiHasMore ? (
+                        <MiniToggle
+                          options={AI_DETAIL_OPTIONS}
+                          value={aiDetail}
+                          onChange={setAiDetail}
+                        />
+                      ) : undefined
+                    }
+                  >
+                    <p className="whitespace-pre-line rounded-lg border px-2.5 py-2 text-read">
+                      {aiHasMore && aiDetail === "brief" ? aiBrief : llmDaily.aiSummary}
+                    </p>
+                  </QuickLookSection>
+                )}
+
+                {dailyRows !== null && dailyRows.length > 0 && (
+                  <QuickLookSection title="최근 일별">
+                    {/*
+                      지수 모달과 **같은 표**다(`DailyCloseMiniTable`). 오늘 점수 하나만
+                      보여 주면 그것이 높은 건지 알 수 없다 — 어제·그제가 옆에 서야
+                      58이라는 숫자가 방향을 갖는다.
+
+                      종목은 지수와 달리 해설 칸이 하나뿐이라(`aiSummary`), 규칙이 쓴
+                      날은 펴지지 않게 `llm`인 행만 눌리게 한다.
+                    */}
+                    <DailyCloseMiniTable
+                      rows={dailyRows}
+                      formatValue={(v) => formatPrice(v, stock.currency)}
+                      noteOf={(r) =>
+                        r.analysisSource === "llm" && r.aiSummary.trim()
+                          ? { text: r.aiSummary }
+                          : null
+                      }
+                    />
+                  </QuickLookSection>
+                )}
 
                 <QuickLookSection title="다가오는 일정">
                   {events === null ? (
                     <div className="h-10 animate-pulse rounded bg-muted" />
                   ) : events.length === 0 ? (
-                    <p className="py-2 text-center text-[11px] text-muted-foreground">
+                    <p className="py-2 text-center text-cell text-muted-foreground">
                       예정된 실적·공시가 없습니다
                     </p>
                   ) : (
@@ -314,20 +548,20 @@ export function StockQuickLookModal({
                       {events.map((ev, i) => (
                         <li
                           key={`${ev.date}-${i}`}
-                          className="flex items-start gap-2 py-1 text-[11px]"
+                          className="flex items-start gap-2 py-1 text-cell"
                         >
                           {/*
                             `slice(5)`로 자르면 안 된다 — 미국 일정은 Finnhub가 `8/26`처럼
                             연도 없이 주므로 잘린 결과가 「6」이 된다(실측). 형식을 읽어서
                             거리로 적는다.
                           */}
-                          <span className="w-[3.2rem] shrink-0 font-mono tabular-nums text-muted-foreground">
+                          <span className="w-[3.2rem] shrink-0 font-num tabular-nums text-muted-foreground">
                             {formatEarningsDateLabel(ev.date)}
                           </span>
                           <span className="min-w-0 flex-1 truncate">{ev.label.trim()}</span>
                           <span
                             className={cn(
-                              "shrink-0 rounded px-1 text-[10px]",
+                              "shrink-0 rounded px-1 text-micro",
                               ev.source === "dart"
                                 ? "bg-[var(--brand-muted)] text-[var(--brand)]"
                                 : "bg-muted text-muted-foreground",
@@ -349,7 +583,7 @@ export function StockQuickLookModal({
                       ))}
                     </div>
                   ) : news.length === 0 ? (
-                    <p className="py-2 text-center text-[11px] text-muted-foreground">
+                    <p className="py-2 text-center text-cell text-muted-foreground">
                       관련 뉴스가 없습니다
                     </p>
                   ) : (
@@ -361,10 +595,10 @@ export function StockQuickLookModal({
                             onClick={() => newsModal.open(a)}
                             className="block w-full rounded-md px-1 py-0.5 text-left hover:bg-accent"
                           >
-                            <p className="line-clamp-2 text-[11px] leading-snug">
+                            <p className="line-clamp-2 text-cell leading-snug">
                               {a.headlineKo || a.headline}
                             </p>
-                            <p className="mt-0.5 text-[10px] text-muted-foreground">
+                            <p className="mt-0.5 text-micro text-muted-foreground">
                               {formatRelativeTime(a.publishedAt)}
                             </p>
                           </button>
@@ -379,7 +613,12 @@ export function StockQuickLookModal({
 
               <div className="flex shrink-0 flex-wrap items-center gap-2 border-t px-4 py-3">
                 <Button asChild size="sm" className="min-w-32 flex-1">
-                  <Link href={analysisSymbolHref(stock.symbol, "ai")} onClick={onClose}>
+                  {/* `leaveModal` — 그냥 닫으면 모달이 걷어내는 히스토리 항목이 이 이동을
+                      밀어내 아무 일도 일어나지 않는다. 까닭은 `lib/modal-history`. */}
+                  <Link
+                    href={analysisSymbolHref(stock.symbol)}
+                    onClick={() => leaveModal(onClose)}
+                  >
                     종목 분석 보기
                     <ArrowRight className="size-3.5" />
                   </Link>
@@ -391,7 +630,7 @@ export function StockQuickLookModal({
             <div className="p-6">
               <DialogHeader>
                 <DialogTitle className="text-sm">종목</DialogTitle>
-                <DialogDescription className="text-xs">{loadingLabel}</DialogDescription>
+                <DialogDescription className="text-cell">{loadingLabel}</DialogDescription>
               </DialogHeader>
             </div>
           )}
@@ -404,6 +643,11 @@ export function StockQuickLookModal({
 }
 
 /** 퀵룩 안의 한 블록. 화면별 섹션도 같은 제목 스타일을 쓰라고 내보낸다. */
+const AI_DETAIL_OPTIONS: { id: "brief" | "full"; label: string }[] = [
+  { id: "brief", label: "간단" },
+  { id: "full", label: "상세" },
+];
+
 export function QuickLookSection({
   title,
   action,
@@ -416,7 +660,7 @@ export function QuickLookSection({
   return (
     <section className="mb-4 last:mb-0">
       <div className="mb-1.5 flex min-w-0 items-center justify-between gap-2">
-        <h3 className="min-w-0 text-[11px] font-semibold text-muted-foreground">{title}</h3>
+        <h3 className="min-w-0 text-cell font-semibold text-muted-foreground">{title}</h3>
         {action}
       </div>
       {children}
@@ -436,8 +680,8 @@ export function QuickLookStat({
 }) {
   return (
     <div className="min-w-0">
-      <p className="text-[10px] text-muted-foreground">{label}</p>
-      <p className={cn("truncate font-mono text-[12px] font-semibold tabular-nums", className)}>
+      <p className="text-micro text-muted-foreground">{label}</p>
+      <p className={cn("truncate font-num text-cell font-semibold tabular-nums", className)}>
         {value}
       </p>
     </div>
@@ -448,8 +692,8 @@ export function QuickLookStat({
 export function QuickLookKV({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex min-w-0 items-center justify-between gap-2 py-0.5">
-      <span className="shrink-0 text-[11px] text-muted-foreground">{label}</span>
-      <span className="min-w-0 truncate text-right font-mono text-[11px] tabular-nums">
+      <span className="shrink-0 text-cell text-muted-foreground">{label}</span>
+      <span className="min-w-0 truncate text-right font-num text-cell tabular-nums">
         {value}
       </span>
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { formatPercent, formatPrice } from "@/lib/format";
+import { formatPercent } from "@/lib/format";
 import {
   DIRECTION_LABELS,
   STATUS_LABELS,
@@ -12,6 +12,7 @@ import {
   type ResearchTargetOdds,
 } from "@/lib/research-types";
 import { cn } from "@/lib/utils";
+import { PriceDisplay } from "@/components/ui/price-display";
 
 /**
  * 만기까지 남은 일수. 판정이 끝난 콜은 null.
@@ -36,7 +37,7 @@ export function toneClass(value: number | undefined): string {
 export function DirectionBadge({ direction }: { direction: ResearchDirection }) {
   const variant = direction === "buy" ? "profit" : direction === "sell" ? "loss" : "default";
   return (
-    <Badge variant={variant} className="px-1.5 py-0 text-[10px]">
+    <Badge variant={variant} className="px-1.5 py-0 text-micro">
       {DIRECTION_LABELS[direction]}
     </Badge>
   );
@@ -46,7 +47,7 @@ export function StatusBadge({ status }: { status: ResearchStatus }) {
   const tone = statusTone(status);
   const variant = tone === "positive" ? "profit" : tone === "negative" ? "loss" : "default";
   return (
-    <Badge variant={variant} className="px-1.5 py-0 text-[10px]">
+    <Badge variant={variant} className="px-1.5 py-0 text-micro">
       {STATUS_LABELS[status]}
     </Badge>
   );
@@ -58,7 +59,7 @@ export function StatusBadge({ status }: { status: ResearchStatus }) {
  */
 export function ContrarianBadge() {
   return (
-    <Badge variant="warning" className="px-1.5 py-0 text-[10px]">
+    <Badge variant="warning" className="px-1.5 py-0 text-micro">
       역발상
     </Badge>
   );
@@ -98,7 +99,7 @@ export function EvidenceCard({
       )}
     >
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-[11px] font-medium text-[var(--text-muted)]">
+        <p className="text-cell font-medium text-[var(--text-muted)]">
           발행 시점 근거 · 서버 측정
         </p>
         {score != null && (
@@ -109,7 +110,7 @@ export function EvidenceCard({
       </div>
 
       {score == null && (
-        <p className="mt-1.5 text-[11px] text-[var(--text-muted)]">
+        <p className="mt-1.5 text-cell text-[var(--text-muted)]">
           이 종목은 종합 점수를 산출할 데이터가 부족합니다.
         </p>
       )}
@@ -118,7 +119,7 @@ export function EvidenceCard({
         <div className="mt-2 space-y-1">
           {present.map((axis) => (
             <div key={axis.label} className="flex items-center gap-2">
-              <span className="w-10 shrink-0 text-[10px] text-[var(--text-muted)]">
+              <span className="w-10 shrink-0 text-micro text-[var(--text-muted)]">
                 {axis.label}
               </span>
               <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--surface-elevated)]">
@@ -127,7 +128,7 @@ export function EvidenceCard({
                   style={{ width: `${Math.max(0, Math.min(100, axis.value ?? 0))}%` }}
                 />
               </span>
-              <span className="w-6 shrink-0 text-right text-[10px] tabular-nums text-[var(--text-secondary)]">
+              <span className="w-6 shrink-0 text-right text-micro tabular-nums text-[var(--text-secondary)]">
                 {Math.round(axis.value ?? 0)}
               </span>
             </div>
@@ -135,7 +136,7 @@ export function EvidenceCard({
         </div>
       )}
 
-      <dl className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+      <dl className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1 text-cell">
         {evidence.peerPct != null && (
           <EvidenceRow label="동종 상위" value={`${evidence.peerPct}%`} />
         )}
@@ -145,17 +146,17 @@ export function EvidenceCard({
         {evidence.per != null && <EvidenceRow label="PER" value={evidence.per.toFixed(1)} />}
         {evidence.pbr != null && <EvidenceRow label="PBR" value={evidence.pbr.toFixed(2)} />}
         {!!evidence.week52High && (
-          <EvidenceRow label="52주 최고" value={formatPrice(evidence.week52High, currency)} />
+          <EvidenceRow label="52주 최고" value={<PriceDisplay value={evidence.week52High} currency={currency} size="inherit" />} />
         )}
         {!!evidence.week52Low && (
-          <EvidenceRow label="52주 최저" value={formatPrice(evidence.week52Low, currency)} />
+          <EvidenceRow label="52주 최저" value={<PriceDisplay value={evidence.week52Low} currency={currency} size="inherit" />} />
         )}
       </dl>
     </div>
   );
 }
 
-function EvidenceRow({ label, value }: { label: string; value: string }) {
+function EvidenceRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-2">
       <dt className="text-[var(--text-muted)]">{label}</dt>
@@ -172,7 +173,7 @@ function EvidenceRow({ label, value }: { label: string; value: string }) {
 export function TargetOddsNote({ odds }: { odds: ResearchTargetOdds }) {
   if (odds.insufficient) {
     return (
-      <p className="text-[11px] text-[var(--text-muted)]">
+      <p className="text-cell text-[var(--text-muted)]">
         이 종목의 저장된 일봉이 {odds.horizonDays}일 구간을 평가하기에 부족합니다 — 도달 확률을
         계산하지 않았습니다.
       </p>
@@ -182,13 +183,13 @@ export function TargetOddsNote({ odds }: { odds: ResearchTargetOdds }) {
   const hard = probability < 10;
   return (
     <div className="space-y-0.5">
-      <p className={cn("text-[11px]", hard ? "text-[var(--loss)]" : "text-[var(--text-secondary)]")}>
+      <p className={cn("text-cell", hard ? "text-[var(--loss)]" : "text-[var(--text-secondary)]")}>
         과거 {odds.windows.toLocaleString()}개 {odds.horizonDays}일 구간 중{" "}
         <strong>{odds.reached.toLocaleString()}회</strong>가 {formatPercent(odds.requiredPct)} 이상
         움직였습니다 ({probability.toFixed(1)}%)
       </p>
       {odds.medianPct !== undefined && (
-        <p className="text-[10px] text-[var(--text-muted)]">
+        <p className="text-micro text-[var(--text-muted)]">
           같은 기간 중앙값 {formatPercent(odds.medianPct)}
           {odds.bestPct !== undefined && ` · 최대 ${formatPercent(odds.bestPct)}`}
           {odds.fromDate && odds.toDate && ` · ${odds.fromDate} ~ ${odds.toDate}`}
@@ -218,7 +219,7 @@ export function HorizonProgress({
   const done = status !== "open";
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between text-[10px] text-[var(--text-muted)]">
+      <div className="flex items-center justify-between text-micro text-[var(--text-muted)]">
         <span>{done ? "판정 완료" : "판정 진행"}</span>
         <span className="tabular-nums">
           D+{elapsed} / {total}

@@ -3,13 +3,16 @@ package service
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/enact/quant-port/be/internal/authctx"
 	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/repository"
+	"github.com/enact/quant-port/be/internal/textutil"
 )
 
 // HoldingTradesService owns manual buy/sell history and everything derived from
@@ -24,6 +27,7 @@ type HoldingTradesService struct {
 	holdings   *UserHoldingsService
 	dailyClose *repository.StockDailyCloseRepo
 	fx         *ExchangeRateService
+	stocks     *repository.StockRepo
 }
 
 func NewHoldingTradesService(
@@ -33,6 +37,11 @@ func NewHoldingTradesService(
 	fx *ExchangeRateService,
 ) *HoldingTradesService {
 	return &HoldingTradesService{repo: repo, holdings: holdings, dailyClose: dailyClose, fx: fx}
+}
+
+// SetCatalog 을 주면 없는 심볼로 매매를 기록하지 않는다.
+func (s *HoldingTradesService) SetCatalog(stocks *repository.StockRepo) {
+	s.stocks = stocks
 }
 
 func (s *HoldingTradesService) ListSymbol(ctx context.Context, symbol string) ([]model.HoldingTrade, error) {
@@ -86,8 +95,13 @@ func (s *HoldingTradesService) Create(ctx context.Context, t model.HoldingTrade)
 	if _, err := time.Parse("2006-01-02", t.TradeDate); err != nil {
 		return model.HoldingPosition{}, fmt.Errorf("%w: trade date must be YYYY-MM-DD", errTradeInvalid)
 	}
-	if len(t.Note) > 200 {
-		t.Note = t.Note[:200]
+	// 메모는 사람이 한국어로 적는 칸이다. 바이트로 자르면 200번째 바이트에 걸린
+	// 글자가 반으로 쪼개져 저장된다(`internal/textutil` 참조). 컬럼도 VARCHAR(200)로
+	// 문자를 세므로 글자 단위가 양쪽 모두에 맞다.
+	t.Note = textutil.TruncateRunes(t.Note, 200)
+
+	if err := ensureSymbolInCatalog(ctx, s.stocks, sym); err != nil {
+		return model.HoldingPosition{}, err
 	}
 
 	dup, err := s.repo.FindDuplicateTrade(ctx, userID, t)
@@ -96,6 +110,42 @@ func (s *HoldingTradesService) Create(ctx context.Context, t model.HoldingTrade)
 	}
 	if dup != nil {
 		return s.syncHolding(ctx, userID, sym)
+	}
+
+	/*
+		보유분을 넘는 매도는 여기서 막는다 (2026-09-06 사용자 결정).
+
+		`DerivePositions`는 같은 입력을 0으로 깎는다 — 조회가 음수 포지션을 만들지
+		않기 위한 안전망이고 그대로 둔다. 다만 **쓰기에서까지 눈감으면 없던 매도가
+		이력에 남는다**: 10주를 갖고 50주를 팔면 내역은 「50주 매도」인데 실현손익은
+		10주분이라, 같은 화면의 두 숫자가 서로를 부정한다.
+
+		**중복 검사 뒤에 둔다.** 같은 매도를 두 번 보내면 첫 번째가 이미 저장돼
+		`existing`에 들어 있으므로, 위에서 걸러 내지 않으면 같은 매도를 두 번 세어
+		멀쩡한 재전송이 「초과」로 거부된다.
+
+		날짜로 되짚는 이유: 매도는 소급 입력될 수 있다. 「지금 보유 수량」이 아니라
+		**그 날짜까지의 보유 수량**과 견줘야 4월에 산 것을 3월에 판 것으로 적는
+		순서 뒤집힘도 함께 걸린다.
+	*/
+	if side == "sell" {
+		existing, err := s.repo.ListSymbol(ctx, userID, sym)
+		if err != nil {
+			return model.HoldingPosition{}, err
+		}
+		candidate := t
+		// 아직 행이 없다 — 같은 날짜 안에서는 가장 나중에 일어난 일로 본다.
+		candidate.ID = math.MaxInt64
+		if bad, held, ok := repository.FindOversell(append(existing, candidate)); ok {
+			return model.HoldingPosition{}, fmt.Errorf(
+				"%w: cannot sell %s of %s on %s — only %s held then",
+				errTradeInvalid,
+				strconv.FormatFloat(bad.Quantity, 'f', -1, 64),
+				sym,
+				bad.TradeDate,
+				strconv.FormatFloat(held, 'f', -1, 64),
+			)
+		}
 	}
 
 	if _, err := s.repo.Insert(ctx, userID, t); err != nil {
@@ -116,7 +166,18 @@ func (s *HoldingTradesService) BulkRegister(ctx context.Context, items []model.B
 	if len(items) == 0 {
 		return nil
 	}
-	affected := map[string]bool{}
+	/*
+		검증 → 원자적 쓰기 → 파생 갱신, 셋을 분명히 나눈다.
+
+		예전에는 항목마다 조회 두 번과 쓰기 한 번을 따로 냈고 트랜잭션이 없었다.
+		중간에서 실패하면 **앞쪽 종목만 등록된 상태로 남았다** — 스크린샷 임포트가
+		한 번에 수십 종목을 넣는 경로라 사용자가 "일부만 들어온" 포트폴리오를 보게
+		됐다(docs/PERFORMANCE_AUDIT.md P1-8).
+
+		검증을 먼저 전부 끝내는 이유: 잘못된 날짜 하나 때문에 트랜잭션을 열었다
+		되돌리는 것보다, 열기 전에 걸러 내는 편이 싸고 오류 메시지도 그대로다.
+	*/
+	trades := make([]model.HoldingTrade, 0, len(items))
 	for _, item := range items {
 		sym := strings.ToUpper(strings.TrimSpace(item.Symbol))
 		if sym == "" || item.Quantity <= 0 || item.Price <= 0 {
@@ -134,7 +195,7 @@ func (s *HoldingTradesService) BulkRegister(ctx context.Context, items []model.B
 			return fmt.Errorf("%w: trade date must be YYYY-MM-DD for %s", errTradeInvalid, sym)
 		}
 
-		trade := model.HoldingTrade{
+		trades = append(trades, model.HoldingTrade{
 			Symbol:    sym,
 			Side:      "buy",
 			Quantity:  item.Quantity,
@@ -142,39 +203,87 @@ func (s *HoldingTradesService) BulkRegister(ctx context.Context, items []model.B
 			Currency:  currency,
 			TradeDate: tradeDate,
 			Note:      bulkRegisterNote,
-		}
-
-		dup, err := s.repo.FindDuplicateTrade(ctx, userID, trade)
-		if err != nil {
-			return err
-		}
-		if dup != nil {
-			affected[sym] = true
-			continue
-		}
-
-		existing, err := s.repo.FindBulkRegisterTrade(ctx, userID, sym)
-		if err != nil {
-			return err
-		}
-		if existing != nil {
-			if err := s.repo.UpdateTrade(ctx, userID, existing.ID, trade); err != nil {
-				return err
-			}
-			affected[sym] = true
-			continue
-		}
-
-		if _, err := s.repo.Insert(ctx, userID, trade); err != nil {
-			return err
-		}
-		affected[sym] = true
+		})
+	}
+	if len(trades) == 0 {
+		return nil
 	}
 
-	for sym := range affected {
-		if _, err := s.syncHolding(ctx, userID, sym); err != nil {
+	affected, err := s.repo.BulkRegisterAll(ctx, userID, trades)
+	if err != nil {
+		return err
+	}
+
+	/*
+		파생 보유 갱신은 **커밋 뒤에** 한다.
+
+		syncHolding은 user_holdings를 다시 쓰고 Redis 캐시를 버린다. 트랜잭션
+		안에서 캐시를 버리면 롤백됐을 때 캐시만 날아가 — 데이터는 그대로인데
+		캐시는 비는, 고치기 어려운 어긋남이 생긴다.
+	*/
+	return s.syncHoldings(ctx, userID, affected)
+}
+
+/*
+syncHoldings — 영향받은 심볼 전체의 파생 보유를 **한 번에** 다시 계산한다.
+
+`syncHolding`을 심볼마다 부르면 왕복이 심볼 수만큼 난다 — 체결 조회 1 + upsert 1.
+80종목 임포트면 약 160회 순차 왕복이고, `[HW]` DB가 1 ECPU라 그동안 한 요청이
+커넥션을 붙들고 있었다(감사가 「항목당 약 1.65 질의가 남는다」로 남긴 부분).
+
+여기서는 세 번으로 끝낸다:
+
+	① ListSymbolsTrades — 전체 체결을 IN 한 방으로
+	② UpsertForUser     — 남은 포지션을 다중행 upsert 한 방으로
+	③ 전량 매도분 삭제  — 있을 때만
+
+호출자는 커밋 뒤에 이걸 부른다. 캐시 무효화가 여기서 일어나므로 트랜잭션 안에서
+부르면 롤백 시 캐시만 날아간다(BulkRegister 주석 참조).
+*/
+func (s *HoldingTradesService) syncHoldings(ctx context.Context, userID int64, symbols []string) error {
+	if len(symbols) == 0 {
+		return nil
+	}
+
+	tradesBySymbol, err := s.repo.ListSymbolsTrades(ctx, userID, symbols)
+	if err != nil {
+		return err
+	}
+	if s.holdings == nil {
+		return nil
+	}
+
+	rows := make([]model.UserHolding, 0, len(tradesBySymbol))
+	var soldOut []string
+	for sym, trades := range tradesBySymbol {
+		pos := repository.DerivePositions(trades)[sym]
+		pos.Symbol = sym
+		if pos.Quantity <= 0 {
+			// 전량 매도. 보유 행은 지우되 체결 로그는 남긴다 — 실현 손익이 거기 있다.
+			soldOut = append(soldOut, sym)
+			continue
+		}
+		row := model.UserHolding{
+			Symbol:       sym,
+			Quantity:     pos.Quantity,
+			CostCurrency: pos.Currency,
+			Source:       "trades",
+		}
+		if avg := pos.AvgPrice; avg > 0 {
+			row.AvgPrice = &avg
+		}
+		rows = append(rows, row)
+	}
+
+	if len(rows) > 0 {
+		if err := s.holdings.UpsertForUser(ctx, userID, rows); err != nil {
 			return err
 		}
+	}
+	for _, sym := range soldOut {
+		// "없음"은 무시한다 — 애초에 보유가 없었을 수 있고, 호출자가 요청한 것은
+		// 체결 로그 변경이지 보유 행의 존재 여부가 아니다.
+		_ = s.holdings.RemoveHoldingRowForUser(ctx, userID, sym)
 	}
 	return nil
 }

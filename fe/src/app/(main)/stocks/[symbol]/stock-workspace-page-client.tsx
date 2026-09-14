@@ -13,7 +13,6 @@ export function StockWorkspacePageClient({ symbol }: StockWorkspacePageClientPro
     <div className="flex min-h-0 flex-1 justify-center overflow-hidden">
       <StockWorkspaceClient
         symbol={symbol}
-        loginNext={`/stocks/${encodeURIComponent(symbol)}`}
         className="page-shell-wide min-h-0"
       />
     </div>

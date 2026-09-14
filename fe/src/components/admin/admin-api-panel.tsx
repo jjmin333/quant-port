@@ -16,6 +16,8 @@ import {
   type ApiQuotaUsage,
 } from "@/lib/admin";
 import { cn } from "@/lib/utils";
+import { toUserMessage } from "@/lib/error-message";
+import { buttonVariants } from "@/components/ui/button";
 
 function formatDateTime(value: string | null | undefined): string {
   if (!value) return "-";
@@ -65,7 +67,7 @@ function UsageRow({
   const ratio = usageRatio(count, limit);
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+      <div className="flex items-center justify-between text-cell text-[var(--text-muted)]">
         <span>{label}</span>
         <span className="tabular-nums text-[var(--text-secondary)]">
           {count.toLocaleString()}
@@ -82,7 +84,7 @@ function UsageRow({
   );
 }
 
-const CATEGORY_ORDER: ApiQuotaCategory[] = ["market", "corp", "news", "translation", ""];
+const CATEGORY_ORDER: ApiQuotaCategory[] = ["market", "corp", "news", "translation", "llm", ""];
 
 export function AdminApiPanel() {
   const router = useRouter();
@@ -102,7 +104,7 @@ export function AdminApiPanel() {
       setQuotas(data);
       setLoadedAt(new Date());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "불러오기 실패");
+      setError(toUserMessage(e, "불러오기 실패"));
     } finally {
       setBusy(false);
     }
@@ -153,16 +155,16 @@ export function AdminApiPanel() {
       <PageHeader title="API 관리" subtitle="외부 API 호출 용도 · 호출량 · 할당량 (관리자 전용)" />
       <PageScrollShell bare>
         <div className="page-shell-wide min-w-0 space-y-4 py-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-cell">
             <Link
               href="/admin"
-              className="rounded-md border border-[var(--border)] px-2.5 py-1.5 text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]")}
             >
               ← 관리자 홈
             </Link>
             <div className="flex items-center gap-2">
               {loadedAt && (
-                <span className="text-[10px] text-[var(--text-muted)]">
+                <span className="text-micro text-[var(--text-muted)]">
                   마지막 새로고침 {formatDateTime(loadedAt.toISOString())}
                 </span>
               )}
@@ -170,7 +172,7 @@ export function AdminApiPanel() {
                 type="button"
                 onClick={() => void load()}
                 disabled={busy}
-                className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)] disabled:opacity-50"
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)] disabled:opacity-50")}
               >
                 <RefreshCw className={cn("h-3.5 w-3.5", busy && "animate-spin")} />
                 새로고침
@@ -200,12 +202,11 @@ export function AdminApiPanel() {
             />
           </section>
 
-          <div className="flex flex-wrap gap-1.5 text-xs">
+          <div className="flex flex-wrap gap-1.5 text-cell">
             <button
               type="button"
               onClick={() => setCategory("all")}
-              className={cn(
-                "rounded-full px-3 py-1 font-medium",
+              className={cn(buttonVariants({ variant: "outline", size: "xs" }), "rounded-full",
                 category === "all"
                   ? "bg-[var(--brand-muted)] text-[var(--brand)]"
                   : "border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]",
@@ -218,8 +219,7 @@ export function AdminApiPanel() {
                 key={c}
                 type="button"
                 onClick={() => setCategory(c)}
-                className={cn(
-                  "rounded-full px-3 py-1 font-medium",
+                className={cn(buttonVariants({ variant: "outline", size: "xs" }), "rounded-full",
                   category === c
                     ? "bg-[var(--brand-muted)] text-[var(--brand)]"
                     : "border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]",
@@ -238,7 +238,7 @@ export function AdminApiPanel() {
             <div className="space-y-5">
               {grouped.map(([cat, items]) => (
                 <section key={cat || "uncategorized"}>
-                  <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                  <h2 className="mb-2 text-section font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                     {API_QUOTA_CATEGORY_LABELS[cat] ?? "기타"}
                   </h2>
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -255,11 +255,11 @@ export function AdminApiPanel() {
                               <p className="text-sm font-semibold text-[var(--text-primary)]">
                                 {q.label || q.provider}
                               </p>
-                              <p className="font-mono text-[10px] text-[var(--text-muted)]">{q.provider}</p>
+                              <p className="font-code text-micro text-[var(--text-muted)]">{q.provider}</p>
                             </div>
                             <span
                               className={cn(
-                                "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
+                                "shrink-0 rounded-full px-2 py-0.5 text-micro font-medium",
                                 blocked
                                   ? "bg-red-500/15 text-red-400"
                                   : "bg-emerald-500/15 text-emerald-400",
@@ -269,12 +269,12 @@ export function AdminApiPanel() {
                             </span>
                           </div>
                           {q.purpose && (
-                            <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">
+                            <p className="mt-2 text-cell leading-relaxed text-[var(--text-secondary)]">
                               {q.purpose}
                             </p>
                           )}
                           {blocked && (
-                            <p className="mt-2 rounded border border-red-500/30 bg-red-500/10 px-2 py-1 text-[10px] text-red-300">
+                            <p className="mt-2 rounded border border-red-500/30 bg-red-500/10 px-2 py-1 text-micro text-red-300">
                               {formatDateTime(q.blockedUntil)} 까지 호출 차단
                             </p>
                           )}
@@ -291,7 +291,7 @@ export function AdminApiPanel() {
                             <UsageRow label="일간" count={q.dayCount} limit={q.limits.dailyQuota} blocked={blocked} />
                             <UsageRow label="월간" count={q.monthCount} limit={q.limits.monthlyQuota} blocked={blocked} />
                           </div>
-                          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-[var(--text-muted)]">
+                          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-micro text-[var(--text-muted)]">
                             {interval && <span>{interval}</span>}
                             <span>마지막 호출: {formatDateTime(q.lastCallAt)}</span>
                           </div>
@@ -322,7 +322,7 @@ function StatCard({
 }) {
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-      <p className="text-xs text-[var(--text-muted)]">{label}</p>
+      <p className="text-cell text-[var(--text-muted)]">{label}</p>
       <p
         className={cn(
           "mt-1 text-2xl font-semibold",
@@ -331,7 +331,7 @@ function StatCard({
       >
         {value}
       </p>
-      {sub && <p className="mt-1 text-xs text-[var(--text-secondary)]">{sub}</p>}
+      {sub && <p className="mt-1 text-cell text-[var(--text-secondary)]">{sub}</p>}
     </div>
   );
 }

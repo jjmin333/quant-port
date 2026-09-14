@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageNav } from "@/components/ui/page-nav";
 import { NewsCard } from "@/components/news/news-card";
+import { useNewsArticleModal } from "@/components/news/news-article-modal-host";
 import { fetchStockNews } from "@/lib/news-api";
 import type { NewsArticle } from "@/lib/news-types";
 import { formatRelativeTime } from "@/lib/format-news";
 import { cn } from "@/lib/utils";
+import { toUserMessage } from "@/lib/error-message";
 
 type StockNewsPanelProps = {
   symbol: string;
@@ -22,21 +24,6 @@ type StockNewsPanelProps = {
   pageSize?: number;
   className?: string;
 };
-
-/** Numbered page window (max 5 numbers) around the current page, à la 1 … 4 5 6 … 12. */
-function pageWindow(current: number, total: number): (number | "ellipsis")[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  const pages = new Set<number>([1, total, current, current - 1, current + 1]);
-  const sorted = Array.from(pages)
-    .filter((p) => p >= 1 && p <= total)
-    .sort((a, b) => a - b);
-  const out: (number | "ellipsis")[] = [];
-  sorted.forEach((p, i) => {
-    if (i > 0 && p - sorted[i - 1] > 1) out.push("ellipsis");
-    out.push(p);
-  });
-  return out;
-}
 
 export function StockNewsPanel({
   symbol,
@@ -67,7 +54,7 @@ export function StockNewsPanel({
       .catch((err) => {
         if (!cancelled) {
           setArticles([]);
-          setError(err instanceof Error ? err.message : "뉴스를 불러오지 못했습니다.");
+          setError(toUserMessage(err, "뉴스를 불러오지 못했습니다."));
         }
       })
       .finally(() => {
@@ -90,27 +77,40 @@ export function StockNewsPanel({
 
   const newsHref = market === "us" ? "/news/us" : "/news/domestic";
 
-  const openArticle = (article: NewsArticle) => {
-    const link = article.originalUrl?.trim() || article.url?.trim();
-    if (link) window.open(link, "_blank", "noopener,noreferrer");
-  };
+  /*
+    # 기사는 **모달로 연다** (2026-09-05 사용자 지적 4)
+
+    여기만 `window.open(link)`으로 새 탭을 띄우고 있었다. 앱의 다른 모든 자리는
+    `useNewsArticleModal`을 쓴다 — 그래서 같은 기사가 홈·지수 모달·종목 퀵룩에서는
+    번역·원문 셸과 「관련 종목·지수」를 달고 열리는데, **종목 화면의 뉴스 탭에서만**
+    앱 밖 언론사 사이트로 튕겨 나갔다. 종목을 보다가 기사를 하나 열면 돌아올 길이
+    브라우저 뒤로가기뿐이었다.
+
+    호출부가 정할 일은 없다 — 어느 셸을 쓸지(해외 헤드라인 / 리더 / iframe)와
+    조회 기록은 그 훅이 안다(`news-article-modal-host.tsx` 머리말).
+
+    `pool`로 지금 받아 둔 목록을 넘기면 모달 안에 「같은 이슈」 묶음이 함께 선다.
+  */
+  const newsModal = useNewsArticleModal({ pool: articles });
+  const openArticle = newsModal.open;
 
   if (variant === "compact") {
     return (
+      <>
       <section className={cn("flex min-h-0 flex-col", className)}>
         <div className="flex shrink-0 items-center justify-between gap-2 px-1 pb-2">
-          <h3 className="text-xs font-medium text-[var(--text-secondary)]">실시간 뉴스</h3>
-          <Link href={newsHref} className="text-[10px] text-[var(--brand)] hover:underline">
+          <h3 className="text-cell font-medium text-[var(--text-secondary)]">실시간 뉴스</h3>
+          <Link href={newsHref} className="text-micro text-[var(--brand)] hover:underline">
             전체 →
           </Link>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {loading ? (
-            <p className="py-4 text-center text-xs text-[var(--text-muted)]">로딩 중…</p>
+            <p className="py-4 text-center text-cell text-[var(--text-muted)]">로딩 중…</p>
           ) : error ? (
-            <p className="py-4 text-center text-xs text-[var(--text-muted)]">{error}</p>
+            <p className="py-4 text-center text-cell text-[var(--text-muted)]">{error}</p>
           ) : articles.length === 0 ? (
-            <p className="py-4 text-center text-xs text-[var(--text-muted)]">관련 뉴스 없음</p>
+            <p className="py-4 text-center text-cell text-[var(--text-muted)]">관련 뉴스 없음</p>
           ) : (
             <ul className="space-y-0.5">
               {articles.map((article) => (
@@ -120,10 +120,13 @@ export function StockNewsPanel({
                     onClick={() => openArticle(article)}
                     className="w-full rounded-lg px-2 py-2 text-left transition-colors hover:bg-[var(--surface-elevated)]/60"
                   >
-                    <p className="line-clamp-2 text-xs font-medium leading-snug text-[var(--text-primary)]">
+                    <p className="line-clamp-2 text-cell font-medium leading-snug text-[var(--text-primary)]">
                       {article.headline}
                     </p>
-                    <p className="mt-1 truncate text-[10px] text-[var(--text-muted)]">
+                    <p
+                      className="mt-1 truncate text-micro text-[var(--text-muted)]"
+                      suppressHydrationWarning
+                    >
                       {formatRelativeTime(article.publishedAt)} · {article.publisher.name}
                     </p>
                   </button>
@@ -133,10 +136,13 @@ export function StockNewsPanel({
           )}
         </div>
       </section>
+      {newsModal.modal}
+      </>
     );
   }
 
   return (
+    <>
     <Card className={className}>
       <CardHeader className="flex flex-row items-center justify-between gap-2">
         <CardTitle>
@@ -147,7 +153,7 @@ export function StockNewsPanel({
             </span>
           )}
         </CardTitle>
-        <Link href={newsHref} className="text-xs text-[var(--brand)] hover:underline">
+        <Link href={newsHref} className="text-cell text-[var(--brand)] hover:underline">
           전체 뉴스 →
         </Link>
       </CardHeader>
@@ -167,59 +173,18 @@ export function StockNewsPanel({
                 <NewsCard key={article.id} article={article} onClick={openArticle} />
               ))}
             </div>
-            {totalPages > 1 && (
-              <nav
-                aria-label="뉴스 페이지"
-                className="mt-3 flex flex-wrap items-center justify-center gap-1 border-t border-[var(--border)] pt-3"
-              >
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={safePage <= 1}
-                  aria-label="이전 페이지"
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)] disabled:pointer-events-none disabled:opacity-30"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-                {pageWindow(safePage, totalPages).map((p, i) =>
-                  p === "ellipsis" ? (
-                    <span
-                      key={`ellipsis-${i}`}
-                      className="flex h-7 w-7 items-center justify-center text-xs text-[var(--text-muted)]"
-                    >
-                      …
-                    </span>
-                  ) : (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setPage(p)}
-                      aria-current={p === safePage ? "page" : undefined}
-                      className={cn(
-                        "flex h-7 min-w-7 items-center justify-center rounded-md px-1.5 text-xs font-medium tabular-nums",
-                        p === safePage
-                          ? "bg-[var(--brand)] text-[var(--brand-foreground)]"
-                          : "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]",
-                      )}
-                    >
-                      {p}
-                    </button>
-                  ),
-                )}
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={safePage >= totalPages}
-                  aria-label="다음 페이지"
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)] disabled:pointer-events-none disabled:opacity-30"
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-              </nav>
-            )}
+            <PageNav
+              page={safePage}
+              totalPages={totalPages}
+              onChange={setPage}
+              label="뉴스 페이지"
+              className="mt-3"
+            />
           </>
         )}
       </div>
     </Card>
+    {newsModal.modal}
+    </>
   );
 }

@@ -47,6 +47,10 @@ func (st *MarketIndexStore) refreshAll(ctx context.Context, warmup bool) {
 		}
 	}
 
+	// 배치가 끝난 뒤에 한 번 훑는다 — 어느 배치가 무엇을 못 채웠는지 여기서만
+	// 한눈에 보이고, 결과가 스냅샷에 실려 캐시되므로 읽기 경로는 DB를 안 탄다.
+	st.fillGapsFromHistory(refreshCtx, out)
+
 	if !indicesSnapshotEqual(before, out) {
 		at := time.Now().UTC()
 		st.mu.Lock()

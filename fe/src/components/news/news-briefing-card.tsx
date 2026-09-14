@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Sparkles, X } from "lucide-react";
 import type { NewsMarketBriefing } from "@/lib/news-briefing-api";
-import { formatBriefingTimestamp } from "@/lib/news-market-briefing";
+import { formatBriefingClock, formatBriefingTimestamp } from "@/lib/news-market-briefing";
 import { formatPercent } from "@/lib/format";
 import { trendTextClass } from "@/lib/trend-colors";
 import { cn } from "@/lib/utils";
@@ -33,32 +33,25 @@ export function NewsBriefingCard({ briefing }: { briefing: NewsMarketBriefing | 
         <div className="grid gap-3 @3xl:grid-cols-[minmax(0,1fr)_320px] @3xl:items-center">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="inline-flex items-center gap-1 text-xs font-bold text-[var(--text-primary)]">
+              <span className="inline-flex items-center gap-1 text-cell font-bold text-[var(--text-primary)]">
                 <Sparkles className="size-3.5 text-[var(--brand)]" />
                 AI 시장 브리핑
               </span>
               {briefing.mood && <MoodBadge mood={briefing.mood} />}
-              <span className="text-[10px] text-[var(--text-muted)]">
+              <span className="text-micro text-[var(--text-muted)]">
                 {formatBriefingTimestamp(briefing.generatedAt)} · {facts.session}
               </span>
-              {briefing.source === "rules" && (
-                <span
-                  className="rounded-md bg-[var(--surface-elevated)] px-1.5 py-px text-[9px] font-semibold text-[var(--text-muted)]"
-                  title="AI 생성에 실패했거나 꺼져 있어, 집계만으로 만든 문장입니다"
-                >
-                  규칙
-                </span>
-              )}
+              <BriefingSourceBadge briefing={briefing} />
             </div>
 
-            <p className="mt-1.5 line-clamp-3 text-[11px] leading-relaxed text-[var(--text-secondary)]">
+            <p className="mt-1.5 line-clamp-3 text-read text-[var(--text-secondary)]">
               {briefing.summary}
             </p>
 
             <button
               type="button"
               onClick={() => setOpen(true)}
-              className="mt-1 text-[11px] font-medium text-[var(--brand)] hover:underline"
+              className="mt-1 text-cell font-medium text-[var(--brand)] hover:underline"
             >
               전체 분석 읽기
             </button>
@@ -114,13 +107,52 @@ function Tile({
 }) {
   return (
     <div className="min-w-0">
-      <div className="truncate text-[10px] text-[var(--text-muted)]">{label}</div>
-      <div className={cn("font-mono text-[15px] font-bold tabular-nums", valueClassName)}>
+      <div className="truncate text-micro text-[var(--text-muted)]">{label}</div>
+      <div className={cn("font-num text-section font-bold tabular-nums", valueClassName)}>
         {value}
       </div>
-      <div className="truncate text-[10px] text-[var(--text-muted)]">{sub}</div>
+      <div className="truncate text-micro text-[var(--text-muted)]">{sub}</div>
     </div>
   );
+}
+
+/**
+ * 문장의 출처 배지 — 홈 브리핑 카드도 같은 것을 쓴다.
+ *
+ * `llm`이면 아무것도 그리지 않는다. 정상이 기본값이고, 매번 「AI」라고 붙여 두면
+ * 예외인 두 경우가 눈에 띄지 않는다.
+ *
+ * 승계(`llm_carry`)에 **시각을 박아 두는 이유**: 카드 위쪽 타임스탬프는 이 슬롯
+ * 것으로 갱신된다(멈춘 화면처럼 보이지 않도록). 그러면 문장만 한 시간 전 것이라는
+ * 사실을 말해 줄 자리가 여기밖에 없다.
+ */
+export function BriefingSourceBadge({ briefing }: { briefing: NewsMarketBriefing }) {
+  if (briefing.source === "llm_carry") {
+    const clock = briefing.carriedFrom ? formatBriefingClock(briefing.carriedFrom) : "";
+    return (
+      <span
+        className="rounded-md bg-[var(--brand)]/12 px-1.5 py-px text-micro font-semibold text-[var(--brand)]"
+        title={
+          clock
+            ? `이번 생성이 실패해 ${clock} 분석을 그대로 씁니다. 숫자와 시각은 지금 것입니다.`
+            : "이번 생성이 실패해 직전 분석을 그대로 씁니다. 숫자와 시각은 지금 것입니다."
+        }
+      >
+        {clock ? `AI ${clock}` : "직전 AI"}
+      </span>
+    );
+  }
+  if (briefing.source === "rules") {
+    return (
+      <span
+        className="rounded-md bg-[var(--surface-elevated)] px-1.5 py-px text-micro font-semibold text-[var(--text-muted)]"
+        title="AI 생성에 실패했거나 꺼져 있어, 집계만으로 만든 문장입니다"
+      >
+        규칙
+      </span>
+    );
+  }
+  return null;
 }
 
 /** 시황 배지 — 홈 브리핑 카드도 같은 것을 쓴다(강세=빨강은 이 앱의 상승색이다). */
@@ -133,7 +165,7 @@ export function MoodBadge({ mood }: { mood: string }) {
         : "bg-[var(--surface-elevated)] text-[var(--text-muted)]";
   const arrow = mood === "강세" ? "▲" : mood === "약세" ? "▼" : "―";
   return (
-    <span className={cn("rounded-full px-2 py-px text-[11px] font-bold", tone)}>
+    <span className={cn("rounded-full px-2 py-px text-cell font-bold", tone)}>
       {arrow} {mood}
     </span>
   );
@@ -162,7 +194,7 @@ function NewsBriefingModal({
           <Sparkles className="size-4 shrink-0 text-[var(--brand)]" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold text-[var(--text-primary)]">AI 시장 브리핑</p>
-            <p className="text-[11px] text-[var(--text-muted)]">
+            <p className="text-cell text-[var(--text-muted)]">
               {formatBriefingTimestamp(briefing.generatedAt)} · {facts.session} · 기사{" "}
               {facts.articleCount.toLocaleString("ko-KR")}건 분석
             </p>
@@ -180,18 +212,18 @@ function NewsBriefingModal({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
           {briefing.moodReason && (
-            <p className="mb-3 rounded-lg bg-[var(--surface-elevated)] px-3 py-2 text-[11px] text-[var(--text-secondary)]">
+            <p className="mb-3 rounded-lg bg-[var(--surface-elevated)] px-3 py-2 text-cell text-[var(--text-secondary)]">
               {briefing.moodReason}
             </p>
           )}
 
-          <p className="whitespace-pre-line text-[13px] leading-relaxed text-[var(--text-primary)]">
+          <p className="whitespace-pre-line text-read text-[var(--text-primary)]">
             {briefing.summary}
           </p>
 
           {(briefing.highlights?.length ?? 0) > 0 && (
             <Section title="핵심 사건">
-              <ul className="list-disc space-y-1 pl-4 text-[12px] leading-relaxed text-[var(--text-secondary)]">
+              <ul className="list-disc space-y-1 pl-4 text-cell leading-relaxed text-[var(--text-secondary)]">
                 {briefing.highlights!.map((item, i) => (
                   <li key={i}>{item}</li>
                 ))}
@@ -201,7 +233,7 @@ function NewsBriefingModal({
 
           {(briefing.watchPoints?.length ?? 0) > 0 && (
             <Section title="지켜볼 것">
-              <ul className="list-disc space-y-1 pl-4 text-[12px] leading-relaxed text-[var(--text-secondary)]">
+              <ul className="list-disc space-y-1 pl-4 text-cell leading-relaxed text-[var(--text-secondary)]">
                 {briefing.watchPoints!.map((item, i) => (
                   <li key={i}>{item}</li>
                 ))}
@@ -215,15 +247,15 @@ function NewsBriefingModal({
                 {facts.indices!.map((idx) => (
                   <li
                     key={idx.id}
-                    className="flex items-center gap-2 border-b border-[var(--border)]/60 py-1 text-[11px] last:border-b-0"
+                    className="flex items-center gap-2 border-b border-[var(--border)]/60 py-1 text-cell last:border-b-0"
                   >
                     <span className="min-w-0 flex-1 truncate">{idx.name}</span>
-                    <span className="shrink-0 font-mono tabular-nums">
+                    <span className="shrink-0 font-num tabular-nums">
                       {idx.value.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}
                     </span>
                     <span
                       className={cn(
-                        "w-16 shrink-0 text-right font-mono tabular-nums",
+                        "w-16 shrink-0 text-right font-num tabular-nums",
                         trendTextClass(idx.changeRate),
                       )}
                     >
@@ -241,13 +273,13 @@ function NewsBriefingModal({
                 {facts.topMentioned!.map((m) => (
                   <li
                     key={m.symbol}
-                    className="flex items-center gap-2 border-b border-[var(--border)]/60 py-1 text-[11px] last:border-b-0"
+                    className="flex items-center gap-2 border-b border-[var(--border)]/60 py-1 text-cell last:border-b-0"
                   >
                     <span className="min-w-0 flex-1 truncate">{m.name}</span>
                     <span className="shrink-0 text-[var(--text-muted)]">{m.mentions}건</span>
                     <span
                       className={cn(
-                        "w-16 shrink-0 text-right font-mono tabular-nums",
+                        "w-16 shrink-0 text-right font-num tabular-nums",
                         m.hasQuote ? trendTextClass(m.changeRate) : "text-[var(--text-muted)]",
                       )}
                     >
@@ -258,12 +290,6 @@ function NewsBriefingModal({
               </ul>
             </Section>
           )}
-
-          <p className="mt-4 text-[10px] leading-relaxed text-[var(--text-muted)]">
-            {briefing.source === "llm"
-              ? "수집된 기사 제목과 지수·시세만으로 생성한 요약입니다. 투자 조언이 아닙니다."
-              : "AI 생성 없이 집계 수치만으로 만든 요약입니다. 투자 조언이 아닙니다."}
-          </p>
         </div>
       </div>
     </div>
@@ -273,7 +299,7 @@ function NewsBriefingModal({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mt-4">
-      <p className="mb-1.5 text-[11px] font-semibold text-[var(--text-muted)]">{title}</p>
+      <p className="mb-1.5 text-cell font-semibold text-[var(--text-muted)]">{title}</p>
       {children}
     </div>
   );

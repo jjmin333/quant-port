@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ArrowRight, Pencil, Pin, Plus, Trash2, X } from "lucide-react";
-import { PageHeader } from "@/components/layout/header";
 import { PageColumns } from "@/components/layout/page-columns";
-import { PageScrollShell } from "@/components/layout/page-content-shell";
+import { PageActions, PageScrollShell } from "@/components/layout/page-content-shell";
 import { JournalNoteForm } from "@/components/journal/journal-note-form";
 import { JournalNoteModal } from "@/components/journal/journal-note-modal";
 import {
@@ -22,9 +21,11 @@ import {
   SampleModeButton,
   SampleRibbon,
   SampleWrap,
+  useAutoSample,
   useSampleMode,
 } from "@/components/common/sample-mode";
 import { useAuth } from "@/components/providers/auth-provider";
+import { useConfirm } from "@/components/providers/confirm-provider";
 import { useJournalNotes, type JournalSort } from "@/hooks/use-journal-notes";
 import { analysisSymbolHref } from "@/lib/analysis-tabs";
 import { formatDateTimeKST, formatDateKST } from "@/lib/format";
@@ -32,6 +33,7 @@ import { noteReturnPct, type JournalNote, type JournalNoteInput } from "@/lib/jo
 import { MENU_COPY } from "@/lib/menu-copy";
 import type { QuoteSummary } from "@/lib/quotes-types";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 
 const COPY = MENU_COPY.journal;
 
@@ -53,6 +55,14 @@ const SORT_OPTIONS: { id: JournalSort; label: string }[] = [
  */
 export function JournalClient() {
   const { session } = useAuth();
+  const confirm = useConfirm();
+  const confirmDelete = () =>
+    confirm({
+      title: "이 메모를 삭제할까요?",
+      description: "메모와 함께 저장된 작성 시점 가격도 사라집니다.",
+      confirmLabel: "삭제",
+      tone: "danger",
+    });
   const { active: sample, setActive: setSample } = useSampleMode();
   const {
     notes,
@@ -82,7 +92,28 @@ export function JournalClient() {
   /** 좁은 화면에서만 쓰는 모달. 넓은 화면은 오른쪽 칸이 이미 상세다. */
   const [modalId, setModalId] = useState<number | null>(null);
 
-  const isEmpty = !sample && !loading && !error && totalCount === 0;
+  /*
+   * 0건 안내를 접고 **작성 화면으로 넘어갔는지**.
+   *
+   * 안내 카드의 「첫 메모 쓰기」는 `setSelectedId("new")`만 했는데, `selectedId`는
+   * 애초에 `"new"`가 기본값이고 편집기는 `isEmpty`의 **반대쪽 분기**에 있다. 즉
+   * 그 버튼은 아무 것도 하지 않았다 — 정확히 그 버튼이 필요한 사람(메모가 0건인
+   * 사람)에게 눌러도 화면이 그대로였다(실측). 안내를 접는 플래그를 따로 둬서
+   * 눌렀을 때 실제로 편집기가 있는 평소 레이아웃으로 넘어가게 한다.
+   */
+  const [composing, setComposing] = useState(false);
+  /*
+    「내 것이 아직 없다」 — **`sample`을 빼고** 잰다 (2026-09-14 사용자 요청 4).
+    이 값이 `useAutoSample`로 가서 예시를 켠다. `!sample`이 섞이면 켜짐 → 0건 아님 →
+    꺼짐이 무한히 반복된다.
+
+    `composing`도 빼 둔다. 그건 「쓸 것이 없다」가 아니라 「지금 쓰고 있다」이고,
+    쓰는 중에 예시가 꺼지는 것은 맞지만(아래 `isEmpty`가 아니라 아예 예시를 끄는
+    것은 사용자 몫이다) 그것 때문에 예시가 켜졌다 꺼졌다 하면 안 된다.
+  */
+  const hasNothingYet = !loading && !error && totalCount === 0;
+  useAutoSample(hasNothingYet);
+  const isEmpty = !sample && hasNothingYet && !composing;
 
   // 목록이 필터로 줄어 고른 메모가 사라지면 첫 행으로 내린다. 선택이 허공을
   // 가리키면 오른쪽 칸이 아무 이유 없이 비어 보인다.
@@ -102,20 +133,36 @@ export function JournalClient() {
 
   return (
     <>
-      <PageHeader
-        title={COPY.title}
-        subtitle={COPY.subtitle}
-        actions={
-          <SampleModeButton active={sample} onToggle={setSample} emphasize={isEmpty || !session} />
-        }
-      />
       <PageScrollShell>
+        {/*
+          0건 안내 카드가 이미 같은 버튼을 들고 있다 (§R-2). 두 곳에 다 두면 한 화면에
+          「예시로 둘러보기」가 둘이 되어 무엇이 다른지 묻게 만든다 — 실측으로 빈
+          보유 화면의 보이는 버튼이 그 문구 ×2 였다.
+        */}
+        <PageActions>
+          {isEmpty ? null : (
+            <SampleModeButton active={sample} onToggle={setSample} emphasize={!session} />
+          )}
+        </PageActions>
         {sample && (
           <div className="mb-3">
             <SampleRibbon
               loggedIn={Boolean(session)}
               loginHref="/login?next=%2Fjournal"
               onDismiss={() => setSample(false)}
+              /*
+                안내 카드가 들고 있던 첫 동작 — 카드가 예시 뒤로 물러났으니 여기 선다.
+                예시를 함께 끈다: 메모를 쓰러 가는 사람에게 남의 메모가 옆에 서 있으면
+                자기 것과 섞여 보인다.
+              */
+              action={{
+                label: "첫 메모 쓰기",
+                onClick: () => {
+                  setSample(false);
+                  setSelectedId("new");
+                  setComposing(true);
+                },
+              }}
             />
           </div>
         )}
@@ -126,7 +173,13 @@ export function JournalClient() {
             headline={COPY.emptyHeadline}
             description={COPY.emptyDescription}
             steps={COPY.steps}
-            primary={{ label: "첫 메모 쓰기", onClick: () => setSelectedId("new") }}
+            primary={{
+              label: "첫 메모 쓰기",
+              onClick: () => {
+                setSelectedId("new");
+                setComposing(true);
+              },
+            }}
             secondary={
               <SampleModeButton
                 active={false}
@@ -160,7 +213,7 @@ export function JournalClient() {
                 {/* ── 왼쪽: 목록 ─────────────────────────────────────────── */}
                 <Card className="min-w-0 p-0">
                   <CardHeader className="mb-0 gap-2 border-b border-[var(--border)] px-3 py-2.5">
-                    <CardTitle className="text-xs">메모 목록</CardTitle>
+                    <CardTitle className="text-cell">메모 목록</CardTitle>
                     <div className="flex items-center gap-1.5">
                       {!loading && (
                         <Badge variant="info">
@@ -175,7 +228,7 @@ export function JournalClient() {
                             type="button"
                             onClick={() => setSort(opt.id)}
                             className={cn(
-                              "rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors",
+                              "rounded-md px-2 py-0.5 text-cell font-medium transition-colors",
                               sort === opt.id
                                 ? "bg-[var(--surface)] text-[var(--text-primary)] shadow-sm"
                                 : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]",
@@ -195,7 +248,7 @@ export function JournalClient() {
                         type="button"
                         onClick={() => setSelectedId("new")}
                         className={cn(
-                          "flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed px-3 py-2 text-xs font-medium transition-colors",
+                          "flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed px-3 py-2 text-cell font-medium transition-colors",
                           selectedId === "new"
                             ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--brand)]"
                             : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--brand)] hover:text-[var(--text-secondary)]",
@@ -207,7 +260,7 @@ export function JournalClient() {
                   )}
 
                   {activeFilterLabel && (
-                    <div className="flex items-center gap-1.5 border-b border-[var(--border)] px-3 py-1.5 text-[11px] text-[var(--text-muted)]">
+                    <div className="flex items-center gap-1.5 border-b border-[var(--border)] px-3 py-1.5 text-cell text-[var(--text-muted)]">
                       <span className="truncate">「{activeFilterLabel}」로 필터 중</span>
                       <button
                         type="button"
@@ -261,7 +314,7 @@ export function JournalClient() {
                           <button
                             type="button"
                             onClick={() => setSelectedId(notes[0].id)}
-                            className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                            className="text-cell text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
                           >
                             취소
                           </button>
@@ -287,8 +340,8 @@ export function JournalClient() {
                         await updateNote(readerNote.id, input);
                       }}
                       onTogglePin={() => togglePin(readerNote)}
-                      onDelete={() => {
-                        if (window.confirm("이 메모를 삭제할까요?")) {
+                      onDelete={async () => {
+                        if (await confirmDelete()) {
                           removeNote(readerNote.id);
                           setSelectedId("new");
                         }
@@ -318,8 +371,8 @@ export function JournalClient() {
           onTogglePin={() => {
             if (modalNote) togglePin(modalNote);
           }}
-          onDelete={() => {
-            if (modalNote && window.confirm("이 메모를 삭제할까요?")) {
+          onDelete={async () => {
+            if (modalNote && (await confirmDelete())) {
               removeNote(modalNote.id);
               setModalId(null);
             }
@@ -367,13 +420,13 @@ function NoteListRow({
           {note.pinned && (
             <Pin className="size-3 shrink-0 fill-current text-[var(--brand)]" aria-label="고정됨" />
           )}
-          <span className="min-w-0 flex-1 truncate text-xs font-medium text-[var(--text-primary)]">
+          <span className="min-w-0 flex-1 truncate text-cell font-medium text-[var(--text-primary)]">
             {note.title || "제목 없음"}
           </span>
           {pct !== null && (
             <span
               className={cn(
-                "shrink-0 font-mono text-[10px] font-semibold tabular-nums",
+                "shrink-0 font-num text-micro font-semibold tabular-nums",
                 pct > 0
                   ? "text-[var(--profit)]"
                   : pct < 0
@@ -386,13 +439,13 @@ function NoteListRow({
             </span>
           )}
         </div>
-        <p className="mt-0.5 line-clamp-1 text-[11px] text-[var(--text-muted)]">{note.body}</p>
+        <p className="mt-0.5 line-clamp-1 text-cell text-[var(--text-muted)]">{note.body}</p>
         <div className="mt-1 flex min-w-0 items-center gap-1.5">
-          <span className="shrink-0 text-[10px] text-[var(--text-muted)]">
+          <span className="shrink-0 text-micro text-[var(--text-muted)]">
             {note.symbolName || note.symbol || "종목 미지정"}
           </span>
-          <span className="shrink-0 text-[10px] text-[var(--text-muted)]">·</span>
-          <span className="shrink-0 text-[10px] text-[var(--text-muted)]">
+          <span className="shrink-0 text-micro text-[var(--text-muted)]">·</span>
+          <span className="shrink-0 text-micro text-[var(--text-muted)]">
             {formatDateKST(note.updatedAt)}
           </span>
           <JournalTagChips tags={note.tags?.slice(0, 2)} className="ml-auto" />
@@ -463,7 +516,7 @@ function NoteReader({
             </h2>
             <JournalSymbolChip note={note} />
           </div>
-          <time className="mt-0.5 block text-[11px] text-[var(--text-muted)]">
+          <time className="mt-0.5 block text-cell text-[var(--text-muted)]">
             {note.updatedAt !== note.createdAt ? "수정됨 " : "작성 "}
             {formatDateTimeKST(note.updatedAt)}
           </time>
@@ -507,7 +560,7 @@ function NoteReader({
       <div className="space-y-3 pt-3">
         <JournalPriceStrip note={note} quote={quote} />
         <JournalTagChips tags={note.tags} onSelect={onTagSelect} />
-        <p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--text-secondary)]">
+        <p className="whitespace-pre-wrap text-read text-[var(--text-secondary)]">
           {note.body}
         </p>
       </div>
@@ -515,8 +568,8 @@ function NoteReader({
       {note.symbol && (
         <div className="mt-auto flex items-center gap-2 border-t border-[var(--border)] pt-3">
           <Link
-            href={analysisSymbolHref(note.symbol, "ai")}
-            className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:border-[var(--brand)]"
+            href={analysisSymbolHref(note.symbol)}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--brand)]")}
           >
             종목 분석 보기
             <ArrowRight className="size-3" />

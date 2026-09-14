@@ -1,5 +1,6 @@
 import { apiRequest } from "@/lib/api-client";
 import type { JournalNote } from "@/lib/journal-types";
+import type { WatchlistMetrics } from "@/lib/quotes-types";
 import type { Stamp, StampSummary } from "@/lib/stamp-types";
 
 /**
@@ -28,6 +29,12 @@ export type SampleWatchlistRow = {
   grade?: string;
   week52High?: number;
   week52Low?: number;
+  /**
+   * 전일·전주·전월·52주 — 로그인한 목록이 받는 것과 **같은 블록**을 서버가 그대로 준다.
+   * 예전에는 이 필드가 없어서 아래 조립 함수가 `changeRate` 하나로 흉내를 냈고, 계산할
+   * 수 없는 전주·전월은 모든 행에서 「—」로 남았다.
+   */
+  watchlistMetrics?: WatchlistMetrics;
 };
 
 export type SampleHoldingRow = {
@@ -106,9 +113,18 @@ export function sampleWatchlistParts(rows: SampleWatchlistRow[]) {
   }));
 
   const quotes = rows.map((r) => {
-    // 전일 종가와 변화폭은 등락률에서 되돌려 만든다. 행은 셋을 함께 그리므로
-    // (`change`가 없으면 현재가 칸이 NaN이 된다) 어느 하나만 채우면 안 된다.
-    const prevClose = r.changeRate === -100 ? r.price : r.price / (1 + r.changeRate / 100);
+    /*
+     * 전일 종가는 서버 메트릭이 우선이다. 없을 때만 등락률에서 되돌려 만든다 —
+     * 행은 현재가·변화폭·등락률 셋을 함께 그려서(`change`가 없으면 현재가 칸이
+     * NaN이 된다) 어느 하나만 비워둘 수 없기 때문이다.
+     */
+    const metrics = r.watchlistMetrics;
+    const prevClose =
+      metrics?.prevClose && metrics.prevClose > 0
+        ? metrics.prevClose
+        : r.changeRate === -100
+          ? r.price
+          : r.price / (1 + r.changeRate / 100);
     return {
       symbol: r.symbol,
       name: r.name,
@@ -118,7 +134,9 @@ export function sampleWatchlistParts(rows: SampleWatchlistRow[]) {
       change: r.price - prevClose,
       currency: r.currency === "USD" ? ("USD" as const) : ("KRW" as const),
       market: r.market,
-      watchlistMetrics: {
+      // 서버가 준 블록을 그대로 넘긴다. 여기서 다시 만들면 로그인 화면과 예시 화면이
+      // 서로 다른 계산을 쓰게 되고, 그 차이는 조용히 벌어진다.
+      watchlistMetrics: metrics ?? {
         addedAt: r.createdAt,
         changeRatePrevClose: r.changeRate,
         prevClose,

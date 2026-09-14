@@ -128,8 +128,8 @@ func CollapseCalendarEvents(events []EarningsEvent) []EarningsEvent {
 	)
 }
 
-// DropStaleOverseasScheduled hides US rows that are still 「예정」 after the
-// one-day grace that timezone lag needs.
+// DropStaleOverseasScheduled hides US rows that are still 「예정」 after their
+// KST calendar day has passed.
 //
 // # 왜 숨기는가 (2026-08-21)
 //
@@ -142,14 +142,12 @@ func CollapseCalendarEvents(events []EarningsEvent) []EarningsEvent {
 // 절반이 빈 행이라 가시성을 해친다. 그래서 **조회에서 뺀다**. DB는 그대로 둔다
 // — 적재가 나중에 실적치를 채우면 확정으로 다시 나온다.
 //
-// # 어제까지는 남긴다
+// # KST 표시일 기준 (2026-08-27)
 //
-// Finnhub `date`는 미국 세션 달력일이지 KST가 아니다. 장후(amc) 8/20 US는
-// KST 8/21 아침이고, 8/21 오전에 8/20 「예정」이 남는 것은 미국이 아직 안
-// 냈을 수 있어서다. 그 시차를 23:55에 날짜를 +1 하는 식으로 고치지 않기로
-// 했다(AMC 미발표와 소형주 공백이 같은 신호가 되고, 반응 열이 미국 종가와
-// 어긋난다). 대신 바닥을 **KST 어제**로 둔다. 오늘·어제 예정은 보이고, 그
-// 이전만 빠진다.
+// DB `event_date`는 미국 거래일 그대로지만, 여기서는 OverseasDisplayDate로
+// amc/dmh를 +1한 **한국 캘린더일**과 KST 오늘을 비교한다. 오늘 칸의 장후 발표는
+// 오늘까지 「예정」으로 남긴다. Finnhub이 숫자를 안 준 채로 어제 칸에만 남는
+// 잔류는 display date < KST today 로 걸러진다.
 //
 // 국내·확정·추정은 건드리지 않는다. 국내는 예정이 없고, 확정은 이미 발표된
 // 행이며, 추정은 작년 동기로 우리가 만든 국내 전용 상태다.
@@ -168,22 +166,23 @@ func DropStaleOverseasScheduled(events []EarningsEvent, now time.Time) []Earning
 	return out
 }
 
-// overseasScheduledKeepFrom is the inclusive floor date (KST yesterday).
-// Rows with Date >= this stay visible even if still scheduled.
+// overseasScheduledKeepFrom is KST today. Scheduled rows with display date >=
+// today stay visible; older scheduled rows drop.
 func overseasScheduledKeepFrom(now time.Time) string {
 	kst := now.In(KST)
 	today := time.Date(kst.Year(), kst.Month(), kst.Day(), 0, 0, 0, 0, KST)
-	return today.AddDate(0, 0, -1).Format("2006-01-02")
+	return today.Format("2006-01-02")
 }
 
 func staleOverseasScheduled(ev EarningsEvent, floor string) bool {
 	if ev.Market != string(AssetUS) || ev.DateStatus != EarningsDateScheduled {
 		return false
 	}
-	if ev.Date == "" {
+	display := OverseasDisplayDate(ev.Date, ev.Session)
+	if display == "" {
 		return false
 	}
-	return ev.Date < floor
+	return display < floor
 }
 
 // CollapseOverseasFiscalYearDup keeps one US row per (symbol, date, fiscalPeriod).

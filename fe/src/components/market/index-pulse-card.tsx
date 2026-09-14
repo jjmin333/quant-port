@@ -67,17 +67,17 @@ export function IndexPulseCard({
                 <button
                   type="button"
                   onClick={() => quickLook.open(idx)}
-                  className="flex h-[30px] w-full min-w-0 items-center gap-2 rounded-md px-1 text-xs hover:bg-accent"
+                  className="flex h-[30px] w-full min-w-0 items-center gap-2 rounded-md px-1 text-cell hover:bg-accent"
                 >
                   <span className="min-w-0 flex-1 truncate text-left">{idx.name}</span>
-                  <span className="shrink-0 font-mono text-xs tabular-nums">
+                  <span className="shrink-0 font-num text-cell tabular-nums">
                     {idx.value
                       ? idx.value.toLocaleString("ko-KR", { maximumFractionDigits: 2 })
                       : "—"}
                   </span>
                   <span
                     className={cn(
-                      "w-14 shrink-0 text-right font-mono text-xs tabular-nums",
+                      "w-14 shrink-0 text-right font-num text-cell tabular-nums",
                       trendTextClass(idx.changeRate),
                     )}
                   >

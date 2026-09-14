@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { OfflineBanner } from "@/components/common/offline-banner";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { HeaderSearchProvider } from "@/components/providers/header-search-provider";
+import { QuickLookProvider } from "@/components/providers/quick-look-provider";
 import { ShellModeProvider, useShellMode } from "@/components/providers/shell-mode-provider";
 import { cn } from "@/lib/utils";
 
@@ -36,10 +38,15 @@ function AppShellFrame({ children }: { children: React.ReactNode }) {
      * **새로고침하면 접어둔 사이드바가 다시 펼쳐졌다**.
      * 좁은 화면에서는 사이드바가 오버레이라 "열림"을 복원하면 앱을 가린 채로 뜬다 —
      * 그래서 넓은 화면에서만 저장값을 적용한다.
+     *
+     * **처음 오는 사람에게는 접힌 채로 준다.** 펼친 사이드바는 220px, 접으면 64px라
+     * 본문이 156px을 더 쓴다 — 홈의 카드 넉 줄이 한 칸씩 넓어지는 폭이다. 접힌
+     * 상태에서도 아이콘 밑에 이름이 붙어(sidebar.tsx의 rail) 무슨 메뉴인지 읽히므로,
+     * 예전처럼 "접으면 아이콘만 남아 못 찾는" 대가를 치르지 않는다.
      */
     const stored = readStoredSidebarOpen();
     const syncSidebar = (matches: boolean) =>
-      setSidebarOpen(matches ? (stored ?? true) : false);
+      setSidebarOpen(matches ? (stored ?? false) : false);
     syncSidebar(media.matches);
 
     const onChange = (event: MediaQueryListEvent) => syncSidebar(event.matches);
@@ -62,6 +69,8 @@ function AppShellFrame({ children }: { children: React.ReactNode }) {
   return (
     <HeaderSearchProvider>
       <div className="flex h-[100dvh] flex-col overflow-hidden bg-[var(--background)]">
+        {/* 끊긴 동안 화면마다 다른 말을 하지 않도록 앱 전체가 한 번만 알린다. */}
+        <OfflineBanner />
         <div className="relative z-50 shrink-0">
           <Header
             sidebarOpen={sidebarOpen}
@@ -93,10 +102,24 @@ function AppShellFrame({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  /** 서버가 요청 UA로 찍은 「좁은 화면일 것」 — `(main)/layout.tsx` 참조. */
+  initialMobile = false,
+}: {
+  children: React.ReactNode;
+  initialMobile?: boolean;
+}) {
   return (
-    <ShellModeProvider>
-      <AppShellFrame>{children}</AppShellFrame>
+    <ShellModeProvider initialMobile={initialMobile}>
+      {/*
+        종목·지수 퀵룩은 **껍데기 전체가 하나를 공유한다**. 목록 → 카드 → 기사 모달까지
+        여러 겹 안쪽에 있는 칩이 창을 열 수 있어야 하고, 그 창은 한 번에 하나뿐이다
+        (`quick-look-provider.tsx` 머리말).
+      */}
+      <QuickLookProvider>
+        <AppShellFrame>{children}</AppShellFrame>
+      </QuickLookProvider>
     </ShellModeProvider>
   );
 }

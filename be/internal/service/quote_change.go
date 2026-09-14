@@ -8,7 +8,14 @@ import (
 	"github.com/enact/quant-port/be/internal/model"
 )
 
-// quoteChangeUsesRegularClose reports whether displayed change should be vs today's regular close.
+/*
+quoteChangeUsesRegularClose reports whether today's regular close is already
+fixed — the sessions where `regularClose`가 표시할 값으로 의미가 있다.
+
+**등락률의 기준으로는 더 이상 쓰지 않는다**(computeQuoteChange 주석 참조).
+남아 있는 용도는 `resolveRegularClose`가 「지금 정규장 종가를 구할 수 있는
+세션인가」를 판단하는 것뿐이다.
+*/
 func quoteChangeUsesRegularClose(session string) bool {
 	switch session {
 	case "after", "closed":
@@ -18,34 +25,75 @@ func quoteChangeUsesRegularClose(session string) bool {
 	}
 }
 
-func computeQuoteChange(currentPrice, prevClose, regularClose float64, session string) (change, changeRate float64) {
-	baseline := prevClose
-	if quoteChangeUsesRegularClose(session) && regularClose > 0 {
-		baseline = regularClose
-	}
-	if baseline <= 0 || currentPrice <= 0 {
+/*
+computeQuoteChange — 등락률의 기준은 **언제나 직전 거래일 종가**다.
+
+예전에는 마감·시간외 세션에서 「당일 정규장 종가」를 기준으로 삼았다. 그런데
+현재가는 시간외까지 반영한 최종가라, 그 둘을 빼면 나오는 것은 **하루 등락률이
+아니라 시간외 등락률**이다. 실측(2026-09-01 마감 후 삼성전자): 최종가 255,000 ·
+당일 정규장 종가 260,500 → **−2.11%**로 표시됐지만, 그날 실제 움직임은
+전일 258,000 대비 **−1.16%**였다.
+
+게다가 기준이 화면마다 갈렸다 — 목록은 랭킹 기준가(260,000), 상세는 정규장
+종가(260,500). 같은 종목의 같은 날 등락률이 두 값으로 보였다.
+
+「시간외까지 마감된 값이 그날의 진짜 종가」라는 결정에 따라, 현재가는 최종가로
+두고 기준만 전일 종가로 통일한다. 그러면 장중·시간외·마감이 **같은 기준을
+공유**해서 마감 순간에 값이 튀지 않는다.
+
+`regularClose`는 계산에서 빠지되 응답 필드로는 남는다 — 상세 화면이 「정규장
+종가」를 따로 보여 준다.
+*/
+func computeQuoteChange(currentPrice, prevClose float64) (change, changeRate float64) {
+	if prevClose <= 0 || currentPrice <= 0 {
 		return 0, 0
 	}
-	change = currentPrice - baseline
-	changeRate = (change / baseline) * 100
+	change = currentPrice - prevClose
+	changeRate = (change / prevClose) * 100
 	return change, changeRate
 }
 
+/*
+quoteAssetType — 이 종목이 국내인가 해외인가 ETF인가.
+
+**캐시가 붙어 있다.** 이 함수는 목록 경로의 거의 모든 갈래에 있어서, 캐시가 없을
+때는 100줄짜리 목록 하나가 `stocks`를 수백 번 읽었다 — 근거와 실측은
+`quotes_catalog_cache.go` 헤더에 있다.
+*/
 func (s *QuotesService) quoteAssetType(ctx context.Context, symbol string) model.QuoteAssetType {
+	sym := strings.ToUpper(strings.TrimSpace(symbol))
+	if cached, ok := s.assetTypes.get(sym); ok {
+		return cached
+	}
+	resolved, fromCatalog := s.quoteAssetTypeUncached(ctx, symbol)
+	// 카탈로그에 행이 없어 기본값으로 떨어진 경우는 캐시하지 않는다 — 아직 안 채워진
+	// 종목이 TTL 동안 「국내」로 굳으면 해외 종목의 세션 판정이 그만큼 틀어진다.
+	if fromCatalog {
+		s.assetTypes.put(sym, resolved)
+	}
+	return resolved
+}
+
+// quoteAssetTypeUncached는 값과 함께 **카탈로그에서 나온 값인지**를 돌려준다.
+// 두 번째 값이 false면 아래 기본값(국내)으로 떨어진 것이고, 캐시하면 안 된다.
+func (s *QuotesService) quoteAssetTypeUncached(ctx context.Context, symbol string) (model.QuoteAssetType, bool) {
 	if s.stocks != nil {
 		if stock, err := s.stocks.GetBySymbol(ctx, symbol); err == nil && stock != nil {
 			if at := assetTypeFromMarket(stock.Market, stock.SecurityType); at == model.AssetDomestic {
-				return model.AssetDomestic
+				return model.AssetDomestic, true
 			}
 			if stock.Currency == model.CurrencyKRW || isDomesticKRSymbol(stock.Symbol) {
-				return model.AssetDomestic
+				return model.AssetDomestic, true
 			}
 			if stock.AssetType != "" {
-				return stock.AssetType
+				return stock.AssetType, true
 			}
+			// 행은 있는데 자산 구분이 비어 있다. 값은 기본값이지만 조회를 되풀이할
+			// 이유는 없으므로 캐시한다.
+			return model.AssetDomestic, true
 		}
 	}
-	return model.AssetDomestic
+	return model.AssetDomestic, false
 }
 
 func (s *QuotesService) marketSessionFor(ctx context.Context, symbol string) string {
@@ -78,7 +126,18 @@ func (s *QuotesService) resolveRegularClose(ctx context.Context, symbol string, 
 			return rc
 		}
 	}
-	if s.toss != nil && s.toss.Enabled() {
+	// 목록에서는 업스트림까지 내려가지 않는다.
+	//
+	// fetchRegularSessionClose는 종목당 `/candles` 호출이고, 마감 세션에서는
+	// **모든 국내 종목이 이 분기를 탄다**(quoteChangeUsesRegularClose가
+	// "closed"에 true다). 실측(2026-09-01 마감 후): 시세 배치 10종목이
+	// 캔들 한도 경고를 6번 냈고, 그 원인이 여기였다 — 캐시·DB에 정규장 종가가
+	// 없는 종목마다 한 번씩이다.
+	//
+	// 목록에서 0을 돌려주면 `computeQuoteChange`가 전일 종가를 기준으로
+	// 되돌아간다. 마감 후 목록에서 그건 「오늘 얼마나 움직였나」라 오히려
+	// 목록이 기대하는 값이고, 상세 화면은 목록 모드가 아니므로 그대로다.
+	if !listMode(ctx) && s.toss != nil && s.toss.Enabled() {
 		if rc, ok := fetchRegularSessionClose(ctx, s.toss, sym, string(assetType), cals, now); ok {
 			return rc
 		}
@@ -123,14 +182,31 @@ func (s *QuotesService) applyQuoteChange(
 	prevClose float64,
 	detail *model.QuoteDetail,
 ) {
-	session := s.marketSessionFor(ctx, symbol)
 	assetType := s.quoteAssetType(ctx, symbol)
-	regularClose := s.resolveRegularClose(ctx, symbol, assetType, session)
-	if regularClose <= 0 && detail.RegularClose > 0 {
-		regularClose = detail.RegularClose
+	/*
+		세션과 그 경계 시각을 **한 번에** 받는다.
+
+		예전에는 `marketSessionFor`가 세션만 답했고, 화면은 마감 중에도 「응답을 받은
+		시각」을 찍었다(「오전 12:33:08 기준」). 지금은 닫혀 있으면 **언제 닫혔는지**와
+		**언제 다시 여는지**가 같이 나가고, 화면은 그 둘로 시각을 적고 폴링을 멈춘다
+		(`market_session_clock.go`).
+	*/
+	clock := s.MarketClockFor(ctx, string(assetType))
+	session := clock.Session
+	// 정규장 종가는 **표시용**이다(상세 화면의 「정규장 종가」 줄). 등락률 계산에는
+	// 쓰이지 않으므로, 그 줄을 그리지 않는 목록에서는 구하지 않는다 — 이 함수가
+	// 종목마다 1분봉 480행을 읽던 경로다.
+	regularClose := 0.0
+	if !listMode(ctx) {
+		regularClose = s.resolveRegularClose(ctx, symbol, assetType, session)
+		if regularClose <= 0 && detail.RegularClose > 0 {
+			regularClose = detail.RegularClose
+		}
 	}
-	change, changeRate := computeQuoteChange(currentPrice, prevClose, regularClose, session)
+	change, changeRate := computeQuoteChange(currentPrice, prevClose)
 	detail.MarketSession = session
+	detail.SessionClosedAt = clock.ClosedAt
+	detail.NextSessionAt = clock.NextOpenAt
 	detail.RegularClose = regularClose
 	detail.PrevClose = prevClose
 	detail.CurrentPrice = currentPrice

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { formatPrice } from "@/lib/format";
+
 import {
   HORIZON_OPTIONS,
   STANCE_LABELS,
@@ -9,6 +9,10 @@ import {
   type StampHorizonKind,
 } from "@/lib/stamp-types";
 import { cn } from "@/lib/utils";
+import { PriceDisplay } from "@/components/ui/price-display";
+import { LoginRequiredNote } from "@/components/auth/login-required-note";
+import { useModalAutoFocus } from "@/hooks/use-modal-autofocus";
+import { useLoginGate } from "@/hooks/use-login-gate";
 
 /**
  * 예상 주가 · 검증 기간 · 확신도 · 메모를 받는 폼 본체.
@@ -107,9 +111,28 @@ export function StampPredictionForm({
     setTarget(basePrice ? String(Math.round(basePrice)) : "");
   }
 
+  /*
+    비로그인이면 저장 버튼이 **눌리지 않는다** (2026-09-05 사용자 요청 4).
+
+    이 폼을 여는 길은 둘이다 — 종목 헤더의 도장 버튼과 스탬프 화면의 「스탬프 찍기」.
+    둘 다 이제 **로그인 여부와 무관하게 폼을 연다**(같은 요청). 그래서 401이 날 요청을
+    막는 자리는 여기 하나뿐이고, 그 자리가 `disabled`다 — 눌리지 않으니 요청이
+    만들어질 길이 없다.
+
+    로그인으로 가는 길은 버튼이 아니라 **아래 한 줄**이 연다(`LoginRequiredNote`).
+    죽은 버튼만 두면 다음에 할 일이 화면에 없다.
+  */
+  const gate = useLoginGate("스탬프");
+
+  /*
+    폰·태블릿에서는 **자판을 올리지 않는다** (lib/modal-autofocus.ts). 이 폼은
+    언제나 모달 안에서 열리는데, 열리자마자 목표가 칸이 선택되면서 화면 절반이
+    자판에 덮여 바로 위의 현재가·52주 범위가 가려졌다.
+  */
+  const canAutoFocus = useModalAutoFocus();
   useEffect(() => {
-    if (autoFocus) targetRef.current?.select();
-  }, [autoFocus]);
+    if (autoFocus && canAutoFocus) targetRef.current?.select();
+  }, [autoFocus, canAutoFocus]);
 
   const targetValue = parseTarget(target);
   const base = basePrice ?? 0;
@@ -120,7 +143,9 @@ export function StampPredictionForm({
   const estimate = estimateDueDate(horizon);
 
   const submit = () => {
-    if (!canSave) return;
+    // 버튼이 이미 막혀 있지만, 폼 어딘가에서 엔터로 들어오는 길이 생겨도 요청이
+    // 나가지 않도록 여기서도 한 번 더 확인한다.
+    if (!gate.authed || !canSave) return;
     onSubmit({
       targetPrice: targetValue,
       horizonKind: horizon,
@@ -132,7 +157,7 @@ export function StampPredictionForm({
 
   return (
     <div>
-      <label className="block text-[10px] text-[var(--text-muted)]">
+      <label className="block text-micro text-[var(--text-muted)]">
         예상 주가 <span className="text-[var(--loss)]">*</span>
       </label>
       <div className="mt-1 flex items-center gap-1">
@@ -146,9 +171,9 @@ export function StampPredictionForm({
             if (e.key === "Enter" && canSave) submit();
           }}
           placeholder={base > 0 ? String(Math.round(base)) : "목표 주가"}
-          className="h-8 min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-2 text-xs tabular-nums text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none"
+          className="h-8 min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-2 text-cell tabular-nums text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none"
         />
-        <span className="shrink-0 text-[11px] text-[var(--text-muted)]">
+        <span className="shrink-0 text-cell text-[var(--text-muted)]">
           {currency === "USD" ? "USD" : "원"}
         </span>
       </div>
@@ -163,7 +188,7 @@ export function StampPredictionForm({
         week52Low={week52Low}
       />
 
-      <label className="mt-2.5 block text-[10px] text-[var(--text-muted)]">
+      <label className="mt-2.5 block text-micro text-[var(--text-muted)]">
         검증 기간 <span className="text-[var(--loss)]">*</span>
       </label>
       <div className="mt-1 grid grid-cols-3 gap-1">
@@ -174,7 +199,7 @@ export function StampPredictionForm({
             title={opt.hint}
             onClick={() => setHorizon(opt.id)}
             className={cn(
-              "rounded-md border px-1 py-1 text-[10.5px] transition-colors",
+              "rounded-md border px-1 py-1 text-micro transition-colors",
               horizon === opt.id
                 ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--text-primary)]"
                 : "border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]",
@@ -190,15 +215,15 @@ export function StampPredictionForm({
           value={customDate}
           min={toDateInputValue(estimateDueDate("next_session_close"))}
           onChange={(e) => setCustomDate(e.target.value)}
-          className="mt-1.5 h-7 w-full rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-2 text-[11px] text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
+          className="mt-1.5 h-7 w-full rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-2 text-cell text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
         />
       ) : (
-        <p className="mt-1.5 text-[10px] text-[var(--text-muted)]">
+        <p className="mt-1.5 text-micro text-[var(--text-muted)]">
           개봉 예정 {formatEstimate(estimate)} 장 마감 · 휴장일이면 다음 거래일로 밀립니다
         </p>
       )}
 
-      <label className="mt-2.5 block text-[10px] text-[var(--text-muted)]">확신도</label>
+      <label className="mt-2.5 block text-micro text-[var(--text-muted)]">확신도</label>
       <div className="mt-1 flex gap-1">
         {[1, 2, 3, 4, 5].map((v) => (
           <button
@@ -206,7 +231,7 @@ export function StampPredictionForm({
             type="button"
             onClick={() => setConviction(v)}
             className={cn(
-              "flex-1 rounded-md border py-1 text-[11px] transition-colors",
+              "flex-1 rounded-md border py-1 text-cell transition-colors",
               conviction === v
                 ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--text-primary)]"
                 : "border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]",
@@ -225,17 +250,17 @@ export function StampPredictionForm({
           if (e.key === "Enter" && canSave) submit();
         }}
         placeholder="이유 한 줄 (선택)"
-        className="mt-2.5 h-7 w-full rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-2 text-[11px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none"
+        className="mt-2.5 h-7 w-full rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-2 text-cell text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none"
       />
 
-      {error && <p className="mt-1.5 text-[10px] text-[var(--loss)]">{error}</p>}
+      {error && <p className="mt-1.5 text-micro text-[var(--loss)]">{error}</p>}
 
       <div className="mt-2.5 flex gap-1.5">
         {onCancel && (
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-md border border-[var(--border)] px-2.5 py-1.5 text-[11px] text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+            className="rounded-md border border-[var(--border)] px-2.5 py-1.5 text-cell text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
           >
             취소
           </button>
@@ -243,14 +268,16 @@ export function StampPredictionForm({
         <button
           type="button"
           onClick={submit}
-          disabled={!canSave}
-          className="flex-1 rounded-md bg-[var(--brand)] py-1.5 text-[11px] font-medium text-white disabled:opacity-40"
+          /* 로그인 전에는 아예 눌리지 않는다 — 저장 요청이 만들어질 길을 없앤다. */
+          disabled={!gate.authed || !canSave}
+          className="flex-1 rounded-md bg-[var(--brand)] py-1.5 text-cell font-medium text-white disabled:opacity-40"
         >
-          {busy ? "저장 중…" : submitLabel}
+          {busy ? "저장 중…" : gate.label(submitLabel)}
         </button>
       </div>
+      <LoginRequiredNote gate={gate} />
       {targetValue <= 0 && (
-        <p className="mt-1 text-center text-[10px] text-[var(--text-muted)]">
+        <p className="mt-1 text-center text-micro text-[var(--text-muted)]">
           예상 주가를 입력해야 채점할 수 있습니다
         </p>
       )}
@@ -317,8 +344,8 @@ function TargetPreview({
           style={{ left: `${tgtPct}%`, background: tone }}
         />
       </div>
-      <div className="mt-1 flex items-baseline justify-between text-[10px] text-[var(--text-muted)]">
-        <span>{formatPrice(lo, currency)}</span>
+      <div className="mt-1 flex items-baseline justify-between text-micro text-[var(--text-muted)]">
+        <span><PriceDisplay value={lo} currency={currency} size="inherit" /></span>
         <span style={{ color: tone }}>
           {STANCE_LABELS[stance]}
           {expected !== undefined && (
@@ -331,13 +358,13 @@ function TargetPreview({
             </>
           )}
         </span>
-        <span>{formatPrice(hi, currency)}</span>
+        <span><PriceDisplay value={hi} currency={currency} size="inherit" /></span>
       </div>
       {(week52High ?? 0) > 0 && target > (week52High ?? 0) && (
-        <p className="mt-1 text-[10px] text-[var(--text-muted)]">52주 최고가를 넘는 목표입니다</p>
+        <p className="mt-1 text-micro text-[var(--text-muted)]">52주 최고가를 넘는 목표입니다</p>
       )}
       {(week52Low ?? 0) > 0 && target < (week52Low ?? 0) && (
-        <p className="mt-1 text-[10px] text-[var(--text-muted)]">52주 최저가를 밑도는 목표입니다</p>
+        <p className="mt-1 text-micro text-[var(--text-muted)]">52주 최저가를 밑도는 목표입니다</p>
       )}
     </div>
   );

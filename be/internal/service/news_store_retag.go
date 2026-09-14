@@ -28,7 +28,30 @@ const (
 	// a market, so a restart does not re-sweep the whole table. Bumping the
 	// version suffix is how a future rule change schedules another sweep.
 	// v3 — 08-16 US 전 종목 카탈로그·한국어 별칭·지수 태그 재계산.
-	retagDoneKeyPrefix = "news:retag:v3:"
+	// v4 — 08-24 이름 인덱스 불용어 도입. GOLD·BOND·HERE·HONG·OPEN·FIVE처럼
+	//      네 글자 이상이면서 흔한 영어 단어인 티커가 「금값」·「채권」·「홍콩」
+	//      기사에 붙고 있었다(최근 3일 실측 HERE 49 · BOND 39 · OPEN 27 · GOLD 26).
+	//      규칙이 바뀌었으므로 저장된 기사에 소급 적용한다.
+	// v5 — 08-24 불용어 가드를 lookupUSSymbolByName로 올렸다. 이름 인덱스에만
+	//      두면 DB 검색 폴백(stocks.Search는 심볼도 매치한다)이 우회해서
+	//      「Here's …」 헤드라인에 HERE가 계속 붙었다(v4 스윕 후 53건 잔존).
+	// v6 — 09-03 티커를 소문자 이름 인덱스에서 **대문자 티커 인덱스**로 옮겼다.
+	//      손으로 늘리던 불용어 목록이 늘 새 오탐 뒤를 쫓아갔기 때문이다 — v4에서
+	//      여섯을 넣었는데 실측 1,000건에서 같은 종류가 스물둘 더 나왔다
+	//      (MOVE 30 · AMID 20 · ALTO 18 · PALO 18 · HIGH 17 · LIVE 15 · TECH 14 …).
+	//      이제 티커는 원문 대문자로만 매치하고, 낱말 티커는 `$AMID` 같은 명시
+	//      표기로만 붙는다. 이름 쪽에서는 nasdaq(→NDAQ 55건)·target(→TGT 18건)을 막았다.
+	// v7 — 09-03 소유격 주어 DB 검색을 **정확 일치**로 좁혔다. 앞자리 일치가
+	//      「Fed's …」에 FEDM을, 「BoC's …」에 BOC를 붙이고 있었다(각 17·20건).
+	// v8 — 09-04 국내 **통칭**을 푼다(`news_symbol_nickname.go`). 「37% 빠진
+	//      삼전닉스…」에 종목이 하나도 안 붙던 것이 계기다(사용자 지적 10).
+	//      상장명이 아닌 말이라 이름 인덱스로는 영원히 안 걸렸다.
+	// v9 — 09-13 **이름 칸이 티커와 같으면 이름 인덱스에 넣지 않는다.** v6가 낱말
+	//      티커를 대문자 티커 인덱스로 옮겨 막았는데, 소스가 `stocks.name`에도
+	//      같은 문자열을 주면 그 방어가 이름 쪽 문으로 우회됐다 — AMID의 이름이
+	//      그냥 「AMID」라 키 `amid`가 살아 있었고, v6가 잡았다고 적은 바로 그
+	//      종목이 09-12~13 이틀에 다시 20건 붙었다("…IPO amid AI safety…").
+	retagDoneKeyPrefix = "news:retag:v9:"
 	retagDoneTTL       = 90 * 24 * time.Hour
 )
 
@@ -224,7 +247,8 @@ func (st *NewsStore) retagOnceIfNeeded(ctx context.Context) {
 			continue
 		}
 		if res.Scanned == 0 {
-			// 인덱스가 아직 없거나 기사가 없다 — 다음 기회에 다시 시도한다.
+			// 인덱스가 아직 없거나 기사가 없다. 마커를 남기지 않으므로 아래
+			// 재시도 루프가 다시 부른다 (retagOnceIfNeeded 호출자 참조).
 			continue
 		}
 		log.Printf("news retag %s: scanned=%d changed=%d failed=%d in %s",
@@ -233,4 +257,60 @@ func (st *NewsStore) retagOnceIfNeeded(ctx context.Context) {
 			_ = st.redis.Set(ctx, key, time.Now().Format(time.RFC3339), retagDoneTTL).Err()
 		}
 	}
+}
+
+/*
+retagUntilDone — 재태깅이 실제로 한 바퀴 돌 때까지 주기적으로 다시 시도한다.
+
+**한 번만 부르면 영원히 안 도는 경우가 있다.** `retagOnceIfNeeded`는 이름
+인덱스가 아직 없으면(`Scanned == 0`) 마커를 남기지 않고 그냥 넘어가는데,
+호출이 `Run` 시작 시 한 번뿐이라 「다음 기회」가 오지 않았다. 실제로 v4 규칙을
+넣고 재기동했는데 스윕이 돌지 않아 오탐 태그가 그대로 남아 있었다
+(GOLD 198 · BOND 384 · HERE 916건).
+
+인덱스는 첫 뉴스 폴링이 끝나야 만들어지므로, 그때까지 몇 분 기다렸다 다시
+시도하면 된다. 두 시장 모두 마커가 생기면 루프를 끝낸다 — 스윕 자체는
+DB만 읽고 쓰므로 외부 할당량을 쓰지 않는다.
+*/
+func (st *NewsStore) retagUntilDone(ctx context.Context) {
+	const (
+		firstDelay = 30 * time.Second
+		interval   = 3 * time.Minute
+		maxRounds  = 20 // 약 1시간. 그래도 안 되면 로그를 보고 손으로 돌린다.
+	)
+
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(firstDelay):
+	}
+
+	for round := 0; round < maxRounds; round++ {
+		st.retagOnceIfNeeded(ctx)
+		if st.retagAllMarkersPresent(ctx) {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(interval):
+		}
+	}
+	log.Println("news retag: gave up waiting for the name index — run it from the admin console")
+}
+
+// retagAllMarkersPresent reports whether every market's sweep is recorded.
+func (st *NewsStore) retagAllMarkersPresent(ctx context.Context) bool {
+	if st.redis == nil {
+		// Redis가 없으면 마커를 못 남긴다. 매 기동 한 번 도는 것이 설계이므로
+		// 여기서 무한 반복하지 않고 한 라운드로 끝낸다.
+		return true
+	}
+	for _, market := range []string{"domestic", "us"} {
+		done, err := st.redis.Get(ctx, retagDoneKeyPrefix+market).Result()
+		if err != nil || done == "" {
+			return false
+		}
+	}
+	return true
 }

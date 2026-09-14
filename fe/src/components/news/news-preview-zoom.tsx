@@ -57,7 +57,7 @@ export function NewsPreviewZoomToolbar({
 }: NewsPreviewZoomToolbarProps) {
   return (
     <div className={cn("flex items-center gap-1", className)}>
-      <span className="mr-1 text-[11px] tabular-nums text-[var(--text-muted)]">
+      <span className="mr-1 text-cell tabular-nums text-[var(--text-muted)]">
         {Math.round(zoom * 100)}%
       </span>
       <button

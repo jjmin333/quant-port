@@ -11,8 +11,8 @@ import (
 )
 
 type MarketDataSettingsStore struct {
-	repo *repository.MarketDataSettingsRepo
-	mu   sync.RWMutex
+	repo   *repository.MarketDataSettingsRepo
+	mu     sync.RWMutex
 	cached model.MarketDataSettings
 }
 

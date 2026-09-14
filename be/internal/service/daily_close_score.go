@@ -1,74 +1,27 @@
 package service
 
-import "github.com/enact/quant-port/be/internal/model"
+/*
+지표 곡선 — RSI·MACD·추세·52주 위치를 0~100으로 옮기는 함수들.
 
-// The 일별 점수 shown beside each close is computed here, on the server, from
-// indicators we already calculate — it is never a number the LLM produced.
-//
-// This mirrors the rule the project already applies to news sentiment (the LLM
-// labels articles, the server does the counting) and it matters more here: a
-// score the model invents would drift between runs on identical input, which
-// makes a dated series meaningless to compare, and it could not be audited
-// after the fact. The LLM still writes the prose in ai_summary.
-//
-// Each component scores 0–100 around a neutral 50. Components without data are
-// dropped and the remainder is re-weighted, so a missing indicator never reads
-// as a bad signal.
+# 여기 있던 두 번째 점수는 없앴다 (2026-09-03 §6)
+
+`stockSummaryScore`가 이 파일에서 요약 파이프라인 전용 종합 점수를 만들어
+`stock_daily_closes.score`에 써 넣고 있었다. 같은 컬럼을 점수 배치도 쓴다
+(`SyncDailyCloseScores`). 두 값의 잣대가 아예 달라서 — 이쪽은 기술적 지표 +
+뉴스 감성만 보는 절대 기준, 저쪽은 5축을 동종 그룹 백분위로 환산한 값 — AI 분석
+탭의 「오늘의 종합 점수」와 바로 아래 같은 날짜 행의 점수가 서로 다른 숫자를
+말했다. 종합 점수의 주인은 `stock_scores` 하나다.
+
+남은 곡선들은 **점수 배치가 쓴다**(`stock_score.go`의 `technicalAxis`) —
+절대 곡선으로 「좋은 형태」를 정한 뒤 그 값을 동종 그룹 안에서 다시 줄 세운다.
+곡선 자체는 그대로 두고, 그 위에 얹혀 있던 두 번째 합산만 걷어냈다.
+
+각 곡선은 중립 50을 중심으로 0~100을 낸다.
+*/
 
 type scoreComponent struct {
 	value  float64
 	weight float64
-}
-
-// stockSummaryScore returns nil when nothing measurable was available, which
-// the UI renders as "-".
-func stockSummaryScore(view *model.StockSummaryView, ti *TechnicalIndicators) *int {
-	components := make([]scoreComponent, 0, 5)
-
-	if ti != nil {
-		if ti.RSI14 != nil {
-			components = append(components, scoreComponent{value: rsiScore(*ti.RSI14), weight: 0.30})
-		}
-		if ti.MACD != nil && ti.MACDSignal != nil {
-			components = append(components, scoreComponent{value: macdScore(*ti.MACD, *ti.MACDSignal), weight: 0.20})
-		}
-		if ti.LastClose != nil && ti.SMA20 != nil && ti.SMA50 != nil {
-			components = append(components, scoreComponent{
-				value:  trendScore(*ti.LastClose, *ti.SMA20, *ti.SMA50),
-				weight: 0.25,
-			})
-		}
-		if ti.PctFromLow52Week != nil && ti.PctFromHigh52Week != nil {
-			components = append(components, scoreComponent{
-				value:  rangePositionScore(*ti.PctFromLow52Week, *ti.PctFromHigh52Week),
-				weight: 0.10,
-			})
-		}
-	}
-
-	if view != nil && view.NewsSentiment != nil && view.NewsSentiment.Total > 0 {
-		// AverageScore is -100..100 → 0..100.
-		components = append(components, scoreComponent{
-			value:  clamp01to100((view.NewsSentiment.AverageScore + 100) / 2),
-			weight: 0.15,
-		})
-	}
-
-	if len(components) == 0 {
-		return nil
-	}
-
-	var weighted, totalWeight float64
-	for _, c := range components {
-		weighted += c.value * c.weight
-		totalWeight += c.weight
-	}
-	if totalWeight <= 0 {
-		return nil
-	}
-
-	score := int(clamp01to100(weighted/totalWeight) + 0.5)
-	return &score
 }
 
 // rsiScore maps RSI to a momentum reading. Deliberately not "high RSI = good":

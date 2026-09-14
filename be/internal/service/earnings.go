@@ -3,15 +3,17 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
-	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/marketdata/apibudget"
+	"github.com/enact/quant-port/be/internal/model"
 )
 
 type EarningsConfig struct {
@@ -29,6 +31,48 @@ type EarningsClient struct {
 	// provider — 어느 한도 버킷으로 셀지. 기본은 라이브 폴러와 같은
 	// ProviderFinnhub이고, 배치 워커는 UseBatchBudget()으로 전용 버킷으로 옮긴다.
 	provider apibudget.Provider
+	// baseURL — 테스트에서 스텁 서버를 물리기 위한 이음매. 비어 있으면
+	// finnhubBaseURL. 지금은 FetchSurpriseHistory만 쓴다. 캘린더 경로는 운영에서
+	// 돌고 있는 코드라 이유 없이 건드리지 않았다 — 옮길 때는 함께 옮긴다.
+	baseURL string
+}
+
+// finnhubBaseURL is the live host. 테스트만 이 값을 바꾼다.
+const finnhubBaseURL = "https://finnhub.io/api/v1"
+
+// redactFinnhubToken strips the API key out of an error before it is logged.
+//
+// **이게 없으면 API 키가 로그 파일에 평문으로 남는다.** Finnhub은 토큰을
+// 쿼리스트링으로 받는데, transport 오류에서 Go가 돌려주는 `*url.Error`는
+// **요청 URL을 통째로** 메시지에 담는다. 실측(2026-08-21 백필): 타임아웃 한 건이
+//
+//	Get "https://finnhub.io/api/v1/stock/earnings?symbol=VLY&token=<진짜 키>":
+//	context deadline exceeded
+//
+// 를 그대로 로그에 찍었다. 로그 파일은 커밋되기도 하고 공유되기도 한다.
+//
+// 토큰을 헤더로 옮기는 편이 더 낫지만, 그건 운영 중인 캘린더 배치의 인증 방식을
+// 바꾸는 일이다. 여기서는 **동작을 바꾸지 않고** 새는 곳만 막는다.
+func redactFinnhubToken(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	redacted := finnhubTokenPattern.ReplaceAllString(msg, "token=REDACTED")
+	if redacted == msg {
+		return err
+	}
+	return errors.New(redacted)
+}
+
+// token= 뒤의 값 — 따옴표·`&`·공백 앞까지.
+var finnhubTokenPattern = regexp.MustCompile(`token=[^&"\s]*`)
+
+func (e *EarningsClient) base() string {
+	if e.baseURL != "" {
+		return e.baseURL
+	}
+	return finnhubBaseURL
 }
 
 func NewEarningsClient(cfg EarningsConfig, budget *apibudget.Manager) *EarningsClient {
@@ -259,7 +303,8 @@ func (e *EarningsClient) FetchCalendarRange(ctx context.Context, from, to time.T
 	}
 	res, err := e.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		// URL에 토큰이 들어 있어 그대로 올리면 로그에 키가 남는다.
+		return nil, redactFinnhubToken(err)
 	}
 	defer res.Body.Close()
 	if res.StatusCode == http.StatusTooManyRequests {

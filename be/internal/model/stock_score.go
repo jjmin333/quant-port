@@ -178,6 +178,9 @@ type StockScoreView struct {
 	ScoreKind string         `json:"scoreKind"`
 	Coverage  float64        `json:"coverage"`
 	PeerGroup string         `json:"peerGroup,omitempty"`
+	// PeerPct is a 상위 N%: 1 is the best of the peer group, 100 the worst.
+	// Read it through ReadPeerPct — see there for why 0 must never reach a
+	// screen or an LLM prompt.
 	PeerPct   *int           `json:"peerPct,omitempty"`
 	Breakdown ScoreBreakdown `json:"breakdown"`
 	Inputs    map[string]any `json:"inputs,omitempty"`
@@ -224,18 +227,94 @@ type StockScoreListItem struct {
 	ClosePrice *float64 `json:"closePrice,omitempty"`
 	Currency   string   `json:"currency,omitempty"`
 	TradeDate  string   `json:"tradeDate"`
+	/*
+		등락률·가격이 **무엇을 잰 값인지**. `"live"` 아니면 종가의 거래일(YYYY-MM-DD).
+
+		랭킹은 하루 한 번 도는 배치가 만들지만 가격은 계속 움직인다. 장이 열려 있는
+		동안(프리·정규·애프터)에는 실시간 시세로 덮어써 `"live"`가 되고, 애프터마켓까지
+		끝나면 확정된 종가를 쓰고 그 거래일이 들어온다.
+
+		**점수의 날(`TradeDate`)과 비교할 값이 아니다.** 점수의 날은 KST 날짜라 해외
+		종목의 종가는 정상적으로 하루 뒤에 온다 — 그걸 「밀렸다」로 읽으면 해외 랭킹은
+		언제나 밀린 것으로 보인다(실측: 08-31 점수에 08-28 종가, 전 종목 회색).
+		이 필드는 그 판정을 대신하는 게 아니라 **출처를 그대로 말한다.**
+	*/
+	PriceAsOf string `json:"priceAsOf,omitempty"`
+
+	/*
+		RankValue는 **이 목록이 실제로 줄 세운 값**이다.
+
+		AI 추천 랭킹은 종합 점수 말고도 다섯 축 각각으로 순위를 매길 수 있고(추세·수익성·
+		성장·가치·심리·수급), 기간을 고르면 그 기간 안의 **최고점**으로 매긴다. 그때 행에
+		적혀야 하는 숫자는 `Score`(최신일 종합)가 아니라 이 값이다 — 둘이 다른데 종합만
+		보이면 목록이 뒤죽박죽으로 정렬된 것처럼 읽힌다.
+
+		종합·최신일 조합에서는 `Score`와 같으므로 화면은 한 자리만 그리면 된다.
+		점수가 없는 축이면 비어 있고, 그런 종목은 애초에 그 목록에 들어가지 않는다.
+	*/
+	RankValue *int `json:"rankValue,omitempty"`
+
+	/*
+		실시간 등락률의 기준가를 정할 때 쓰는 재료 — 화면에는 나가지 않는다.
+
+		`ClosePrice`가 어느 세션 것인지(`PriceAsOf`)에 따라 「직전 종가」가 달라진다:
+		저장된 마지막 종가가 아직 오늘 것이 아니면 그게 곧 직전 종가이고, 오늘 것이
+		이미 들어와 있으면(미국 애프터마켓 중에는 그렇다) 그 행의 `prev_close`가
+		직전 종가다. 서버가 이 둘 중 하나를 골라 쓴다.
+	*/
+	PrevClose *float64 `json:"-"`
+
+	/*
+		BasePrice — 등락률의 **기준가**. 화면이 스트림 가격으로 등락률을 낼 때 쓴다.
+
+		위 `PrevClose`가 재료라면 이것은 **서버가 실제로 고른 답**이다(`scorePrevCloseHint`).
+		둘을 나눈 이유는 화면이 그 고르는 규칙을 다시 구현하면 안 되기 때문이다 —
+		「저장된 종가가 오늘 것인가」는 그 종목 시장의 표준시로 재야 하고, KST 자정을
+		넘긴 미국 애프터마켓을 국내 날짜로 재면 한 세션씩 밀린다.
+
+		이 값이 나가는 이유는 목록 가격이 SSE로 오기 때문이다(2026-09-04). 스트림은
+		**가격만** 보낸다 — 기준가는 세션 안에서 안 변하니 목록이 뜰 때 한 번 받아 두면
+		되고, 서버가 틱마다 종목별로 그걸 풀면 종목당 4~5 SELECT가 붙는다(실측: 이
+		엔드포인트 20줄이 100 SELECT였다). 그 곱셈을 없애려고 푸시로 옮긴 것이라
+		서버가 그 산수를 계속하면 앞뒤가 안 맞는다.
+
+		비어 있으면 화면은 등락률을 **그리지 않는다**(0.00%로 때우지 않는다).
+	*/
+	BasePrice *float64 `json:"basePrice,omitempty"`
 }
 
 // ScoreDistribution is the batch's self-check (docs/STOCK_SCORE_DESIGN.md §7.1).
 type ScoreDistribution struct {
-	Count    int     `json:"count"`
-	Mean     float64 `json:"mean"`
-	StdDev   float64 `json:"stdDev"`
-	Min      int     `json:"min"`
-	Max      int     `json:"max"`
-	AtFloor  int     `json:"atFloor"`  // score <= 1
-	AtCeil   int     `json:"atCeil"`   // score >= 99
-	Withheld int     `json:"withheld"` // coverage below floor
-	Healthy  bool    `json:"healthy"`
+	Count    int      `json:"count"`
+	Mean     float64  `json:"mean"`
+	StdDev   float64  `json:"stdDev"`
+	Min      int      `json:"min"`
+	Max      int      `json:"max"`
+	AtFloor  int      `json:"atFloor"`  // score <= 1
+	AtCeil   int      `json:"atCeil"`   // score >= 99
+	Withheld int      `json:"withheld"` // coverage below floor
+	Healthy  bool     `json:"healthy"`
 	Warnings []string `json:"warnings,omitempty"`
+}
+
+// ScorePriceAsOfLive is the StockScoreListItem.PriceAsOf value meaning "this is
+// the price right now", as opposed to a settled close's trade date.
+const ScorePriceAsOfLive = "live"
+
+// ReadPeerPct normalizes a stored peer rank on the way out.
+//
+// The rank is a 상위 N% and the score batch floors it at 1, but rows written
+// before that floor existed carry 0 — the batch's percentile puts the single
+// best symbol of a group at the 100th percentile, which inverts to 0. 「동종
+// 상위 0%」 is not something anyone says, and on 09-08 twenty of the top 100 US
+// scores read that way. Correcting on read means a stale row never reaches a
+// screen or an LLM prompt saying it; the daily batch fixes the stored value.
+func ReadPeerPct(v int) int {
+	if v < 1 {
+		return 1
+	}
+	if v > 100 {
+		return 100
+	}
+	return v
 }

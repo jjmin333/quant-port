@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quant Port — 컨트롤 높이 · 숫자 표기 후보 v2 (실물 대조)</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" />
+
+<style>
+/* ── 앱 토큰 (fe/src/app/globals.css에서 그대로) ─────────────────────── */
+:root {
+  --background:#F7F7F7; --foreground:#252525; --card:#FFFFFF; --muted:#F7F7F7;
+  --muted-foreground:#767676; --border:#DEDEDE; --accent:#EDEDED;
+  --surface-elevated:#EDEDED; --text-primary:#252525; --text-secondary:#767676;
+  --text-muted:#9B9B9B;
+  --brand:#2563EB; --brand-muted:rgba(37,99,235,.1);
+  --profit:#DC2626; --loss:#2563EB;
+  --font-pretendard:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,system-ui,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;
+  --font-code:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  /* v1.0.0 타이포 계단 */
+  --text-micro:11px; --text-cell:12px; --text-note:13px; --text-read:14px;
+  --text-section:15px; --text-page:19px;
+}
+[data-theme="dark"] {
+  --background:#252525; --card:#343434; --muted:#454545; --muted-foreground:#B4B4B4;
+  --border:rgba(255,255,255,.16); --accent:#454545; --surface-elevated:#454545;
+  --text-primary:#FAFAFA; --text-secondary:#B4B4B4; --text-muted:#999999;
+  --brand:#60A5FA; --brand-muted:rgba(96,165,250,.15);
+  --profit:#F87171; --loss:#60A5FA;
+}
+
+*,*::before,*::after { box-sizing:border-box; }
+/* 앱의 body와 동일 — 이 세 줄이 다르면 같은 글꼴도 다르게 보인다 */
+body {
+  margin:0; background:var(--background); color:var(--text-primary);
+  font-family:var(--font-pretendard);
+  font-synthesis:none;
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+}
+code { font-family:var(--font-code); font-size:.9em; }
+
+.wrap { max-width:1080px; margin:0 auto; padding:20px 20px 92px; }
+h1 { font-size:var(--text-page); font-weight:600; margin:0; }
+h2 { font-size:var(--text-section); font-weight:600; margin:0 0 4px; }
+h3 { font-size:var(--text-note); font-weight:700; margin:0; color:var(--brand); }
+section { margin-top:30px; }
+.sub { font-size:var(--text-cell); color:var(--muted-foreground); margin:5px 0 0; line-height:1.6; }
+.lede { font-size:var(--text-read); line-height:1.7; color:var(--text-secondary); margin:0 0 14px; max-width:76ch; }
+.lede b { color:var(--text-primary); font-weight:600; }
+
+.topbar {
+  position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  padding:9px 0; margin-bottom:8px;
+  background:color-mix(in srgb, var(--background) 90%, transparent);
+  backdrop-filter:blur(8px); border-bottom:1px solid var(--border);
+}
+.chip { border:1px solid var(--border); background:var(--card); color:var(--text-secondary);
+  border-radius:8px; height:28px; padding:0 10px; font-size:var(--text-cell); font-family:inherit;
+  cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+.chip:hover { background:var(--surface-elevated); color:var(--text-primary); }
+.pill { font-size:var(--text-micro); padding:3px 8px; border-radius:99px; border:1px solid var(--border); color:var(--text-muted); }
+.pill[data-ok="1"] { color:#15803D; border-color:rgba(21,128,61,.4); background:rgba(21,128,61,.08); }
+.pill[data-ok="0"] { color:var(--profit); border-color:color-mix(in srgb,var(--profit) 40%,transparent); }
+[data-theme="dark"] .pill[data-ok="1"] { color:#4ADE80; border-color:rgba(74,222,128,.4); background:rgba(74,222,128,.12); }
+
+table.ev { width:100%; border-collapse:collapse; font-size:var(--text-cell); }
+table.ev th, table.ev td { text-align:left; padding:6px 9px; border-bottom:1px solid var(--border); vertical-align:top; }
+table.ev th { font-size:var(--text-micro); font-weight:600; color:var(--muted-foreground); }
+table.ev tr:last-child td { border-bottom:0; }
+td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; }
+.ok { color:#15803D; font-weight:600; } .bad { color:var(--profit); font-weight:600; }
+[data-theme="dark"] .ok { color:#4ADE80; }
+.tag { display:inline-block; font-size:var(--text-micro); border-radius:6px; padding:1px 6px;
+  background:var(--muted); color:var(--text-secondary); border:1px solid var(--border); }
+
+.opt { border:1px solid var(--border); border-radius:12px; background:var(--card); padding:13px 15px; margin-bottom:11px; }
+.opt:has(input:checked) { border-color:var(--brand); box-shadow:0 0 0 3px var(--brand-muted); }
+.opt > label.head { display:flex; align-items:baseline; gap:8px; cursor:pointer; flex-wrap:wrap; }
+.opt input[type=radio] { accent-color:var(--brand); margin:0 2px 0 0; transform:translateY(1px); }
+.spec { font-size:var(--text-micro); color:var(--muted-foreground); font-variant-numeric:tabular-nums; }
+.why { font-size:var(--text-cell); color:var(--text-secondary); line-height:1.6; margin:6px 0 0; max-width:80ch; }
+.why.warn { color:#B45309; } [data-theme="dark"] .why.warn { color:#FBBF24; }
+.stage { margin-top:11px; border:1px solid var(--border); border-radius:10px; background:var(--background); padding:12px; }
+
+/* ══════ 실물 재현 — 클래스 이름과 값은 앱 컴포넌트에서 그대로 옮겼다 ══════
+   stock-workspace-header.tsx · market-radar-list.tsx · quote-price.tsx      */
+
+/* 워크스페이스 헤더 */
+.wh { }
+.wh-top { display:flex; align-items:flex-start; gap:8px; flex-wrap:wrap; }
+.wh-av { width:40px; height:40px; border-radius:50%; background:#E11D48; color:#fff;
+  display:grid; place-items:center; font-size:var(--text-cell); font-weight:700; flex:none; }  /* size="md" = h-10 w-10 text-cell */
+.wh-id { min-width:0; flex:1 1 240px; }
+.wh-line { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.wh-name { font-size:18px; font-weight:600; color:var(--text-primary); }        /* text-base sm:text-lg font-semibold */
+.wh-sym  { font-size:var(--text-micro); color:var(--text-muted); font-variant-numeric:tabular-nums; }
+.wh-badge{ font-size:var(--text-micro); font-weight:500; border-radius:6px; padding:0 4px;
+  background:var(--muted); color:var(--text-secondary); border:1px solid var(--border); }
+.wh-live { font-size:var(--text-micro); color:var(--profit); display:inline-flex; align-items:center; gap:4px; }
+.wh-live::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--profit); }
+.wh-when { font-size:var(--text-micro); color:var(--text-muted); margin:2px 0 0; }
+.wh-quote { margin-top:8px; display:flex; flex-wrap:wrap; align-items:flex-end; column-gap:12px; row-gap:4px; }
+.wh-price { font-size:24px; font-weight:600; font-variant-numeric:tabular-nums; color:var(--text-primary); }  /* !text-2xl font-semibold */
+.wh-chg   { font-size:var(--text-cell); font-variant-numeric:tabular-nums; display:inline-flex; gap:8px; }    /* QuoteChange size="sm" */
+
+/* 마켓 레이더 행 (desktop = non-compact) */
+.mr { border:1px solid var(--border); border-radius:10px; overflow:hidden; background:var(--card); }
+.mr-row { display:flex; width:100%; align-items:center; gap:6px; padding:4px 8px;
+  border-bottom:1px solid color-mix(in srgb, var(--border) 70%, transparent); text-align:left; }
+.mr-row:last-child { border-bottom:0; }
+.mr-row.active { background:var(--brand-muted); }
+.mr-rank { width:28px; flex:none; display:flex; align-items:baseline; justify-content:flex-end; gap:2px;
+  font-variant-numeric:tabular-nums; }
+.mr-rank b { font-size:var(--text-cell); font-weight:600; color:var(--text-primary); }
+.mr-av { width:20px; height:20px; border-radius:50%; flex:none; display:grid; place-items:center;
+  font-size:var(--text-micro); color:#fff; font-weight:700; }
+.mr-mid { min-width:0; flex:1 1 auto; }
+.mr-name { font-size:var(--text-cell); font-weight:500; line-height:1.25; color:var(--text-primary);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mr-sym { font-size:var(--text-micro); line-height:1.25; color:var(--text-muted);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:0; }
+.mr-right { flex:none; text-align:right; line-height:1.25; }
+.mr-px { font-size:var(--text-cell); font-variant-numeric:tabular-nums; color:var(--text-primary); margin:0; }
+.mr-pc { font-size:var(--text-micro); font-variant-numeric:tabular-nums; margin:0; }
+.mr-vol{ font-size:var(--text-micro); font-variant-numeric:tabular-nums; color:var(--text-muted); margin:0; }
+.up { color:var(--profit); } .dn { color:var(--loss); }
+
+/* ── C 축: 단위 표기 ─────────────────────────────────────────────── */
+.u { }                                        /* C0/C1 — 단위도 본문과 같은 크기 */
+.n-unit .u { font-size:.85em; font-weight:400; color:var(--text-muted); margin-left:1px; }
+.n-rank .mr-px, .n-unit .mr-px { font-weight:600; }
+.n-rank .mr-pc, .n-unit .mr-pc { font-weight:500; }
+
+/* ── A 축: 액션 버튼 ─────────────────────────────────────────────── */
+.actions { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.btn { display:inline-flex; align-items:center; flex:none; border:1px solid var(--border);
+  background:var(--card); color:var(--text-secondary); font-family:inherit; cursor:pointer;
+  white-space:nowrap; text-decoration:none;
+  gap:4px; border-radius:10px; padding:4px 8px; font-size:12px; font-weight:400; line-height:1.35; }
+.btn:hover { background:var(--surface-elevated); color:var(--text-primary); }
+.btn svg { width:14px; height:14px; flex:none; }
+.btn.on { color:#F59E0B; } .btn.on svg { fill:#FBBF24; color:#FBBF24; }
+/* A1 — 앱의 <Button variant="outline" size="sm"> 규격 */
+.a1 .btn { height:28px; padding:0 8px; border-radius:8px; gap:4px; font-size:12px; font-weight:500; }
+.a1 .btn svg { width:13px; height:13px; }
+.ruler { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:8px 0; position:relative; }
+.ruler::after { content:""; position:absolute; left:0; right:0; top:50%; height:1px;
+  background:repeating-linear-gradient(90deg,color-mix(in srgb,var(--brand) 45%,transparent) 0 6px,transparent 6px 12px); }
+.ruler > * { position:relative; z-index:1; }
+.hb { font-size:var(--text-micro); color:var(--text-muted); font-variant-numeric:tabular-nums; }
+
+.summary { position:fixed; left:0; right:0; bottom:0; z-index:30; border-top:1px solid var(--border);
+  background:color-mix(in srgb,var(--card) 94%,transparent); backdrop-filter:blur(10px); padding:9px 20px; }
+.summary .inner { max-width:1080px; margin:0 auto; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.summary .lab { font-size:var(--text-micro); color:var(--muted-foreground); }
+.summary .pick { font-size:var(--text-note); font-weight:700; font-family:var(--font-code); color:var(--brand); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <button class="chip" id="theme">◐ 다크 모드</button>
+    <span class="pill" id="fontok">폰트 확인 중…</span>
+    <span class="pill" id="fidelity">대조 중…</span>
+  </div>
+
+  <h1>컨트롤 높이 · 숫자 표기 — v2 (실물 대조본)</h1>
+  <p class="sub">
+    v1의 무대는 <b>제가 임의로 정한 크기</b>였습니다. v2는 앱 컴포넌트에서 값을 그대로 옮겼습니다.
+  </p>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>0. 왜 달라 보였나</h2>
+    <p class="lede">
+      <b>글꼴은 처음부터 같았습니다.</b> 앱과 이 파일에서 같은 문자열을 같은 스타일로 그려 폭을 재면
+      소수점까지 일치합니다(아래 대조표). 두 곳 다 Pretendard Variable 1.3.9 한 벌(가변축 45–920)을
+      쓰고 <code>font-synthesis:none</code>·<code>antialiased</code>도 같습니다.
+      달랐던 건 <b>v1 무대에 제가 넣은 크기·굵기·자간</b>이었습니다.
+    </p>
+
+    <div class="opt" style="margin-bottom:14px">
+      <h3>v1에서 틀렸던 값 → v2에서 고친 값</h3>
+      <table class="ev" style="margin-top:6px">
+        <tr><th>요소</th><th>앱 실제</th><th>v1 목업</th><th>결과</th></tr>
+        <tr><td>헤더 가격</td><td>24px / 600 / 자간 normal</td><td>26px / <b>700</b> / <b>−0.52px</b></td><td>더 굵고 좁아 <b>다른 글꼴처럼</b> 보였다</td></tr>
+        <tr><td>헤더 등락</td><td>12px (<code>QuoteChange size="sm"</code>)</td><td>14px</td><td>가격과의 낙차가 실제보다 작았다</td></tr>
+        <tr><td>종목명</td><td>18px / 600</td><td>15px / 700 / −0.01em</td><td>—</td></tr>
+        <tr><td>목록 행</td><td>가격·등락률·거래대금 <b>세로 3단</b><br>12px · 11px · 11px</td><td>가로 한 줄 12/12/11</td><td>실제 목록과 구조가 달랐다</td></tr>
+      </table>
+    </div>
+
+    <div class="opt">
+      <h3>글꼴 대조 — 이 파일이 스스로 잰 값</h3>
+      <p class="why">
+        기준값은 실행 중인 앱(<code>localhost:3000</code>)에서 같은 방법으로 잰 것입니다.
+        <b>모두 일치</b>하면 이 파일에서 본 크기가 앱에서 그대로 나옵니다.
+      </p>
+      <table class="ev" id="fidtable" style="margin-top:6px">
+        <tr><th>스타일</th><th class="n">앱에서 잰 폭</th><th class="n">이 파일</th><th>판정</th></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>1. 실물 재현 — 여기부터가 앱 그대로입니다</h2>
+    <p class="lede">
+      아래는 <code>/market</code>의 종목 헤더와 순위 목록을 앱 값 그대로 그린 것입니다.
+      고른 후보(A·B·C)가 여기에 실시간으로 적용됩니다.
+    </p>
+    <div class="stage" id="live"></div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>A. 액션 버튼 — 고르신 A1</h2>
+    <p class="lede">
+      지금 이 여섯 개는 <b>같은 스타일 문자열이 네 벌 복사</b>돼 있고(관심 버튼 · 공용 알약 클래스 ·
+      리포트 작성 · 스탬프), 앱 전체로는 손으로 쓴 알약이 <b>16개 파일</b>에 흩어져 있습니다.
+      A1은 이것을 공용 <code>&lt;Button variant="outline" size="sm"&gt;</code> 하나로 합칩니다.
+    </p>
+
+    <div class="opt">
+      <label class="head"><input type="radio" name="A" value="A0" />
+        <h3>A0 · 지금 이대로</h3>
+        <span class="spec">높이 26.2px(내용에 따라 변함) · 12px/400 · 아이콘 14px · 모서리 10px</span>
+      </label>
+      <div class="stage" style="padding:8px 12px"><div class="ruler a0" data-btns></div></div>
+    </div>
+
+    <div class="opt">
+      <label class="head"><input type="radio" name="A" value="A1" checked />
+        <h3>A1 · 공용 버튼에 합친다 <span style="font-weight:600;color:var(--text-muted)">(선택하신 안)</span></h3>
+        <span class="spec">높이 <b>28px 고정</b> · 12px/500 · 아이콘 13px · 모서리 8px</span>
+      </label>
+      <p class="why">
+        앱의 <code>&lt;Button size="sm"&gt;</code>과 같은 규격이 되어, 이 여섯 개가 화면의 다른 버튼과
+        처음으로 같은 줄에 섭니다. 아이콘을 글자보다 작게(14 → 13px) 해 버튼마다 무게가 달라 보이던 것도
+        정리됩니다. <b>아이콘 크기는 <code>Button</code>의 <code>sm</code> 한 곳에서 바꿉니다</b> —
+        호출부에서 덮으면 방금 없앤 문제가 다시 생깁니다(<code>xs</code> 12 · <code>sm</code> 13 · 기본 14px 계단).
+      </p>
+      <div class="stage" style="padding:8px 12px"><div class="ruler a1" data-btns></div></div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>B. 숫자 글꼴 — 고르신 B1</h2>
+    <p class="lede">
+      B1 = <b>지금 그대로</b>(Pretendard + <code>tabular-nums</code>). 코드 변경 없습니다.
+      위 0번에서 확인했듯 글꼴은 앱과 이 파일이 동일합니다.
+    </p>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>C. 숫자 표기 — 고르신 C2</h2>
+
+    <div class="opt">
+      <label class="head"><input type="radio" name="C" value="C0" />
+        <h3>C0 · 지금 이대로</h3>
+        <span class="spec">가격 400 · 등락률 400 · 「원」도 같은 크기</span>
+      </label>
+    </div>
+    <div class="opt">
+      <label class="head"><input type="radio" name="C" value="C1" />
+        <h3>C1 · 굵기로만 가른다</h3>
+        <span class="spec">가격 600 · 등락률 500 · 단위는 그대로</span>
+      </label>
+    </div>
+    <div class="opt">
+      <label class="head"><input type="radio" name="C" value="C2" checked />
+        <h3>C2 · 단위를 작고 흐리게 <span style="font-weight:600;color:var(--text-muted)">(선택하신 안)</span></h3>
+        <span class="spec">숫자 600 · <span style="color:var(--text-muted)">원</span>·<span style="color:var(--text-muted)">$</span>는 0.85배 + 흐린 색</span>
+      </label>
+      <p class="why">
+        값이 단위보다 먼저 눈에 듭니다. 「원」이 여덟 줄 반복될 때 그 여덟 개가 조용해집니다.
+      </p>
+      <p class="why warn">
+        <b>범위를 정확히 말씀드립니다.</b> v1에서 「약 40곳」이라고 했는데 실제로는
+        <code>formatPrice()</code>를 <b>직접 부르는 곳이 92곳</b>이고, 컴포넌트(<code>PriceDisplay</code> 등)를
+        거치는 곳은 23곳뿐입니다. 이 함수는 <b>문자열 하나</b>를 돌려주므로 값과 단위를 나누려면
+        호출부를 손대야 합니다. 그래서 이렇게 합니다 —
+        <b>① 값·단위를 나눠 주는 <code>&lt;Money&gt;</code>를 만들고 ② 가격이 반복해 보이는 화면
+        (헤더·순위·관심·보유·목록)부터 옮기고 ③ 툴팁·라벨처럼 크기가 의미 없는 자리는 문자열 그대로 둡니다.</b>
+        옮기지 않은 자리는 지금과 똑같이 보이므로 화면이 깨지지 않습니다.
+      </p>
+      <p class="why">
+        <b>퍼센트(%)는 건드리지 않습니다.</b> <code>formatPercent()</code>는 60곳이 넘게 문자열로 쓰이고,
+        「%」는 「원」과 달리 값의 일부로 읽힙니다 — 흐리게 하면 <b>−1.85</b>가 무엇의 −1.85인지 약해집니다.
+      </p>
+    </div>
+  </section>
+</div>
+
+<div class="summary"><div class="inner">
+  <span class="lab">내 선택</span><span class="pick" id="pick">A1 + B1 + C2</span>
+</div></div>
+
+<script>
+/* ── 아이콘 (lucide) ───────────────────────────────────────────── */
+const ICON = {
+  star:'<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  stamp:'<path d="M5 22h14"/><path d="M19.27 13.73A2.5 2.5 0 0 0 17.5 13h-11A2.5 2.5 0 0 0 4 15.5V17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5c0-.66-.26-1.3-.73-1.77Z"/><path d="M14 13V8.5C14 7 15 7 15 5a3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 2 1 2 1 3.5V13"/>',
+  case:'<rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
+  pen:'<path d="M12 20h9"/><path d="M16.4 3.6a2.1 2.1 0 1 1 3 3L7.4 18.6a2 2 0 0 1-.9.5l-2.9.9a.5.5 0 0 1-.6-.6l.8-2.9a2 2 0 0 1 .5-.9Z"/>',
+  note:'<path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><path d="M21.4 5.6a2.1 2.1 0 1 0-3-3l-5 5a2 2 0 0 0-.5.9l-.8 2.9a.5.5 0 0 0 .6.6l2.9-.8a2 2 0 0 0 .9-.5Z"/>',
+  target:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+};
+const svg = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k]}</svg>`;
+const BTNS = [["star","관심 추가",1],["stamp","스탬프",0],["case","보유 추가",0],
+              ["pen","리포트 작성",0],["note","메모장",0],["target","목표가 관리",0]];
+
+document.querySelectorAll("[data-btns]").forEach(el => {
+  const h = el.classList.contains("a1") ? "28px 고정" : "26.2px";
+  el.innerHTML = BTNS.map(b => `<a class="btn${b[2] ? " on" : ""}" href="#">${svg(b[0])}${b[1]}</a>`).join("")
+    + `<span class="hb">← ${h}</span>`;
+});
+
+/* ── 실물 무대 ─────────────────────────────────────────────────── */
+const ROWS = [
+  ["1","SK하이닉스","000660","#E11D48","SK","1,688,000","+0.84%","1928억",1],
+  ["2","KODEX 200","069500","#1F2937","KO","107,315","-0.28%","1462억",0],
+  ["3","삼성전자","005930","#1D4ED8","삼","259,250","-0.29%","1437억",0],
+  ["4","KODEX 레버리지","122630","#1F2937","KO","106,510","-0.53%","634억",0],
+  ["5","TIGER 200","102110","#7C2D12","TI","107,585","-0.27%","502억",0],
+];
+const money = (v, u) => `${v}<span class="u">${u}</span>`;
+
+document.getElementById("live").innerHTML = `
+  <div class="wh">
+    <div class="wh-top">
+      <span class="wh-av">SK</span>
+      <div class="wh-id">
+        <div class="wh-line">
+          <span class="wh-name">SK하이닉스</span>
+          <span class="wh-sym">000660</span>
+          <span class="wh-badge">KOSPI</span>
+          <span class="wh-live">실시간</span>
+        </div>
+        <p class="wh-when">오후 12:43:15 기준 · 전일 정규장 종가 대비</p>
+      </div>
+      <div class="actions" id="whActions"></div>
+    </div>
+    <div class="wh-quote">
+      <span class="wh-price">${money("1,687,000","원")}</span>
+      <span class="wh-chg up"><span>${money("+13,000","원")}</span><span>(+0.78%)</span></span>
+    </div>
+  </div>
+  <div class="mr" style="margin-top:12px">
+    ${ROWS.map(r => `
+      <div class="mr-row${r[8] ? " active" : ""}">
+        <span class="mr-rank"><b>${r[0]}</b></span>
+        <span class="mr-av" style="background:${r[3]}">${r[4]}</span>
+        <span class="mr-mid">
+          <span class="mr-name">${r[1]}</span>
+          <p class="mr-sym">${r[2]}</p>
+        </span>
+        <span class="mr-right">
+          <p class="mr-px">${money(r[5],"원")}</p>
+          <p class="mr-pc ${r[6][0] === "+" ? "up" : "dn"}">${r[6]}</p>
+          <p class="mr-vol">${money(r[7],"원")}</p>
+        </span>
+      </div>`).join("")}
+  </div>`;
+
+/* 헤더 액션 버튼은 A 선택을 따라간다 */
+const whActions = document.getElementById("whActions");
+whActions.innerHTML = BTNS.map(b => `<a class="btn${b[2] ? " on" : ""}" href="#">${svg(b[0])}${b[1]}</a>`).join("");
+
+function apply() {
+  const a = document.querySelector("input[name=A]:checked").value;
+  const c = document.querySelector("input[name=C]:checked").value;
+  const live = document.getElementById("live");
+  live.classList.remove("n-flat", "n-rank", "n-unit");
+  live.classList.add({ C0: "n-flat", C1: "n-rank", C2: "n-unit" }[c]);
+  whActions.parentElement.parentElement.classList.remove("a0", "a1");
+  whActions.classList.remove("a0", "a1");
+  whActions.classList.add(a === "A1" ? "a1" : "a0");
+  document.getElementById("pick").textContent = `${a} + B1 + ${c}`;
+}
+document.querySelectorAll("input[type=radio]").forEach(r => r.addEventListener("change", apply));
+apply();
+
+/* ── 글꼴 대조 ─────────────────────────────────────────────────────
+   기준값은 실행 중인 앱에서 같은 문자열·같은 스타일로 잰 폭이다.
+   두 값이 어긋나면 이 파일에서 본 크기를 믿으면 안 된다.               */
+const REF = [
+  ["헤더 가격 24px/600 tabular", "font-size:24px;font-weight:600;font-variant-numeric:tabular-nums", 141.53],
+  ["14px/500 tabular",           "font-size:14px;font-weight:500;font-variant-numeric:tabular-nums", 81.02],
+  ["목록 셀 12px/400 tabular",   "font-size:12px;font-weight:400;font-variant-numeric:tabular-nums", 68.06],
+  ["12px/400 일반",              "font-size:12px;font-weight:400",                                   61.83],
+  ["섹션 제목 15px/600",         "font-size:15px;font-weight:600",                                   80.91],
+];
+
+document.fonts.ready.then(() => {
+  const badge = document.getElementById("fontok");
+  const ok = document.fonts.check('400 12px "Pretendard Variable"');
+  badge.dataset.ok = ok ? "1" : "0";
+  badge.textContent = ok ? "Pretendard 로드됨" : "Pretendard 로드 실패 — 인터넷 확인 (지금은 시스템 글꼴)";
+
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;left:-9999px;top:0";
+  document.body.appendChild(host);
+  const table = document.getElementById("fidtable");
+  let allOk = true;
+  for (const [label, css, ref] of REF) {
+    const s = document.createElement("span");
+    s.style.cssText = "font-family:var(--font-pretendard);" + css;
+    s.textContent = "1,697,000원";
+    host.appendChild(s);
+    const w = +s.getBoundingClientRect().width.toFixed(2);
+    const pass = Math.abs(w - ref) < 0.5;
+    if (!pass) allOk = false;
+    table.insertAdjacentHTML("beforeend",
+      `<tr><td>${label}</td><td class="n">${ref.toFixed(2)}px</td><td class="n">${w.toFixed(2)}px</td>` +
+      `<td class="${pass ? "ok" : "bad"}">${pass ? "일치" : "다름"}</td></tr>`);
+  }
+  host.remove();
+  const fid = document.getElementById("fidelity");
+  fid.dataset.ok = allOk ? "1" : "0";
+  fid.textContent = allOk ? "앱과 글꼴·크기 일치 확인" : "앱과 어긋남 — 이 파일로 판단하지 마세요";
+});
+
+const themeBtn = document.getElementById("theme");
+themeBtn.addEventListener("click", () => {
+  const dark = document.documentElement.getAttribute("data-theme") === "dark";
+  document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
+  themeBtn.textContent = dark ? "◐ 다크 모드" : "◑ 라이트 모드";
+});
+</script>
+</body>
+</html>

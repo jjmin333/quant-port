@@ -43,7 +43,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeoutMin)*time.Minute)
 	defer cancel()
 
-	mysql, err := repository.NewMySQL(cfg.MySQLDSN)
+	mysql, err := repository.NewMySQLForCLI(cfg.MySQLDSN)
 	if err != nil {
 		log.Fatalf("mysql: %v", err)
 	}

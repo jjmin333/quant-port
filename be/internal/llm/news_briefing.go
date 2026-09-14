@@ -58,6 +58,13 @@ previousBriefings가 있으면 흐름의 변화(이어짐·반전·소강)를 su
 // factsJSON must carry every number the prose may cite — the model is told not
 // to invent any, so anything missing simply will not be mentioned.
 func (c *Client) GenerateNewsBriefing(ctx context.Context, factsJSON string) (*NewsBriefingLLMOutput, error) {
+	_, out, err := c.GenerateNewsBriefingRaw(ctx, factsJSON)
+	return out, err
+}
+
+// GenerateNewsBriefingRaw returns the provider completion before parsing, plus
+// the decoded payload. Admin/dry-run tooling uses the raw string for auditing.
+func (c *Client) GenerateNewsBriefingRaw(ctx context.Context, factsJSON string) (raw string, out *NewsBriefingLLMOutput, err error) {
 	content, used, err := c.chatCompletion(
 		ctx,
 		newsBriefingSystemPrompt,
@@ -67,16 +74,16 @@ func (c *Client) GenerateNewsBriefing(ctx context.Context, factsJSON string) (*N
 		newsBriefingOutputTokens,
 	)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
-	var out NewsBriefingLLMOutput
-	if err := decodeLLMJSON(content, &out); err != nil {
-		return nil, err
+	var parsed NewsBriefingLLMOutput
+	if err := decodeLLMJSON(content, &parsed); err != nil {
+		return content, nil, err
 	}
-	out.Summary = strings.TrimSpace(out.Summary)
-	out.Mood = normalizeBriefingMood(out.Mood)
-	out.TotalTokens = used
-	return &out, nil
+	parsed.Summary = strings.TrimSpace(parsed.Summary)
+	parsed.Mood = normalizeBriefingMood(parsed.Mood)
+	parsed.TotalTokens = used
+	return content, &parsed, nil
 }
 
 // EstimateNewsBriefingTokens reports what one call is expected to cost, input

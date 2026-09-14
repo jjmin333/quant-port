@@ -16,6 +16,7 @@ import { NewsKeywordBadges } from "@/components/news/news-keyword-badges";
 import { NewsBreakingBadge } from "@/components/news/news-breaking-badge";
 import { isArticleBreakingNews } from "@/lib/news-breaking";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 
 type NewsArticleModalProps = {
   article: NewsArticle | null;
@@ -25,6 +26,8 @@ type NewsArticleModalProps = {
 };
 
 export function NewsArticleModal({ article, onClose, context }: NewsArticleModalProps) {
+  // 뒤로가기 처리는 셸이 아니라 `useNewsArticleModal`(호스트)이 맡는다 — 셸이 셋이라
+  // 여기에 두면 하나를 빠뜨리고, 둘에 두면 히스토리 항목이 두 번 쌓인다.
   useEffect(() => {
     if (!article) {
       return;
@@ -99,16 +102,16 @@ function NewsArticleModalFrame({
             <div className="flex flex-wrap items-center gap-2">
               <span
                 className={cn(
-                  "inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold",
+                  "inline-flex items-center rounded-md border px-2 py-0.5 text-cell font-semibold",
                   article.publisher.badgeClass,
                 )}
               >
                 {article.publisher.name}
               </span>
-              {isBreaking && <NewsBreakingBadge className="text-[11px]" />}
+              {isBreaking && <NewsBreakingBadge className="text-cell" />}
               <span
                 className={cn(
-                  "text-[11px] font-medium",
+                  "text-cell font-medium",
                   article.embedPolicy === "blocked"
                     ? "text-amber-400"
                     : article.embedPolicy === "ok"
@@ -121,11 +124,11 @@ function NewsArticleModalFrame({
               {article.tags
                 .filter((tag) => tag !== "속보")
                 .map((tag) => (
-                <span key={tag} className="text-[11px] font-medium text-[var(--text-muted)]">
+                <span key={tag} className="text-cell font-medium text-[var(--text-muted)]">
                   {tag}
                 </span>
               ))}
-              <time dateTime={article.publishedAt} className="text-[11px] text-[var(--text-muted)]">
+              <time dateTime={article.publishedAt} className="text-cell text-[var(--text-muted)]">
                 {formatRelativeTime(article.publishedAt)}
               </time>
             </div>
@@ -136,7 +139,7 @@ function NewsArticleModalFrame({
               {article.headline}
             </h2>
             {article.summary && (
-              <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{article.summary}</p>
+              <p className="text-read text-[var(--text-secondary)]">{article.summary}</p>
             )}
             {/* 종목 코드 나열은 옆 「관련 종목」 패널이 이름·시세와 함께 보여준다. */}
             <NewsKeywordBadges keywords={article.keywords} max={8} />
@@ -157,7 +160,7 @@ function NewsArticleModalFrame({
           {showIframe ? (
             <>
               <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2 sm:px-5">
-                <p className="text-[11px] text-emerald-400/90">{previewLabel}</p>
+                <p className="text-cell text-emerald-400/90">{previewLabel}</p>
                 <NewsPreviewZoomToolbar {...previewZoom} />
               </div>
               <div className="relative min-h-0 flex-1 overflow-auto">
@@ -195,7 +198,7 @@ function NewsArticleModalFrame({
         </div>
 
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border)] px-4 py-3 sm:px-5">
-          <span className="text-[11px] text-[var(--text-muted)]">
+          <span className="text-cell text-[var(--text-muted)]">
             수집: {article.source.name}
           </span>
           {hasUrl && (
@@ -203,7 +206,7 @@ function NewsArticleModalFrame({
               href={link}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--background)]"
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] hover:bg-[var(--background)]")}
             >
               원문 새 탭에서 열기
               <ExternalLink className="h-3.5 w-3.5" />
@@ -225,7 +228,7 @@ function ReaderFallback({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2 sm:px-5">
-        <p className="text-xs font-medium text-amber-400">
+        <p className="text-cell font-medium text-amber-400">
           {embedPolicyLabel(article.embedPolicy, article.publisher.name)}
         </p>
         <NewsPreviewZoomToolbar {...previewZoom} />
@@ -237,7 +240,7 @@ function ReaderFallback({
               {article.summary?.trim() ||
                 "이 언론사는 iframe 미리보기를 막습니다. 본문 전체는 원문 링크에서 확인해 주세요."}
             </p>
-            <p className="text-xs leading-relaxed text-[var(--text-muted)]">
+            <p className="text-cell leading-relaxed text-[var(--text-muted)]">
               요약만 표시됩니다. 전체 기사는 하단 「원문 새 탭에서 열기」를 이용해 주세요.
             </p>
           </div>

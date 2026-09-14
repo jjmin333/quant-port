@@ -31,8 +31,6 @@ export function intradayInitialVisibleBars(interval: CandleInterval): number {
       return 48;
     case "30m":
       return 32;
-    case "60m":
-      return 56;
     default:
       return 120;
   }

@@ -8,9 +8,11 @@ import (
 	"log"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/enact/quant-port/be/internal/marketdata/calendar"
 	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/repository"
 )
@@ -32,10 +34,25 @@ type ScoreService struct {
 
 	// indexScores shares this batch's daily slot — see RunScheduler.
 	indexScores *IndexScoreService
+
+	// liveQuotes overlays the leaderboard's change rate while the market is
+	// trading. Nil in the batch workers — they never serve the list, and the
+	// scoring run itself must stay free of upstream calls.
+	liveQuotes ScoreLiveQuotes
+}
+
+// ScoreLiveQuotes is the slice of QuotesService the leaderboard needs. An
+// interface, not the concrete type, so the score batch does not drag the whole
+// quote stack (Toss client, Redis, poller) into worker processes.
+type ScoreLiveQuotes interface {
+	LiveChanges(ctx context.Context, reqs []LiveChangeRequest) map[string]LiveChange
 }
 
 // SetIndexScores wires index scoring into the same daily run.
 func (s *ScoreService) SetIndexScores(svc *IndexScoreService) { s.indexScores = svc }
+
+// SetLiveQuotes wires live prices into the leaderboard read path.
+func (s *ScoreService) SetLiveQuotes(q ScoreLiveQuotes) { s.liveQuotes = q }
 
 func NewScoreService(db *sql.DB, scores *repository.StockScoreRepo, settings *ScoreSettingsStore) *ScoreService {
 	return &ScoreService{db: db, scores: scores, settings: settings}
@@ -85,6 +102,18 @@ func (in *scoreInput) fundamentalsApplicable() bool {
 	return in.assetType != string(model.AssetETF)
 }
 
+// PruneOldScores drops score rows past the retention window.
+//
+// 조회는 전부 최신 거래일 하나만 본다(MAX(trade_date) 또는 LatestScoredDate).
+// 과거 점수 시계열을 읽는 기능이 없으므로 오래된 행은 용량만 차지한다 —
+// 정리하지 않으면 연 7.5GB다. repository.ScoreRetentionDates 헤더 참조.
+func (s *ScoreService) PruneOldScores(ctx context.Context) (int64, error) {
+	if s == nil || s.scores == nil {
+		return 0, nil
+	}
+	return s.scores.PruneOldScores(ctx, repository.ScoreRetentionDates)
+}
+
 // Recompute builds and stores scores for one trade date. Returns the
 // distribution self-check so callers (batch, admin) can gate on it.
 func (s *ScoreService) Recompute(ctx context.Context, tradeDate string) (model.ScoreDistribution, error) {
@@ -107,7 +136,7 @@ func (s *ScoreService) Recompute(ctx context.Context, tradeDate string) (model.S
 	log.Printf("score: loaded %d symbols for %s in %s", len(inputs), tradeDate, time.Since(start).Round(time.Millisecond))
 
 	techStart := time.Now()
-	if err := s.attachTechnicals(ctx, inputs); err != nil {
+	if err := s.attachTechnicals(ctx, inputs, tradeDate); err != nil {
 		return dist, fmt.Errorf("technicals: %w", err)
 	}
 	log.Printf("score: technicals in %s", time.Since(techStart).Round(time.Millisecond))
@@ -115,7 +144,17 @@ func (s *ScoreService) Recompute(ctx context.Context, tradeDate string) (model.S
 	for _, in := range inputs {
 		in.techRaw, in.techConf = technicalAxis(in)
 	}
-	assignPeerGroups(inputs)
+	/*
+		동종 그룹은 **어제 것을 이어 받는다** — `assignPeerGroups` 참고. 못 읽어도
+		배치는 그대로 돈다(첫 실행이면 읽을 것이 없다), 그때는 예전처럼 오늘 분포로만
+		정해진다.
+	*/
+	prevPeer, err := s.scores.PeerGroupsBefore(ctx, tradeDate)
+	if err != nil {
+		log.Printf("score: previous peer groups unavailable, assigning fresh: %v", err)
+		prevPeer = nil
+	}
+	assignPeerGroups(inputs, prevPeer)
 	normalized := normalizeUniverse(inputs)
 
 	settings := model.DefaultScoreSettings()
@@ -165,7 +204,7 @@ func (s *ScoreService) loadUniverse(ctx context.Context, tradeDate string) ([]*s
 		       COALESCE(f.shares_outstanding, s.shares_outstanding) AS shares,
 		       f.roe, f.operating_margin, f.net_profit_margin, f.debt_ratio, f.current_ratio,
 		       f.revenue_growth_yoy, f.eps_growth_yoy,
-		       f.eps_basic, f.total_equity, f.revenue,
+		       f.eps_diluted, f.eps_basic, f.net_income, f.total_equity, f.revenue,
 		       d.close_price
 		  FROM stocks s
 		  LEFT JOIN stock_fundamentals f ON f.symbol = s.symbol
@@ -181,16 +220,17 @@ func (s *ScoreService) loadUniverse(ctx context.Context, tradeDate string) ([]*s
 	var out []*scoreInput
 	for rows.Next() {
 		var (
-			in                          scoreInput
-			shares, eps, equity, revenue sql.NullFloat64
-			closePrice                  sql.NullFloat64
-			name, assetType, market     sql.NullString
+			in                                    scoreInput
+			shares, equity, revenue               sql.NullFloat64
+			epsDiluted, epsBasic, netIncome       sql.NullFloat64
+			closePrice                            sql.NullFloat64
+			name, assetType, market               sql.NullString
 		)
 		if err := rows.Scan(
 			&in.symbol, &name, &assetType, &market, &shares,
 			&in.roe, &in.opMargin, &in.netMargin, &in.debtRatio, &in.currentRatio,
 			&in.revGrowth, &in.epsGrowth,
-			&eps, &equity, &revenue, &closePrice,
+			&epsDiluted, &epsBasic, &netIncome, &equity, &revenue, &closePrice,
 		); err != nil {
 			return nil, err
 		}
@@ -212,8 +252,8 @@ func (s *ScoreService) loadUniverse(ctx context.Context, tradeDate string) ([]*s
 		// symbol_last_prices, which covers only ~1.1k symbols) is what makes
 		// this axis reachable for thousands of symbols instead of hundreds.
 		if in.close > 0 {
-			if eps.Valid && eps.Float64 > 0 {
-				v := in.close / eps.Float64
+			if eps, ok := scoreEPS(epsDiluted, epsBasic, netIncome, in.shares); ok && eps > 0 {
+				v := in.close / eps
 				in.per = &v
 			}
 			if in.marketCap > 0 {
@@ -232,13 +272,51 @@ func (s *ScoreService) loadUniverse(ctx context.Context, tradeDate string) ([]*s
 	return out, rows.Err()
 }
 
+/*
+scoreEPS — PER의 분모.
+
+**화면과 같은 순서로 고른다** (`fundamentals_calc.go`의 `ComputeValuationMetrics`
++ `enrichDerivedEPS`): 희석 EPS → 기본 EPS → 없으면 순이익 ÷ 발행주식수.
+
+세 번째 갈래가 없어서 생긴 문제(2026-09-03 사용자 지적 §7): 점수 쪽은 `eps_basic`
+컬럼만 봤다. 그런데 DART/EDGAR 원문에 주당순이익이 아예 없는 경우가 흔해서, 화면의
+밸류에이션 탭은 순이익으로 되짚은 PER을 멀쩡히 보여 주는데 **가치 축은 그 종목의
+PER을 아예 못 본 채** PBR·PSR 둘로만 매겨지고 있었다. 같은 종목·같은 화면에서 한쪽은
+PER을 알고 한쪽은 모르는 상태였던 셈이다.
+
+EPS가 음수(적자)면 PER은 뜻이 없으므로 부르는 쪽이 `> 0`으로 거른다 — 그때 가치
+축은 PBR·PSR로 간다. 「PER 없음」과 「PER 나쁨」은 다른 말이다.
+*/
+func scoreEPS(diluted, basic, netIncome sql.NullFloat64, shares float64) (float64, bool) {
+	if diluted.Valid && diluted.Float64 != 0 {
+		return diluted.Float64, true
+	}
+	if basic.Valid && basic.Float64 != 0 {
+		return basic.Float64, true
+	}
+	if netIncome.Valid && shares > 0 {
+		return netIncome.Float64 / shares, true
+	}
+	return 0, false
+}
+
 // scoreTechnicalBars caps how much history is kept per symbol: SMA200 plus a
 // 52-week window needs ~252 bars, so anything older cannot change the result.
 const scoreTechnicalBars = 260
 
-// attachTechnicals streams every daily bar once, ordered by symbol, computing
-// indicators as each symbol's run ends. Memory stays bounded to one symbol.
-func (s *ScoreService) attachTechnicals(ctx context.Context, inputs []*scoreInput) error {
+/*
+attachTechnicals streams every daily bar once, ordered by symbol, computing
+indicators as each symbol's run ends. Memory stays bounded to one symbol.
+
+**채점하는 날짜까지만 읽는다.** 예전에는 날짜 조건이 없어 `bar_interval='1d'`인 봉을
+전부 읽었다. 매일 도는 배치에서는 티가 안 났지만(오늘 채점하면 오늘까지가 맞다), 지난
+날짜를 다시 계산하면 **그날 몰랐던 봉으로 그날 점수를 매겼다** — 08-27을 오늘 다시
+돌리면 08-28·08-31 봉이 섞여 들어간다. 그러면 재계산 결과와 원래 저장된 값을 나란히
+놓고 비교할 수가 없고, 채점 날짜라는 인자가 사실상 종가 조인에만 쓰이게 된다.
+
+PK가 (symbol, bar_interval, bar_time)이라 조건이 붙어도 훑는 순서와 정렬은 그대로다.
+*/
+func (s *ScoreService) attachTechnicals(ctx context.Context, inputs []*scoreInput, tradeDate string) error {
 	bySymbol := make(map[string]*scoreInput, len(inputs))
 	for _, in := range inputs {
 		bySymbol[in.symbol] = in
@@ -250,9 +328,10 @@ func (s *ScoreService) attachTechnicals(ctx context.Context, inputs []*scoreInpu
 		SELECT symbol, open_price, high_price, low_price, close_price, volume
 		  FROM candle_bars
 		 WHERE bar_interval = '1d'
+		   AND bar_time < DATE_ADD(?, INTERVAL 1 DAY)
 		 ORDER BY symbol, bar_time`
 
-	rows, err := s.db.QueryContext(ctx, q)
+	rows, err := s.db.QueryContext(ctx, q, tradeDate)
 	if err != nil {
 		return err
 	}
@@ -302,10 +381,21 @@ func (s *ScoreService) attachTechnicals(ctx context.Context, inputs []*scoreInpu
 	return rows.Err()
 }
 
-// assignPeerGroups keys each symbol to (assetType:market:capTercile). Sector
-// would be the right third axis but no sector column exists in the schema, so
-// market cap is the best available refinement (§8 of the design doc).
-func assignPeerGroups(inputs []*scoreInput) {
+/*
+assignPeerGroups keys each symbol to (assetType:market:capTercile). Sector
+would be the right third axis but no sector column exists in the schema, so
+market cap is the best available refinement (§8 of the design doc).
+
+**어제 속했던 그룹을 이어 받는다** (`prevPeer`). 시총은 주가만큼 매일 움직이고 분위
+경계선도 그날 분포에서 다시 잡히므로, 경계 근처 종목은 아무 일이 없어도 하루걸러
+cap2↔cap3를 오간다. 시총을 못 받은 날에는 분위가 통째로 빠져 `us:NASDAQ`와
+`us:NASDAQ:cap1` 사이를 왕복한다. 실측 08-27→08-28: **17,913 중 9,936(55%)이 소속
+변경**. 그룹이 바뀌면 백분위가 바뀌고, 백분위가 바뀌면 재무제표가 그대로여도 수익성이
+5.1점, 성장이 3.9점씩 움직인다 — 종합 점수가 하루에 평균 6.2점 뛰던 몫의 큰 부분이다.
+
+`prevPeer`가 비면(첫 실행·보관 기간 밖) 예전과 똑같이 그날 값으로만 정한다.
+*/
+func assignPeerGroups(inputs []*scoreInput, prevPeer map[string]string) {
 	capsByMarket := map[string][]float64{}
 	for _, in := range inputs {
 		base := in.assetType + ":" + in.market
@@ -318,7 +408,9 @@ func assignPeerGroups(inputs []*scoreInput) {
 	}
 	for _, in := range inputs {
 		base := in.assetType + ":" + in.market
-		tercile := capTercile(capsByMarket[base], in.marketCap)
+		tercile := stickyCapTercile(
+			capsByMarket[base], in.marketCap, prevTercileFor(prevPeer[in.symbol], base),
+		)
 		if tercile == 0 {
 			in.peer = base
 			continue
@@ -327,6 +419,86 @@ func assignPeerGroups(inputs []*scoreInput) {
 	}
 	collapseSmallPeers(inputs)
 }
+
+/*
+prevTercileFor는 저장된 그룹 문자열에서 분위 번호를 꺼낸다.
+
+**같은 base일 때만** 유효하다. 종목이 시장을 옮기거나(상장 이전) 자산군이 바뀌면
+어제의 분위는 다른 분포에서 매긴 값이라 이어 붙일 근거가 없다. 분위가 없던 그룹
+(`us:NASDAQ`)은 0을 돌려주고, 그러면 아래 stickyCapTercile이 오늘 값으로 새로 정한다.
+*/
+func prevTercileFor(prev, base string) int {
+	if prev == "" || !strings.HasPrefix(prev, base+":cap") {
+		return 0
+	}
+	n, err := strconv.Atoi(strings.TrimPrefix(prev, base+":cap"))
+	if err != nil || n < 1 || n > 3 {
+		return 0
+	}
+	return n
+}
+
+/*
+stickyCapTerciles는 분위를 **바꿀 이유가 분명할 때만** 바꾼다.
+
+두 가지를 막는다:
+
+  - **경계 근처의 왕복.** 어제 cap2였는데 오늘 계산이 cap3를 준다면, 시총이 경계를
+    `capTercileHysteresis`만큼 넘어섰을 때만 옮긴다. 경계에서 1%쯤 오르내리는 종목이
+    매일 다른 무리에 섞이는 일을 없앤다.
+  - **시총 결측으로 인한 이탈.** 오늘 시총을 못 받았다고 어제 있던 분위를 버리면,
+    그 종목은 전 시장(수천 종목)을 상대로 다시 줄 세워진다. 값이 없는 날은 어제
+    자리에 그대로 둔다 — 모른다는 것이 "다른 무리"라는 뜻은 아니다.
+*/
+func stickyCapTercile(sortedCaps []float64, cap float64, prev int) int {
+	fresh := capTercile(sortedCaps, cap)
+	if prev < 1 || prev > 3 {
+		return fresh
+	}
+	// 오늘 값을 못 정했다(시총 결측·표본 부족) → 어제 자리를 지킨다.
+	if fresh == 0 {
+		return prev
+	}
+	if fresh == prev {
+		return prev
+	}
+
+	n := len(sortedCaps)
+	if n < 30 {
+		return prev
+	}
+	t1, t2 := sortedCaps[n/3], sortedCaps[2*n/3]
+
+	// 올라가려면 넘어야 할 선을 여유만큼 넘어야 하고, 내려가려면 여유만큼 내려가야 한다.
+	switch {
+	case fresh > prev:
+		boundary := t1
+		if prev == 2 {
+			boundary = t2
+		}
+		if cap > boundary*(1+capTercileHysteresis) {
+			return fresh
+		}
+	case fresh < prev:
+		boundary := t2
+		if prev == 2 {
+			boundary = t1
+		}
+		if cap < boundary*(1-capTercileHysteresis) {
+			return fresh
+		}
+	}
+	return prev
+}
+
+/*
+분위를 옮기려면 경계에서 이만큼은 벗어나 있어야 한다.
+
+10%는 하루 등락으로는 좀처럼 닿지 않으면서(경계 근처 왕복을 없앤다) 몇 주에 걸친
+실제 체급 변화는 막지 않는 폭이다. 등급 문자(`ScoreGrade`)에 밴드를 넓게 잡아 한
+점 차이로 글자가 안 바뀌게 한 것과 같은 생각이다.
+*/
+const capTercileHysteresis = 0.10
 
 // minPeerSize is the smallest group whose percentiles mean anything. Below it
 // the group is folded back into its market so a symbol is not ranked against
@@ -606,9 +778,19 @@ func buildScoreRow(
 			}
 		}
 	}
-	// Sentiment stays unset in batch on purpose: news sentiment comes from the
-	// LLM and insider data from live DART/EDGAR calls, neither of which can run
-	// across 17,901 symbols. It is applied as a bounded on-demand adjustment.
+	/*
+		심리·수급은 **여기서 비워 둔다.** 뉴스 감성은 LLM이 붙인 기사별 라벨에서
+		나오고 내부자 거래는 DART/EDGAR 종목별 호출이라, 둘 다 17,901종목에 돌릴
+		수 없다.
+
+		대신 요약 파이프라인이 한 종목을 조립할 때 그 재료를 이미 모으므로, 그
+		끝에서 `ScoreService.ApplySentiment`가 이 행에 축을 얹고 종합 점수를 다시
+		낸다(`stock_score_sentiment.go`). 이 배치가 다시 돌면 축은 지워지고, 다음
+		요약 재빌드가 다시 붙인다.
+
+		비워 두는 것과 0을 넣는 것은 다르다 — `nil`은 가중치에서 빠지고, 0은
+		「심리 최하위」다.
+	*/
 
 	weights := settings.Weights
 	weightSource := "global"
@@ -736,6 +918,11 @@ func mustJSON(v any) string {
 
 // assignPeerPercentiles ranks each scored symbol inside its own peer group so
 // the UI can say "상위 14%" instead of only showing a bare number.
+//
+// The stored value is a 상위 N% — lower is better — and model.ReadPeerPct floors
+// it at 1: the rank below puts the single best symbol of a group at the 100th
+// percentile, which inverts to 0, and 「동종 상위 0%」 is not something anyone
+// says. On 09-08 twenty of the top 100 US scores read that way.
 func assignPeerPercentiles(rows []repository.StockScoreRow, peerScores map[string][]float64) {
 	for k := range peerScores {
 		sort.Float64s(peerScores[k])
@@ -755,7 +942,7 @@ func assignPeerPercentiles(rows []repository.StockScoreRow, peerScores map[strin
 			pct = 100
 		}
 		// Report as "top N%".
-		top := 100 - pct
+		top := model.ReadPeerPct(100 - pct)
 		rows[i].PeerPct = sql.NullInt64{Int64: int64(top), Valid: true}
 	}
 }
@@ -890,7 +1077,94 @@ func (s *ScoreService) TopScores(ctx context.Context, market string, limit int) 
 	if items == nil {
 		items = []model.StockScoreListItem{}
 	}
+	s.overlayLiveChanges(ctx, items)
 	return items, tradeDate, nil
+}
+
+/*
+overlayLiveChanges — 장이 열려 있는 동안에는 확정 종가 대신 지금 값을 보여준다.
+
+랭킹 자체는 하루 한 번 도는 배치의 결과지만, 그 옆의 등락률은 「어제 이랬다」가
+아니라 「지금 이렇다」여야 한다 — 화면의 다른 시세 칸이 전부 그렇게 움직인다.
+애프터마켓까지 끝난 뒤에는 `LiveChanges`가 아무것도 주지 않으므로 종가가 그대로
+남는다(그때는 실시간 값이라는 것이 곧 종가다).
+
+시세를 못 구한 행은 **손대지 않는다.** 목록에서 그 종목만 조용히 어제 값으로
+남는 편이, 절반은 실시간이고 절반은 빈칸인 목록보다 낫다.
+*/
+/*
+scorePrevCloseHint — 저장된 종가에서 「직전 세션 종가」를 고른다.
+
+랭킹 행이 들고 있는 종가는 **점수일 이하 중 가장 최근** 것이다. 그게 그 종목 시장의
+오늘 세션 것이라면(미국 애프터마켓 중에는 그렇다 — 정규장이 끝나고 적재가 이미
+돌았다) 직전 종가는 그 행의 `prev_close`이고, 아직 오늘 것이 아니라면 그 행의 종가
+자체가 직전 종가다.
+
+「오늘」은 그 종목 시장의 표준시로 읽는다 — KST 자정을 넘긴 미국 애프터마켓을
+국내 날짜로 재면 한 세션씩 밀린다.
+*/
+func scorePrevCloseHint(it model.StockScoreListItem) float64 {
+	if it.ClosePrice == nil || *it.ClosePrice <= 0 {
+		return 0
+	}
+	schedule := calendar.ScheduleKRX
+	if it.AssetType == string(model.AssetUS) || it.AssetType == string(model.AssetETF) {
+		schedule = calendar.ScheduleUS
+	}
+	today := time.Now().In(calendar.LocationFor(schedule)).Format("2006-01-02")
+	if it.PriceAsOf >= today && it.PrevClose != nil && *it.PrevClose > 0 {
+		return *it.PrevClose
+	}
+	return *it.ClosePrice
+}
+
+func (s *ScoreService) overlayLiveChanges(ctx context.Context, items []model.StockScoreListItem) {
+	if s == nil || len(items) == 0 {
+		return
+	}
+	/*
+		기준가는 **실시간 시세를 못 구해도** 채운다.
+
+		화면이 SSE로 받은 가격에서 등락률을 내려면 이 값이 있어야 하고, 그건 이 함수가
+		시세를 구했는지와 무관하다. 예전 순서(구하기 → 성공한 것만 손대기)를 그대로
+		두면 마감 중이거나 시세가 없는 종목만 기준가가 비어, 장이 열리는 순간 그 행들만
+		등락률이 안 뜬다.
+	*/
+	for i := range items {
+		if hint := scorePrevCloseHint(items[i]); hint > 0 {
+			base := hint
+			items[i].BasePrice = &base
+		}
+	}
+	if s.liveQuotes == nil {
+		return
+	}
+	reqs := make([]LiveChangeRequest, len(items))
+	for i, it := range items {
+		reqs[i] = LiveChangeRequest{
+			Symbol:        it.Symbol,
+			AssetType:     it.AssetType,
+			PrevCloseHint: scorePrevCloseHint(it),
+		}
+	}
+	live := s.liveQuotes.LiveChanges(ctx, reqs)
+	if len(live) == 0 {
+		return
+	}
+	for i := range items {
+		lc, ok := live[strings.ToUpper(items[i].Symbol)]
+		if !ok || lc.Price <= 0 {
+			continue
+		}
+		rate := lc.ChangeRate
+		price := lc.Price
+		items[i].ChangeRate = &rate
+		items[i].ClosePrice = &price
+		if lc.Currency != "" {
+			items[i].Currency = lc.Currency
+		}
+		items[i].PriceAsOf = model.ScorePriceAsOfLive
+	}
 }
 
 // LatestScoredDate is the newest date the score batch actually wrote.

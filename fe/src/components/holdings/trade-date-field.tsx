@@ -41,9 +41,9 @@ export function TradeDateField({
   return (
     <div className={cn("min-w-0", className)}>
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-        <span className="text-[11px] font-medium text-foreground">{label}</span>
+        <span className="text-cell font-medium text-foreground">{label}</span>
         {readable ? (
-          <span className="text-[11px] text-muted-foreground">{readable}</span>
+          <span className="text-cell text-muted-foreground">{readable}</span>
         ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
@@ -52,13 +52,13 @@ export function TradeDateField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
-          className="h-9 min-w-[9.5rem] flex-1 font-mono text-sm"
+          className="h-9 min-w-[9.5rem] flex-1 font-num text-sm"
         />
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="h-9 shrink-0 px-2.5 text-[11px]"
+          className="h-9 shrink-0 px-2.5 text-cell"
           disabled={disabled}
           onClick={() => onChange(todayTradeDateISO())}
         >
@@ -68,7 +68,7 @@ export function TradeDateField({
           type="button"
           variant="outline"
           size="sm"
-          className="h-9 shrink-0 px-2.5 text-[11px]"
+          className="h-9 shrink-0 px-2.5 text-cell"
           disabled={disabled}
           onClick={() => onChange(offsetTradeDateISO(-1))}
         >

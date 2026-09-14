@@ -48,7 +48,7 @@ export function FundamentalsIndicatorsPanel({
 }: IndicatorsPanelProps) {
   if (loading) {
     return (
-      <Card className="flex min-h-[160px] items-center justify-center p-6 text-xs text-[var(--text-muted)]">
+      <Card className="flex min-h-[160px] items-center justify-center p-6 text-cell text-[var(--text-muted)]">
         지표 데이터 로딩 중…
       </Card>
     );
@@ -56,7 +56,7 @@ export function FundamentalsIndicatorsPanel({
 
   if (!data) {
     return (
-      <Card className="flex min-h-[160px] items-center justify-center p-6 text-xs text-[var(--text-muted)]">
+      <Card className="flex min-h-[160px] items-center justify-center p-6 text-cell text-[var(--text-muted)]">
         지표 데이터를 불러오지 못했습니다.
       </Card>
     );
@@ -66,7 +66,7 @@ export function FundamentalsIndicatorsPanel({
     return (
       <Card className="border-dashed p-5 text-center">
         <Badge variant="info">{COVERAGE_TIER_LABEL.not_applicable}</Badge>
-        <p className="mt-3 text-xs text-[var(--text-secondary)]">
+        <p className="mt-3 text-cell text-[var(--text-secondary)]">
           {data.message ?? "재무제표 미제공 상품입니다."}
         </p>
       </Card>
@@ -77,7 +77,7 @@ export function FundamentalsIndicatorsPanel({
     return (
       <Card className="p-5 text-center">
         <Badge variant="warning">{COVERAGE_TIER_LABEL.unavailable}</Badge>
-        <p className="mt-3 text-xs text-[var(--text-secondary)]">공시 재무 데이터가 없습니다.</p>
+        <p className="mt-3 text-cell text-[var(--text-secondary)]">공시 재무 데이터가 없습니다.</p>
       </Card>
     );
   }
@@ -85,47 +85,29 @@ export function FundamentalsIndicatorsPanel({
   const panel = panelProp ?? mapFundamentalsToPanel(data, stock);
   if (!panel) return null;
 
-  const scoreTone =
-    panel.score >= 75 ? "text-emerald-400" : panel.score >= 55 ? "text-violet-400" : "text-amber-400";
   const tierVariant =
     panel.coverageTier === "full" ? "profit" : panel.coverageTier === "basic" ? "warning" : "info";
 
   return (
     <Card className="p-0">
-      <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-3 py-2.5">
-        <div className="min-w-0">
-          <p className="text-[10px] text-[var(--text-muted)]">종합 지표</p>
-          <p className="line-clamp-1 text-xs text-[var(--text-secondary)]">{panel.summary}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <ScoreRing score={panel.score} />
-          <div className="text-right">
-            <p className={cn("text-lg font-bold tabular-nums leading-none", scoreTone)}>
-              {panel.score > 0 ? `+${panel.score}` : "—"}
-            </p>
-            <p className={cn("text-[11px] font-semibold", scoreTone)}>{panel.rating}</p>
-          </div>
-        </div>
-      </div>
+      {/*
+        # 점수는 **이 카드가 그리지 않는다** (2026-09-03 사용자 결정)
 
-      <div className="border-b border-[var(--border)] bg-blue-500/5 px-3 py-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Badge variant="info" className="text-[10px]">
-            핵심 요약
-          </Badge>
-          <Badge variant={tierVariant} className="text-[10px]">
+        여기 머리줄에 「가치 점수 62 / 100 · 종합 66」이 글자로 적혀 있었다. 그런데
+        재무제표 탭은 같은 것을 탭 맨 위의 막대 달린 배지(`AxisScoreBadge`)로 보여
+        준다 — 같은 앱에서 「수익성 점수」와 「가치 점수」를 읽는 자리와 모양이 서로
+        달랐다는 뜻이다. 점수는 이제 밸류에이션 탭도 그 배지로 그린다
+        (`TAB_SCORE_AXIS`), 그래서 이 자리는 카드가 무엇인지(종합 지표)와 그 숫자를
+        얼마나 믿을 수 있는지(커버리지 등급)만 말한다.
+      */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--border)] px-3 py-2.5">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <p className="text-micro text-[var(--text-muted)]">종합 지표</p>
+          {/* 커버리지 등급은 「이 카드의 숫자를 얼마나 믿을 수 있나」라 남긴다 —
+              함께 있던 「핵심 요약」 배지와 태그 줄은 뺐다(전부 중복이었다). */}
+          <Badge variant={tierVariant} className="text-micro">
             {COVERAGE_TIER_LABEL[panel.coverageTier]}
           </Badge>
-        </div>
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {panel.tags.map((tag) => (
-            <span
-              key={tag}
-              className="rounded-full bg-[var(--surface-elevated)] px-2 py-0.5 text-[10px] text-[var(--text-muted)]"
-            >
-              {tag}
-            </span>
-          ))}
         </div>
       </div>
 
@@ -147,14 +129,20 @@ function MetricCard({ metric }: { metric: StockFundamentalsPanel["metrics"][numb
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="text-[11px] text-[var(--text-secondary)]">{metric.label}</span>
-        <span className={cn("text-[10px] font-medium", metricToneClass(metric.tone))}>
+        <span className="text-cell text-[var(--text-secondary)]">{metric.label}</span>
+        <span className={cn("text-micro font-medium", metricToneClass(metric.tone))}>
           {metric.verdict}
         </span>
       </div>
-      <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-[var(--text-primary)]">
+      <p className="mt-1 font-num text-lg font-semibold tabular-nums text-[var(--text-primary)]">
         {metric.value}
       </p>
+      {/* 값 바로 아래에 한 줄 풀이. 「PER」만 적힌 카드는 입문자에게 아무 말도
+          하지 않는다 — 무엇을 무엇으로 나눈 값이고 높으면/낮으면 무슨 뜻인지가
+          숫자 옆에 붙어 있어야 한다. */}
+      {metric.hint && (
+        <p className="mt-1 text-micro leading-snug text-[var(--text-muted)]">{metric.hint}</p>
+      )}
       {metric.available && (
         <div className="mt-2 h-1 overflow-hidden rounded-full bg-[var(--surface-elevated)]">
           <div
@@ -167,30 +155,3 @@ function MetricCard({ metric }: { metric: StockFundamentalsPanel["metrics"][numb
   );
 }
 
-function ScoreRing({ score }: { score: number }) {
-  const pct = Math.min(100, Math.max(0, score));
-  const dash = `${pct} ${100 - pct}`;
-  return (
-    <svg viewBox="0 0 36 36" className="h-9 w-9 -rotate-90" aria-hidden>
-      <circle
-        cx="18"
-        cy="18"
-        r="15.5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="3"
-        className="text-[var(--surface-elevated)]"
-      />
-      <circle
-        cx="18"
-        cy="18"
-        r="15.5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeDasharray={dash}
-        className="text-emerald-500"
-      />
-    </svg>
-  );
-}

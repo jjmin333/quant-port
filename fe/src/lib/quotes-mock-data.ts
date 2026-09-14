@@ -1,7 +1,7 @@
 export type QuoteCurrency = "KRW" | "USD";
 export type QuoteAssetType = "domestic" | "us" | "etf";
 export type QuoteMarket = "KRX" | "KOSDAQ" | "NYSE" | "NASDAQ" | "AMEX";
-export type CandleInterval = "1m" | "5m" | "10m" | "30m" | "60m" | "1d" | "1w" | "1M";
+export type CandleInterval = "1m" | "5m" | "10m" | "30m" | "1d" | "1w" | "1M";
 export type TradeSide = "buy" | "sell" | "neutral";
 
 export type MarketIndex = {
@@ -432,7 +432,6 @@ const candlesMap: Record<string, Record<CandleInterval, Candle[]>> = {
     "5m": generateCandles(60_800, 48, 400),
     "10m": generateCandles(60_800, 36, 600),
     "30m": generateCandles(60_800, 24, 900),
-    "60m": generateCandles(60_800, 16, 1_200),
     "1d": generateCandles(60_800, 30, 1_200),
     "1w": generateCandles(60_800, 24, 2_500),
     "1M": generateCandles(60_800, 12, 5_000),
@@ -442,7 +441,6 @@ const candlesMap: Record<string, Record<CandleInterval, Candle[]>> = {
     "5m": generateCandles(254.2, 48, 1.5),
     "10m": generateCandles(254.2, 36, 2),
     "30m": generateCandles(254.2, 24, 3),
-    "60m": generateCandles(254.2, 16, 4),
     "1d": generateCandles(254.2, 30, 4),
     "1w": generateCandles(254.2, 24, 8),
     "1M": generateCandles(254.2, 12, 15),

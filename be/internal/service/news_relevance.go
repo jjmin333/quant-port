@@ -195,6 +195,97 @@ var cryptoFinanceTerms = []string{
 	"nft", "web3", "채굴", "mining", "halving", "반감기",
 }
 
+/*
+cryptoAmbiguousMarketTerms — **코인 기사에도 그대로 나오는 증시 단어들.**
+
+이것들이 `explicitDomesticStockTerms`에 섞여 있는 바람에 코인 전문 매체 기사가
+증권 피드로 들어왔다. 실측(2026-09-03 사용자 신고 2건):
+
+	「리플 선물 매도우위 8억8210만달러로 확대」            → 「선물」로 통과
+	「[알트 현물 ETF] 라이트코인 단독 순유입…」            → 「etf」로 통과
+
+둘 다 주식과는 아무 상관이 없다. 코인에도 선물·옵션·ETF·지수가 있고 매수·매도·
+급등·시가총액은 아예 같은 말이라, 이 단어들은 「증시 기사다」의 근거가 될 수 없다.
+
+여기서 빼도 코스피·코스닥·증시·주가·종목·공매도·상한가처럼 **주식에서만 쓰는 말**은
+그대로 남는다 — 「코스피, 외국인 매수에 2%대 상승」 같은 기사는 계속 통과한다.
+*/
+var cryptoAmbiguousMarketTerms = []string{
+	"etf", "선물", "옵션", "지수", "매수", "매도", "순매수", "순매도",
+	"급등", "급락", "시가총액", "거래량", "상장", "현물",
+}
+
+func isCryptoAmbiguousTerm(term string) bool {
+	term = strings.ToLower(strings.TrimSpace(term))
+	for _, amb := range cryptoAmbiguousMarketTerms {
+		if term == amb {
+			return true
+		}
+	}
+	return false
+}
+
+// nonCryptoStockTerms — 코인 기사에는 나올 수 없는 증시 앵커만 남긴 목록.
+var nonCryptoStockTerms = filterOutCryptoAmbiguous(explicitDomesticStockTerms)
+
+func filterOutCryptoAmbiguous(terms []string) []string {
+	out := make([]string, 0, len(terms))
+	for _, term := range terms {
+		if isCryptoAmbiguousTerm(term) {
+			continue
+		}
+		out = append(out, term)
+	}
+	return out
+}
+
+/*
+hasNonCryptoStockAnchor — 「이 기사는 주식 이야기다」를 코인 기사가 흉내 낼 수 없는
+근거로만 판정한다.
+
+섹터 맥락(`hasSectorWithIndustryContext`)은 그대로 받는다 — 「반도체 업황 전망」은
+코인 기사가 낼 수 있는 문장이 아니다.
+*/
+func hasNonCryptoStockAnchor(blob string) bool {
+	if containsAnyTerm(blob, nonCryptoStockTerms) {
+		return true
+	}
+	return hasSectorWithIndustryContext(blob)
+}
+
+/*
+altcoinTerms — 개별 알트코인.
+
+비트코인은 **우리가 지수로 관리하는 자산**이라 지금 규칙을 그대로 두고, 그 밖의
+코인만 따로 본다. 사용자 신고 2건이 정확히 이 경우였다 — 리플·라이트코인·XRP·SOL·
+도지코인 이야기인데 비트코인과도 무관했다.
+*/
+var altcoinTerms = []string{
+	"리플", "xrp", "이더리움", "ethereum", "eth", "솔라나", "solana",
+	"도지", "doge", "dogecoin", "도지코인", "라이트코인", "litecoin", "ltc",
+	"에이다", "cardano", "트론", "tron", "폴카닷", "polkadot", "아발란체", "avalanche",
+	"시바이누", "shiba", "체인링크", "chainlink", "알트코인", "알트", "밈코인",
+	"스테이블코인", "usdt", "usdc",
+}
+
+var bitcoinTerms = []string{"비트코인", "bitcoin", "btc"}
+
+/*
+isAltcoinOnlyArticle — 알트코인 이야기이고 비트코인도, 진짜 증시 앵커도 없는 기사.
+
+코인 전문 매체가 아닌 경로(네이버 종목 검색 등)로 같은 기사가 들어와도 걸리도록
+출처와 무관하게 본다.
+*/
+func isAltcoinOnlyArticle(blob string) bool {
+	if !containsAnyTerm(blob, altcoinTerms) {
+		return false
+	}
+	if containsAnyTerm(blob, bitcoinTerms) {
+		return false
+	}
+	return !hasNonCryptoStockAnchor(blob)
+}
+
 func isCryptoNewsSource(sourceID string) bool {
 	switch strings.ToLower(strings.TrimSpace(sourceID)) {
 	case "tokenpost", "coinreaders", "blockmedia":
@@ -211,15 +302,19 @@ func hasExplicitDomesticStockSignal(blob string) bool {
 	return hasSectorWithIndustryContext(blob)
 }
 
-// hasStockMarketKeyword — 코인 전문 RSS용. 증시 앵커 또는 국내 종목·실적 맥락 필요.
+/*
+hasStockMarketKeyword — 코인 전문 RSS용. 증시 앵커 또는 국내 종목·실적 맥락 필요.
+
+앵커는 **코인이 흉내 낼 수 없는 것만** 받는다(`hasNonCryptoStockAnchor`). 예전에는
+`hasExplicitDomesticStockSignal`을 썼는데, 거기엔 선물·ETF·매수처럼 코인 기사에도
+그대로 나오는 단어가 섞여 있어 사실상 아무것도 거르지 못했다.
+
+예전에 있던 둘째 갈래(실적 맥락 + 강한 증시 신호)는 없앴다. 「배당」·「매출」은 코인
+기업 기사에도 나오고, 짝이 되는 「강한 증시 신호」가 곧 위 앵커라 같은 조건을 두 번
+쓰는 꼴이었다 — 「비트마인, 연내 17회 매주 배당 예정」이 그 갈래로 되살아난다.
+*/
 func hasStockMarketKeyword(blob string) bool {
-	if hasExplicitDomesticStockSignal(blob) {
-		return true
-	}
-	if hasCorporateFinanceSignal(blob) && hasStrongMarketSignal(blob) {
-		return true
-	}
-	return false
+	return hasNonCryptoStockAnchor(blob)
 }
 
 func isDomesticCryptoOnlyArticle(blob string) bool {
@@ -349,6 +444,17 @@ func isStockRelated(
 	if isDomesticCryptoOnlyArticle(blob) && !hasSymbols {
 		return false
 	}
+	/*
+		개별 알트코인 기사는 **출처와 무관하게** 막는다.
+
+		위 한 줄은 「가상자산 신호가 있고 증시 앵커가 없을 때」인데, 그 앵커에
+		선물·ETF가 들어 있어서 「리플 선물…」·「알트 현물 ETF…」가 빠져나갔다
+		(사용자 신고 2건). 여기서는 앵커를 코인이 흉내 낼 수 없는 것으로 좁혀
+		한 번 더 본다 — 비트코인은 우리가 지수로 관리하므로 이 규칙에서 뺀다.
+	*/
+	if isAltcoinOnlyArticle(blob) && !hasSymbols {
+		return false
+	}
 
 	hasStrong := hasStrongMarketSignal(blob)
 	hasCorporate := hasCorporateFinanceSignal(blob)
@@ -422,7 +528,7 @@ func passesDomesticCryptoSourceGate(
 	if !hasStockMarketKeyword(blob) {
 		return false
 	}
-	if matchesExcludeTopic(blob) && !hasExplicitDomesticStockSignal(blob) {
+	if matchesExcludeTopic(blob) && !hasNonCryptoStockAnchor(blob) {
 		return false
 	}
 	return true

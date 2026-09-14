@@ -57,7 +57,7 @@ func TestInferNewsMarket_IRENHeadline(t *testing.T) {
 	st := &NewsStore{
 		usNameIndex: map[string]string{
 			"coinbase": "COIN",
-			"코인베이스":   "COIN",
+			"코인베이스":    "COIN",
 		},
 	}
 	ctx := context.Background()
@@ -89,7 +89,7 @@ func TestInferNewsMarket_kospiStaysDomestic(t *testing.T) {
 func TestInferNewsMarket_NvidiaKoreanHeadline(t *testing.T) {
 	st := &NewsStore{
 		usNameIndex: map[string]string{
-			"엔비디아": "NVDA",
+			"엔비디아":   "NVDA",
 			"nvidia": "NVDA",
 		},
 	}

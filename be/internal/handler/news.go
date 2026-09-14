@@ -122,6 +122,63 @@ func (h *NewsHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, map[string]any{"data": out, "meta": meta})
 }
 
+/*
+Keywords serves GET /news/{market}/keywords — 「오늘의 키워드」 집계.
+
+화면이 기사를 받아 세지 않고 **답만 받는다**. 표본이 1,000건이라 목록을 넘기면
+요약본만으로도 300KB가 넘고, 그 전에 `NewsStore.List`의 국내 200건 상한에 걸려
+1,000건을 달라고 해도 200건이 왔다. 집계 규칙은 `service.NewsStore.TopKeywords` 참고.
+*/
+func (h *NewsHandler) Keywords(w http.ResponseWriter, r *http.Request) {
+	market := strings.ToLower(strings.TrimSpace(chi.URLParam(r, "market")))
+	if market != "domestic" && market != "us" {
+		response.Error(w, http.StatusBadRequest, "market must be domestic or us")
+		return
+	}
+	if h.store == nil {
+		response.JSON(w, http.StatusOK, map[string]any{
+			"data": service.NewsTopKeywords{Keywords: nil},
+		})
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	out, err := h.store.TopKeywords(r.Context(), market, limit)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]any{"data": out})
+}
+
+/*
+Symbols serves GET /news/{market}/symbols — 「많이 언급된 종목」 집계.
+
+`Keywords`와 같은 이유로 같은 모양이다. 화면이 목록을 세면 그 목록이 덮는 시간만
+세게 되는데, 국내 최신 100건이 덮는 시간이 **34분이었다**(실측 2026-09-01).
+집계 규칙은 `service.NewsStore.TopSymbols` 참고 — 응답의 종목명은 `stocks`에서
+붙여 보내므로, 화면은 시세 배치를 기다리며 종목코드를 대신 그릴 일이 없다.
+*/
+func (h *NewsHandler) Symbols(w http.ResponseWriter, r *http.Request) {
+	market := strings.ToLower(strings.TrimSpace(chi.URLParam(r, "market")))
+	if market != "domestic" && market != "us" {
+		response.Error(w, http.StatusBadRequest, "market must be domestic or us")
+		return
+	}
+	if h.store == nil {
+		response.JSON(w, http.StatusOK, map[string]any{
+			"data": service.NewsTopSymbols{Symbols: nil},
+		})
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	out, err := h.store.TopSymbols(r.Context(), market, limit)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]any{"data": out})
+}
+
 // digestArticle keeps only what the 키워드 집계와 속보 판정 read.
 //
 // 제목은 남긴다 — 속보 판정이 `[속보]` 표기를 제목에서 찾고, 「같은 이슈」 묶음도

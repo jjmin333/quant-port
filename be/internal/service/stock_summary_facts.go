@@ -64,16 +64,24 @@ type factsScore struct {
 	Coverage   float64        `json:"coverage,omitempty"`
 }
 
-// factsFundamental pairs each ratio with its peer percentile. "PER 24.9" alone
+// factsFundamental pairs each ratio with its peer standing. "PER 24.9" alone
 // does not tell the model whether that is cheap; "상위 3%" does, and the server
 // already computed it during the score batch.
+//
+// Every *TopPercent here is a 상위 N% — 1 is the best of the peer group, 100 the
+// worst — the same direction as factsScore.TopPercent and as the number the UI
+// prints beside the score. The batch stores the opposite direction (a percentile
+// rank where higher is better), so it is flipped here rather than left as a
+// second convention under a near-identical name: handed ORCL's raw
+// 94th-percentile ROE, the model wrote 「동종 상위 94%」 — the bottom of the group
+// — from a standing it had called 「상위 6%」 the day before.
 type factsFundamental struct {
 	PER             *float64 `json:"per,omitempty"`
-	PERPeerPct      *int     `json:"perPeerPct,omitempty"`
+	PERTopPercent   *int     `json:"perTopPercent,omitempty"`
 	PBR             *float64 `json:"pbr,omitempty"`
-	PBRPeerPct      *int     `json:"pbrPeerPct,omitempty"`
+	PBRTopPercent   *int     `json:"pbrTopPercent,omitempty"`
 	ROE             *float64 `json:"roe,omitempty"`
-	ROEPeerPct      *int     `json:"roePeerPct,omitempty"`
+	ROETopPercent   *int     `json:"roeTopPercent,omitempty"`
 	OperatingMargin *float64 `json:"operatingMargin,omitempty"`
 	DebtRatio       *float64 `json:"debtRatio,omitempty"`
 	RevenueYoY      *float64 `json:"revenueYoY,omitempty"`
@@ -264,9 +272,21 @@ func dedupeHeadlines(articles []model.NewsArticle, limit int) []factsArticle {
 
 // ---- assembly --------------------------------------------------------------
 
-func pctPtr(v float64) *int {
-	i := int(v + 0.5)
-	return &i
+// topPercentPtr turns the score batch's percentile rank (higher is better) into
+// the 상위 N% the rest of the product speaks in (lower is better).
+//
+// The floor is 1, not 0. The batch's rank puts the single best symbol of a peer
+// group at the 100th percentile, and 「동종 상위 0%」 is not something anyone says
+// — 1 is the honest reading, and it only ever rounds up.
+func topPercentPtr(percentile float64) *int {
+	top := int(100 - percentile + 0.5)
+	if top < 1 {
+		top = 1
+	}
+	if top > 100 {
+		top = 100
+	}
+	return &top
 }
 
 // round1 trims a ratio to one decimal. Sending per=24.934903853743542 spends
@@ -375,13 +395,13 @@ func buildStockSummaryFacts(
 			EPSYoY:          round1(fundamentals.EPSGrowthYoY),
 		}
 		if v, ok := peerPct["per"]; ok {
-			f.PERPeerPct = pctPtr(v)
+			f.PERTopPercent = topPercentPtr(v)
 		}
 		if v, ok := peerPct["pbr"]; ok {
-			f.PBRPeerPct = pctPtr(v)
+			f.PBRTopPercent = topPercentPtr(v)
 		}
 		if v, ok := peerPct["roe"]; ok {
-			f.ROEPeerPct = pctPtr(v)
+			f.ROETopPercent = topPercentPtr(v)
 		}
 		facts.Fundamental = f
 	}

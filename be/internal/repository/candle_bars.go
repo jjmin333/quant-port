@@ -79,7 +79,7 @@ func (r *CandleBarRepo) ListBefore(
 	useDatetime := r.barTimeIsDatetime(ctx)
 
 	query := `
-		SELECT bar_time, open_price, high_price, low_price, close_price, volume
+		SELECT bar_time, open_price, high_price, low_price, close_price, volume, src_bars
 		FROM candle_bars
 		WHERE symbol = ? AND bar_interval = ?
 	`
@@ -377,13 +377,13 @@ func (r *CandleBarRepo) scanCandle(row candleScanner, interval model.CandleInter
 	var c model.Candle
 	if useDatetime {
 		var bt time.Time
-		if err := row.Scan(&bt, &c.Open, &c.High, &c.Low, &c.Close, &c.Volume); err != nil {
+		if err := row.Scan(&bt, &c.Open, &c.High, &c.Low, &c.Close, &c.Volume, &c.SrcBars); err != nil {
 			return c, err
 		}
 		c.Time = model.FormatCandleTime(bt.In(model.KST), interval)
 		return c, nil
 	}
-	if err := row.Scan(&c.Time, &c.Open, &c.High, &c.Low, &c.Close, &c.Volume); err != nil {
+	if err := row.Scan(&c.Time, &c.Open, &c.High, &c.Low, &c.Close, &c.Volume, &c.SrcBars); err != nil {
 		return c, err
 	}
 	c.Time = model.NormalizeBarTime(c.Time, interval)

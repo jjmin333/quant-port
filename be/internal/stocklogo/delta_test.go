@@ -33,7 +33,7 @@ func TestFilterDeltaLogoStocks(t *testing.T) {
 		{Symbol: "FAIL", Currency: model.CurrencyUSD, AssetType: model.AssetETF},
 	}
 
-	out := FilterDeltaLogoStocks(stocks, m, krDir, true)
+	out := FilterDeltaLogoStocks(stocks, m, krDir, "", true, false)
 	if len(out) != 2 {
 		t.Fatalf("want 2 delta rows, got %d", len(out))
 	}
@@ -41,7 +41,7 @@ func TestFilterDeltaLogoStocks(t *testing.T) {
 		t.Fatalf("unexpected symbols: %+v", out)
 	}
 
-	all := FilterDeltaLogoStocks(stocks, m, krDir, false)
+	all := FilterDeltaLogoStocks(stocks, m, krDir, "", false, false)
 	if len(all) != len(stocks) {
 		t.Fatalf("deltaOnly=false should keep all rows")
 	}

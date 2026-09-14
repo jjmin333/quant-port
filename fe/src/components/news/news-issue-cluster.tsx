@@ -34,10 +34,10 @@ export function NewsIssueCluster({
   return (
     <div className={cn("rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5", className)}>
       <div className="mb-1 flex items-baseline justify-between gap-2">
-        <p className="text-[11px] font-semibold text-[var(--text-muted)]">
+        <p className="text-cell font-semibold text-[var(--text-muted)]">
           관련 있어 보이는 기사 {related.length}건
         </p>
-        <span className="text-[10px] text-[var(--text-muted)]">매체별 논조 비교</span>
+        <span className="text-micro text-[var(--text-muted)]">매체별 논조 비교</span>
       </div>
       <ul className="min-w-0">
         {related.map((item) => (
@@ -49,17 +49,20 @@ export function NewsIssueCluster({
             >
               <span
                 className={cn(
-                  "mt-px inline-flex max-w-[5.5rem] shrink-0 truncate rounded-md border px-1.5 py-px text-[9px] font-semibold",
+                  "mt-px inline-flex max-w-[5.5rem] shrink-0 truncate rounded-md border px-1.5 py-px text-micro font-semibold",
                   item.publisher.badgeClass,
                 )}
               >
                 {item.publisher.name}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="line-clamp-2 block text-[11px] leading-snug text-[var(--text-primary)]">
+                <span className="line-clamp-2 block text-cell leading-snug text-[var(--text-primary)]">
                   {newsDisplayHeadline(item)}
                 </span>
-                <span className="mt-0.5 block text-[10px] text-[var(--text-muted)]">
+                <span
+                  className="mt-0.5 block text-micro text-[var(--text-muted)]"
+                  suppressHydrationWarning
+                >
                   {formatRelativeTime(item.publishedAt)}
                 </span>
               </span>

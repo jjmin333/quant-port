@@ -58,7 +58,7 @@ export function StockWorkspaceTabBar({
             className={cn(
               // whitespace-nowrap keeps two-word labels (내부자 거래, 차트·호가)
               // on one line instead of wrapping and doubling the bar height.
-              "shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-xs font-medium transition-colors",
+              "shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-cell font-medium transition-colors",
               // 활성 표시는 중립. 브랜드 파랑은 이 앱에서 하락을 뜻한다 (UI_SPEC §5)
               active === tab.id
                 ? "border-foreground text-foreground"

@@ -7,20 +7,20 @@ import (
 )
 
 type GetRankingsParams struct {
-	Type                      RankingType
-	MarketCountry             MarketCountry
-	Duration                  RankingDuration
-	ExcludeInvestmentCaution  bool
-	Count                     int
+	Type                     RankingType
+	MarketCountry            MarketCountry
+	Duration                 RankingDuration
+	ExcludeInvestmentCaution bool
+	Count                    int
 }
 
 // --- Ranking API ---
 
 func (c *Client) GetRankings(ctx context.Context, p GetRankingsParams) (*RankingResponse, error) {
 	q := url.Values{
-		"type":           {string(p.Type)},
-		"marketCountry":  {string(p.MarketCountry)},
-		"duration":       {string(p.Duration)},
+		"type":                     {string(p.Type)},
+		"marketCountry":            {string(p.MarketCountry)},
+		"duration":                 {string(p.Duration)},
 		"excludeInvestmentCaution": {strconv.FormatBool(p.ExcludeInvestmentCaution)},
 	}
 	if p.Count > 0 {

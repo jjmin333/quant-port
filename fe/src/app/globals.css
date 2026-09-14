@@ -11,7 +11,19 @@
 
 :root {
   --sidebar-width: 220px;
-  --sidebar-collapsed-width: 48px;
+  /*
+   * 접힌 사이드바는 **아이콘 밑에 이름이 붙는 레일**이라 48px에서 64px로 넓혔다.
+   * 48px에서는 아이콘만 남아 툴팁을 띄우기 전에는 무슨 메뉴인지 알 수 없었고,
+   * 그래서 접어 두는 사람이 없었다. 16px을 더 주면 「관심」·「랭킹」 같은 두세 글자가
+   * 들어가 눌러 볼 수 있는 레일이 된다 — 그러고도 펼친 상태보다 156px을 아낀다.
+   *
+   * 그 뒤 72px로 한 번 더 넓혔다 (2026-09-04 사용자 요구: 「실시간 차트가 2줄로
+   * 넘어가지 않게 최소한으로」). 64px에서 글자가 쓸 수 있는 폭은 52px인데
+   * (nav 좌우 8px + 링크 좌우 4px), 10px 글꼴의 「실시간 차트」는 공백까지 약 56px이라
+   * 딱 한 글자가 모자라 두 줄로 접혔다. 8px을 더해 60px을 만들면 한 줄에 들어간다 —
+   * 그 이상은 아끼는 폭을 그냥 버리는 것이라 여기서 멈춘다.
+   */
+  --sidebar-collapsed-width: 72px;
   --header-min-width: 480px;
   --dashboard-content-min: 300px;
   --dashboard-stat-min: 140px;
@@ -34,6 +46,16 @@
   --font-pretendard:
     "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui,
     "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  /*
+   * 코드·식별자 전용 고정폭. **웹폰트가 아니라 OS에 이미 있는 글꼴**만 부른다.
+   *
+   * v1.0.0에서 숫자를 Pretendard로 통일하면서 Geist Mono를 걷어냈는데, 관리자 화면의
+   * Redis 키·SQL·테이블 컬럼명과 마크다운 `<code>`는 여전히 고정폭이라야 읽힌다.
+   * 그 자리만 남기되 그것 때문에 웹폰트를 한 벌 더 받지는 않는다.
+   */
+  --font-code-stack:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -166,7 +188,18 @@
   --surface-elevated: var(--accent);
   --text-primary: var(--foreground);
   --text-secondary: var(--muted-foreground);
-  --text-muted: oklch(0.65 0 0);
+  /*
+    각주·시각·건수·라벨의 회색.
+
+    0.65는 **WCAG AA에 미달했다** — `#8f8f8f`라 흰 카드 위 3.23:1, 페이지 배경
+    (`#f5f5f5`) 위 **2.97:1**(본문 기준 4.5:1). 뉴스 목록의 시각·건수는 대부분 카드가
+    아니라 그 배경 위에 앉아 있어서, 카드만 재면 실제보다 좋게 나온다.
+
+    0.545 = `#707070` → 배경 위 4.54:1 · 카드 위 4.95:1로 둘 다 통과한다.
+    **다크 블록은 손대지 않는다** — 거기는 `#808080`으로 이미 4.54:1이다.
+    (2026-09-06 QA 실측 · 사용자 승인)
+  */
+  --text-muted: oklch(0.545 0 0);
 
   /* 차트 크롬. 활성 표시는 중립(UI_SPEC §5) */
   --chart-grid: rgba(0, 0, 0, 0.08);
@@ -239,7 +272,56 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-pretendard);
-  --font-mono: var(--font-geist-mono);
+  --font-code: var(--font-code-stack);
+  /*
+   * `font-mono`는 남겨 두되 뜻을 바꾼다 — 미처 못 옮긴 호출부가 사라진 Geist Mono를
+   * 부르며 브라우저 기본 고정폭(대개 Courier)으로 떨어지는 일을 막는다.
+   */
+  --font-mono: var(--font-code-stack);
+
+  /* ─────────────────────────────────────────────────────────────────────────
+   * 타이포 스케일 (v1.0.0) — 앱 전체 글자 크기가 이 여섯 계단에서 나온다.
+   *
+   * 이전에는 크기가 **하드코딩된 임의값 약 1,500곳**에 흩어져 있었다
+   * (`text-[11px]` 495 · `text-[10px]` 439 · `text-xs` 410 · `text-[9px]` 36 …).
+   * 그래서 "조금 키워 보자"가 1,500곳을 고치는 일이었고, 실제로 `docs/UI_SPEC.md`가
+   * 규정한 본문 12px·보조 11px에서 화면들이 9~11px로 조용히 내려가 있었다.
+   *
+   * 이제 계단에 이름을 준다. 다음에 밀도를 손보는 일은 이 여섯 줄을 고치는 일이다.
+   *
+   *   micro   11px  배지·칩·각주·메타 — **이 앱의 하한**. 7~10.5px를 전부 흡수했다
+   *   cell    12px  표 셀·목록 본문·기본 UI (옛 `text-xs`와 같은 값·같은 행간)
+   *   note    13px  한 단 강조된 보조
+   *   read    14px  **읽는 글** — 브리핑·뉴스 요약·AI 해설·메모 본문
+   *   article 15px  문서 본문 — 리포트·기사 원문처럼 그것만 보러 들어온 화면
+   *   section 15px  섹션/카드 제목
+   *   page    19px  페이지 제목
+   *
+   * `article`과 `section`은 크기가 같지만 나누어 둔다. 하나는 읽는 글이고 하나는
+   * 제목이라, 다음에 문단만 키우거나 제목만 키우는 일이 반드시 생긴다 — 그때 같은
+   * 토큰을 쓰고 있으면 한쪽을 위해 다른 쪽을 망가뜨린다.
+   *
+   * 행간을 micro·cell·note에는 `1.35~1.4`로만 주고 그 이상 늘리지 않는다 — 이 셋은
+   * 표 안에 서는 글자라 행간이 곧 행 높이다. 반대로 `read`는 행간이 본질이라
+   * 1.7을 함께 묶는다: 한국어 문단은 같은 px여도 행간이 좁으면 글자가 뭉쳐 보인다.
+   *
+   * `text-sm`(14px) 이상의 Tailwind 기본 계단은 건드리지 않았다. 버튼·입력·내비의
+   * 높이가 그 행간(20px)에 맞춰져 있어 같이 움직이면 컨트롤 높이가 따라 변한다.
+   * ───────────────────────────────────────────────────────────────────────── */
+  --text-micro: 0.6875rem; /* 11px */
+  --text-micro--line-height: 1.35;
+  --text-cell: 0.75rem; /* 12px */
+  --text-cell--line-height: 1.35;
+  --text-note: 0.8125rem; /* 13px */
+  --text-note--line-height: 1.4;
+  --text-read: 0.875rem; /* 14px */
+  --text-read--line-height: 1.7;
+  --text-article: 0.9375rem; /* 15px */
+  --text-article--line-height: 1.85;
+  --text-section: 0.9375rem; /* 15px */
+  --text-section--line-height: 1.4;
+  --text-page: 1.1875rem; /* 19px */
+  --text-page--line-height: 1.35;
 
   /* shadcn 컴포넌트가 쓰는 유틸 매핑. `border-border`/`bg-card` 등이 여기서 생긴다. */
   --color-card: var(--card);
@@ -289,6 +371,22 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+}
+
+/*
+ * 숫자 칸 — 가격·등락률·점수·수량.
+ *
+ * v1.0.0 이전에는 `font-mono`(Geist Mono)가 이 일을 했다. 자릿수 정렬을 위해 고정폭을
+ * 쓴 것인데, 정렬에 실제로 필요한 것은 **고정폭 글꼴이 아니라 고정폭 숫자**다.
+ * Pretendard는 `tnum`을 갖고 있어 그것만 켜면 표의 세로 정렬이 그대로 유지되면서
+ * 폰트가 한 벌로 줄고(Google Fonts 요청 제거) 숫자 폭도 좁아져 촘촘한 표에 여유가 생긴다.
+ *
+ * 이름을 `font-mono`에서 바꾼 이유: Pretendard는 고정폭이 아니다. 뜻이 어긋난 이름을
+ * 남겨 두면 다음 사람이 "여기는 고정폭이구나"라고 읽고 그 전제로 폭을 계산한다.
+ */
+@utility font-num {
+  font-family: var(--font-pretendard);
+  font-variant-numeric: tabular-nums;
 }
 
 /*

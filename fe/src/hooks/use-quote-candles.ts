@@ -9,15 +9,19 @@ import {
   quoteStreamUrl,
 } from "@/lib/market-api";
 import type { StreamEvent } from "@/lib/quotes-types";
+import { PRICE_POLL_MS } from "@/lib/price-cadence";
+import { isPageVisible } from "@/hooks/use-page-visible";
+import { useStreamAwake } from "@/hooks/use-stream-awake";
 
 // Fallback cadence for re-fetching the forming bar over REST. The SSE stream
 // above is the primary path, but has no retry of its own if messages stop
 // arriving after connecting (a buffering proxy between client and API can
 // hold the connection open while never flushing chunks through) — without
 // this, formingTime and the live-price overlay both go stale for the rest
-// of the page's life. Matches useQuoteDetail's poll interval so the header
-// and this forming-bar refresh land in step.
-const FORMING_BAR_POLL_MS = 2_000;
+// of the page's life. Shares the app-wide price cadence so the header and this
+// forming-bar refresh land in step — a local copy of the number is how the two
+// drift apart (see the price-cadence header).
+const FORMING_BAR_POLL_MS = PRICE_POLL_MS;
 
 function candlesFromSnapshot(
   completed: Candle[],
@@ -63,14 +67,25 @@ function applyLivePrice(
  *   its poller's fast tick, which backs off under upstream rate limits, so the
  *   chart would otherwise sit at the price it loaded with while the header
  *   ticks. Pass 0 to disable the overlay.
+ * @param live 지금 봉이 자라고 있는가. **장이 닫혀 있으면 false를 넘긴다** —
+ *   그러면 아래 2초 스냅샷 폴링과 SSE를 둘 다 걷는다. 마감 중에는 만들어지는 봉이
+ *   없어서 그 왕복이 매번 같은 응답을 받는다(2026-09-04 사용자 지적: 상세 화면
+ *   하나가 `/candles/snapshot`을 2초마다 쳤다). 첫 적재는 이 값과 무관하게 한다.
  */
-export function useQuoteCandles(symbol: string, interval: CandleInterval, livePrice = 0) {
+export function useQuoteCandles(
+  symbol: string,
+  interval: CandleInterval,
+  livePrice = 0,
+  live = true,
+) {
   const [candles, setCandles] = useState<Candle[]>([]);
   const [formingTime, setFormingTime] = useState<string | null>(null);
   const [nextBefore, setNextBefore] = useState<string | null>(null);
   const [source, setSource] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  /** 숨은 지 3시간이 안 됐는가 — 그 동안은 봉 스트림을 유지한다(`use-stream-awake`). */
+  const streamAwake = useStreamAwake();
   const loadingMoreRef = useRef(false);
   const nextBeforeRef = useRef<string | null>(null);
   const revRef = useRef(0);
@@ -126,8 +141,14 @@ export function useQuoteCandles(symbol: string, interval: CandleInterval, livePr
     };
   }, [symbol, interval]);
 
+  /*
+    마감 중에는 스트림을 열지 않는다 — 자라는 봉이 없으므로 흘러올 이벤트도 없다.
+
+    **탭이 뒤로 가는 것만으로는 끊지 않는다** (2026-09-05 사용자 요청 5) — 규칙은
+    `useStreamAwake`가 들고 있다(숨어도 3시간). 아래 폴백 폴링은 그대로 숨으면 멈춘다.
+  */
   useEffect(() => {
-    if (!symbol) return;
+    if (!symbol || !live || !streamAwake) return;
 
     let es: EventSource | null = null;
     let cancelled = false;
@@ -157,7 +178,8 @@ export function useQuoteCandles(symbol: string, interval: CandleInterval, livePr
     };
 
     const connect = () => {
-      if (cancelled || document.visibilityState !== "visible") return;
+      // 보이는지는 더 안 본다 — 이 이펙트가 도는 것 자체가 「붙어 있을 때」라는 뜻이다.
+      if (cancelled) return;
       es?.close();
       es = new EventSource(quoteStreamUrl(symbol, interval));
 
@@ -181,9 +203,13 @@ export function useQuoteCandles(symbol: string, interval: CandleInterval, livePr
 
     connect();
 
+    /*
+      숨을 때는 아무것도 하지 않는다. 다시 보일 때도 **죽어 있을 때만** 다시 붙는다 —
+      이유는 `use-quote-stream`의 같은 자리에 적어 두었다.
+    */
     const onVis = () => {
-      if (document.visibilityState === "visible") connect();
-      else es?.close();
+      if (!isPageVisible()) return;
+      if (!es || es.readyState === EventSource.CLOSED) connect();
     };
     document.addEventListener("visibilitychange", onVis);
 
@@ -192,10 +218,11 @@ export function useQuoteCandles(symbol: string, interval: CandleInterval, livePr
       document.removeEventListener("visibilitychange", onVis);
       es?.close();
     };
-  }, [symbol, interval]);
+  }, [symbol, interval, live, streamAwake]);
 
+  // 봉이 자라지 않는 구간(마감)에는 폴백 폴링도 멈춘다 — 매번 같은 스냅샷을 받는다.
   useEffect(() => {
-    if (!symbol) return;
+    if (!symbol || !live) return;
     let cancelled = false;
 
     const poll = () => {
@@ -219,7 +246,7 @@ export function useQuoteCandles(symbol: string, interval: CandleInterval, livePr
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [symbol, interval]);
+  }, [symbol, interval, live]);
 
   const loadMore = useCallback(async () => {
     const cursor = nextBeforeRef.current;

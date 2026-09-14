@@ -4,13 +4,39 @@ import * as React from "react"
 import { XIcon } from "lucide-react"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
+import { useModalHistory } from "@/hooks/use-modal-history"
+import { suppressAutoFocusOnTouch } from "@/lib/modal-autofocus"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
+/**
+ * 모달은 열려 있는 동안 **히스토리 항목 하나를 점유한다** (§C-3).
+ *
+ * 사용자는 화면을 덮은 것을 「새 화면」으로 보고 닫을 때 뒤로가기를 누른다. 그런데
+ * 히스토리에 아무것도 쌓이지 않았으면 그 뒤로가기는 앱을 떠난다 — 실측으로 뉴스 기사
+ * 모달을 열고 뒤로가기를 눌렀더니 모달이 닫히는 게 아니라 사이트 밖으로 나갔다.
+ * 모바일 물리 뒤로가기에서는 더 자주 밟힌다.
+ *
+ * 개별 모달 19개에 각각 붙이지 않고 **이 껍데기 한 곳**에 둔다. 새로 만드는 모달도
+ * 자동으로 같게 동작하고, 어느 하나만 빠뜨리는 일이 없다. 중첩 모달은 각자 항목을
+ * 쌓으므로 뒤로가기가 맨 위 것부터 닫는다 — 그게 기대되는 순서다.
+ *
+ * 제어되지 않는(open prop 없는) 모달은 상태를 알 수 없으므로 건드리지 않는다.
+ */
 function Dialog({
+  open,
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+  useModalHistory(open === true, React.useCallback(() => onOpenChange?.(false), [onOpenChange]))
+  return (
+    <DialogPrimitive.Root
+      data-slot="dialog"
+      open={open}
+      onOpenChange={onOpenChange}
+      {...props}
+    />
+  )
 }
 
 function DialogTrigger({
@@ -47,10 +73,22 @@ function DialogOverlay({
   )
 }
 
+/**
+ * 모달 본문.
+ *
+ * **폰·태블릿에서는 열릴 때 키보드를 올리지 않는다** (2026-09-03 사용자 결정).
+ * 개별 모달 스무 개에 각각 붙이지 않고 여기 한 곳에서 막는다 — 새로 만드는 모달도
+ * 자동으로 같게 동작하고, 어느 하나만 빠뜨리는 일이 없다. 규칙과 배경은
+ * `lib/modal-autofocus.ts` 헤더에.
+ *
+ * 부르는 쪽이 `onOpenAutoFocus`를 직접 주면 그쪽이 먼저 돌고, 그쪽에서 이미
+ * 막았으면(`preventDefault`) 여기서는 아무것도 하지 않는다.
+ */
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onOpenAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
@@ -60,6 +98,11 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        onOpenAutoFocus={(event) => {
+          onOpenAutoFocus?.(event)
+          if (event.defaultPrevented) return
+          suppressAutoFocusOnTouch(event)
+        }}
         className={cn(
           "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
           className

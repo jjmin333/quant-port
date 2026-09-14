@@ -22,6 +22,10 @@ type FinancialHistoryService struct {
 	periods *repository.FinancialPeriodRepo
 	sync    *repository.SyncStateRepo
 	stocks  *repository.StockRepo
+	// candles·fundamentals는 분기별 PER·PBR을 실제로 계산하는 데만 쓴다
+	// (financial_history_valuation.go). 없으면 그 두 값만 비고 나머지는 그대로다.
+	candles      *repository.CandleBarRepo
+	fundamentals *repository.FundamentalsRepo
 }
 
 func NewFinancialHistoryService(
@@ -30,6 +34,18 @@ func NewFinancialHistoryService(
 	stocks *repository.StockRepo,
 ) *FinancialHistoryService {
 	return &FinancialHistoryService{periods: periods, sync: syncState, stocks: stocks}
+}
+
+// SetValuationSources를 부르면 분기별 PER·PBR이 응답에 실린다.
+func (s *FinancialHistoryService) SetValuationSources(
+	candles *repository.CandleBarRepo,
+	fundamentals *repository.FundamentalsRepo,
+) {
+	if s == nil {
+		return
+	}
+	s.candles = candles
+	s.fundamentals = fundamentals
 }
 
 func (s *FinancialHistoryService) Get(ctx context.Context, symbol string, years int) (*model.FinancialHistoryView, error) {
@@ -68,6 +84,11 @@ func (s *FinancialHistoryService) Get(ctx context.Context, symbol string, years 
 	// 성장률은 저장하지 않고 읽을 때 계산한다 — 직전 분기가 나중에 채워지면
 	// 저장된 값이 틀린 채로 남는다.
 	applyQoQGrowth(view.Periods)
+	// 마진·비율도 마찬가지로 읽을 때 계산한다 — `financial_periods`에는 금액만
+	// 저장한다(적재 때 계산한 값을 담을 칼럼이 없다). 예전에는 이 단계가 없어
+	// 「이익률」 차트와 상세 모달의 비율 선이 통째로 빈 채 나갔다.
+	applyPeriodRatios(view.Periods)
+	s.applyValuation(ctx, stock.Symbol, view.Periods, s.lookupShares(ctx, stock.Symbol))
 
 	if len(view.Periods) == 0 {
 		synced, err := s.sync.WasSynced(ctx, financialsSyncKind(assetType), stock.Symbol)
@@ -123,4 +144,45 @@ func applyQoQGrowth(periods []model.FinancialHistoryPeriod) {
 			periods[i].NetIncomeGrowthQoQ = pctChange(float64(*cur.NetIncome), float64(*prev.NetIncome))
 		}
 	}
+}
+
+// applyPeriodRatios fills each period's own margins and balance-sheet ratios
+// from that same period's amounts.
+//
+// 적재 경로(ApplyPeriodRatios)도 같은 값을 계산하지만 `financial_periods`에는
+// 담을 칼럼이 없어 버려진다 — 그래서 읽을 때 다시 만든다. 분모가 0이거나
+// 한쪽이 비면 아무것도 넣지 않는다: 0%는 「비율이 0」이라는 거짓말이고,
+// 화면은 빈 값을 선의 끊김으로 그려야 한다.
+func applyPeriodRatios(periods []model.FinancialHistoryPeriod) {
+	for i := range periods {
+		p := &periods[i]
+		if p.Revenue != nil && *p.Revenue != 0 {
+			if p.OperatingIncome != nil {
+				p.OperatingMargin = pctRatio(float64(*p.OperatingIncome), float64(*p.Revenue))
+			}
+			if p.NetIncome != nil {
+				p.NetProfitMargin = pctRatio(float64(*p.NetIncome), float64(*p.Revenue))
+			}
+		}
+		if p.TotalEquity != nil && *p.TotalEquity != 0 && p.TotalLiabilities != nil {
+			p.DebtRatio = pctRatio(float64(*p.TotalLiabilities), float64(*p.TotalEquity))
+		}
+		if p.CurrentLiabilities != nil && *p.CurrentLiabilities != 0 && p.CurrentAssets != nil {
+			p.CurrentRatio = ratioValue(float64(*p.CurrentAssets), float64(*p.CurrentLiabilities))
+		}
+	}
+}
+
+// lookupShares는 저장된 현재 발행주식수다 — 분기별 주식수 되찾기(순이익÷EPS)가
+// 실패했을 때만 쓰는 최후 수단이다. 그 사이 증자가 있었다면 과거 PBR이
+// 왜곡되므로 우선순위가 낮다.
+func (s *FinancialHistoryService) lookupShares(ctx context.Context, symbol string) *int64 {
+	if s == nil || s.fundamentals == nil {
+		return nil
+	}
+	row, err := s.fundamentals.GetBySymbol(ctx, symbol)
+	if err != nil || row == nil {
+		return nil
+	}
+	return row.SharesOutstanding
 }

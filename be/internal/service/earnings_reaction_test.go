@@ -17,6 +17,15 @@ func day(s string) time.Time {
 	return t
 }
 
+// kstDay mimics MySQL DATE scanned with DSN loc=Asia/Seoul (KST midnight).
+func kstDay(s string) time.Time {
+	t, err := time.ParseInLocation("2006-01-02", s, model.KST)
+	if err != nil {
+		panic(err)
+	}
+	return t
+}
+
 // 8/10(월) ~ 8/14(금) 거래일 종가. 8/15·8/16은 주말이라 없다.
 var closes = []repository.DailyClose{
 	{Date: day("2026-08-10"), Close: 100},
@@ -71,6 +80,23 @@ func TestReactionForSessionSplit(t *testing.T) {
 		}
 		if got := pct1(r.Pct); got != 9.1 {
 			t.Errorf("pct = %v, want 9.1", got)
+		}
+	})
+
+	t.Run("장중(dmh) — 그날 종가가 첫 반응", func(t *testing.T) {
+		// 장중에 나온 뉴스는 그 세션 종가에 이미 들어 있다. 장후처럼 다음날을
+		// 세면 소화가 끝난 뒤의 하루를 발표 반응이라고 부르게 된다.
+		e := base
+		e.Session = model.EarningsSessionDuringHours
+		r := reactionFor(e, closes)
+		if r == nil {
+			t.Fatal("reaction = nil")
+		}
+		if r.BaseDate != "2026-08-11" || r.Date != "2026-08-12" {
+			t.Fatalf("dates = %s → %s, want 08-11 → 08-12", r.BaseDate, r.Date)
+		}
+		if r.Basis != "sameDay" {
+			t.Errorf("basis = %q, want sameDay", r.Basis)
 		}
 	})
 
@@ -174,4 +200,74 @@ func TestReactionForGuards(t *testing.T) {
 
 func pct1(v float64) float64 {
 	return math.Round(v*10) / 10
+}
+
+// DSN loc=Asia/Seoul scans DATE as KST midnight; the event date is UTC midnight.
+// Equal/Before then miss the announcement-day close (장전·장중 전부 「집계 중」)
+// and lastCloseBefore can pick that same day as the baseline (0%).
+func TestReactionForKSTScannedCloses(t *testing.T) {
+	kstCloses := []repository.DailyClose{
+		{Date: kstDay("2026-08-10"), Close: 100},
+		{Date: kstDay("2026-08-11"), Close: 110},
+		{Date: kstDay("2026-08-12"), Close: 120},
+		{Date: kstDay("2026-08-13"), Close: 90},
+		{Date: kstDay("2026-08-14"), Close: 99},
+	}
+	base := model.EarningsEvent{
+		Symbol:     "TGT",
+		Date:       "2026-08-12",
+		DateStatus: model.EarningsDateConfirmed,
+	}
+
+	t.Run("장전 — 당일 종가를 찾고 전일을 기준으로", func(t *testing.T) {
+		e := base
+		e.Session = model.EarningsSessionBeforeOpen
+		r := reactionFor(e, kstCloses)
+		if r == nil {
+			t.Fatal("reaction = nil (KST DATE vs UTC 발표일이 Equal에 실패하던 경로)")
+		}
+		if r.BaseDate != "2026-08-11" || r.Date != "2026-08-12" {
+			t.Fatalf("dates = %s → %s, want 08-11 → 08-12", r.BaseDate, r.Date)
+		}
+		if got := pct1(r.Pct); got != 9.1 {
+			t.Errorf("pct = %v, want 9.1 — 0%%이면 발표일 종가를 기준으로 집은 것", got)
+		}
+	})
+
+	t.Run("장중 — 장전과 같은 당일 짝", func(t *testing.T) {
+		e := base
+		e.Session = model.EarningsSessionDuringHours
+		r := reactionFor(e, kstCloses)
+		if r == nil || r.BaseDate != "2026-08-11" || r.Date != "2026-08-12" {
+			t.Fatalf("reaction = %+v, want 08-11 → 08-12", r)
+		}
+	})
+
+	t.Run("장후 — 다음 달력일이 첫 반응", func(t *testing.T) {
+		e := base
+		e.Session = model.EarningsSessionAfterClose
+		r := reactionFor(e, kstCloses)
+		if r == nil {
+			t.Fatal("reaction = nil")
+		}
+		if r.BaseDate != "2026-08-12" || r.Date != "2026-08-13" {
+			t.Fatalf("dates = %s → %s, want 08-12 → 08-13", r.BaseDate, r.Date)
+		}
+		if got := pct1(r.Pct); got != -25 {
+			t.Errorf("pct = %v, want -25", got)
+		}
+	})
+}
+
+func TestGapDaysUsesCivilDate(t *testing.T) {
+	// Hours()/24는 KST 0시 vs UTC 0시에서 9시간을 잃어 달력 5일을 4로 센다.
+	if got := gapDays(kstDay("2026-08-18"), day("2026-08-13")); got != 5 {
+		t.Fatalf("gapDays = %d, want 5", got)
+	}
+	if got := gapDays(day("2026-08-12"), day("2026-08-12")); got != 0 {
+		t.Fatalf("same UTC day = %d, want 0", got)
+	}
+	if got := gapDays(kstDay("2026-08-12"), day("2026-08-12")); got != 0 {
+		t.Fatalf("same civil day different loc = %d, want 0", got)
+	}
 }

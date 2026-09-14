@@ -119,7 +119,7 @@ export function PriceHistoryChart({
         right={
           <span
             className={cn(
-              "font-mono text-[11px] font-bold tabular-nums",
+              "font-num text-cell font-bold tabular-nums",
               chart.rising ? "text-[var(--profit)]" : "text-[var(--loss)]",
             )}
           >
@@ -204,7 +204,7 @@ export function PriceHistoryChart({
 
         {/* 금액 눈금. 세로 배율이 1이라 뷰박스 y를 px로 그대로 쓴다. */}
         <div
-          className="relative w-[4.75rem] shrink-0 font-mono text-[10px] tabular-nums text-[var(--text-muted)]"
+          className="relative w-[4.75rem] shrink-0 font-num text-micro tabular-nums text-[var(--text-muted)]"
           style={{ height }}
         >
           <span className="absolute right-0 leading-none" style={{ top: PAD_Y - 4 }}>
@@ -224,7 +224,7 @@ export function PriceHistoryChart({
         </div>
       </div>
 
-      <div className="flex items-baseline justify-between font-mono text-[10px] text-[var(--text-muted)]">
+      <div className="flex items-baseline justify-between font-num text-micro text-[var(--text-muted)]">
         <span>{formatChartDate(times, 0)}</span>
         {/*
           "N거래일"이라고 쓰지 않는다. 일별 종가가 빠짐없이 쌓인 종목만 그 말이 맞는데,
@@ -241,7 +241,7 @@ export function PriceHistoryChart({
 function ChartTitleRow({ title, right }: { title: string; right?: React.ReactNode }) {
   return (
     <div className="mb-1 flex items-baseline justify-between gap-2">
-      <span className="text-[11px] font-semibold text-muted-foreground">{title}</span>
+      <span className="text-cell font-semibold text-muted-foreground">{title}</span>
       {right}
     </div>
   );

@@ -62,19 +62,25 @@ func TestUSTickerTokenMatchRejectsShortAndEmbedded(t *testing.T) {
 
 func TestAddUSNameIndexKeysDropsShortTickerKeys(t *testing.T) {
 	idx := map[string]string{}
-	addUSNameIndexKeys(idx, "V", "Visa Inc.", "비자")
-	addUSNameIndexKeys(idx, "MA", "Mastercard Incorporated", "마스터카드")
-	addUSNameIndexKeys(idx, "NVDA", "NVIDIA Corporation", "엔비디아")
+	tickers := map[string]string{}
+	addUSNameIndexKeys(idx, tickers, "V", "Visa Inc.", "비자")
+	addUSNameIndexKeys(idx, tickers, "MA", "Mastercard Incorporated", "마스터카드")
+	addUSNameIndexKeys(idx, tickers, "NVDA", "NVIDIA Corporation", "엔비디아")
 
-	// 티커 자체를 키로 넣던 것이 오탐의 원인이었다.
-	if sym, ok := idx["v"]; ok {
-		t.Errorf(`idx["v"] should not exist, got %q`, sym)
+	// 티커는 어느 쪽이든 **소문자 이름 인덱스**에 들어가지 않는다.
+	for _, key := range []string{"v", "ma", "nvda"} {
+		if sym, ok := idx[key]; ok {
+			t.Errorf(`idx[%q] should not exist, got %q`, key, sym)
+		}
 	}
-	if sym, ok := idx["ma"]; ok {
-		t.Errorf(`idx["ma"] should not exist, got %q`, sym)
+	// 짧은 티커는 티커 인덱스에도 안 들어간다 — "V"가 든 모든 기사에 붙는다.
+	for _, key := range []string{"V", "MA"} {
+		if sym, ok := tickers[key]; ok {
+			t.Errorf(`tickers[%q] should not exist, got %q`, key, sym)
+		}
 	}
-	if idx["nvda"] != "NVDA" {
-		t.Errorf(`idx["nvda"] = %q, want "NVDA"`, idx["nvda"])
+	if tickers["NVDA"] != "NVDA" {
+		t.Errorf(`tickers["NVDA"] = %q, want "NVDA"`, tickers["NVDA"])
 	}
 	// 회사명은 여전히 들어간다.
 	if idx["visa inc."] != "V" {
@@ -89,9 +95,9 @@ func TestAddUSNameIndexKeysDropsShortTickerKeys(t *testing.T) {
 // 실측: "Amazon rising, Apple sinking …" 기사에 AAPL만 붙고 AMZN이 빠져 있었다.
 func TestAddUSNameIndexKeysTrimsDomainAndClassTails(t *testing.T) {
 	idx := map[string]string{}
-	addUSNameIndexKeys(idx, "AMZN", "Amazon.com", "아마존")
-	addUSNameIndexKeys(idx, "GOOGL", "Alphabet A", "알파벳")
-	addUSNameIndexKeys(idx, "BRK.B", "Berkshire Hathaway B", "버크셔")
+	addUSNameIndexKeys(idx, nil, "AMZN", "Amazon.com", "아마존")
+	addUSNameIndexKeys(idx, nil, "GOOGL", "Alphabet A", "알파벳")
+	addUSNameIndexKeys(idx, nil, "BRK.B", "Berkshire Hathaway B", "버크셔")
 
 	for _, c := range []struct{ key, want string }{
 		{"amazon.com", "AMZN"}, // 원래 형태도 남는다

@@ -69,7 +69,7 @@ func main() {
 		log.Fatalf("config: %v", err)
 	}
 
-	mysql, err := repository.NewMySQL(cfg.MySQLDSN)
+	mysql, err := repository.NewMySQLForCLI(cfg.MySQLDSN)
 	if err != nil {
 		log.Fatalf("mysql: %v", err)
 	}

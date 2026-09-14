@@ -1,37 +1,41 @@
-export const ANALYSIS_TABS = [
-  { id: "ai", label: "AI 분석" },
-  { id: "company", label: "기업 정보" },
-  { id: "valuation", label: "밸류에이션" },
-  { id: "financials", label: "재무제표" },
-  { id: "earnings", label: "실적" },
-  { id: "insider", label: "내부자 거래" },
-  { id: "news", label: "뉴스" },
-] as const;
+import {
+  parseStockWorkspaceTab,
+  type StockWorkspaceTabId,
+} from "@/lib/stock-workspace-tabs";
 
-export type AnalysisTabId = (typeof ANALYSIS_TABS)[number]["id"];
-
-export const VALUATION_SUB_TABS = [
-  { id: "multiples", label: "배수" },
-  { id: "indicators", label: "지표" },
-] as const;
-
-export type ValuationSubTabId = (typeof VALUATION_SUB_TABS)[number]["id"];
-
-export function parseAnalysisTab(value: string | null): AnalysisTabId {
-  if (value && ANALYSIS_TABS.some((t) => t.id === value)) {
-    return value as AnalysisTabId;
-  }
-  return "ai";
-}
-
-export function parseValuationSubTab(value: string | null): ValuationSubTabId {
-  if (value && VALUATION_SUB_TABS.some((t) => t.id === value)) {
-    return value as ValuationSubTabId;
-  }
-  return "multiples";
-}
-
-export function analysisSymbolHref(symbol: string, tab: AnalysisTabId = "ai"): string {
-  const params = new URLSearchParams({ symbol, tab });
+/**
+ * AI 추천 랭킹(/analysis)의 URL.
+ *
+ * # 탭 목록을 따로 갖지 않는다 (2026-09-03 사용자 결정)
+ *
+ * 예전에는 이 파일이 자기만의 탭 일곱 개(`ANALYSIS_TABS`)를 들고 있었고, 그래서
+ * 랭킹에서 고른 종목과 실시간 차트에서 고른 종목이 **서로 다른 화면**으로 열렸다 —
+ * 개요·차트가 없고, 헤더 모양도 달랐다. 지금은 두 화면이 같은 워크스페이스
+ * (`StockWorkspaceClient`)를 그리므로 탭도 그쪽 목록 하나뿐이다.
+ *
+ * 남은 것은 **주소 모양**뿐이다: 랭킹은 목록과 상세가 한 화면이라 `?symbol=`로
+ * 종목을 가리키고, 종목 페이지(`/stocks/[symbol]`)는 경로로 가리킨다.
+ */
+export function analysisSymbolHref(
+  symbol: string,
+  tab: StockWorkspaceTabId = "overview",
+  /**
+   * 왼쪽 목록이 지금 무엇을 보여 주고 있는지(시장·축·기간). **같이 실어야** 종목을
+   * 고른 뒤에도 그 목록이 그대로 있는다 — 빠뜨리면 「해외 · 성장 · 1주」를 골라 둔
+   * 사람이 종목 하나를 누르는 순간 국내 · 종합 · 실시간으로 되돌아간다.
+   *
+   * 앱 다른 곳(검색·점수 칩)에서 부를 때는 목록 상태를 모르므로 생략한다.
+   */
+  ranking?: URLSearchParams,
+): string {
+  const params = new URLSearchParams(ranking);
+  params.set("symbol", symbol);
+  params.set("tab", tab);
   return `/analysis?${params.toString()}`;
 }
+
+/** @deprecated `parseStockWorkspaceTab`을 쓴다 — 탭 목록은 한 벌뿐이다. */
+export const parseAnalysisTab = parseStockWorkspaceTab;
+
+/** @deprecated `StockWorkspaceTabId`를 쓴다. */
+export type AnalysisTabId = StockWorkspaceTabId;

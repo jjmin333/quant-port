@@ -29,6 +29,22 @@ func (st *NewsStore) lookupUSSymbolByName(ctx context.Context, name string) stri
 	if nameLower == "" {
 		return ""
 	}
+	/*
+		불용어는 여기서 막는다 — **인덱스보다 앞이어야 한다.**
+
+		이름 인덱스에만 가드를 두면 아래 DB 검색 폴백이 그것을 우회한다.
+		`stocks.Search`는 심볼도 매치하므로 "Here" → 심볼 `HERE`(HERE GP LTD)를
+		정확히 찾아낸다. 실제로 이름 인덱스에 불용어를 넣은 뒤에도
+		`Here's the Smartest…`·`Here's what Nvidia needs…` 같은 헤드라인에
+		HERE가 계속 붙었다(재태깅 후에도 53건 잔존).
+
+		이 함수의 입력은 `ExtractPossessiveHeadlineSubject`가 뽑은
+		「헤드라인 첫 소유격 주어」다 — "Tesla's …"의 Tesla를 노린 것인데
+		"Here's …"의 Here도 같은 모양이라 걸러야 한다.
+	*/
+	if _, blocked := usNameStopwords[nameLower]; blocked {
+		return ""
+	}
 	st.mu.RLock()
 	if sym := st.usNameIndex[nameLower]; sym != "" {
 		st.mu.RUnlock()
@@ -47,11 +63,32 @@ func (st *NewsStore) lookupUSSymbolByName(ctx context.Context, name string) stri
 	if err != nil || len(results) == 0 {
 		return ""
 	}
+	/*
+		**정확히 일치할 때만 받는다.**
+
+		`stocks.Search`는 앞자리 일치로도 찾아 준다 — 검색창에서는 그게 맞지만 여기서는
+		아니다. 이 함수의 입력은 헤드라인의 첫 소유격 주어("Tesla's …"의 Tesla)인데,
+		중앙은행 이름도 같은 모양이라 그대로 흘러 들어온다. 실측(최근 1,000건):
+
+			"Fed's Williams: …"     → Search("Fed")  → FEDM (FLEXSHARES ESG ETF) 17건
+			"BoC's Gov. Macklem …"  → Search("BoC")  → BOC  (보스턴 오마하)      20건
+			"BoJ's Takata: …"       → Search("BoJ")  → CBOJ (CALMS BTC ETF)     16건
+			"US Commerce Secretary" → Search("Comm…")→ CMRC (COMMERCE.COM)      10건
+
+		넷 다 **연준·캐나다은행·일본은행·상무부** 이야기지 그 종목 이야기가 아니다.
+		앞자리만 같은 티커를 붙이느니 아무것도 안 붙이는 편이 낫다 — 그 기사에 진짜
+		관련된 종목은 이름 인덱스와 티커 인덱스가 이미 따로 잡는다.
+	*/
 	for _, s := range results {
 		if s.Currency != model.CurrencyUSD {
 			continue
 		}
-		return strings.ToUpper(strings.TrimSpace(s.Symbol))
+		sym := strings.ToUpper(strings.TrimSpace(s.Symbol))
+		if strings.EqualFold(sym, nameLower) ||
+			strings.EqualFold(strings.TrimSpace(s.EnglishName), nameLower) ||
+			strings.EqualFold(strings.TrimSpace(s.Name), nameLower) {
+			return sym
+		}
 	}
 	return ""
 }

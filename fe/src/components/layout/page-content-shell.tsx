@@ -20,6 +20,35 @@ export function pageShellClass(width: PageShellWidth) {
   return width === "wide" ? "page-shell-wide" : "page-shell";
 }
 
+/**
+ * 본문 최상단의 동작 줄.
+ *
+ * 2026-09-02에 페이지 제목 블록(`PageHeader`)을 사용자 화면에서 걷어내면서, 그
+ * 헤더 우측에 붙어 있던 동작 버튼들이 갈 곳을 잃었다. 화면마다 알아서 두게 하면
+ * 「예시로 둘러보기」·「스탬프 찍기」·리포트 필터가 다시 제각각의 위치에 서게
+ * 되므로(`PageHeader`의 `actions`가 애초에 없애려던 문제다), 본문 첫 줄 우측이라는
+ * **한 자리**를 대신 준다. docs/UI_SPEC.md §7.
+ *
+ * 넘길 것이 없으면 아무것도 그리지 않는다 — 빈 줄이 본문을 12px 밀어내면 헤더를
+ * 지운 이유가 절반 사라진다.
+ */
+export function PageActions({
+  children,
+  className,
+}: {
+  children?: React.ReactNode;
+  className?: string;
+}) {
+  if (!children) {
+    return null;
+  }
+  return (
+    <div className={cn("mb-3 flex flex-wrap items-center justify-end gap-1.5", className)}>
+      {children}
+    </div>
+  );
+}
+
 type PageScrollShellProps = {
   children: React.ReactNode;
   className?: string;

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PageHeader } from "@/components/layout/header";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { fetchFundamentalsClient } from "@/lib/fundamentals-api";
@@ -18,6 +17,7 @@ import {
 import { formatListDate, formatPrice } from "@/lib/format";
 import type { StockInfo } from "@/lib/quotes-types";
 import { cn } from "@/lib/utils";
+import { toUserMessage } from "@/lib/error-message";
 
 type StockRow = StockInfo & { fetchError?: string };
 
@@ -58,7 +58,7 @@ export function FinancialsClient({ stocks }: FinancialsClientProps) {
       })
       .catch((err) => {
         if (cancelled) return;
-        setFetchError(err instanceof Error ? err.message : "펀더멘털 조회 실패");
+        setFetchError(toUserMessage(err, "펀더멘털 조회 실패"));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -71,10 +71,6 @@ export function FinancialsClient({ stocks }: FinancialsClientProps) {
 
   return (
     <>
-      <PageHeader
-        title="재무제표"
-        subtitle="보유 종목 펀더멘털 · DART/EDGAR + Toss 실시간 PER/PBR"
-      />
       <main className="flex-1 overflow-y-auto p-4 sm:p-6">
         {stocks.length === 0 ? (
           <div className="mx-auto max-w-5xl">
@@ -89,13 +85,13 @@ export function FinancialsClient({ stocks }: FinancialsClientProps) {
                 <CardTitle>보유 종목</CardTitle>
                 <Badge variant="info">{stocks.length}종목</Badge>
               </CardHeader>
-              <p className="px-5 pb-3 text-xs text-[var(--text-muted)]">
+              <p className="px-5 pb-3 text-cell text-[var(--text-muted)]">
                 종목을 선택하면 펀더멘털 분석을 확인합니다.
               </p>
               <div className="max-h-[420px] overflow-y-auto border-t border-[var(--border)]">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-[var(--surface)]">
-                    <tr className="text-left text-xs text-[var(--text-muted)]">
+                    <tr className="text-left text-cell text-[var(--text-muted)]">
                       <th className="px-4 py-2 font-medium">종목</th>
                       <th className="hidden px-2 py-2 font-medium sm:table-cell">시장</th>
                       <th className="px-4 py-2 text-right font-medium">상장</th>
@@ -117,15 +113,15 @@ export function FinancialsClient({ stocks }: FinancialsClientProps) {
                         >
                           <td className="px-4 py-3">
                             <p className="font-medium text-[var(--text-primary)]">{stock.name}</p>
-                            <p className="text-xs text-[var(--text-muted)]">{stock.symbol}</p>
+                            <p className="text-cell text-[var(--text-muted)]">{stock.symbol}</p>
                             {stock.fetchError && (
-                              <p className="text-xs text-rose-400">{stock.fetchError}</p>
+                              <p className="text-cell text-rose-400">{stock.fetchError}</p>
                             )}
                           </td>
-                          <td className="hidden px-2 py-3 text-xs text-[var(--text-secondary)] sm:table-cell">
+                          <td className="hidden px-2 py-3 text-cell text-[var(--text-secondary)] sm:table-cell">
                             {stock.market}
                           </td>
-                          <td className="px-4 py-3 text-right text-xs tabular-nums text-[var(--text-secondary)]">
+                          <td className="px-4 py-3 text-right text-cell tabular-nums text-[var(--text-secondary)]">
                             {stock.listDate ? formatListDate(stock.listDate) : "—"}
                           </td>
                         </tr>
@@ -144,7 +140,7 @@ export function FinancialsClient({ stocks }: FinancialsClientProps) {
               ) : fetchError ? (
                 <Card className="flex min-h-[320px] flex-col items-center justify-center gap-2 p-8 text-center text-sm text-[var(--text-muted)]">
                   <p className="text-rose-400">{fetchError}</p>
-                  <p className="text-xs">종목 적재 후 다시 시도하거나, 다른 종목을 선택해 보세요.</p>
+                  <p className="text-cell">종목 적재 후 다시 시도하거나, 다른 종목을 선택해 보세요.</p>
                 </Card>
               ) : fundamentals && selectedStock ? (
                 <FundamentalPanel data={fundamentals} catalog={selectedStock} />
@@ -168,8 +164,8 @@ function FundamentalPanel({
   data: StockFundamentalsPanel;
   catalog: StockRow;
 }) {
-  const scoreTone =
-    data.score >= 75 ? "text-emerald-400" : data.score >= 55 ? "text-violet-400" : "text-amber-400";
+  // 자체 점수·「매수/관망」 등급은 걷어냈다 — 서버 종합 점수와 어긋나는 세 번째
+  // 잣대였다(2026-09-03 §9, `lib/fundamentals-mapper` 헤더 주석 참조).
   const tierVariant = tierBadgeVariant(data.coverageTier);
 
   return (
@@ -177,25 +173,16 @@ function FundamentalPanel({
       <Card className="p-0">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--border)] px-5 py-4">
           <div>
-            <p className="text-xs text-[var(--text-muted)]">펀더멘털 분석</p>
+            <p className="text-cell text-[var(--text-muted)]">펀더멘털 분석</p>
             <h2 className="mt-1 text-lg font-semibold text-[var(--text-primary)]">
               {data.name}
             </h2>
-            <p className="text-xs text-[var(--text-muted)]">
+            <p className="text-cell text-[var(--text-muted)]">
               {data.symbol} · {catalog.market} · {catalog.currency}
               {data.fiscalYear ? ` · FY${data.fiscalYear}` : ""}
               {data.price != null ? ` · ${formatPrice(data.price, data.currency)}` : ""}
               {catalog.sharesOutstanding ? ` · 발행 ${catalog.sharesOutstanding}` : ""}
             </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <ScoreRing score={data.score} />
-            <div className="text-right">
-              <p className={cn("text-2xl font-bold tabular-nums", scoreTone)}>
-                {data.score > 0 ? `+${data.score}` : "—"}
-              </p>
-              <p className={cn("text-sm font-semibold", scoreTone)}>{data.rating}</p>
-            </div>
           </div>
         </div>
 
@@ -203,21 +190,11 @@ function FundamentalPanel({
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <Badge variant="info">핵심 요약</Badge>
             <Badge variant={tierVariant}>{COVERAGE_TIER_LABEL[data.coverageTier]}</Badge>
-            <span className="text-[10px] uppercase text-[var(--text-muted)]">
+            <span className="text-micro uppercase text-[var(--text-muted)]">
               {data.dataSource} · {data.calcStatus}
             </span>
           </div>
-          <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{data.summary}</p>
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {data.tags.map((tag) => (
-              <span
-                key={tag}
-                className="rounded-full bg-[var(--surface-elevated)] px-2.5 py-0.5 text-[11px] text-[var(--text-muted)]"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
+          <p className="text-read text-[var(--text-secondary)]">{data.summary}</p>
         </div>
 
         <div className="grid gap-3 p-4 sm:grid-cols-2">
@@ -255,11 +232,11 @@ function MetricCard({
     >
       <div className="flex items-start justify-between gap-2">
         <span className="text-sm text-[var(--text-secondary)]">{metric.label}</span>
-        <span className={cn("text-xs font-medium", metricToneClass(metric.tone))}>
+        <span className={cn("text-cell font-medium", metricToneClass(metric.tone))}>
           {metric.verdict}
         </span>
       </div>
-      <p className="mt-2 font-mono text-2xl font-semibold tabular-nums text-[var(--text-primary)]">
+      <p className="mt-2 font-num text-2xl font-semibold tabular-nums text-[var(--text-primary)]">
         {metric.value}
       </p>
       {metric.available && (
@@ -274,30 +251,3 @@ function MetricCard({
   );
 }
 
-function ScoreRing({ score }: { score: number }) {
-  const pct = Math.min(100, Math.max(0, score));
-  const dash = `${pct} ${100 - pct}`;
-  return (
-    <svg viewBox="0 0 36 36" className="h-12 w-12 -rotate-90" aria-hidden>
-      <circle
-        cx="18"
-        cy="18"
-        r="15.5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="3"
-        className="text-[var(--surface-elevated)]"
-      />
-      <circle
-        cx="18"
-        cy="18"
-        r="15.5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeDasharray={dash}
-        className="text-emerald-500"
-      />
-    </svg>
-  );
-}

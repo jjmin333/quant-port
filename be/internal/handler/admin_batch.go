@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/enact/quant-port/be/docs"
 	"github.com/enact/quant-port/be/internal/model"
@@ -34,7 +35,25 @@ func (h *AdminHandler) GetBatchJobs(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, map[string]any{"data": map[string]any{
 		"jobs":    h.batch.Catalog(ctx),
 		"history": history,
+		// 같은 응답에 실어 보낸다 — 배너 하나 때문에 화면이 요청을 하나 더 낼
+		// 이유가 없고, 목록과 배너가 서로 다른 순간을 가리키면 안 된다.
+		"health": h.batch.Health(ctx),
 	}})
+}
+
+/*
+GetBatchHealth returns just the judged state — 사이드바 뱃지용.
+
+`/batch/jobs`가 이미 같은 값을 싣고 있지만 그쪽은 잡 카탈로그·커버리지·이력까지
+딸려 온다. 사이드바는 **모든 화면에서** 주기적으로 물어야 하므로 가벼운 입구를
+따로 둔다.
+*/
+func (h *AdminHandler) GetBatchHealth(w http.ResponseWriter, r *http.Request) {
+	if h.batch == nil {
+		response.JSON(w, http.StatusOK, map[string]any{"data": model.BatchHealthView{}})
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]any{"data": h.batch.Health(r.Context())})
 }
 
 // RunBatchJob starts one job. Returns 409 while another is in flight — the
@@ -110,4 +129,57 @@ func batchSchedulePayload(doc docs.BatchScheduleDoc) map[string]any {
 		"source":   doc.Source,
 		"writable": doc.Writable,
 	}
+}
+
+/*
+GetOpsIncidents — 운영 사건 원장.
+
+# 왜 배치 감시와 따로인가
+
+`/batch/health`는 **지금 상태**를 답한다(그 판정은 요청마다 다시 계산된다). 이 입구는
+**이력**을 답한다 — 「언제부터 깨져 있었나」 「몇 번째 재발인가」 「그때 무엇이 함께
+죽었나」. 두 질문의 수명이 다르므로 한 응답에 섞지 않는다.
+
+기본은 열린 사건만이다. `?days=N`을 주면 그 기간의 닫힌 것까지 함께 준다 — 사후
+조사용이고, 화면 기본값은 「지금 신경 쓸 것」이어야 한다.
+*/
+func (h *AdminHandler) GetOpsIncidents(w http.ResponseWriter, r *http.Request) {
+	if h.incidents == nil {
+		response.JSON(w, http.StatusOK, map[string]any{
+			"data": map[string]any{"open": []model.Incident{}, "recent": []model.Incident{}},
+		})
+		return
+	}
+	ctx := r.Context()
+	open, err := h.incidents.ListOpen(ctx, 100)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "사건 원장을 읽지 못했습니다")
+		return
+	}
+	payload := map[string]any{"open": nonNilIncidents(open)}
+
+	if raw := strings.TrimSpace(r.URL.Query().Get("days")); raw != "" {
+		days, convErr := strconv.Atoi(raw)
+		if convErr != nil || days <= 0 || days > 90 {
+			response.Error(w, http.StatusBadRequest, "days는 1~90 사이여야 합니다")
+			return
+		}
+		recent, rErr := h.incidents.ListRecent(ctx, time.Now().AddDate(0, 0, -days), 300)
+		if rErr != nil {
+			response.Error(w, http.StatusInternalServerError, "사건 원장을 읽지 못했습니다")
+			return
+		}
+		payload["recent"] = nonNilIncidents(recent)
+		payload["days"] = days
+	}
+	response.JSON(w, http.StatusOK, map[string]any{"data": payload})
+}
+
+// nonNilIncidents keeps the JSON an array — `null` makes the screen branch on
+// a case that means the same thing as "none".
+func nonNilIncidents(in []model.Incident) []model.Incident {
+	if in == nil {
+		return []model.Incident{}
+	}
+	return in
 }

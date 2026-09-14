@@ -18,10 +18,10 @@ type StockInfo struct {
 }
 
 type KrMarketDetail struct {
-	LiquidationTrading    bool  `json:"liquidationTrading"`
-	NxtSupported          bool  `json:"nxtSupported"`
-	KrxTradingSuspended   bool  `json:"krxTradingSuspended"`
-	NxtTradingSuspended   *bool `json:"nxtTradingSuspended"`
+	LiquidationTrading  bool  `json:"liquidationTrading"`
+	NxtSupported        bool  `json:"nxtSupported"`
+	KrxTradingSuspended bool  `json:"krxTradingSuspended"`
+	NxtTradingSuspended *bool `json:"nxtTradingSuspended"`
 }
 
 type StockWarning struct {

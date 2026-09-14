@@ -27,6 +27,13 @@ type MarketIndexStore struct {
 	repo        *repository.MarketIndexRepo
 	marketStore *MarketDataStore
 
+	// 실시간 시세가 스파크라인·등락률을 안 주는 지수를 메우는 종가 표.
+	// 자세한 사정은 market_index_history.go.
+	closes *repository.IndexDailyCloseRepo
+	histMu sync.Mutex
+	hist   map[string][]repository.DailyClosePoint
+	histAt time.Time
+
 	mu           sync.RWMutex
 	indices      []model.MarketIndex
 	updatedAt    time.Time

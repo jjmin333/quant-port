@@ -76,7 +76,7 @@ export function EarningsWeekBoard({
             <button
               type="button"
               onClick={() => onSelect(null)}
-              className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+              className="rounded-full bg-muted px-2 py-0.5 text-micro text-muted-foreground hover:text-foreground"
             >
               이 주 전체 보기
             </button>
@@ -110,14 +110,14 @@ export function EarningsWeekBoard({
               )}
             >
               <div className="flex items-baseline gap-1">
-                <span className="text-[11px] font-bold">
+                <span className="text-cell font-bold">
                   {weekdayOf(date)} {Number(date.slice(8))}
                 </span>
-                <span className="text-[10px] font-normal text-muted-foreground">
+                <span className="text-micro font-normal text-muted-foreground">
                   {total > 0 ? `${total}건` : "없음"}
                 </span>
               </div>
-              <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+              <p className="mt-0.5 truncate text-micro text-muted-foreground">
                 {cell && cell.confirmed > 0
                   ? `발표 ${cell.confirmed}`
                   : cell && cell.scheduled > 0
@@ -128,17 +128,17 @@ export function EarningsWeekBoard({
               </p>
               <div className="mt-1 space-y-0.5">
                 {picks.length === 0 ? (
-                  <p className="truncate text-[10px] text-muted-foreground">&nbsp;</p>
+                  <p className="truncate text-micro text-muted-foreground">&nbsp;</p>
                 ) : (
                   picks.map((ev) => (
                     <p
                       key={`${ev.symbol}-${ev.fiscalPeriod}`}
-                      className="flex min-w-0 items-baseline gap-1 text-[10px]"
+                      className="flex min-w-0 items-baseline gap-1 text-micro"
                     >
                       <span className="min-w-0 flex-1 truncate">{ev.name || ev.symbol}</span>
                       <span
                         className={cn(
-                          "shrink-0 font-mono tabular-nums",
+                          "shrink-0 font-num tabular-nums",
                           ev.surprise!.pct! >= 0
                             ? "text-[var(--profit)]"
                             : "text-[var(--loss)]",
@@ -155,7 +155,7 @@ export function EarningsWeekBoard({
           );
         })}
       </div>
-      <p className="mt-2 border-t pt-2 text-[10px] text-muted-foreground">
+      <p className="mt-2 border-t pt-2 text-micro text-muted-foreground">
         칸 안 종목은 <b>서프라이즈가 가장 컸던 발표</b>입니다. 날짜를 누르면 그날 전체를 봅니다.
       </p>
     </div>

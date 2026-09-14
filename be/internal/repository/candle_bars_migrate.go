@@ -63,6 +63,16 @@ func MigrateCandleBarsV2IfNeeded(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
+// rebuildCandleBarsAsDatetime rebuilds candle_bars with a DATETIME bar_time.
+//
+// 이 재구축은 **파티션과 src_bars를 날린다** — 새 표를 맨몸으로 만들고
+// RENAME으로 갈아끼우기 때문이다. 그대로 두면 계층 저장의 전제가 조용히
+// 사라진다. 그래서 migrateCandleBarsAsync가 이 함수 다음에 반드시
+// MigrateCandleBarsTieringIfNeeded를 부르고, 그쪽 가드가 파티션이 없어진 것을
+// 보고 다시 만든다. 순서를 바꾸면 안 된다.
+//
+// (실무상 이 함수는 더 이상 돌지 않는다 — bar_time이 이미 DATETIME이라
+// MigrateCandleBarsV2IfNeeded가 앞에서 반환한다.)
 func rebuildCandleBarsAsDatetime(ctx context.Context, db *sql.DB) error {
 	// Start clean if an earlier attempt died midway.
 	if _, err := db.ExecContext(ctx, `DROP TABLE IF EXISTS candle_bars_v2`); err != nil {

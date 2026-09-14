@@ -1,4 +1,4 @@
-param(
+﻿param(
     [switch]$Background,
     [int]$Port = 8080,
     [int]$WaitSeconds = 25

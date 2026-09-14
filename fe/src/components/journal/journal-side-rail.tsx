@@ -112,7 +112,7 @@ export function JournalSideRail({
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
             placeholder="제목·내용·태그"
-            className="h-8 w-full rounded-lg border bg-background pl-8 pr-2.5 text-xs placeholder:text-muted-foreground focus:border-[var(--brand)] focus:outline-none"
+            className="h-8 w-full rounded-lg border bg-background pl-8 pr-2.5 text-cell placeholder:text-muted-foreground focus:border-[var(--brand)] focus:outline-none"
           />
         </div>
       </SectionCard>
@@ -131,13 +131,13 @@ export function JournalSideRail({
                   onClick={() => onTagFilter(active ? null : tag)}
                   aria-pressed={active}
                   className={cn(
-                    "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-opacity hover:opacity-80",
+                    "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-cell font-medium transition-opacity hover:opacity-80",
                     JOURNAL_TAG_TONE[tag] ?? "bg-accent text-muted-foreground",
                     active && "ring-1 ring-[var(--brand)]",
                   )}
                 >
                   {tag}
-                  <span className="font-mono tabular-nums opacity-70">{count}</span>
+                  <span className="font-num tabular-nums opacity-70">{count}</span>
                 </button>
               );
             })}
@@ -145,7 +145,7 @@ export function JournalSideRail({
         )}
       </SectionCard>
 
-      <SectionCard title="다시 볼 메모" action={<span className="text-[10px] text-muted-foreground">{STALE_DAYS}일 지남</span>}>
+      <SectionCard title="다시 볼 메모" action={<span className="text-micro text-muted-foreground">{STALE_DAYS}일 지남</span>}>
         {stale.length === 0 ? (
           <SectionEmpty text="최근에 모두 살펴봤습니다" />
         ) : (
@@ -163,15 +163,15 @@ export function JournalSideRail({
                     className="flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-1.5 text-left hover:bg-accent"
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="line-clamp-1 block text-xs">{note.title || "제목 없음"}</span>
-                      <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                      <span className="line-clamp-1 block text-cell">{note.title || "제목 없음"}</span>
+                      <span className="mt-0.5 block truncate text-cell text-muted-foreground">
                         {note.symbolName || note.symbol || "종목 미지정"} ·{" "}
                         {formatDateKST(note.updatedAt)}
                       </span>
                     </span>
                     <span
                       className={cn(
-                        "shrink-0 font-mono text-[11px] font-semibold tabular-nums",
+                        "shrink-0 font-num text-cell font-semibold tabular-nums",
                         pct === null
                           ? "text-muted-foreground"
                           : pct > 0
@@ -210,8 +210,8 @@ export function JournalSideRail({
                   onClick={() => onOpenNote(note.id)}
                   className="w-full min-w-0 rounded-md px-1 py-1.5 text-left hover:bg-accent"
                 >
-                  <span className="line-clamp-1 block text-xs">{note.title || "제목 없음"}</span>
-                  <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                  <span className="line-clamp-1 block text-cell">{note.title || "제목 없음"}</span>
+                  <span className="mt-0.5 block truncate text-cell text-muted-foreground">
                     {note.symbolName || note.symbol || "종목 미지정"} ·{" "}
                     {formatDateKST(note.updatedAt)}
                   </span>
@@ -293,7 +293,7 @@ function FilterRow({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "flex h-[30px] w-full min-w-0 items-center gap-1.5 rounded-md px-1 text-xs",
+        "flex h-[30px] w-full min-w-0 items-center gap-1.5 rounded-md px-1 text-cell",
         active ? "bg-accent font-medium" : "hover:bg-accent/60",
       )}
     >

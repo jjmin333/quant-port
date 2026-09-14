@@ -3,8 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogIn, Star, X } from "lucide-react";
+import { Heart, LogIn, X } from "lucide-react";
+import { ANCHORED_POPOVER_MOBILE } from "@/lib/anchored-popover";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 
 /**
  * 비로그인 사용자를 다루는 방식.
@@ -40,8 +42,8 @@ export function NewsSampleSymbolsBanner({
 }) {
   const loginHref = useLoginHref();
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-amber-500/35 bg-amber-500/[0.08] px-3 py-2 text-[11px]">
-      <Star className="size-3.5 shrink-0 text-amber-500" />
+    <div className="flex items-center gap-2 rounded-lg border border-amber-500/35 bg-amber-500/[0.08] px-3 py-2 text-cell">
+      <Heart className="size-3.5 shrink-0 text-amber-500" />
       <span className="min-w-0 flex-1 text-[var(--text-secondary)]">
         <b className="text-[var(--text-primary)]">지금은 인기 종목 기준</b>입니다 —{" "}
         {sampleNames.join(" · ")}. 로그인하면 <b className="text-[var(--text-primary)]">내 보유·관심 종목</b>
@@ -71,7 +73,7 @@ export function NewsSampleSymbolsBanner({
 export function NewsSampleRailNote() {
   const loginHref = useLoginHref();
   return (
-    <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/[0.07] px-2 py-1.5 text-[10px]">
+    <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/[0.07] px-2 py-1.5 text-micro">
       <span className="min-w-0 flex-1 text-[var(--text-secondary)]">인기 종목 예시입니다</span>
       <Link
         href={loginHref}
@@ -138,8 +140,7 @@ export function NewsGatedActionBar({
             }
             setOpenKey((cur) => (cur === action.key ? null : action.key));
           }}
-          className={cn(
-            "inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors",
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }),
             openKey === action.key
               ? "border-[var(--brand)] text-[var(--brand)]"
               : "border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
@@ -162,14 +163,17 @@ export function NewsGatedActionBar({
             className={cn(
               "absolute left-0 z-20 w-[260px] rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-3 shadow-xl",
               placement === "up" ? "bottom-full mb-2" : "top-full mt-2",
+              // 좁은 화면에서는 화면에 매단다 — `lib/anchored-popover` 참고.
+              // `left-0`으로 여는 패널은 버튼이 오른쪽에 있을 때 오른쪽이 넘친다.
+              ANCHORED_POPOVER_MOBILE,
             )}
           >
-            <p className="text-xs font-bold text-[var(--text-primary)]">{active.title}</p>
-            <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-secondary)]">
+            <p className="text-cell font-bold text-[var(--text-primary)]">{active.title}</p>
+            <p className="mt-1 text-cell leading-relaxed text-[var(--text-secondary)]">
               {active.description}
             </p>
             {active.bullets.length > 0 && (
-              <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[11px] text-[var(--text-muted)]">
+              <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-cell text-[var(--text-muted)]">
                 {active.bullets.map((line, i) => (
                   <li key={i}>{line}</li>
                 ))}
@@ -178,13 +182,13 @@ export function NewsGatedActionBar({
             <div className="mt-2.5 flex gap-1.5">
               <Link
                 href="/signup"
-                className="flex-1 rounded-lg border border-[var(--border)] px-2 py-1.5 text-center text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "flex-1 border-[var(--border)] text-center text-[var(--text-secondary)] hover:text-[var(--text-primary)]")}
               >
                 회원가입
               </Link>
               <Link
                 href={loginHref}
-                className="flex-1 rounded-lg bg-[var(--brand)] px-2 py-1.5 text-center text-[11px] font-semibold text-white hover:opacity-90"
+                className={cn(buttonVariants({ variant: "default", size: "sm" }), "flex-1 bg-[var(--brand)] text-center text-white hover:opacity-90")}
               >
                 <LogIn className="mr-1 inline size-3" />
                 로그인

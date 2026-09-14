@@ -33,6 +33,25 @@ type FinancialPeriodRow struct {
 	Period      model.FinancialHistoryPeriod
 }
 
+func (r *FinancialPeriodRepo) HasPeriods(ctx context.Context, symbol string) (bool, error) {
+	if r == nil || r.db == nil {
+		return false, nil
+	}
+	symbol = strings.TrimSpace(symbol)
+	if symbol == "" {
+		return false, nil
+	}
+	var n int
+	err := r.db.QueryRowContext(ctx,
+		`SELECT EXISTS (SELECT 1 FROM financial_periods WHERE symbol = ? LIMIT 1)`,
+		symbol,
+	).Scan(&n)
+	if err != nil {
+		return false, err
+	}
+	return n == 1, nil
+}
+
 func (r *FinancialPeriodRepo) Upsert(ctx context.Context, rows []FinancialPeriodRow) (int, error) {
 	if r == nil || r.db == nil || len(rows) == 0 {
 		return 0, nil
@@ -431,4 +450,29 @@ func (r *DisclosureRepo) ListRecentForSymbol(ctx context.Context, symbol string,
 	}
 	defer rows.Close()
 	return scanDisclosures(rows)
+}
+
+// CountHoles counts missing flow/EPS cells across one symbol's stored quarters.
+//
+// 「채워졌는지」를 실제로 세기 위한 것이다. 구멍 메우기 배치는 이미 분기가 있는
+// 종목을 대상으로 하므로 「분기가 존재하는가」로는 성패를 알 수 없다 — 전부
+// 성공으로 보고된다.
+func (r *FinancialPeriodRepo) CountHoles(ctx context.Context, symbol string) (int, error) {
+	if r == nil || r.db == nil {
+		return 0, nil
+	}
+	var n int
+	err := r.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(
+		         (revenue IS NULL) + (operating_income IS NULL)
+		       + (net_income IS NULL) + (eps_basic IS NULL)
+		       ), 0)
+		FROM financial_periods
+		WHERE symbol = ? AND basis = 'quarter'`,
+		strings.ToUpper(strings.TrimSpace(symbol)),
+	).Scan(&n)
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
 }

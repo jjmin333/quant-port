@@ -1,0 +1,5 @@
+{
+  "_comment": "이 파일을 watchdog.config.json 으로 복사하고 WebhookUrl 을 채운다. Discord(content)·Slack(text) 웹훅 둘 다 그대로 붙는다. 비워 두면 알림은 deploy/logs/watchdog.log 에만 남는다.",
+  "WebhookUrl": "",
+  "NotifyOnRecovery": true
+}

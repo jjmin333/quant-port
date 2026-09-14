@@ -67,6 +67,71 @@ func MigratePerfIndexesIfNeeded(ctx context.Context, db *sql.DB, migrationsDir s
 	return nil
 }
 
+// MigrateNewsPopularIndexIfNeeded applies 059_news_popular_index.sql.
+//
+// 059는 두 가지를 한다 — `news_articles`에 인기순 인덱스를 **추가**하고,
+// `stock_scores`에서 중복 인덱스 둘을 **제거**한다. 근거와 실측은 그 파일 머리말과
+// docs/PERFORMANCE_AUDIT.md(P1-6·P2-11)에 있다.
+//
+// 마커를 둘 다 보는 이유: 하나만 보면 나머지 하나가 영원히 적용되지 않는다.
+// 050이 같은 이유로 인덱스 목록을 따로 들고 있다(위 perfIndexes 참조).
+//
+// 파일을 통째로 다시 실행해도 안전하다 — 중복 생성은 1061, 없는 인덱스 삭제는
+// 1091이고 둘 다 isSchemaRaceError가 넘긴다. 컨테이너 여럿이 함께 부팅해 같은
+// 문장을 동시에 내는 경우도 같은 경로로 흡수된다.
+func MigrateNewsPopularIndexIfNeeded(ctx context.Context, db *sql.DB, migrationsDir string) error {
+	// 추가해야 할 것: 아직 없으면 적용 대상.
+	add := []struct{ table, index string }{
+		{"news_articles", "idx_news_market_popular"},
+	}
+	// 제거해야 할 것: 아직 남아 있으면 적용 대상.
+	drop := []struct{ table, index string }{
+		{"stock_scores", "idx_stock_scores_date"},
+		{"stock_scores", "idx_stock_scores_score"},
+	}
+
+	pending := false
+	for _, ix := range add {
+		exists, err := tableExists(ctx, db, ix.table)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			// 표가 아직 없으면 그 표를 만드는 마이그레이션이 인덱스까지 책임진다.
+			continue
+		}
+		has, err := indexExists(ctx, db, ix.table, ix.index)
+		if err != nil {
+			return err
+		}
+		if !has {
+			pending = true
+		}
+	}
+	for _, ix := range drop {
+		exists, err := tableExists(ctx, db, ix.table)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			continue
+		}
+		has, err := indexExists(ctx, db, ix.table, ix.index)
+		if err != nil {
+			return err
+		}
+		if has {
+			pending = true
+		}
+	}
+	if !pending {
+		return nil
+	}
+
+	return applyMigrationFile(ctx, db, migrationsDir,
+		"059_news_popular_index.sql", "news popular index + score index dedupe")
+}
+
 func indexExists(ctx context.Context, db *sql.DB, table, index string) (bool, error) {
 	var n int
 	err := db.QueryRowContext(ctx, `

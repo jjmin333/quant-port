@@ -2,16 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MenuEmptyState } from "@/components/common/menu-empty-state";
+import { AddHoldingDialog } from "@/components/holdings/add-holding-dialog";
+import { LoadErrorState } from "@/components/common/load-error-state";
 import { menuIcon } from "@/components/common/menu-icon";
 import {
   SampleModeButton,
   SampleRibbon,
+  useAutoSample,
   useSampleMode,
 } from "@/components/common/sample-mode";
 import { useAuth } from "@/components/providers/auth-provider";
-import { PageHeader } from "@/components/layout/header";
 import { PageColumns } from "@/components/layout/page-columns";
-import { PageScrollShell } from "@/components/layout/page-content-shell";
+import { PageActions, PageScrollShell } from "@/components/layout/page-content-shell";
 import { useHeaderSearch } from "@/components/providers/header-search-provider";
 import { HoldingDetailModal } from "@/components/holdings/holding-detail-modal";
 import { HoldingsAllocationCard } from "@/components/holdings/holdings-allocation-card";
@@ -38,7 +40,12 @@ import { apiRequest } from "@/lib/api-client";
 import { fetchQuotesBatchClient } from "@/lib/market-api";
 import { MENU_COPY } from "@/lib/menu-copy";
 import { fetchSampleHoldings } from "@/lib/sample-api";
-import { mergeQuoteSummariesForSymbols } from "@/lib/merge-quotes";
+import {
+  applyStreamPricesToQuotes,
+  mergeQuoteSummariesForSymbols,
+} from "@/lib/merge-quotes";
+import { useQuoteStreamByMarket } from "@/hooks/use-quote-stream";
+import { PRICE_POLL_MS, PRICE_POLL_MS_WHILE_STREAMING } from "@/lib/price-cadence";
 import { fetchScoresBatchClient, type StockScoreData } from "@/lib/stock-score-api";
 import type { QuoteSummary } from "@/lib/quotes-types";
 import type { UserHolding } from "@/lib/user-holdings-types";
@@ -47,12 +54,20 @@ import {
   type UserCashBalances,
 } from "@/lib/user-cash-balances-types";
 import { fetchUserCashBalancesClient } from "@/lib/user-cash-balances-api";
+import { toUserMessage } from "@/lib/error-message";
 
 /** 참조가 매번 바뀌면 하위 memo가 전부 무효가 된다 — 빈 맵은 하나만 만든다. */
 const EMPTY_SCORES = new Map<string, StockScoreData>();
 
-/** 관심종목과 동일 — 평가손익·오늘 손익이 장중 시세를 따라가도록 주기 갱신. */
-const QUOTES_POLL_MS = 5_000;
+/*
+관심종목과 동일 — 평가손익·오늘 손익이 장중 시세를 따라가도록 주기 갱신.
+
+**5초에서 2초로 맞췄다 (2026-09-04 사용자 요청 1).** 같은 가격이 화면마다 다른
+박자로 늙는 것을 없애는 것이 목적이라, 숫자는 이제 `lib/price-cadence` 한 곳에만
+있다. 요청 수는 오히려 줄었다 — 아래 SSE가 붙어 있는 동안 이 폴링은 30초로
+물러나고, 끊겼을 때만 2초로 돌아온다.
+*/
+const QUOTES_POLL_MS = PRICE_POLL_MS;
 
 /**
  * 보유종목 화면.
@@ -106,6 +121,29 @@ export function HoldingsPageClient() {
     const batch = await fetchQuotesBatchClient(symbols);
     setQuotes((prev) => mergeQuoteSummariesForSymbols(symbols, prev, batch ?? []));
   }, []);
+
+  /*
+   * 모드가 바뀌면 이전 모드의 데이터를 **먼저 버린다.**
+   *
+   * 아래 두 적재 효과는 성공했을 때만 값을 갈아끼우고, 실패 경로는
+   * `setHoldings((prev) => prev ?? [])`로 **이전 값을 유지**한다(폴링이 잠깐
+   * 실패해도 목록이 사라지지 않게 하려는 의도이고, 같은 모드 안에서는 그게 맞다).
+   * 그런데 모드를 넘나들 때는 그 유지가 곧 **예시 숫자가 실데이터인 척 남는 것**이
+   * 된다 — 비로그인으로 예시를 끄면 실데이터 요청이 전부 401이라 예시 포트폴리오가
+   * 그대로 화면에 남았다. 모드 전환은 "값이 아직 없음"에서 다시 시작해야 한다.
+   *
+   * effect가 아니라 **렌더 중에** 되돌린다(React의 "prop이 바뀔 때 state 조정"
+   * 패턴). effect로 하면 초기화 전에 한 프레임이 먼저 그려져 이전 모드의 숫자가
+   * 잠깐 보이는데, 이 화면에서 그 한 프레임이 정확히 고치려는 증상이다.
+   */
+  const [renderedSample, setRenderedSample] = useState(sample);
+  if (renderedSample !== sample) {
+    setRenderedSample(sample);
+    setHoldings(null);
+    setCashBalances(null);
+    setQuotes([]);
+    setError(null);
+  }
 
   // 예시 모드는 보유·현금·시세 세 요청(전부 인증 뒤에 있다)을 한 픽스처로 대신한다.
   useEffect(() => {
@@ -178,7 +216,7 @@ export function HoldingsPageClient() {
       })
       .catch((err: unknown) => {
         if (!alive) return;
-        setError(err instanceof Error ? err.message : "불러오기 실패");
+        setError(toUserMessage(err, "불러오기 실패"));
         // 실패해도 로딩 상태에 갇히지 않게 빈 목록으로 확정한다. 오류 배너가 이유를 말한다.
         setHoldings((prev) => prev ?? []);
         setCashBalances((prev) => prev ?? EMPTY_CASH_BALANCES);
@@ -193,20 +231,66 @@ export function HoldingsPageClient() {
     [holdings],
   );
 
+  /*
+    가격을 푸시로도 받는다 (2026-09-04 사용자 요청 1).
+
+    구독 대상을 **시세 목록**(`quotes`)에서 만드는 이유는 자산 구분이 거기 있기
+    때문이다. 보유 목록은 한 사람 안에 국내·해외가 섞여 있고, 서버는 그 값으로
+    어느 거래소 달력을 볼지 정한다 — `useQuoteStreamByMarket`이 시장별로 나눠
+    연결한다(그 머리글 참조).
+
+    예시 모드에서는 붙지 않는다. 그 숫자는 픽스처라 스트림이 덮으면 평단과 현재가가
+    서로 다른 세계의 값이 된다.
+  */
+  const streamRows = useMemo(
+    () =>
+      sample
+        ? []
+        : quotes.map((q) => ({ symbol: q.symbol, assetType: q.assetType as string })),
+    [quotes, sample],
+  );
+  const { prices: streamPrices, streaming } = useQuoteStreamByMarket(streamRows);
+
+  /*
+    스트림 가격은 **상태에 저장하지 않고 렌더 중에 얹는다.**
+
+    이펙트에서 `setQuotes`를 하면 틱마다 렌더가 두 번 돈다 — 이 화면은 그 목록으로
+    평가손익·비중·기여도를 다시 계산하므로 두 배가 그대로 비용이다. 아래 계산들이
+    전부 `liveQuotes`를 읽는다.
+  */
+  const liveQuotes = useMemo(
+    () => applyStreamPricesToQuotes(quotes, streamPrices),
+    [quotes, streamPrices],
+  );
+
   useEffect(() => {
-    // 예시에서는 실시간 시세를 덮어쓰지 않는다. 평단은 픽스처 값에 맞춰 정해둔 것이라
-    // 현재가만 실제 시세로 갈아끼우면 평가손익이 +231% 같은 엉뚱한 숫자가 된다.
-    if (sample || holdingSymbols.length === 0) return;
+    /*
+     * 예시도 실시간 시세를 받는다. 예전에는 막아뒀는데, 그때는 평단이 손으로 적은
+     * 값이라 현재가만 진짜로 갈아끼우면 평가손익이 +231% 같은 숫자가 됐기 때문이다.
+     * 지금은 평단이 **매수일의 실제 종가**라 두 끝이 같은 세계에 있다.
+     */
+    if (holdingSymbols.length === 0) return;
+    const every = streaming ? PRICE_POLL_MS_WHILE_STREAMING : QUOTES_POLL_MS;
     const id = window.setInterval(() => {
       void refreshQuotes(holdingSymbols).catch(() => {
         // 폴링 실패는 조용히 — mergeQuoteSummary가 마지막 시세를 유지한다.
       });
-    }, QUOTES_POLL_MS);
+    }, every);
     return () => window.clearInterval(id);
-  }, [sample, holdingSymbols, refreshQuotes]);
+  }, [holdingSymbols, refreshQuotes, streaming]);
 
   const loading = holdings === null || cashBalances === null;
-  const isEmpty = !sample && !loading && !error && (holdings?.length ?? 0) === 0;
+  /*
+    「내 것이 아직 없다」 — **`sample`을 빼고** 잰다 (2026-09-14 사용자 요청 4).
+    `useAutoSample`이 이 값으로 예시를 켜는데, `!sample`이 섞이면 켜짐 → 0건 아님 →
+    꺼짐이 무한히 반복된다. 화면이 안내 카드를 세우는 조건은 그 위에 `!sample`을
+    얹은 `isEmpty`다 — 예시를 **끈** 사람에게만 카드가 보인다.
+  */
+  const hasNothingYet = !loading && !error && (holdings?.length ?? 0) === 0;
+  useAutoSample(hasNothingYet);
+  const isEmpty = !sample && hasNothingYet;
+  /** 0건 안내에서 여는 추가 폼. 사이드 레일이 없는 상태의 유일한 진입점이다. */
+  const [addOpen, setAddOpen] = useState(false);
 
   // 점수는 목록과 **따로** 불러온다. 배치 API가 죽어도 손익은 보여야 한다.
   const scoreKey = (holdings ?? []).map((h) => h.symbol).join(",");
@@ -233,12 +317,13 @@ export function HoldingsPageClient() {
   }, [scoreKey]);
 
   const rows: HoldingRow[] = useMemo(() => {
-    const quoteMap = new Map((quotes ?? []).map((q) => [q.symbol.toUpperCase(), q]));
+    // 스트림 가격이 얹힌 목록을 쓴다 — 평가손익·오늘 손익이 지금 값을 따라간다.
+    const quoteMap = new Map(liveQuotes.map((q) => [q.symbol.toUpperCase(), q]));
     return (holdings ?? []).map((h) => ({
       ...h,
       quote: quoteMap.get(h.symbol.toUpperCase()),
     }));
-  }, [holdings, quotes]);
+  }, [holdings, liveQuotes]);
 
   const { metrics, totals } = useMemo(() => {
     const base = buildHoldingMetrics(rows, exchangeRate);
@@ -300,24 +385,25 @@ export function HoldingsPageClient() {
 
   return (
     <>
-      <PageHeader
-        title={COPY.title}
-        subtitle={COPY.subtitle}
-        actions={
-          <SampleModeButton
-            active={sample}
-            onToggle={setSample}
-            emphasize={isEmpty || !session}
-          />
-        }
-      />
       <PageScrollShell>
+        {/*
+          0건 안내 카드가 이미 같은 버튼을 들고 있다 (§R-2). 두 곳에 다 두면 한 화면에
+          「예시로 둘러보기」가 둘이 되어 무엇이 다른지 묻게 만든다 — 실측으로 빈
+          보유 화면의 보이는 버튼이 그 문구 ×2 였다.
+        */}
+        <PageActions>
+          {isEmpty ? null : (
+            <SampleModeButton active={sample} onToggle={setSample} emphasize={!session} />
+          )}
+        </PageActions>
         {sample && (
           <div className="mb-3">
             <SampleRibbon
               loggedIn={Boolean(session)}
               loginHref="/login?next=%2Fholdings"
               onDismiss={() => setSample(false)}
+              // 안내 카드가 들고 있던 첫 동작 — 카드가 예시 뒤로 물러났으니 여기 선다.
+              action={{ label: "종목 추가하기", onClick: () => setAddOpen(true) }}
             />
           </div>
         )}
@@ -328,7 +414,13 @@ export function HoldingsPageClient() {
             headline={COPY.emptyHeadline}
             description={COPY.emptyDescription}
             steps={COPY.steps}
-            primary={{ label: "종목 찾아보기", href: "/analysis" }}
+            /*
+              예전 CTA는 `/analysis`(AI 추천 랭킹)로 보냈다. 그런데 이 카드가 약속한
+              「종목을 추가한다 — 직접 입력하거나 잔고 화면을 캡처해 올리면…」의 두
+              진입점은 사이드 레일 안에 있고, 그 레일은 지금 이 0건 분기에서 렌더되지
+              않는다. 결국 첫 사용자는 어디로도 갈 수 없었다. 약속한 그 폼을 바로 연다.
+            */
+            primary={{ label: "종목 추가하기", onClick: () => setAddOpen(true) }}
             secondary={
               <SampleModeButton
                 active={false}
@@ -346,12 +438,13 @@ export function HoldingsPageClient() {
               metrics={byWeight}
               onAdded={onTradesChanged}
               exchangeRate={exchangeRate}
+              sample={sample}
             />
           }
         >
           <div className="space-y-3">
             {error && (
-              <Card className="border-[var(--danger)]/40 bg-[var(--danger)]/10 p-3 text-xs">
+              <Card className="border-[var(--danger)]/40 bg-[var(--danger)]/10 p-3 text-cell">
                 {error}
               </Card>
             )}
@@ -413,6 +506,7 @@ export function HoldingsPageClient() {
           </div>
         </PageColumns>
         )}
+        <AddHoldingDialog open={addOpen} onOpenChange={setAddOpen} onAdded={onTradesChanged} />
       </PageScrollShell>
 
       <HoldingDetailModal

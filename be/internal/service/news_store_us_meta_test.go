@@ -62,10 +62,10 @@ func TestResolveUSNewsPreviewImage_keepsEditorial(t *testing.T) {
 
 func TestPickPrimaryUSSymbol_prefersHeadlineLead(t *testing.T) {
 	idx := map[string]string{
-		"tesla":   "TSLA",
-		"rivian":  "RIVN",
-		"tsla":    "TSLA",
-		"rivn":    "RIVN",
+		"tesla":  "TSLA",
+		"rivian": "RIVN",
+		"tsla":   "TSLA",
+		"rivn":   "RIVN",
 	}
 	got := pickPrimaryUSSymbol([]string{"TSLA", "RIVN"}, "Is This EV Stock The Next Tesla?", idx)
 	if got != "TSLA" {
@@ -75,7 +75,7 @@ func TestPickPrimaryUSSymbol_prefersHeadlineLead(t *testing.T) {
 
 func TestAddUSNameIndexKeys_companyToken(t *testing.T) {
 	idx := map[string]string{}
-	addUSNameIndexKeys(idx, "TSLA", "Tesla, Inc.", "")
+	addUSNameIndexKeys(idx, nil, "TSLA", "Tesla, Inc.", "")
 	if idx["tesla"] != "TSLA" {
 		t.Fatalf("expected tesla token, got %#v", idx)
 	}

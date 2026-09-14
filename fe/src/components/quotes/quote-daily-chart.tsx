@@ -18,6 +18,12 @@ type QuoteDailyChartProps = {
   height?: number;
   /** 왼쪽 끝으로 스크롤하면 과거 일봉을 더 불러온다. 모달처럼 차트가 본문일 때. */
   enableLoadMore?: boolean;
+  /**
+   * 지금 봉이 자라고 있는가. 장이 닫혀 있으면 false를 넘긴다 — 2초 스냅샷 폴링과
+   * 스트림을 둘 다 걷는다(`use-quote-candles`의 `live`). 부르는 쪽이 시세의
+   * `marketSession`을 알고 있으므로 여기서 다시 판정하지 않는다.
+   */
+  live?: boolean;
   className?: string;
 };
 
@@ -34,6 +40,7 @@ export function QuoteDailyChart({
   compact = false,
   height,
   enableLoadMore = false,
+  live = true,
   className,
 }: QuoteDailyChartProps) {
   const chartRef = useRef<CandlestickChartHandle>(null);
@@ -42,13 +49,14 @@ export function QuoteDailyChart({
     symbol,
     "1d",
     livePrice,
+    live,
   );
   const chartHeight = height ?? (compact ? 200 : 240);
 
   return (
     <Card className={cn("overflow-hidden p-0", className)}>
       <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2">
-        <h2 className="text-xs font-medium text-[var(--text-secondary)]">일봉 차트</h2>
+        <h2 className="text-cell font-medium text-[var(--text-secondary)]">일봉 차트</h2>
         <ChartZoomToolbar
           className="scale-90"
           onZoomIn={() => chartRef.current?.zoomIn()}
@@ -68,6 +76,8 @@ export function QuoteDailyChart({
           hasMore={enableLoadMore ? hasMore : false}
           loadingMore={enableLoadMore ? loadingMore : false}
           onLoadMore={enableLoadMore ? loadMore : undefined}
+          /* 현재가 표는 부르는 쪽이 헤더에 적는 값 그대로 — 사용자 지적 4 */
+          livePrice={livePrice}
         />
       </div>
     </Card>

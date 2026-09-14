@@ -3,6 +3,7 @@
 import { formatPrice } from "@/lib/format";
 import type { TargetView } from "@/lib/target-stats";
 import { cn } from "@/lib/utils";
+import { PriceDisplay } from "@/components/ui/price-display";
 
 /**
  * 「등록가 — 현재가 — 목표가」를 한 축에 올린 게이지. 손절이 있으면 그것도 같은 축에.
@@ -107,15 +108,15 @@ export function TargetAxis({
       </div>
 
       {showLabels && (
-        <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-[var(--text-muted)]">
+        <div className="mt-1 flex items-center justify-between gap-2 text-micro text-[var(--text-muted)]">
           <span className="truncate">
             {target.basePrice
               ? `등록 ${formatPrice(target.basePrice, target.currency)}`
               : "등록가 없음"}
             {progress !== null && ` · 진행 ${Math.round(progress * 100)}%`}
           </span>
-          <span className="shrink-0 font-mono tabular-nums text-[var(--profit)]">
-            목표 {formatPrice(target.targetPrice, target.currency)}
+          <span className="shrink-0 font-num tabular-nums text-[var(--profit)]">
+            목표 <PriceDisplay value={target.targetPrice} currency={target.currency} size="inherit" />
           </span>
         </div>
       )}

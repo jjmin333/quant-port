@@ -21,8 +21,8 @@ import (
 	"github.com/enact/quant-port/be/internal/import/costestimate"
 	"github.com/enact/quant-port/be/internal/import/imageutil"
 	"github.com/enact/quant-port/be/internal/import/ocr"
-	"github.com/enact/quant-port/be/internal/import/resolver"
 	"github.com/enact/quant-port/be/internal/import/pipeline"
+	"github.com/enact/quant-port/be/internal/import/resolver"
 	"github.com/enact/quant-port/be/internal/import/textparse"
 	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/safego"
@@ -34,13 +34,25 @@ const (
 	importJobCacheTTL = 24 * time.Hour
 )
 
+// imageWorkSlots는 한 잡 안에서 동시에 처리할 이미지 수의 상한을 만든다.
+// nil이면 무제한(OCR_MAX_CONCURRENCY=0). 잡마다 새로 만드는 이유: 상한은 "한 잡이
+// 박스를 독점하지 않게" 하는 것이 목적이고, 동시에 도는 잡은 사용자당 하나뿐이라
+// 실질적으로 프로세스 전역과 같다. 전역으로 두면 두 사용자의 잡이 서로를 굶긴다.
+func imageWorkSlots() chan struct{} {
+	n := ocr.MaxConcurrency()
+	if n <= 0 {
+		return nil
+	}
+	return make(chan struct{}, n)
+}
+
 type ImportJobService struct {
-	redis       *redis.Client
-	holdings    *UserHoldingsService
-	watchlist   *WatchlistService
-	resolver    *resolver.Resolver
-	ocr         ocr.Engine
-	tempRoot    string
+	redis     *redis.Client
+	holdings  *UserHoldingsService
+	watchlist *WatchlistService
+	resolver  *resolver.Resolver
+	ocr       ocr.Engine
+	tempRoot  string
 
 	jobsWg sync.WaitGroup
 }
@@ -225,7 +237,8 @@ func (s *ImportJobService) CommitJob(ctx context.Context, jobID string, req mode
 			if sym == "" {
 				continue
 			}
-			if err := s.watchlist.Add(ctx, sym); err == nil {
+			// 캡처 가져오기는 처음 담는 경로라 현재가를 찍는다(0).
+			if err := s.watchlist.Add(ctx, sym, 0); err == nil {
 				watchAdded++
 			}
 		}
@@ -259,11 +272,26 @@ func (s *ImportJobService) processJob(jobID string, userID int64, paths []string
 	var brokerHints []string
 	imageResults := make([]model.ImportImageResult, total)
 
+	// 이미지당 고루틴 하나를 띄우되, **동시에 일하는 수는 코어 수로 묶는다.**
+	//
+	// tesseract 호출은 ocr 패키지가 따로 막지만(ocr/limit.go), 그 앞뒤의 crop·업스케일도
+	// 싸지 않다 — 1080×2400 스크린샷을 3배로 키우면 RGBA로 약 93 MB고, 10장이 동시에
+	// 그 상태면 api 컨테이너의 메모리 상한(1 GiB)을 혼자 넘는다. CPU만 막고 메모리를
+	// 안 막으면 OOM 킬로 옮겨갈 뿐이다 — OOM 킬에는 graceful shutdown이 없다.
+	//
+	// 상한을 ocr 쪽과 같은 값으로 맞춘다. 두 세마포어는 별개지만 폭이 같고 획득 순서가
+	// 항상 (이미지 → tesseract)라, 이미지 슬롯을 쥔 고루틴은 tesseract 슬롯을 반드시
+	// 얻는다 — 교착이 생기지 않는다.
+	slots := imageWorkSlots()
 	var wg sync.WaitGroup
 	for i, path := range paths {
 		wg.Add(1)
 		go func(idx int, srcPath string) {
 			defer wg.Done()
+			if slots != nil {
+				slots <- struct{}{}
+				defer func() { <-slots }()
+			}
 
 			fail := func(reason string) {
 				mu.Lock()

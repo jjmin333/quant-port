@@ -352,6 +352,7 @@ func (st *NewsStore) rebuildNameIndex(ctx context.Context) {
 		}
 		idx[name] = strings.ToUpper(s.Symbol)
 	}
+	addHangulAliasNames(idx)
 	st.mu.Lock()
 	st.nameIndex = idx
 	st.nameIndexAt = time.Now()
@@ -421,6 +422,20 @@ func (st *NewsStore) extractSymbols(ctx context.Context, text string) []string {
 			continue
 		}
 		add(idx[name])
+	}
+	/*
+		상장명이 아닌 **통칭**도 푼다 (2026-09-04 사용자 지적 10).
+
+		「삼전닉스」처럼 시장이 두 종목을 묶어 부르는 말은 이름 인덱스에 있을 수
+		없다 — 회사가 등록한 이름이 아니다. 표와 그 판정 기준은
+		`news_symbol_nickname.go`에 있다.
+
+		**최장 일치 뒤에 둔다.** 앞의 루프가 상장명으로 이미 붙인 것이 있으면
+		`add`가 중복을 걸러 주고, 상장명이 하나도 안 걸린 기사(바로 그 기사가
+		그랬다)에서만 이 줄이 실제로 값을 낸다.
+	*/
+	for _, sym := range matchNicknameSymbols(textLower, idx) {
+		add(sym)
 	}
 	for _, sym := range st.trackedSymbols(ctx) {
 		if containsDomesticCode(textLower, strings.ToLower(sym)) {

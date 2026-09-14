@@ -31,6 +31,7 @@ type briefingPayload struct {
 	MoodReason  string                  `json:"moodReason,omitempty"`
 	Highlights  []string                `json:"highlights,omitempty"`
 	WatchPoints []string                `json:"watchPoints,omitempty"`
+	CarriedFrom *time.Time              `json:"carriedFrom,omitempty"`
 	Facts       model.NewsBriefingFacts `json:"facts"`
 }
 
@@ -42,6 +43,7 @@ func (r *NewsBriefingRepo) Insert(ctx context.Context, b model.NewsMarketBriefin
 		MoodReason:  b.MoodReason,
 		Highlights:  b.Highlights,
 		WatchPoints: b.WatchPoints,
+		CarriedFrom: b.CarriedFrom,
 		Facts:       b.Facts,
 	})
 	if err != nil {
@@ -105,6 +107,7 @@ func (r *NewsBriefingRepo) Recent(ctx context.Context, market string, limit int)
 			b.MoodReason = p.MoodReason
 			b.Highlights = p.Highlights
 			b.WatchPoints = p.WatchPoints
+			b.CarriedFrom = p.CarriedFrom
 			b.Facts = p.Facts
 		}
 		if latest.Valid {
@@ -117,13 +120,26 @@ func (r *NewsBriefingRepo) Recent(ctx context.Context, market string, limit int)
 
 // History returns past briefings compressed for the next prompt — newest
 // first, oldest last, so the model reads them as a sequence.
+// 이력에서 승계 행은 건너뛴다. 승계 행의 문장은 원본 슬롯의 문장과 **글자
+// 그대로 같아서**, 넣으면 세 칸짜리 이력의 한 칸이 중복으로 날아가고 프롬프트의
+// 「지난 브리핑 문장을 반복하지 마십시오」와도 어긋난다. 원본이 창 밖으로 밀려나지
+// 않도록 넉넉히 읽고 limit에서 끊는다.
 func (r *NewsBriefingRepo) History(ctx context.Context, market string, limit, summaryChars int) ([]model.NewsBriefingHistoryEntry, error) {
-	recent, err := r.Recent(ctx, market, limit)
+	if limit <= 0 {
+		limit = 3
+	}
+	recent, err := r.Recent(ctx, market, limit*2+2)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]model.NewsBriefingHistoryEntry, 0, len(recent))
+	out := make([]model.NewsBriefingHistoryEntry, 0, limit)
 	for _, b := range recent {
+		if len(out) >= limit {
+			break
+		}
+		if b.Source == model.BriefingSourceCarry {
+			continue
+		}
 		out = append(out, model.NewsBriefingHistoryEntry{
 			GeneratedAt: b.GeneratedAt,
 			Mood:        b.Mood,

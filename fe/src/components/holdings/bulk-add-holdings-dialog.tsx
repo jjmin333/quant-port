@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { createHoldingTradeClient } from "@/lib/holding-trades-api";
 import type { StockInfo } from "@/lib/quotes-types";
+import { toUserMessage } from "@/lib/error-message";
 
 type DraftRow = {
   key: string;
@@ -25,9 +26,21 @@ type DraftRow = {
   date: string;
 };
 
+/*
+ * `crypto.randomUUID()`는 보안 컨텍스트(HTTPS 또는 localhost)에서만 존재한다 — 개발 중
+ * 휴대폰에서 사설 IP(http://192.168.x.x:3000)로 접속하면 `crypto.randomUUID`가
+ * undefined라 TypeError가 난다. 이 키는 화면 안에서만 쓰는 행 식별자라 굳이 진짜
+ * UUID일 필요가 없어 카운터로 대신한다.
+ */
+let rowKeySeq = 0;
+function nextRowKey(): string {
+  rowKeySeq += 1;
+  return `row-${rowKeySeq}`;
+}
+
 function emptyRow(): DraftRow {
   return {
-    key: crypto.randomUUID(),
+    key: nextRowKey(),
     stock: null,
     quantity: "",
     price: "",
@@ -87,7 +100,7 @@ export function BulkAddHoldingsDialog({
       onOpenChange(false);
       setRows([emptyRow(), emptyRow()]);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "일괄 추가 실패");
+      setError(toUserMessage(err, "일괄 추가 실패"));
     } finally {
       setBusy(false);
     }
@@ -98,7 +111,7 @@ export function BulkAddHoldingsDialog({
       <DialogContent className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
         <DialogHeader className="border-b px-4 py-3 pr-10 text-left">
           <DialogTitle className="text-base">종목 일괄 추가</DialogTitle>
-          <DialogDescription className="text-xs">
+          <DialogDescription className="text-cell">
             여러 종목의 매수 기록을 한 번에 등록합니다. 평가금액 추이에 매수일부터 반영됩니다.
           </DialogDescription>
         </DialogHeader>
@@ -107,7 +120,7 @@ export function BulkAddHoldingsDialog({
           {rows.map((row, index) => (
             <div key={row.key} className="rounded-lg border p-2.5">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <span className="text-[11px] font-medium text-muted-foreground">
+                <span className="text-cell font-medium text-muted-foreground">
                   종목 {index + 1}
                 </span>
                 {rows.length > 1 && (
@@ -129,12 +142,12 @@ export function BulkAddHoldingsDialog({
                     currency={row.stock.currency}
                     size="xs"
                   />
-                  <span className="min-w-0 flex-1 truncate text-xs">
+                  <span className="min-w-0 flex-1 truncate text-cell">
                     {row.stock.name || row.stock.symbol}
                   </span>
                   <button
                     type="button"
-                    className="text-[10px] text-muted-foreground hover:text-foreground"
+                    className="text-micro text-muted-foreground hover:text-foreground"
                     onClick={() => updateRow(row.key, { stock: null })}
                   >
                     변경
@@ -145,7 +158,7 @@ export function BulkAddHoldingsDialog({
                   <StockCatalogSearchField
                     placeholder="종목 검색"
                     suggestionsId={`bulk-add-${row.key}`}
-                    inputClassName="h-8 py-1 pl-9 pr-2.5 text-xs md:text-xs"
+                    inputClassName="h-8 py-1 pl-9 pr-2.5 text-cell md:text-cell"
                     onSelect={(picked) => updateRow(row.key, { stock: picked })}
                   />
                 </div>
@@ -157,7 +170,7 @@ export function BulkAddHoldingsDialog({
                   inputMode="decimal"
                   placeholder="수량"
                   disabled={!row.stock}
-                  className="font-mono text-xs"
+                  className="font-num text-cell"
                 />
                 <Input
                   value={row.price}
@@ -165,7 +178,7 @@ export function BulkAddHoldingsDialog({
                   inputMode="decimal"
                   placeholder="매수 단가"
                   disabled={!row.stock}
-                  className="font-mono text-xs"
+                  className="font-num text-cell"
                 />
               </div>
               <TradeDateField
@@ -189,7 +202,7 @@ export function BulkAddHoldingsDialog({
             종목 행 추가
           </Button>
 
-          {error && <p className="text-[11px] text-[var(--danger)]">{error}</p>}
+          {error && <p className="text-cell text-[var(--danger)]">{error}</p>}
         </div>
 
         <div className="flex gap-2 border-t px-4 py-3">

@@ -23,15 +23,21 @@ export const NEWS_STOCK_FILTERS: NewsStockFilter[] = [
   { id: "005380", label: "현대차", terms: ["현대차", "현대자동차", "005380"] },
 ];
 
-/** Pill order in the news page tab bar. */
+/*
+ * pill 줄에 세우는 값 — **지수·성격만 남긴다.**
+ *
+ * 여기에 005930·000660·005380이 박혀 있었다. 그 옆 자리를 「오늘 많이 언급된
+ * 종목」이 채우면서, 오늘처럼 그 셋이 실제 상위권이면 같은 줄에 삼성전자가 두 번,
+ * SK하이닉스가 두 번 섰다(실측). 어느 쪽을 눌러야 하는지 알 수 없는 화면이다.
+ *
+ * 종목 자리는 집계가 정한다 — 그게 매일 달라지는 이 자리의 값어치다. 필터 자체는
+ * 남겨 둔다: `?filter=005930`으로 저장해 둔 링크와 목록 제목이 계속 동작해야 한다.
+ */
 export const NEWS_INDEX_PILLS: NewsIndexFilter[] = [
   "all",
   "breaking",
   "kospi",
   "kosdaq",
-  "005930",
-  "000660",
-  "005380",
 ];
 
 const BREAKING_MAX_AGE_MS = 24 * 60 * 60 * 1000;

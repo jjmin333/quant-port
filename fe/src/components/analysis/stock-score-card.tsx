@@ -17,7 +17,7 @@ function AxisBar({ axis, value }: { axis: ScoreAxisId; value: number | undefined
   const tone = has ? scoreTone(value) : "mid";
   return (
     <div className="flex items-center gap-2">
-      <span className="w-16 shrink-0 text-[11px] text-[var(--text-muted)]">
+      <span className="w-14 shrink-0 text-cell leading-none text-[var(--text-muted)]">
         {SCORE_AXIS_LABELS[axis]}
       </span>
       <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-[var(--surface-elevated)]">
@@ -30,7 +30,7 @@ function AxisBar({ axis, value }: { axis: ScoreAxisId; value: number | undefined
       </div>
       <span
         className={cn(
-          "w-8 shrink-0 text-right text-[11px] tabular-nums",
+          "w-7 shrink-0 text-right text-cell leading-none tabular-nums",
           has ? TEXT_CLASS[tone] : "text-[var(--text-muted)]",
         )}
       >
@@ -41,11 +41,26 @@ function AxisBar({ axis, value }: { axis: ScoreAxisId; value: number | undefined
 }
 
 /**
- * Full 종합 점수 panel for the AI 분석 tab.
+ * 종합 점수 카드 — **개요 탭 맨 위**에 선다 (2026-09-03 사용자 결정).
  *
- * Never shows the number alone: the axis breakdown, the peer rank and the data
- * coverage are what make a single figure defensible, and a score computed from
- * thin data is explicitly marked rather than quietly presented as equivalent.
+ * # 왜 개요로 옮겼나
+ *
+ * 예전에는 AI 분석 탭 맨 위에 있었다. 그런데 그 탭의 본문(LLM 글)은 **전체
+ * 17,916종목 중 744종목(4%)에만** 있고, 점수는 거의 모든 종목에 있다. 종목을 열고
+ * 처음 보이는 화면이 개요인데, 대부분의 종목에서 개요는 「AI 요약 없음 + 차트」로
+ * 시작하고 정작 그 종목을 요약하는 유일한 숫자는 한 탭 뒤에 숨어 있었다.
+ *
+ * # 높이를 어디서 줄였나
+ *
+ * 개요 탭 최상단은 모바일에서 **차트가 시작되기 전의 마지막 관문**이라 높이가 곧
+ * 비용이다. 숫자를 머리줄로 끌어올려 한 층을 통째로 없앴다:
+ *
+ *   · 점수·등급이 본문 왼쪽 아래에서 **제목 옆**으로 (본문 한 줄 제거)
+ *   · 동종 순위·커버리지가 본문 오른쪽 아래에서 **날짜 위**로 (그 줄과 합류)
+ *   · 축 다섯 줄의 간격·라벨 폭·글자 높이를 한 단씩 죄었다
+ *
+ * 좁은 화면에서는 머리줄이 두 줄로 접힌다(`flex-wrap`) — 잘라 내지 않는다. 점수
+ * 옆의 「/ 100」처럼 없어도 읽히는 것만 좁은 폭에서 감춘다.
  */
 export function StockScoreCard({
   score,
@@ -58,7 +73,9 @@ export function StockScoreCard({
 }) {
   if (loading) {
     return (
-      <Card className={cn("p-3 text-xs text-[var(--text-muted)]", className)}>점수 불러오는 중…</Card>
+      <Card className={cn("px-3 py-2 text-cell text-[var(--text-muted)]", className)}>
+        점수 불러오는 중…
+      </Card>
     );
   }
   if (!score || score.score == null) return null;
@@ -69,54 +86,72 @@ export function StockScoreCard({
 
   return (
     <Card className={cn("p-0", className)}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--border)] px-3 py-2.5">
-        <h3 className="text-sm font-semibold text-[var(--text-primary)]">종합 점수</h3>
-        <span className="text-[10px] text-[var(--text-muted)]">
-          서버 산출 · {score.tradeDate}
-        </span>
-      </div>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[var(--border)] px-3 py-2">
+        <h3 className="shrink-0 text-cell font-semibold text-[var(--text-primary)]">종합 점수</h3>
 
-      <div className="space-y-3 p-3">
-        <div className="flex items-end gap-3">
-          <div className="flex items-baseline gap-1.5">
-            <span className={cn("text-3xl font-bold tabular-nums", TEXT_CLASS[tone])}>
-              {score.score}
-            </span>
-            <span className="text-sm text-[var(--text-muted)]">/ 100</span>
-          </div>
+        {/* 제목과 숫자는 **한 덩어리로** 접힌다 — 등급 배지만 다음 줄에 남으면
+            그것이 무엇의 등급인지 알 수 없다. */}
+        <div className="flex shrink-0 items-baseline gap-1.5">
+          <span className={cn("text-2xl font-bold leading-none tabular-nums", TEXT_CLASS[tone])}>
+            {score.score}
+          </span>
+          {/*
+            「/ 100」은 **좁은 화면에서도 남긴다** (2026-09-04 사용자 지적).
+
+            0~100 척도를 아는 사람에게는 잉여라고 보고 `sm` 미만에서 감췄는데,
+            그러면 모바일에서 「56」 하나만 서서 등급 배지 옆의 또 다른 숫자처럼
+            읽힌다. 오른쪽에 있던 커버리지·기준일을 걷어낸 지금(아래) 머리줄에
+            자리가 생겼고, 척도를 밝히는 편이 낫다.
+          */}
+          <span className="text-micro text-[var(--text-muted)]">/ 100</span>
           {score.grade && (
             <span
               className={cn(
-                "rounded-md border px-2 py-0.5 text-xs font-semibold",
+                "rounded-md border border-current px-1.5 py-0.5 text-micro font-semibold leading-none",
                 TEXT_CLASS[tone],
-                "border-current",
               )}
             >
               {score.grade}
             </span>
           )}
-          <div className="ml-auto text-right text-[11px] text-[var(--text-muted)]">
-            {typeof score.peerPct === "number" && <div>동종 상위 {score.peerPct}%</div>}
-            <div>데이터 커버리지 {coveragePct}%</div>
-          </div>
         </div>
 
-        <div className="space-y-1.5">
-          {SCORE_AXIS_ORDER.map((axis) => (
-            <AxisBar key={axis} axis={axis} value={score.breakdown?.[axis]} />
-          ))}
-        </div>
+        {/*
+          오른쪽 위에는 **동종 상위 순위만** 남는다 (2026-09-04 사용자 결정).
 
+          여기에는 세 가지가 두 줄로 있었다: 「동종 상위 17% · 커버리지 90%」와
+          「서버 산출 · 2026-09-03」. 뒤의 둘은 사용자가 이 카드에서 하는 판단을
+          바꾸지 않는다 — 「서버 산출」은 모든 종목·모든 방문에 똑같이 붙는 말이고,
+          날짜와 커버리지 퍼센트는 점수를 읽는 데 쓰이지 않는다.
+
+          **커버리지가 정말 낮을 때는 아래 경고가 말한다**(`thin`). 그건 숫자가
+          아니라 「점수를 어디까지 믿을지」를 문장으로 말하는 자리라 남는다.
+        */}
+        {typeof score.peerPct === "number" && (
+          <p className="ml-auto min-w-0 shrink truncate text-right text-micro leading-tight text-[var(--text-muted)]">
+            동종 상위 {score.peerPct}%
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-1 px-3 py-2">
+        {SCORE_AXIS_ORDER.map((axis) => (
+          <AxisBar key={axis} axis={axis} value={score.breakdown?.[axis]} />
+        ))}
+
+        {/*
+          산출 방식 설명("각 지표를 동종 그룹 내 순위 백분위로 환산해 가중 합산합니다…")은
+          뺐다(2026-09-03 사용자 결정 §7). 모든 종목·모든 방문에 똑같이 붙는 문장이라
+          두 번째 종목부터는 읽히지 않으면서 카드 높이만 늘리고 있었다.
+
+          아래 커버리지 경고는 **남긴다** — 이건 설명이 아니라 이 종목에만 해당하는
+          사실이고, 점수를 어디까지 믿을지 바꾸는 정보다.
+        */}
         {thin && (
-          <p className="rounded-md border border-dashed border-[var(--border)] px-2 py-1.5 text-[10px] leading-relaxed text-[var(--text-muted)]">
+          <p className="!mt-2 rounded-md border border-dashed border-[var(--border)] px-2 py-1 text-micro leading-relaxed text-[var(--text-muted)]">
             사용 가능한 데이터가 {coveragePct}%로 제한적이라 점수를 중립(50) 쪽으로 보정했습니다.
           </p>
         )}
-
-        <p className="text-[10px] leading-relaxed text-[var(--text-muted)]">
-          각 지표를 동종 그룹 내 순위 백분위로 환산해 가중 합산합니다. 데이터가 없는 축은 0점이 아니라
-          가중치에서 제외됩니다. 투자 자문이 아닙니다.
-        </p>
       </div>
     </Card>
   );
@@ -146,7 +181,7 @@ export function AxisScoreBadge({
         className,
       )}
     >
-      <span className="text-[11px] text-[var(--text-muted)]">
+      <span className="text-cell text-[var(--text-muted)]">
         {SCORE_AXIS_LABELS[axis]} 점수
       </span>
       <div className="h-1.5 w-16 overflow-hidden rounded-full bg-[var(--surface)]">
@@ -155,11 +190,11 @@ export function AxisScoreBadge({
           style={{ width: `${Math.max(2, Math.min(100, value))}%` }}
         />
       </div>
-      <span className={cn("text-xs font-semibold tabular-nums", TEXT_CLASS[tone])}>
+      <span className={cn("text-cell font-semibold tabular-nums", TEXT_CLASS[tone])}>
         {Math.round(value)}
       </span>
       {typeof score?.score === "number" && (
-        <span className="text-[10px] text-[var(--text-muted)]">(종합 {score.score})</span>
+        <span className="text-micro text-[var(--text-muted)]">(종합 {score.score})</span>
       )}
     </div>
   );

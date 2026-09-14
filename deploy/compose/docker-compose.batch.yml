@@ -1,0 +1,105 @@
+# 배치 VM 전용 — **단독 파일이다.** 루트 docker-compose.yml 과 겹쳐 쓰지 않는다.
+#
+#   deploy/scripts/batch-stack.sh up
+#
+# 왜 오버레이가 아니라 단독인가: 루트 파일의 워커는 `depends_on: redis, api` 를 갖는데,
+# 이 VM에는 그 둘이 없다. compose 의 depends_on 은 오버레이로 제거할 수 없다(키 단위
+# 병합이라 지우는 문법이 없다). 조건부로 흉내 내는 것보다 이 VM이 실제로 띄우는 것만
+# 적은 파일 하나가 읽기도 쉽고 사고도 적다.
+#
+# ── 이 VM이 API VM과 공유해야 하는 것 ────────────────────────────────────
+#   MySQL : 관리형 MySQL(사설 엔드포인트). MYSQL_DSN 으로 지정.
+#   Redis : **API VM의 Redis.** 자체 Redis를 띄우면 안 된다 —
+#           Toss 토큰 스토어(client_id당 활성 토큰 1개) · apibudget 사용량 ·
+#           지수 스냅샷을 API 프로세스와 같은 인스턴스에서 봐야 한다.
+#           근거는 deploy/compose/docker-compose.app.oci.yml 머리말.
+#
+# ── 마이그레이션 ─────────────────────────────────────────────────────────
+#   워커는 DDL 을 실행하지 않는다. 스키마 마이그레이터는 API VM 의 api 하나뿐이고,
+#   워커는 repository.VerifySchema 로 최대 3분 기다린다. 그래서 이 VM 에는
+#   api 의존이 없어도 되고, **API VM 을 먼저 배포하는 순서만 지키면 된다.**
+#
+# 필요한 환경변수는 deploy/.env.batch.example 참조.
+#
+# CONTAINER_PREFIX: 컨테이너 이름 접두사(기본 quant-port). 배치 VM 에서는 기본값
+# 그대로 두면 된다 — 한 대에서 API 스택과 함께 검증할 때만 바꾼다(이름 충돌 방지).
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# 배치 VM 은 API 와 CPU 를 다투지 않으므로 상한을 루트 파일보다 넉넉히 준다.
+# 그래도 상한 자체는 남긴다 — 한 잡의 폭주가 나머지 7 개를 굶기지 않게.
+x-worker: &worker
+  build:
+    context: ./be
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  logging: *logging
+  stop_grace_period: 60s
+  healthcheck:
+    disable: true
+  env_file:
+    - ./be/.env
+  # 배치 VM 에서는 MySQL·Redis 가 사설 IP 라 필요 없다. 그래도 두는 이유는
+  # ① 루트 compose 와 동작을 맞추고 ② 한 대에서 스모크 테스트할 때
+  # host.docker.internal 로 붙을 수 있게 하기 위해서다. Linux 에서는 무해하다.
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  environment: &worker-env
+    REDIS_URL: "${REDIS_URL_CONTAINER:?API VM 의 Redis 주소를 설정하세요 — 예 redis://:PW@10.0.1.5:6379/0}"
+    MYSQL_DSN: "${MYSQL_DSN:?관리형 MySQL DSN 을 설정하세요}"
+    # 커넥션 예산은 API VM 과 나눠 쓰는 총합이다(api 24 + 워커 8×4 = 56).
+    # VM 이 갈라져도 DB 는 하나이므로 이 값은 그대로 유지한다.
+    MYSQL_MAX_OPEN_CONNS: "4"
+    MYSQL_MAX_IDLE_CONNS: "2"
+  deploy:
+    resources:
+      limits:
+        cpus: "1.0"
+        memory: 256M
+      reservations:
+        memory: 32M
+
+services:
+  worker-close-domestic:
+    <<: *worker
+    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-close-domestic
+    command: ["./worker-close-domestic"]
+
+  worker-close-overseas:
+    <<: *worker
+    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-close-overseas
+    command: ["./worker-close-overseas"]
+
+  worker-scores:
+    <<: *worker
+    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-scores
+    command: ["./worker-scores"]
+
+  worker-index:
+    <<: *worker
+    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-index
+    command: ["./worker-index"]
+
+  worker-fetch:
+    <<: *worker
+    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-fetch
+    command: ["./worker-fetch"]
+
+  worker-research:
+    <<: *worker
+    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-research
+    command: ["./worker-research"]
+
+  worker-earnings:
+    <<: *worker
+    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-earnings
+    command: ["./worker-earnings"]
+
+  worker-filings:
+    <<: *worker
+    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-filings
+    command: ["./worker-filings"]

@@ -3,6 +3,7 @@
 import { formatPrice } from "@/lib/format";
 import { TARGET_STATUS_LABEL, type TargetStatus, type TargetView } from "@/lib/target-stats";
 import { cn } from "@/lib/utils";
+import { PriceDisplay } from "@/components/ui/price-display";
 
 /** 상태 배지. 목록·카드·레일·모달이 같은 색과 같은 말을 쓴다. */
 export function TargetStatusBadge({ status }: { status: TargetStatus }) {
@@ -10,7 +11,7 @@ export function TargetStatusBadge({ status }: { status: TargetStatus }) {
   return (
     <span
       className={cn(
-        "shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold",
+        "shrink-0 rounded-md px-1.5 py-0.5 text-micro font-semibold",
         status === "reached" && "bg-emerald-500/15 text-emerald-500",
         status === "near" && "bg-amber-500/15 text-amber-500",
         status === "stop_near" && "bg-[var(--loss)]/15 text-[var(--loss)]",
@@ -26,10 +27,10 @@ export function TargetGapCell({ view, className }: { view: TargetView; className
   const { toTargetPct, status } = view;
   return (
     <div className={cn("text-right", className)}>
-      <p className="text-[10px] text-[var(--text-muted)]">목표까지</p>
+      <p className="text-micro text-[var(--text-muted)]">목표까지</p>
       <p
         className={cn(
-          "font-mono text-sm font-semibold tabular-nums",
+          "font-num text-sm font-semibold tabular-nums",
           status === "reached"
             ? "text-emerald-500"
             : toTargetPct === null
@@ -76,7 +77,7 @@ export function TargetLadder({ view }: { view: TargetView }) {
           .map((row) => (
             <div
               key={row.label}
-              className="grid grid-cols-[54px_minmax(0,1fr)_auto] items-center gap-2 text-[11px]"
+              className="grid grid-cols-[54px_minmax(0,1fr)_auto] items-center gap-2 text-cell"
             >
               <span
                 className={cn(
@@ -101,14 +102,14 @@ export function TargetLadder({ view }: { view: TargetView }) {
               </span>
               <span
                 className={cn(
-                  "text-right font-mono tabular-nums",
+                  "text-right font-num tabular-nums",
                   row.tone === "up" && "text-[var(--profit)]",
                   row.tone === "down" && "text-[var(--loss)]",
                   row.tone === "now" && "font-semibold text-[var(--text-primary)]",
                   row.tone === "base" && "text-[var(--text-muted)]",
                 )}
               >
-                {formatPrice(row.price, target.currency)}
+                <PriceDisplay value={row.price} currency={target.currency} size="inherit" />
               </span>
             </div>
           ))}
@@ -117,17 +118,17 @@ export function TargetLadder({ view }: { view: TargetView }) {
       {(riskReward !== null || toStopPct !== null) && (
         <div className="space-y-0.5 border-t border-[var(--border)] pt-1.5">
           {riskReward !== null && (
-            <div className="flex items-center justify-between text-[11px]">
+            <div className="flex items-center justify-between text-cell">
               <span className="text-[var(--text-muted)]">손익비 (R:R)</span>
-              <span className="font-mono font-semibold tabular-nums">
+              <span className="font-num font-semibold tabular-nums">
                 {riskReward.toFixed(2)} : 1
               </span>
             </div>
           )}
           {toStopPct !== null && (
-            <div className="flex items-center justify-between text-[11px]">
+            <div className="flex items-center justify-between text-cell">
               <span className="text-[var(--text-muted)]">목표까지 / 손절까지</span>
-              <span className="font-mono tabular-nums">
+              <span className="font-num tabular-nums">
                 <span className="text-[var(--profit)]">
                   {toTargetPct === null
                     ? "—"
@@ -192,11 +193,11 @@ function Row({
   tone?: "up" | "down";
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 text-[11px]">
+    <div className="flex items-center justify-between gap-2 text-cell">
       <span className="shrink-0 text-[var(--text-muted)]">{label}</span>
       <span
         className={cn(
-          "min-w-0 truncate text-right font-mono tabular-nums",
+          "min-w-0 truncate text-right font-num tabular-nums",
           tone === "up" && "text-[var(--profit)]",
           tone === "down" && "text-[var(--loss)]",
         )}

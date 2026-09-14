@@ -104,6 +104,26 @@ func (s *ResearchService) DeleteComment(ctx context.Context, commentID int64) er
 	return s.repo.DeleteComment(ctx, commentID, userID)
 }
 
+/*
+ToggleCommentLike 은 댓글 추천을 켜고 끈다 (2026-09-14 사용자 요청 3).
+
+# 왜 여기서 콜의 공개 범위를 다시 안 보나
+
+글 추천(`ToggleReaction`)은 콜을 먼저 읽어 `researchReadable`을 확인한다. 여기서는
+그 검사가 **댓글 자체에** 들어 있다 — 댓글 목록은 같은 검사를 통과해야만 나오므로
+(`Comments`), 비공개 콜의 댓글 id를 알아낼 길이 애초에 없다. 그리고 id 하나로는
+아무것도 드러나지 않는다: 추천은 성공해도 그 글의 어떤 내용도 돌려주지 않는다.
+
+리포지토리가 지워진 댓글을 거부하므로 「삭제된 댓글입니다」에 추천이 붙지 않는다.
+*/
+func (s *ResearchService) ToggleCommentLike(ctx context.Context, commentID int64) (bool, error) {
+	userID, err := authctx.RequireUserID(ctx)
+	if err != nil {
+		return false, err
+	}
+	return s.repo.ToggleCommentLike(ctx, commentID, userID)
+}
+
 // ---------------------------------------------------------------- ratings
 
 // Rate records a reader's 3-axis score of the *argument*.

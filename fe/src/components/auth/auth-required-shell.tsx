@@ -2,18 +2,21 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { PageHeader } from "@/components/layout/header";
 import { PageScrollShell } from "@/components/layout/page-content-shell";
 import { LoginRequiredPanel } from "@/components/auth/login-required-panel";
 import { MenuEmptyState } from "@/components/common/menu-empty-state";
 import { menuIcon } from "@/components/common/menu-icon";
-import { SampleModeButton, useSampleMode } from "@/components/common/sample-mode";
+import {
+  SampleModeButton,
+  useAutoSample,
+  useSampleMode,
+} from "@/components/common/sample-mode";
 import { useAuth } from "@/components/providers/auth-provider";
 import { MENU_COPY, type MenuKey } from "@/lib/menu-copy";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type AuthRequiredShellProps = {
-  title: string;
-  subtitle?: string;
   loginNext: string;
   /**
    * 「내 투자」 메뉴 키. 주면 로그인하지 않은 방문자도 **데이터가 0건인 회원과 똑같은
@@ -31,8 +34,6 @@ type AuthRequiredShellProps = {
 };
 
 export function AuthRequiredShell({
-  title,
-  subtitle,
   loginNext,
   menu,
   children,
@@ -40,41 +41,51 @@ export function AuthRequiredShell({
   const { session, loading } = useAuth();
   const { active: sample, setActive: setSample } = useSampleMode();
 
+  /*
+    로그인하지 않은 방문자에게는 **묻지 않고 예시를 켠다** (2026-09-14 사용자 요청 4).
+
+    이 사람에게는 「내 것」이 있을 수가 없다 — 목록을 받아 볼 필요도 없이 0건이
+    확정이다. 그래서 여기가 `useAutoSample`을 부르기에 가장 이른 자리이고, 화면이
+    자기 데이터를 한 번 받아 보는 왕복도 생기지 않는다.
+
+    세션을 기다리는 동안(`loading`)은 켜지 않는다. 로그인한 사람에게 예시가 한 프레임
+    번쩍이고 사라지면, 그건 안내가 아니라 깜빡임이다.
+  */
+  useAutoSample(Boolean(menu) && !loading && !session);
+
   // 예시 모드는 세션을 기다리지 않는다 — 공개 데이터라 로딩 화면을 거칠 이유가 없다.
   if (menu && sample) {
     return children;
   }
 
-  const actions = menu ? (
-    <SampleModeButton active={false} onToggle={() => setSample(true)} emphasize />
-  ) : undefined;
+  /*
+    비로그인 화면에는 「예시로 둘러보기」를 **한 번만** 둔다 (§R-2).
 
+    예전에는 페이지 헤더 우측에도 같은 버튼이 있었다. 헤더가 사라져 그 버튼이
+    본문 첫 줄로 내려오자, 안내 카드가 들고 있는 같은 버튼과 40px 간격으로 나란히
+    서서 "둘이 뭐가 다르지"가 되었다 — 실측으로 한 화면에 같은 문구 ×2.
+    카드 쪽이 문맥(무엇을 해주는 곳인지 · 3단계)을 함께 주므로 그쪽을 남긴다.
+  */
   if (loading) {
     return (
-      <>
-        <PageHeader title={title} subtitle={subtitle} actions={actions} />
-        <PageScrollShell>
-          <p className="text-sm text-[var(--text-muted)]">로딩 중…</p>
-        </PageScrollShell>
-      </>
+      <PageScrollShell>
+        <p className="text-sm text-[var(--text-muted)]">로딩 중…</p>
+      </PageScrollShell>
     );
   }
 
   if (!session) {
     return (
-      <>
-        <PageHeader title={title} subtitle={subtitle} actions={actions} />
-        <PageScrollShell>
-          {menu ? (
-            <LoggedOutIntro menu={menu} loginNext={loginNext} onSample={() => setSample(true)} />
-          ) : (
-            <LoginRequiredPanel
-              loginNext={loginNext}
-              description="로그인 후 이용할 수 있습니다."
-            />
-          )}
-        </PageScrollShell>
-      </>
+      <PageScrollShell>
+        {menu ? (
+          <LoggedOutIntro menu={menu} loginNext={loginNext} onSample={() => setSample(true)} />
+        ) : (
+          <LoginRequiredPanel
+            loginNext={loginNext}
+            description="로그인 후 이용할 수 있습니다."
+          />
+        )}
+      </PageScrollShell>
     );
   }
 
@@ -113,7 +124,7 @@ function LoggedOutIntro({
           />
           <Link
             href="/signup"
-            className="rounded-lg border border-[var(--border)] px-3.5 py-1.5 text-[11px] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]")}
           >
             회원가입
           </Link>

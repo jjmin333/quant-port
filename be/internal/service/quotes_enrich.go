@@ -40,13 +40,9 @@ type quoteStatsCache struct {
 }
 
 func (s *QuotesService) buildQuoteDetailFromToss(ctx context.Context, symbol string) (model.QuoteDetail, error) {
-	stock, ok := s.lookupPrefetchedStock(symbol)
-	if !ok {
-		var err error
-		stock, err = s.toss.GetStock(ctx, symbol)
-		if err != nil || stock == nil {
-			return model.QuoteDetail{}, fmt.Errorf("stock %s: %w", symbol, err)
-		}
+	stock, err := s.stockInfo(ctx, symbol)
+	if err != nil || stock == nil {
+		return model.QuoteDetail{}, fmt.Errorf("stock %s: %w", symbol, err)
 	}
 
 	currentPrice := s.resolveBestLivePrice(ctx, symbol, 0, nil, nil)
@@ -314,8 +310,10 @@ func (s *QuotesService) fallbackDailySessionStats(ctx context.Context, symbol st
 
 func (s *QuotesService) statsFromRawCache(ctx context.Context, symbol string, stock *toss.StockInfo, currentPrice float64) (quoteStatsCache, bool) {
 	sym := strings.ToUpper(strings.TrimSpace(symbol))
-	var raw1m []model.Candle
-	if !s.cacheGetJSON(ctx, fmt.Sprintf(mdRaw1mKeyFmt, sym), &raw1m) || len(raw1m) == 0 {
+	// 291KB짜리 배열이라 짧은 기억을 거쳐 읽는다 (`quotes_raw_tail_memo.go`).
+	// 아래 반복은 전부 읽기라 공유 슬라이스를 써도 안전하다.
+	raw1m, ok := loadRawCandles(ctx, s.redis, fmt.Sprintf(mdRaw1mKeyFmt, sym))
+	if !ok {
 		return quoteStatsCache{}, false
 	}
 
@@ -349,8 +347,9 @@ func (s *QuotesService) statsFromRawCache(ctx context.Context, symbol string, st
 		stats.TradingValue += c.Close * float64(c.Volume)
 	}
 
-	var raw1d []model.Candle
-	if s.cacheGetJSON(ctx, fmt.Sprintf(mdRaw1dKeyFmt, sym), &raw1d) && len(raw1d) > 0 {
+	// 일봉 원본은 아래 52주 고저 계산이 그대로 쓴다 — 존재 확인만으로 대체할 수 없다.
+	raw1d, hasRaw1d := loadRawCandles(ctx, s.redis, fmt.Sprintf(mdRaw1dKeyFmt, sym))
+	if hasRaw1d {
 		if ref, ok := s.resolvePrevClose(ctx, sym); ok {
 			stats.PrevClose = ref
 		}
@@ -426,12 +425,7 @@ func (s *QuotesService) enrichQuoteSummaries(ctx context.Context, items []model.
 			prevClose = ref
 		}
 		if items[i].CurrentPrice > 0 {
-			assetType := assetTypeFromMarket(stock.Market, stock.SecurityType)
-			session := s.marketSessionFor(ctx, items[i].Symbol)
-			regularClose := s.resolveRegularClose(ctx, items[i].Symbol, assetType, session)
-			items[i].Change, items[i].ChangeRate = computeQuoteChange(
-				items[i].CurrentPrice, prevClose, regularClose, session,
-			)
+			items[i].Change, items[i].ChangeRate = computeQuoteChange(items[i].CurrentPrice, prevClose)
 		}
 		items[i].Volume = stats.Volume
 		items[i].TradingValue = stats.TradingValue
@@ -469,4 +463,3 @@ func roundIndexValue(v float64) float64 {
 	}
 	return v
 }
-

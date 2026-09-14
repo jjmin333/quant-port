@@ -1,0 +1,715 @@
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>스탬프 재설계 v3 — 시안 B · 예측 원장</title>
+<style>
+/* ─────────────────────────────────────────────────────────────
+   스탬프 전면 재설계 v3 — 4개 시안 공용 스타일
+
+   토큰은 fe/src/app/globals.css 에서 그대로 옮겼다(눈대중 금지).
+   각 시안 파일에 인라인으로 박아 두었다 — 파일 하나만 열어도 그대로 뜬다.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  --background: oklch(0.97 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --surface-elevated: oklch(0.97 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.93 0 0);
+  --border: oklch(0.87 0 0);
+  --brand: #2563eb;
+  --brand-muted: rgba(37, 99, 235, 0.1);
+  --profit: #dc2626;
+  --loss: #2563eb;
+  --profit-muted: rgba(220, 38, 38, 0.1);
+  --loss-muted: rgba(37, 99, 235, 0.1);
+  --text-muted: oklch(0.65 0 0);
+  --sample: #7c3aed;
+  --sample-muted: rgba(124, 58, 237, 0.12);
+  --warn: #b45309;
+  --warn-muted: rgba(180, 83, 9, 0.12);
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --surface-elevated: oklch(0.269 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 16%);
+  --brand: #60a5fa;
+  --brand-muted: rgba(96, 165, 250, 0.15);
+  --profit: #f87171;
+  --loss: #60a5fa;
+  --profit-muted: rgba(248, 113, 113, 0.14);
+  --loss-muted: rgba(96, 165, 250, 0.14);
+  --text-muted: oklch(0.6 0 0);
+  --sample: #a78bfa;
+  --sample-muted: rgba(167, 139, 250, 0.14);
+  --warn: #fbbf24;
+  --warn-muted: rgba(251, 191, 36, 0.14);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 12px; line-height: 1.5;
+  padding: 20px 20px 100px;
+  -webkit-font-smoothing: antialiased; font-synthesis: none;
+}
+.wrap { max-width: 1320px; margin: 0 auto; }
+
+/* 앱 타입 계단 */
+.t-micro { font-size: 11px; line-height: 1.35; }
+.t-cell { font-size: 12px; line-height: 1.35; }
+.t-note { font-size: 13px; line-height: 1.4; }
+.num { font-variant-numeric: tabular-nums; }
+.up { color: var(--profit); } .down { color: var(--loss); }
+.dim { color: var(--text-muted); } .sec { color: var(--muted-foreground); }
+.b { font-weight: 700; } .sb { font-weight: 600; }
+
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.015em; }
+h2 { font-size: 15px; font-weight: 600; }
+h3 { font-size: 13px; font-weight: 600; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em;
+  background: var(--muted); border-radius: 4px; padding: 1px 4px; }
+
+/* ── 문서 껍데기 ── */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding-bottom: 12px; margin-bottom: 18px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--background); z-index: 40; padding-top: 4px; }
+.topbar .who { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.navlinks { display: flex; gap: 6px; flex-wrap: wrap; }
+.navlinks a { font-size: 11px; text-decoration: none; color: var(--muted-foreground);
+  border: 1px solid var(--border); border-radius: 7px; padding: 4px 9px; background: var(--card); }
+.navlinks a:hover { background: var(--accent); color: var(--foreground); }
+.navlinks a.here { border-color: var(--brand); color: var(--brand); background: var(--brand-muted); font-weight: 600; }
+button.tgl { font: inherit; font-size: 12px; cursor: pointer; border: 1px solid var(--border);
+  background: var(--card); color: var(--foreground); border-radius: 8px; padding: 5px 12px; }
+button.tgl:hover { background: var(--accent); }
+button.tgl:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.lead { max-width: 900px; margin-bottom: 18px; color: var(--muted-foreground); font-size: 12px; line-height: 1.65; }
+.lead b { color: var(--foreground); font-weight: 600; }
+.lead .kicker { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
+  color: var(--brand); background: var(--brand-muted); border-radius: 6px; padding: 2px 8px; margin-bottom: 8px; }
+
+.why { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 16px 0 22px; }
+.why > div { border: 1px solid var(--border); background: var(--card); border-radius: 10px; padding: 11px 13px; }
+.why h4 { font-size: 11px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--text-muted); margin-bottom: 6px; }
+.why p { font-size: 11.5px; line-height: 1.6; color: var(--muted-foreground); }
+.why p b { color: var(--foreground); font-weight: 600; }
+.why ul { margin: 0; padding-left: 15px; font-size: 11.5px; line-height: 1.65; color: var(--muted-foreground); }
+.why ul b { color: var(--foreground); font-weight: 600; }
+
+.stage-cap { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted);
+  margin: 26px 0 7px; font-weight: 700; }
+
+/* ── 앱 화면 무대 ── */
+/* 데스크톱 본문 폭: 사이드바(56) 제외한 콘텐츠 영역 실측 ≈ 1240px, 우측 레일 300px */
+.app { background: var(--background); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px; width: 1240px; max-width: 100%; }
+.app.mob { width: 375px; padding: 10px; }
+.cols { display: flex; gap: 12px; align-items: flex-start; }
+.main { min-width: 0; flex: 1 1 auto; }
+.rail { flex: 0 0 300px; display: flex; flex-direction: column; gap: 10px; }
+.mob .cols { flex-direction: column; }
+.mob .rail { flex: 1 1 auto; width: 100%; }
+
+.pageacts { display: flex; align-items: center; gap: 8px; justify-content: flex-end; margin-bottom: 10px; }
+.btn { font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; border-radius: 8px;
+  padding: 6px 12px; border: 1px solid var(--border); background: var(--card); color: var(--foreground);
+  display: inline-flex; align-items: center; gap: 5px; }
+.btn:hover { background: var(--accent); }
+.btn.pri { background: var(--brand); border-color: var(--brand); color: #fff; }
+.btn.pri:hover { opacity: 0.9; background: var(--brand); }
+.btn.sm { font-size: 11px; padding: 4px 9px; }
+
+/* ── 카드 ── */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+.card > .hd { display: flex; align-items: center; gap: 8px; padding: 9px 13px;
+  border-bottom: 1px solid var(--border); }
+.card > .hd h3 { flex: 1 1 auto; min-width: 0; }
+.card > .bd { padding: 12px 13px; }
+.card.flat { border-radius: 10px; }
+
+/* ── 배지 · 칩 ── */
+.badge { font-size: 10.5px; font-weight: 700; border-radius: 6px; padding: 2px 6px; flex: none;
+  line-height: 1.35; letter-spacing: 0.01em; white-space: nowrap; }
+.badge.hit { background: var(--profit-muted); color: var(--profit); }
+.badge.miss { background: var(--loss-muted); color: var(--loss); }
+.badge.pending { background: var(--muted); color: var(--muted-foreground); }
+.badge.due { background: var(--brand-muted); color: var(--brand); }
+.badge.warn { background: var(--warn-muted); color: var(--warn); }
+.badge.sample { background: var(--sample-muted); color: var(--sample); }
+.badge.hollow { background: transparent; border: 1px solid var(--border); color: var(--muted-foreground); font-weight: 600; }
+
+.chipbar { display: flex; gap: 2px; background: var(--surface-elevated); border-radius: 9px; padding: 2px; }
+.chipbar button { font: inherit; font-size: 11.5px; font-weight: 500; cursor: pointer; border: 0;
+  background: transparent; color: var(--text-muted); border-radius: 7px; padding: 4px 10px; }
+.chipbar button.on { background: var(--card); color: var(--foreground); font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06); }
+
+/* ── 종목 아바타 ── */
+.av { flex: none; width: 24px; height: 24px; border-radius: 999px; display: grid; place-items: center;
+  font-size: 9px; font-weight: 700; color: #fff; overflow: hidden; letter-spacing: -0.02em; }
+.av.lg { width: 32px; height: 32px; font-size: 11px; }
+.av-005930 { background: #1428a0; } .av-000660 { background: #e60012; }
+.av-042660 { background: #f47216; } .av-NVDA { background: #76b900; }
+.av-AAPL { background: #333; } .av-035720 { background: #fee500; color: #191600; }
+
+/* ── 실링(판정 도장) ── */
+.seal { flex: none; width: 46px; height: 46px; border-radius: 999px; display: grid; place-items: center;
+  border: 2px solid currentColor; text-align: center; line-height: 1.1; font-weight: 800;
+  letter-spacing: -0.02em; transform: rotate(-8deg); }
+.seal .v { font-size: 12px; display: block; }
+.seal .d { font-size: 8px; font-weight: 600; display: block; opacity: 0.75; }
+.seal.hit { color: var(--profit); background: var(--profit-muted); }
+.seal.miss { color: var(--loss); background: var(--loss-muted); }
+.seal.pending { color: var(--text-muted); background: var(--muted); border-style: dashed; }
+.seal.due { color: var(--brand); background: var(--brand-muted); }
+
+/* ── 예측/결과 문장 ── */
+.sentence { font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
+.sentence b, .sentence .num { color: var(--foreground); font-weight: 600; }
+.sentence .goal { color: var(--brand); font-weight: 700; }
+
+/* ── 진행 게이지 ── */
+.gauge { position: relative; height: 6px; border-radius: 999px; background: var(--surface-elevated); overflow: hidden; }
+.gauge > i { position: absolute; inset: 0 auto 0 0; border-radius: 999px; display: block; }
+.gauge > i.g { background: var(--profit); } .gauge > i.r { background: var(--loss); }
+.gauge > i.n { background: var(--text-muted); }
+.gauge.tall { height: 8px; }
+.gaugerow { display: flex; align-items: center; gap: 7px; }
+.gaugerow .lab { flex: none; font-size: 10.5px; color: var(--text-muted); }
+
+/* ── 미니 막대 (구간 수익률) ── */
+.hz { display: flex; gap: 3px; flex: none; }
+.hz .c { width: 40px; text-align: center; }
+.hz .c .l { display: block; font-size: 10px; color: var(--text-muted); }
+.hz .c .bar { position: relative; display: block; height: 18px; margin: 2px 0; }
+.hz .c .bar::before { content: ""; position: absolute; left: 10px; right: 10px; top: 9px; height: 1px; background: var(--border); }
+.hz .c .bar > i { position: absolute; left: 10px; right: 10px; border-radius: 2px; }
+.hz .c .bar > i.p { bottom: 9px; background: var(--profit); }
+.hz .c .bar > i.m { top: 9px; background: var(--loss); }
+.hz .c .v { display: block; font-size: 10px; font-variant-numeric: tabular-nums; }
+
+/* ── 표 ── */
+table.led { width: 100%; border-collapse: collapse; }
+table.led th { font-size: 10.5px; font-weight: 600; color: var(--text-muted); text-align: left;
+  padding: 7px 9px; border-bottom: 1px solid var(--border); white-space: nowrap;
+  background: var(--surface-elevated); }
+table.led th.r, table.led td.r { text-align: right; }
+table.led td { padding: 8px 9px; border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  vertical-align: middle; }
+table.led tr:last-child td { border-bottom: 0; }
+table.led tbody tr { cursor: pointer; }
+table.led tbody tr:hover { background: var(--accent); }
+table.led tbody tr.on { background: var(--brand-muted); box-shadow: inset 2px 0 0 var(--brand); }
+
+/* ── 목록 행 ── */
+.row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0;
+  background: transparent; color: inherit; font: inherit; cursor: pointer; padding: 10px 13px;
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent); }
+.row:last-child { border-bottom: 0; }
+.row:hover { background: var(--accent); }
+.row .mid { min-width: 0; flex: 1 1 auto; }
+.row .nm { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.row .nm .t { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+
+.groupbar { font-size: 11px; font-weight: 600; color: var(--text-muted); padding: 5px 13px;
+  background: color-mix(in oklab, var(--surface-elevated) 60%, transparent);
+  border-bottom: 1px solid var(--border); border-top: 1px solid var(--border); }
+
+/* ── 레일 섹션 ── */
+.kv { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 4px 0;
+  font-size: 11.5px; }
+.kv + .kv { border-top: 1px dashed color-mix(in oklab, var(--border) 70%, transparent); }
+.kv .k { color: var(--text-muted); } .kv .v { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ── 스파크/차트 캔버스 ── */
+svg.spark { display: block; width: 100%; height: 100%; }
+
+.hairline { height: 1px; background: var(--border); border: 0; margin: 10px 0; }
+.stack { display: flex; flex-direction: column; }
+.gap2 { gap: 2px; } .gap4 { gap: 4px; } .gap6 { gap: 6px; } .gap8 { gap: 8px; } .gap10 { gap: 10px; } .gap12 { gap: 12px; }
+.rowf { display: flex; align-items: center; }
+.wrapf { flex-wrap: wrap; }
+.grow { flex: 1 1 auto; min-width: 0; }
+.mt2 { margin-top: 2px; } .mt4 { margin-top: 4px; } .mt6 { margin-top: 6px; }
+.mt8 { margin-top: 8px; } .mt10 { margin-top: 10px; } .mt12 { margin-top: 12px; }
+.trunc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.note { color: var(--muted-foreground); font-size: 11.5px; line-height: 1.7; margin-top: 12px; max-width: 940px; }
+.note b { color: var(--foreground); font-weight: 600; }
+.note ul { padding-left: 16px; margin-top: 4px; }
+</style>
+<style>
+/* ── 시안 B 전용 ── */
+.ledgercols { display: flex; gap: 12px; align-items: flex-start; }
+.ledgercols .list { flex: 1 1 auto; min-width: 0; }
+.ledgercols .insp { flex: 0 0 420px; position: sticky; top: 70px; }
+
+.predcell { font-size: 11.5px; line-height: 1.45; }
+.predcell .arrow { color: var(--text-muted); margin: 0 3px; }
+.predcell .memo { color: var(--text-muted); font-size: 10.5px; display: block; margin-top: 2px; }
+
+.minibar { position: relative; height: 4px; border-radius: 999px; background: var(--surface-elevated); width: 58px; }
+.minibar > i { position: absolute; top: 0; bottom: 0; border-radius: 999px; }
+
+/* 인스펙터 */
+.insp .chartbox { border: 1px solid var(--border); border-radius: 10px; background: var(--surface-elevated);
+  padding: 8px; }
+.axis5 { display: grid; grid-template-columns: 54px 1fr 1fr; gap: 4px 8px; align-items: center; }
+.axis5 .n { font-size: 10.5px; color: var(--text-muted); }
+.axis5 .track { position: relative; height: 14px; border-radius: 3px; background: var(--surface-elevated); }
+.axis5 .track > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; }
+.axis5 .track > i.then { background: color-mix(in oklab, var(--text-muted) 45%, transparent); }
+.axis5 .track > i.now { background: var(--brand); }
+.axis5 .track > span { position: absolute; right: 4px; top: 0; font-size: 9.5px; line-height: 14px;
+  font-variant-numeric: tabular-nums; font-weight: 700; color: var(--foreground); }
+.axis5 .hd2 { font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+
+.newsitem { display: flex; gap: 7px; padding: 6px 0; border-top: 1px dashed color-mix(in oklab, var(--border) 70%, transparent); }
+.newsitem:first-of-type { border-top: 0; }
+.newsitem .dot { flex: none; width: 5px; height: 5px; border-radius: 999px; background: var(--brand); margin-top: 5px; }
+
+.kwd { font-size: 10.5px; font-weight: 600; border-radius: 999px; padding: 2px 8px;
+  background: var(--surface-elevated); color: var(--muted-foreground); }
+
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); }
+.tabs button { font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; border: 0;
+  background: transparent; color: var(--text-muted); padding: 7px 11px; border-bottom: 2px solid transparent; }
+.tabs button.on { color: var(--brand); border-bottom-color: var(--brand); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div class="who">
+    <h1>스탬프 v3 — 시안 B</h1>
+    <span class="badge due">예측 원장 (Ledger · 붙박이 인스펙터)</span>
+  </div>
+  <div class="navlinks">
+    <a href="stamps-v3-a-reveal.html">A 개봉 극장</a>
+    <a class="here" href="stamps-v3-b-ledger.html">B 예측 원장</a>
+    <a href="stamps-v3-c-track.html">C 만기 트랙</a>
+    <a href="stamps-v3-d-coach.html">D 판단 코치</a>
+    <button class="tgl" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'">다크/라이트</button>
+  </div>
+</div>
+
+<div class="lead">
+  <span class="kicker">한 줄 주장</span><br />
+  우리는 스탬프 하나마다 <b>당시 시세·5축 점수·AI 요약·뉴스·공시·지수·차트 200봉</b>을 박제해 두고도,
+  목록에서는 그 어느 것도 보여 주지 않는다. 전부 <b>모달 뒤</b>에 있고, 모달은 한 번에 하나씩만 열린다 —
+  <b>비교가 불가능한 구조</b>다.<br /><br />
+  시안 B는 모달을 없애고 <b>오른쪽 붙박이 인스펙터</b>를 둔다. 왼쪽 표에서 행을 바꾸면 오른쪽이 즉시 갈아끼워진다.
+  방향키로 훑으면 스탬프 6건의 차트·5축·그때 뉴스가 <b>왕복 없이</b> 지나간다.
+  왼쪽 표는 대신 <b>문장 두 개</b>로 압축한다 — 「무엇을 예상했나」와 「어떻게 됐나」.
+</div>
+
+<div class="why">
+  <div>
+    <h4>이 시안이 쓰는 데이터</h4>
+    <ul>
+      <li><b>차트</b> — chart.bars(박제 200봉) + 스탬프 마커 + 목표 파선 + 이후 경로 + peak/trough 음영</li>
+      <li><b>5축 대조</b> — snapshot.breakdown vs current.breakdown, grade, peerPct, coverage</li>
+      <li><b>맥락</b> — context.aiSummary, aiKeywords, news[], disclosures[], indices[]</li>
+      <li><b>표</b> — targetPrice, expectedReturn, horizon.return, alpha, targetAccuracy, targetProgress</li>
+      <li><b>내 상태</b> — snapshot.held / watchlisted / holdingAvgPrice</li>
+    </ul>
+  </div>
+  <div>
+    <h4>재사용하는 기존 컴포넌트</h4>
+    <ul>
+      <li><code>StampDetail</code> — 모달 껍데기만 벗겨 인스펙터 본문으로 (이미 469줄이 다 만들어져 있다)</li>
+      <li><code>StampSparkline</code> → 인스펙터 대형 차트로 승격</li>
+      <li><code>StampSeal</code> · <code>StampTargetGauge</code> — 표 안에서 축소 사용</li>
+      <li><code>StampDetailModal</code> — 모바일에서만 유지 (인스펙터가 안 들어간다)</li>
+    </ul>
+  </div>
+  <div>
+    <h4>버리는 것</h4>
+    <ul>
+      <li>상세 <b>모달</b> — 데스크톱에서 완전 제거</li>
+      <li>4개 균등 타일 — 표 헤더 위 한 줄 요약으로 압축</li>
+      <li>우측 레일 — 인스펙터가 그 자리를 쓴다 (성적/분포는 성적표 모달로)</li>
+    </ul>
+  </div>
+  <div>
+    <h4>약점 (미리 밝힘)</h4>
+    <ul>
+      <li>본문이 <b>1240px일 때만</b> 성립한다. 1100px 이하에서는 인스펙터를 접고 모달로 되돌려야 한다</li>
+      <li>개봉이 <b>사건으로 느껴지지 않는다</b> — 시안 A의 봉인 카드를 표 위에 얹는 절충이 필요할 수 있다</li>
+      <li>첫 방문자에게는 「원장」이 차갑다 — 0건 화면을 따로 설계해야 한다</li>
+    </ul>
+  </div>
+</div>
+
+<p class="stage-cap">데스크톱 · 본문 1240px (사이드바 제외) · 우측 레일 없음</p>
+
+<div class="app">
+  <div class="pageacts">
+    <span class="badge sample">예시 데이터</span>
+    <button class="btn sm">예시 끄기</button>
+    <button class="btn pri">＋ 스탬프 찍기</button>
+  </div>
+
+  <!-- 한 줄 요약 -->
+  <div class="card flat" style="margin-bottom:10px">
+    <div class="bd" style="padding:9px 13px">
+      <div class="rowf wrapf gap12">
+        <span class="t-note">
+          <b>6건</b><span class="dim"> 찍었고, </span><b>4건</b><span class="dim"> 판정됐고, </span>
+          <b class="up">2건</b><span class="dim"> 적중했습니다 </span><b>(50%)</b>
+        </span>
+        <span class="dim">·</span>
+        <span class="t-note"><span class="dim">평균 알파 </span><b class="up num">+1.68%</b></span>
+        <span class="dim">·</span>
+        <span class="t-note"><span class="dim">평균 목표가 오차 </span><b class="num">8.9%</b></span>
+        <span class="grow"></span>
+        <button class="btn sm" style="border-color:var(--brand);color:var(--brand)">개봉 대기 3건 열기 →</button>
+        <button class="btn sm">성적표</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 필터 -->
+  <div class="rowf gap8 wrapf" style="margin-bottom:10px">
+    <div class="chipbar">
+      <button class="on">전체</button><button>개봉 대기</button><button>검증 중</button><button>적중</button><button>빗나감</button>
+    </div>
+    <div class="chipbar">
+      <button class="on">전체 관점</button><button>강세</button><button>관망</button><button>약세</button>
+    </div>
+    <span class="grow"></span>
+    <div class="chipbar">
+      <button class="on">최신순</button><button>만기순</button><button>오차순</button><button>알파순</button>
+    </div>
+  </div>
+
+  <div class="ledgercols">
+    <!-- 왼쪽 원장 -->
+    <div class="list card" style="padding:0;overflow:hidden">
+      <table class="led">
+        <thead>
+          <tr>
+            <th style="width:70px">판정</th>
+            <th>종목 · 예측 → 결과</th>
+            <th class="r" style="width:66px">진행/결과</th>
+            <th class="r" style="width:62px">벤치 대비</th>
+            <th class="r" style="width:56px">오차</th>
+            <th class="r" style="width:72px">만기</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="on">
+            <td><span class="badge due">개봉</span></td>
+            <td>
+              <div class="rowf gap5" style="gap:5px">
+                <span class="av av-005930">삼성</span>
+                <span class="sb" style="font-size:12.5px">삼성전자</span>
+                <span class="badge hollow" style="color:var(--profit);border-color:color-mix(in oklab,var(--profit) 40%,var(--border))">강세</span>
+                <span class="t-micro dim">확신 4</span>
+              </div>
+              <div class="predcell mt2">
+                <span class="num">74,200</span><span class="arrow">→</span><span class="num sb">82,000</span>
+                <span class="dim">예상 (+10.5%)</span>
+                <span class="arrow">·</span>
+                <span class="num sb up">81,300 마감 (+9.6%)</span>
+                <span class="memo">“HBM 수주 기대 + 외국인 순매수 전환”</span>
+              </div>
+            </td>
+            <td class="r"><span class="up b num" style="font-size:13px">+9.6%</span></td>
+            <td class="r"><span class="up num sb">+6.1%p</span></td>
+            <td class="r"><span class="num sb">0.9%</span></td>
+            <td class="r"><span class="t-micro dim num">8/29<br />10일 지남</span></td>
+          </tr>
+
+          <tr>
+            <td><span class="badge due">개봉</span></td>
+            <td>
+              <div class="rowf" style="gap:5px">
+                <span class="av av-000660">SK</span>
+                <span class="sb" style="font-size:12.5px">SK하이닉스</span>
+                <span class="badge hollow" style="color:var(--loss);border-color:color-mix(in oklab,var(--loss) 40%,var(--border))">약세</span>
+                <span class="badge hollow">보유중</span>
+                <span class="t-micro dim">확신 3</span>
+              </div>
+              <div class="predcell mt2">
+                <span class="num">198,000</span><span class="arrow">→</span><span class="num sb">185,000</span>
+                <span class="dim">예상 (-6.6%)</span>
+                <span class="arrow">·</span>
+                <span class="num sb up">214,500 마감 (+8.3%)</span>
+                <span class="memo">“고점 부담 — 단기 조정 예상”</span>
+              </div>
+            </td>
+            <td class="r"><span class="up b num" style="font-size:13px">+8.3%</span></td>
+            <td class="r"><span class="up num sb">+4.8%p</span></td>
+            <td class="r"><span class="num sb">15.9%</span></td>
+            <td class="r"><span class="t-micro dim num">8/29<br />10일 지남</span></td>
+          </tr>
+
+          <tr>
+            <td><span class="badge due">개봉</span></td>
+            <td>
+              <div class="rowf" style="gap:5px">
+                <span class="av av-042660">한화</span>
+                <span class="sb" style="font-size:12.5px">한화오션</span>
+                <span class="badge hollow" style="color:var(--profit);border-color:color-mix(in oklab,var(--profit) 40%,var(--border))">강세</span>
+                <span class="badge hit">목표 도달</span>
+                <span class="t-micro dim">확신 5</span>
+              </div>
+              <div class="predcell mt2">
+                <span class="num">58,400</span><span class="arrow">→</span><span class="num sb">68,000</span>
+                <span class="dim">예상 (+16.4%)</span>
+                <span class="arrow">·</span>
+                <span class="num sb up">장중 68,400 도달 (28일 전)</span>
+                <span class="memo">“특수선 수주 모멘텀”</span>
+              </div>
+            </td>
+            <td class="r"><span class="up b num" style="font-size:13px">+16.4%</span></td>
+            <td class="r"><span class="up num sb">+12.3%p</span></td>
+            <td class="r"><span class="num sb">0.6%</span></td>
+            <td class="r"><span class="t-micro dim num">10/6<br />조기 확정</span></td>
+          </tr>
+
+          <tr>
+            <td><span class="badge pending">D-1</span></td>
+            <td>
+              <div class="rowf" style="gap:5px">
+                <span class="av av-AAPL">AA</span>
+                <span class="sb" style="font-size:12.5px">애플</span>
+                <span class="badge hollow">관망</span>
+                <span class="t-micro dim">확신 2</span>
+              </div>
+              <div class="predcell mt2">
+                <span class="num">228.40</span><span class="arrow">→</span><span class="num sb">232.00</span>
+                <span class="dim">예상 (+1.6%)</span>
+                <span class="arrow">·</span>
+                <span class="num sb">현재 231.10</span> <span class="up num">+1.2%</span>
+                <span class="memo dim">메모 없음</span>
+              </div>
+            </td>
+            <td class="r">
+              <span class="minibar" style="display:inline-block"><i class="g" style="left:0;width:75%;background:var(--profit)"></i></span>
+              <br /><span class="t-micro num dim">목표의 75%</span>
+            </td>
+            <td class="r"><span class="dim">—</span></td>
+            <td class="r"><span class="dim">—</span></td>
+            <td class="r"><span class="t-micro dim num">9/8<br />내일 05:30</span></td>
+          </tr>
+
+          <tr>
+            <td><span class="badge warn">D-60</span></td>
+            <td>
+              <div class="rowf" style="gap:5px">
+                <span class="av av-NVDA">NV</span>
+                <span class="sb" style="font-size:12.5px">NVIDIA</span>
+                <span class="badge hollow" style="color:var(--profit);border-color:color-mix(in oklab,var(--profit) 40%,var(--border))">강세</span>
+                <span class="t-micro dim">확신 5</span>
+              </div>
+              <div class="predcell mt2">
+                <span class="num">$178.20</span><span class="arrow">→</span><span class="num sb">$210.00</span>
+                <span class="dim">예상 (+17.8%)</span>
+                <span class="arrow">·</span>
+                <span class="num sb">현재 $171.40</span> <span class="down num">-3.8%</span>
+                <span class="memo">“실적 발표 앞두고 눌림목이라 판단” · <b style="color:var(--warn)">그 사이 점수 82 → 76</b></span>
+              </div>
+            </td>
+            <td class="r">
+              <span class="minibar" style="display:inline-block"><i style="right:50%;width:11%;background:var(--loss)"></i></span>
+              <br /><span class="t-micro num down">반대로 21%</span>
+            </td>
+            <td class="r"><span class="dim">—</span></td>
+            <td class="r"><span class="dim">—</span></td>
+            <td class="r"><span class="t-micro dim num">11/7<br />60일 남음</span></td>
+          </tr>
+
+          <tr>
+            <td><span class="badge miss">빗나감</span></td>
+            <td>
+              <div class="rowf" style="gap:5px">
+                <span class="av av-035720">kk</span>
+                <span class="sb" style="font-size:12.5px">카카오</span>
+                <span class="badge hollow" style="color:var(--profit);border-color:color-mix(in oklab,var(--profit) 40%,var(--border))">강세</span>
+                <span class="t-micro dim">확신 2 · 개봉함</span>
+              </div>
+              <div class="predcell mt2">
+                <span class="num">41,300</span><span class="arrow">→</span><span class="num sb">47,000</span>
+                <span class="dim">예상 (+13.8%)</span>
+                <span class="arrow">·</span>
+                <span class="num sb down">38,100 마감 (-7.8%)</span>
+                <span class="memo">“낙폭과대 반등 기대 — 결과적으로 근거가 얕았다”</span>
+              </div>
+            </td>
+            <td class="r"><span class="down b num" style="font-size:13px">-7.8%</span></td>
+            <td class="r"><span class="down num sb">-9.9%p</span></td>
+            <td class="r"><span class="num sb">18.9%</span></td>
+            <td class="r"><span class="t-micro dim num">7/30<br />40일 지남</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 오른쪽 붙박이 인스펙터 -->
+    <aside class="insp card">
+      <div class="tabs">
+        <button class="on">그때 vs 지금</button>
+        <button>그때의 근거</button>
+        <button>내 메모</button>
+      </div>
+      <div class="bd stack gap12">
+
+        <div class="rowf gap8">
+          <span class="av lg av-005930">삼성</span>
+          <div class="grow">
+            <div class="rowf gap6">
+              <span class="b" style="font-size:15px">삼성전자</span>
+              <span class="badge hit">적중</span>
+            </div>
+            <div class="t-micro dim">2026. 7. 30. 오전 3:00 스탬프 · 1개월 · 8/29 만기</div>
+          </div>
+          <button class="btn sm">종목 분석 →</button>
+        </div>
+
+        <!-- 차트: 스탬프 → 목표 파선 → 이후 경로 -->
+        <div class="chartbox">
+          <div class="rowf gap8 t-micro" style="margin-bottom:5px">
+            <span class="rowf" style="gap:4px"><i style="width:9px;height:2px;background:var(--profit);display:inline-block"></i> 실제 경로</span>
+            <span class="rowf" style="gap:4px"><i style="width:9px;height:0;border-top:2px dashed var(--brand);display:inline-block"></i> 목표가 82,000</span>
+            <span class="grow"></span>
+            <span class="dim">최고 <b class="up">+11.0%</b> · 최저 <b class="down">-1.2%</b></span>
+          </div>
+          <svg viewBox="0 0 390 132" class="spark" style="height:132px" role="img" aria-label="스탬프 이후 주가 경로">
+            <!-- peak/trough 음영 -->
+            <rect x="20" y="12.7" width="350" height="103.7" fill="var(--profit)" opacity="0.05" />
+            <!-- 목표 파선 -->
+            <line x1="20" y1="16.9" x2="380" y2="16.9" stroke="var(--brand)" stroke-width="1.5" stroke-dasharray="4 3" />
+            <text x="382" y="20" font-size="8" fill="var(--brand)" text-anchor="end" opacity="0">목표</text>
+            <!-- 스탬프 기준선 -->
+            <line x1="20" y1="106.25" x2="380" y2="106.25" stroke="var(--border)" stroke-width="1" />
+            <!-- 경로 -->
+            <polyline fill="none" stroke="var(--profit)" stroke-width="1.8" stroke-linejoin="round"
+              points="20,106.3 51.8,116.4 83.6,87.9 115.5,71.9 147.3,81.0 179.1,50.1 210.9,60.4 242.7,34.1 274.5,12.7 306.4,27.2 338.2,37.5 370,24.9" />
+            <!-- 스탬프 마커 -->
+            <circle cx="20" cy="106.3" r="4" fill="var(--brand)" stroke="var(--card)" stroke-width="1.5" />
+            <!-- 정산 마커 -->
+            <circle cx="370" cy="24.9" r="4" fill="var(--profit)" stroke="var(--card)" stroke-width="1.5" />
+            <text x="20" y="128" font-size="8.5" fill="var(--text-muted)">7/30 · 74,200</text>
+            <text x="370" y="128" font-size="8.5" fill="var(--text-muted)" text-anchor="end">8/29 · 81,300</text>
+          </svg>
+        </div>
+
+        <!-- 결론 문장 -->
+        <div class="card flat" style="background:var(--surface-elevated);border:0">
+          <div class="bd" style="padding:10px 11px">
+            <p class="t-note" style="line-height:1.6">
+              <b class="up">＋9.6%</b>로 마감했고, 같은 기간 KOSPI는 <b class="num">+3.5%</b>였습니다 —
+              <b class="up">알파 +6.1%p</b>.<br />
+              목표 82,000원과의 오차는 <b>0.9%</b>로, <b>방향과 폭을 모두</b> 맞춘 드문 경우입니다.
+            </p>
+          </div>
+        </div>
+
+        <!-- 5축 대조 -->
+        <div>
+          <div class="axis5" style="margin-bottom:5px">
+            <span class="hd2"></span><span class="hd2">그때 64 · C</span><span class="hd2" style="color:var(--brand)">지금 68 · B</span>
+          </div>
+          <div class="axis5">
+            <span class="n">추세</span>
+            <span class="track"><i class="then" style="width:58%"></i><span>58</span></span>
+            <span class="track"><i class="now" style="width:74%"></i><span>74</span></span>
+
+            <span class="n">수익성</span>
+            <span class="track"><i class="then" style="width:71%"></i><span>71</span></span>
+            <span class="track"><i class="now" style="width:73%"></i><span>73</span></span>
+
+            <span class="n">성장</span>
+            <span class="track"><i class="then" style="width:66%"></i><span>66</span></span>
+            <span class="track"><i class="now" style="width:69%"></i><span>69</span></span>
+
+            <span class="n">가치</span>
+            <span class="track"><i class="then" style="width:62%"></i><span>62</span></span>
+            <span class="track"><i class="now" style="width:55%"></i><span>55</span></span>
+
+            <span class="n">심리</span>
+            <span class="track"><i class="then" style="width:61%"></i><span>61</span></span>
+            <span class="track"><i class="now" style="width:70%"></i><span>70</span></span>
+          </div>
+          <p class="t-micro dim mt6" style="line-height:1.6">
+            <b style="color:var(--foreground)">추세 +16, 심리 +9</b>가 올랐고 <b style="color:var(--foreground)">가치는 -7</b> 내렸습니다 —
+            주가가 오르면서 밸류가 비싸졌다는 뜻입니다. 동종 백분위 <b style="color:var(--foreground)">상위 22%</b>.
+          </p>
+        </div>
+
+        <hr class="hairline" />
+
+        <!-- 그때의 근거 -->
+        <div>
+          <h3 style="margin-bottom:6px">그때 화면에 있던 것</h3>
+          <p class="t-micro sec" style="line-height:1.65">
+            메모리 반도체 업황 회복 국면에서 HBM 공급 계약 기대가 커지고 있으며, 외국인 수급이
+            4거래일 연속 순매수로 전환됐다.
+          </p>
+          <div class="rowf gap4 wrapf mt6">
+            <span class="kwd">HBM4</span><span class="kwd">외국인 순매수</span><span class="kwd">메모리 업황</span><span class="kwd">파운드리</span>
+          </div>
+          <div class="mt8">
+            <div class="newsitem">
+              <span class="dot"></span>
+              <div class="grow">
+                <div class="t-micro sb">삼성전자, HBM4 양산 준비 본격화</div>
+                <div class="t-micro dim">연합뉴스 · 7/30 08:12</div>
+              </div>
+            </div>
+            <div class="newsitem">
+              <span class="dot" style="background:var(--text-muted)"></span>
+              <div class="grow">
+                <div class="t-micro sb">반도체 수출 3개월 연속 증가</div>
+                <div class="t-micro dim">머니투데이 · 7/29 17:40</div>
+              </div>
+            </div>
+          </div>
+          <div class="rowf gap8 mt8 t-micro">
+            <span class="dim">그때 시장</span>
+            <span class="num">KOSPI 2,714 <span class="up">+0.4%</span></span>
+            <span class="num">USD/KRW 1,382</span>
+          </div>
+          <p class="t-micro dim mt6">공시는 <b style="color:var(--warn)">저장되지 않았습니다</b> (당시 캐시 비어 있음)</p>
+        </div>
+
+        <div class="rowf gap6">
+          <button class="btn sm grow" style="justify-content:center">개봉 확인</button>
+          <button class="btn sm grow" style="justify-content:center">메모 추가</button>
+          <button class="btn sm">삭제</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="note">
+  <b>확인해 주셨으면 하는 것</b>
+  <ul>
+    <li>왼쪽 표의 컬럼 여섯 개(판정 · 예측→결과 · 진행/결과 · 벤치 대비 · 오차 · 만기)가 맞습니까? <b>뺄 것 / 넣을 것</b>이 있습니까?</li>
+    <li>「예측 → 결과」를 <b>한 셀에 문장으로</b> 넣은 것이 읽힙니까, 아니면 컬럼을 나눠야 합니까?</li>
+    <li>인스펙터 폭 420px — <b>차트를 더 크게</b> 하는 대신 5축을 접는 편이 낫습니까?</li>
+    <li>인스펙터 탭 3개(그때 vs 지금 · 그때의 근거 · 내 메모) 구성이 맞습니까?</li>
+    <li>시안 A의 <b>봉인 카드 덱을 이 표 위에 얹는 절충안</b>을 볼 필요가 있습니까?</li>
+  </ul>
+</div>
+
+</div>
+</body>
+</html>

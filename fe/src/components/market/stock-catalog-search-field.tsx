@@ -120,7 +120,9 @@ export function StockCatalogSearchField({
           }
         }}
         className={cn(
-          "w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2 pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none disabled:opacity-50",
+          // 모바일 글자만 16px — 그 아래로 내려가면 iOS가 포커스 시 화면을 확대한다
+          // (`stock-search-field.tsx`와 같은 이유).
+          "w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2 pl-9 pr-3 text-base text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none disabled:opacity-50 md:text-sm",
           inputClassName,
         )}
       />

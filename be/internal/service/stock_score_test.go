@@ -3,6 +3,7 @@ package service
 import (
 	"database/sql"
 	"math"
+	"strconv"
 	"testing"
 
 	"github.com/enact/quant-port/be/internal/model"
@@ -305,5 +306,87 @@ func TestSummarizeDistributionFlagsUnhealthyShape(t *testing.T) {
 	broken := summarizeDistribution(makeScoreRows(400, 99, 0))
 	if broken.Healthy {
 		t.Error("천장에 몰린 분포는 unhealthy 여야 함")
+	}
+}
+
+/*
+분위는 **바꿀 이유가 분명할 때만** 바뀐다.
+
+시총은 주가만큼 매일 움직이고 분위 경계선도 그날 분포에서 다시 잡히므로, 경계 근처
+종목은 아무 일이 없어도 하루걸러 무리를 옮겨 다녔다 — 실측 08-27→08-28에 17,913종목
+중 9,936(55%)이 소속을 바꿨고, 그때마다 백분위가 바뀌어 재무제표가 그대로인 종목의
+수익성 점수까지 움직였다.
+*/
+func TestStickyCapTercile(t *testing.T) {
+	// 90개 표본: 1..90. 경계는 sortedCaps[30]=31, sortedCaps[60]=61.
+	caps := make([]float64, 0, 90)
+	for i := 1; i <= 90; i++ {
+		caps = append(caps, float64(i))
+	}
+
+	cases := []struct {
+		name string
+		cap  float64
+		prev int
+		want int
+	}{
+		{"어제가 없으면 오늘 값 그대로", 70, 0, 3},
+		{"경계 바로 위로 올라온 정도로는 안 옮긴다", 31.5, 1, 1},
+		{"경계를 여유만큼 넘으면 옮긴다", 40, 1, 2},
+		{"경계 바로 아래로 내려온 정도로는 안 옮긴다", 60.5, 3, 3},
+		{"여유만큼 내려가면 옮긴다", 50, 3, 2},
+		{"시총을 못 받은 날은 어제 자리를 지킨다", 0, 2, 2},
+		{"같은 분위면 그대로", 70, 3, 3},
+	}
+	for _, tc := range cases {
+		if got := stickyCapTercile(caps, tc.cap, tc.prev); got != tc.want {
+			t.Errorf("%s: stickyCapTercile(cap=%v, prev=%d) = %d, want %d",
+				tc.name, tc.cap, tc.prev, got, tc.want)
+		}
+	}
+}
+
+// 저장된 그룹 문자열에서 분위를 꺼낼 때, **다른 base의 값은 이어 붙이지 않는다** —
+// 시장을 옮긴 종목의 어제 분위는 다른 분포에서 매긴 값이다.
+func TestPrevTercileFor(t *testing.T) {
+	cases := []struct {
+		prev, base string
+		want       int
+	}{
+		{"us:NASDAQ:cap2", "us:NASDAQ", 2},
+		{"us:NASDAQ", "us:NASDAQ", 0},         // 분위가 없던 그룹
+		{"domestic:KRX:cap3", "us:NASDAQ", 0}, // base가 다르다
+		{"", "us:NASDAQ", 0},
+		{"us:NASDAQ:cap9", "us:NASDAQ", 0}, // 범위 밖은 버린다
+	}
+	for _, tc := range cases {
+		if got := prevTercileFor(tc.prev, tc.base); got != tc.want {
+			t.Errorf("prevTercileFor(%q, %q) = %d, want %d", tc.prev, tc.base, got, tc.want)
+		}
+	}
+}
+
+// 「동종 상위 0%」는 화면에 나갈 수 없는 표현이다. 피어 그룹의 최고 종목은 배치
+// 백분위에서 100을 받고 그것이 상위 0%로 뒤집히므로, 저장 전에 1로 막는다.
+func TestPeerPctNeverReportsZero(t *testing.T) {
+	rows := make([]repository.StockScoreRow, 0, 5)
+	scores := []int64{10, 30, 50, 70, 90}
+	for _, v := range scores {
+		rows = append(rows, repository.StockScoreRow{
+			Symbol:    "S" + strconv.FormatInt(v, 10),
+			PeerGroup: "g",
+			Score:     sql.NullInt64{Int64: v, Valid: true},
+		})
+	}
+	assignPeerPercentiles(rows, map[string][]float64{"g": {10, 30, 50, 70, 90}})
+
+	best := rows[len(rows)-1]
+	if !best.PeerPct.Valid || best.PeerPct.Int64 != 1 {
+		t.Errorf("최고 종목은 상위 1%%여야 함(0%% 금지), got %v", best.PeerPct)
+	}
+	for _, r := range rows {
+		if r.PeerPct.Valid && r.PeerPct.Int64 < 1 {
+			t.Errorf("%s 상위 %d%% — 1 미만이 저장됐다", r.Symbol, r.PeerPct.Int64)
+		}
 	}
 }
