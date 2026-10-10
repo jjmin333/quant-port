@@ -104,3 +104,13 @@ func TestSessionCloseAtAlwaysDoesNotPanic(t *testing.T) {
 		t.Fatal("expected a non-zero close time for ScheduleAlways")
 	}
 }
+
+// 2026-10-10: 한글날(10-09)·근로자의 날·지방선거·광복절 대체휴일이 목록에 없어 그날을 거래일로 보고
+// 「종가 0/4,278」을 메우려 전 종목 재수집이 반복됐다. 실제 일봉이 없던 날이다.
+func TestKRXHolidays2026Gaps(t *testing.T) {
+	for _, day := range []string{"2026-05-01", "2026-06-03", "2026-08-17", "2026-10-09"} {
+		if ShouldPoll(ScheduleKRX, mustKST(t, "2006-01-02 15:04", day+" 10:00"), nil, nil) {
+			t.Errorf("%s: KRX는 휴장이어야 한다", day)
+		}
+	}
+}

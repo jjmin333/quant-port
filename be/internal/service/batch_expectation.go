@@ -132,15 +132,21 @@ var batchExpectations = map[model.BatchJobID]batchExpectation{
 	},
 	model.BatchReTrades: {
 		// 호출 상한 6,000 × 0.26초 + 응답 ≈ 40~60분.
-		at: []string{"03:30"}, grace: 6 * time.Hour, maxRuntime: 2 * time.Hour,
+		// 2026-10-10 예약 중지(workers/asset/asset.go) — 수동 잡으로 둬야 워치독 catch-up이 되살리지 않는다.
+		manual:     true,
+		maxRuntime: 2 * time.Hour,
 	},
 	model.BatchAssetScores: {
 		// 단지 수천 개 백분위 + 금융상품 1,000여 개 — DB만, 몇 분.
-		at: []string{"09:50"}, grace: 6 * time.Hour, maxRuntime: 40 * time.Minute,
+		// 2026-10-10 예약 중지(workers/asset/asset.go) — 수동 잡으로 둬야 워치독 catch-up이 되살리지 않는다.
+		manual:     true,
+		maxRuntime: 40 * time.Minute,
 	},
 	model.BatchAssetAI: {
 		// 많아야 약 60콜 × 4초 간격.
-		at: []string{"10:20"}, grace: 6 * time.Hour, maxRuntime: 40 * time.Minute,
+		// 2026-10-10 예약 중지(workers/asset/asset.go) — 수동 잡으로 둬야 워치독 catch-up이 되살리지 않는다.
+		manual:     true,
+		maxRuntime: 40 * time.Minute,
 	},
 	model.BatchReIndex: {
 		// 첫 회는 전체 이력 약 550호출(≈ 6분), 그 뒤엔 20호출 남짓.
@@ -148,7 +154,9 @@ var batchExpectations = map[model.BatchJobID]batchExpectation{
 	},
 	model.BatchOnbid: {
 		// 목록 ≈ 45 + 상세 ≤ 900 + 낙찰가 ≤ 900, 0.65초 간격 ≈ 20분.
-		at: []string{"07:40"}, grace: 6 * time.Hour, maxRuntime: 90 * time.Minute,
+		// 2026-10-10 예약 중지(workers/asset/asset.go) — 수동 잡으로 둬야 워치독 catch-up이 되살리지 않는다.
+		manual:     true,
+		maxRuntime: 90 * time.Minute,
 	},
 	model.BatchEcosRates: {
 		// 21계열 × 0.6초.
