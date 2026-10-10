@@ -48,14 +48,12 @@ var batchCatchUpAllowed = map[model.BatchJobID]string{
 	model.BatchSocialMentions:  "170호출 남짓. 늦게 돌면 그날 스냅샷을 그 시각 것으로 찍는다",
 	model.BatchSocialPosts:     "로테이션 80(분당 1회). 늦게라도 돌면 그 종목들의 글이 채워진다",
 	model.BatchFinProducts:     "금감원 공시 전체 약 60호출. 늦게 돌아도 하는 일이 같다",
-	model.BatchReTrades:        "로테이션(호출 상한 6,000). 늦게 돌아도 밀린 구간부터 채운다",
-	model.BatchAssetScores:     "DB만. 늦게 돌아도 하는 일이 같다",
-	model.BatchAssetAI:         "자산 전용 키·기능 버킷 안. 입력이 같으면 다시 부르지 않는다",
-	model.BatchReIndex:         "마지막 시점부터 받는다. 늦게 돌아도 하는 일이 같다",
-	model.BatchEcosRates:       "21계열 남짓. 늦게 돌아도 하는 일이 같다",
-	model.BatchOnbid:           "공고 30일 앞 + 상세 900. 늦게 돌아도 하는 일이 같다",
-	model.BatchETFScore:        "마지막 적재일 다음부터 받는다. 늦게 돌아도 빠진 날을 메운다",
-	model.BatchDisclosures:     "시장 전체 매일(실측 2페이지). 실적 탭의 최근 공시가 빈다",
+	// re_trades·asset_scores·asset_ai·onbid는 2026-10-10 예약 중지(workers/asset/asset.go)로 뺐다 —
+	// 되살리면 사유와 함께 다시 넣는다.
+	model.BatchReIndex:     "마지막 시점부터 받는다. 늦게 돌아도 하는 일이 같다",
+	model.BatchEcosRates:   "21계열 남짓. 늦게 돌아도 하는 일이 같다",
+	model.BatchETFScore:    "마지막 적재일 다음부터 받는다. 늦게 돌아도 빠진 날을 메운다",
+	model.BatchDisclosures: "시장 전체 매일(실측 2페이지). 실적 탭의 최근 공시가 빈다",
 
 	// ── 등급제 로테이션 · 늦게라도 돌면 그 슬라이스가 채워진다 ────────────
 	model.BatchInsiderOverseas:    "로테이션 1,200. 건너뛴 슬라이스는 다음 바퀴까지 낡은 채로 남는다",
