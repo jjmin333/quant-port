@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { Loader2, UserRound } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { ProvenanceStamp } from "@/components/ui/provenance-stamp";
+import { sourceLabel } from "@/lib/data-reliability";
 import { fetchInsiderClient } from "@/lib/insider-api";
 import type { InsiderTabData, InsiderTransaction } from "@/lib/insider-types";
 import { formatPercent, formatPrice } from "@/lib/format";
@@ -56,9 +58,14 @@ export function InsiderTab({ symbol, currency }: InsiderTabProps) {
   return (
     <div className="space-y-2.5">
       <Card className="p-3">
-        <h3 className="mb-2 flex items-center gap-1.5 text-cell font-semibold text-[var(--text-primary)]">
+        <h3 className="mb-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-cell font-semibold text-[var(--text-primary)]">
           <UserRound className="h-3.5 w-3.5 text-[var(--text-muted)]" />
           {isDomestic ? "임원ㆍ주요주주 소유 변동" : "내부자 거래 (Form 4)"}
+          {/*
+            출처는 이미 응답에 실려 왔는데 화면이 안 쓰고 있었다 (요구 8). 국내는
+            DART, 해외는 EDGAR라 제목으로 짐작은 되지만, **짐작과 표기는 다르다.**
+          */}
+          <ProvenanceStamp className="ml-auto" parts={{ source: sourceLabel(transactions[0]?.source) }} />
         </h3>
         {transactions.length === 0 ? (
           <p className="text-cell text-[var(--text-muted)]">최근 내부자 거래 내역이 없습니다.</p>

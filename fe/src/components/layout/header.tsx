@@ -6,6 +6,7 @@ import { LogOut, Search, UserCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ColorModeToggle } from "@/components/layout/color-mode-toggle";
+import { NotificationBell } from "@/components/layout/notification-bell";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,13 +57,15 @@ function HeaderActions({ compact }: { compact?: boolean }) {
   if (!loading && session) {
     /*
      * 헤더 우측은 아바타 하나로 통합했다 (docs/UI_SPEC.md §4).
-     *  - 알림 🔔: 미구현이었다. 배지 숫자 3이 하드코딩이고 클릭해도 아무 동작이 없었다.
-     *    동작하지 않는 버튼을 상시 노출하지 않는다 — 실제로 만들 때 다시 넣는다.
+     *  - 알림 🔔: 예전 것은 배지 3이 하드코딩된 가짜라 걷었고, 2026-10-10에 진짜로 다시 넣었다
+     *    (`NotificationBell` — 관심 목록의 변화, 앱 안 알림 칸).
      *  - 색상 모드: 헤더 우측 아이콘 버튼으로 전환한다.
      *  - 계정: 드롭다운에서 /settings(계정 전용)로 연다.
      * 예전 메뉴는 group-hover CSS라 키보드로 열 수 없었다. DropdownMenu가 이를 해결한다.
      */
     return (
+      <>
+      <NotificationBell compact={compact} />
       <DropdownMenu>
         <DropdownMenuTrigger
           className={cn(
@@ -91,6 +94,7 @@ function HeaderActions({ compact }: { compact?: boolean }) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      </>
     );
   }
 

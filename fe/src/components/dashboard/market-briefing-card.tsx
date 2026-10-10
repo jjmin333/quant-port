@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Sparkles } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Building2, Percent, Sparkles, TrendingUp } from "lucide-react";
+import { AssetBriefPanel, type AssetBriefTab } from "@/components/dashboard/asset-pulse-cards";
 import { BriefingSourceBadge, MoodBadge } from "@/components/news/news-briefing-card";
-import { SymbolQuickLookModal } from "@/components/stocks/symbol-quick-look-modal";
+import { useQuickLook } from "@/components/providers/quick-look-provider";
 import { MiniToggle } from "@/components/ui/mini-toggle";
+import type { HomeAssets } from "@/lib/wealth-api";
 import { useOpenMarket } from "@/hooks/use-open-market";
 import {
   ChipCollapseRow,
@@ -14,6 +16,8 @@ import {
 import { SectionCard } from "@/components/ui/section-card";
 import { useMarketIndices } from "@/hooks/use-market-indices";
 import { useLiveQuotes } from "@/hooks/use-live-quotes";
+import { useVisibleInterval } from "@/hooks/use-visible-interval";
+import { SCREEN_REFRESH_MS } from "@/lib/screen-refresh";
 import { ValueFlash } from "@/components/ui/value-flash";
 import { fetchNewsBriefing, type NewsMarketBriefing } from "@/lib/news-briefing-api";
 import type { MarketIndex } from "@/lib/quotes-types";
@@ -69,23 +73,51 @@ const EMPTY_PAIR: BriefingPair = { domestic: null, us: null, loading: true };
  * 토글을 누른 뒤에 부르면 첫 클릭마다 빈 카드가 한 번 보이고, 무엇보다 홈의 레이아웃이
  * 브리핑 유무로 갈리는데(있으면 2단, 없으면 지수 전폭) 한쪽만 알고 배치를 정하면
  * 나머지가 도착할 때 화면이 다시 뛴다.
+ *
+ * **5분마다 다시 받는다** (2026-09-16 사용자 요청, `lib/screen-refresh`). 브리핑은
+ * 배치가 장중 30분·그 외 1시간마다 새로 쓰는데 화면은 마운트 시각의 글을 들고 있었다 —
+ * 홈을 열어 둔 채 하루가 지나면 어제 글에 「오늘의 시장 브리핑」이라고 적혀 있었다.
  */
 export function useMarketBriefings(): BriefingPair {
   const [pair, setPair] = useState<BriefingPair>(EMPTY_PAIR);
 
+  /*
+    언마운트 뒤에 도착한 응답을 버리는 표식. 갱신이 붙으면서 이펙트 안의 `alive`
+    지역변수로는 부족해졌다 — 요청을 거는 자리가 둘(첫 적재·주기)이고 둘 다 같은
+    「아직 이 화면인가」를 물어야 한다.
+  */
+  const aliveRef = useRef(true);
   useEffect(() => {
-    let alive = true;
-    void (async () => {
-      const [domestic, us] = await Promise.all([
-        fetchNewsBriefing("domestic").catch(() => null),
-        fetchNewsBriefing("us").catch(() => null),
-      ]);
-      if (alive) setPair({ domestic, us, loading: false });
-    })();
+    aliveRef.current = true;
     return () => {
-      alive = false;
+      aliveRef.current = false;
     };
   }, []);
+
+  const load = useCallback(async () => {
+    const [domestic, us] = await Promise.all([
+      fetchNewsBriefing("domestic").catch(() => null),
+      fetchNewsBriefing("us").catch(() => null),
+    ]);
+    if (!aliveRef.current) return;
+    /*
+      **못 받은 쪽은 직전 글을 지우지 않는다.** 갱신 한 번이 실패했다고 카드를 비우면
+      낡은 글보다 나쁘고, 홈의 2단 배치가 브리핑 유무로 갈리므로 화면이 통째로 뛴다.
+      아직 생성 전이라 `null`인 경우와 구분되지 않지만(둘 다 `null`이다), 있던 브리핑이
+      사라지는 일은 없고 없던 브리핑은 어차피 `prev`도 `null`이다.
+    */
+    setPair((prev) => ({
+      domestic: domestic ?? prev.domestic,
+      us: us ?? prev.us,
+      loading: false,
+    }));
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useVisibleInterval(() => void load(), SCREEN_REFRESH_MS);
 
   return pair;
 }
@@ -123,11 +155,23 @@ function liveIndexChips(
 /** 이 카드의 국내/해외 이름. 모듈 상수여야 훅이 렌더마다 다시 묻지 않는다. */
 const BRIEFING_MARKET_PAIR = { domestic: "domestic", us: "us" } as const;
 
+type BriefingTopic = "stock" | AssetBriefTab;
+
+/** 카드 맨 위 3칸 탭 — 주식 · 부동산 · 금리 (2026-10-09 사용자 요청 6, 기본 주식). */
+const TOPIC_TABS: { id: BriefingTopic; label: string; icon: React.ReactNode }[] = [
+  { id: "stock", label: "주식", icon: <TrendingUp className="size-4" aria-hidden /> },
+  { id: "re", label: "부동산", icon: <Building2 className="size-4" aria-hidden /> },
+  { id: "rates", label: "금리", icon: <Percent className="size-4" aria-hidden /> },
+];
+
 export function MarketBriefingCard({
   briefings,
+  assets,
   className,
 }: {
   briefings: BriefingPair;
+  /** 홈 「주식 밖」 저장분 — 부동산·금리 탭의 글. 없으면 그 탭을 세우지 않는다. */
+  assets?: HomeAssets | null;
   className?: string;
 }) {
   /*
@@ -149,7 +193,15 @@ export function MarketBriefingCard({
   const briefing = active === "us" ? briefings.us : briefings.domestic;
 
   const [expanded, setExpanded] = useState(false);
-  const [picked, setPicked] = useState<string | null>(null);
+  /*
+    주식·부동산·금리 탭 (2026-10-09 요청 6). 홈 맨 아래에 있던 부동산·금리 브리핑을 여기로 올렸다 —
+    태블릿·폰에서는 한참 내려야 해서 처음 온 사람은 있는 줄도 몰랐다. 글이 없는 쪽 탭은 세우지 않는다.
+  */
+  const [pickedTopic, setTopic] = useState<BriefingTopic>("stock");
+  const topics = TOPIC_TABS.filter((t) => (t.id === "stock" ? Boolean(briefing) : Boolean(assets?.briefing?.[t.id])));
+  const topic = topics.some((t) => t.id === pickedTopic) ? pickedTopic : (topics[0]?.id ?? "stock");
+  /** 지수·종목 칩이 여는 창(전역 하나). 껍데기 밖에서는 `null`이라 그때는 칩이 눌리지 않는다. */
+  const quickLook = useQuickLook();
   // 아래 `liveIndexChips` 참고. 훅은 폴링 한 벌을 지수 스트립과 나눠 쓴다.
   const { indices: live } = useMarketIndices();
   // 훅은 아래 이른 반환보다 **위에** 있어야 한다 — 브리핑이 없는 날 훅 수가 달라진다.
@@ -192,8 +244,33 @@ export function MarketBriefingCard({
     );
   }
 
-  // 아직 한 번도 생성되지 않았으면 카드를 그리지 않는다 — 빈 상자를 두느니 없는 편이 낫다.
-  if (!briefing || !active) return null;
+  // 세 글이 모두 아직 없으면 카드를 그리지 않는다 — 빈 상자를 두느니 없는 편이 낫다.
+  if (topics.length === 0) return null;
+
+  const title = (
+    <span className="flex items-center gap-1.5">
+      <Sparkles className="size-3.5 text-[var(--brand)]" />
+      오늘의 시장 브리핑
+    </span>
+  );
+  const topicTabs =
+    topics.length > 1 ? (
+      <MiniToggle size="lg" className="mb-3 w-full" options={topics} value={topic} onChange={setTopic} />
+    ) : null;
+
+  if (topic !== "stock" || !briefing || !active) {
+    return (
+      <SectionCard
+        className={className}
+        title={title}
+        href={topic === "re" ? "/real-estate" : "/finance/rates"}
+        hrefLabel={topic === "re" ? "부동산" : "금리"}
+      >
+        {topicTabs}
+        {assets && topic !== "stock" && <AssetBriefPanel d={assets} tab={topic} />}
+      </SectionCard>
+    );
+  }
 
   const facts = briefing.facts;
   const indexChips = liveIndexChips(facts.indices, live);
@@ -208,12 +285,7 @@ export function MarketBriefingCard({
     <>
       <SectionCard
         className={className}
-        title={
-          <span className="flex items-center gap-1.5">
-            <Sparkles className="size-3.5 text-[var(--brand)]" />
-            오늘의 시장 브리핑
-          </span>
-        }
+        title={title}
         action={
           <div className="flex shrink-0 items-center gap-1.5">
             <BriefingSourceBadge briefing={briefing} />
@@ -231,6 +303,7 @@ export function MarketBriefingCard({
           </div>
         }
       >
+        {topicTabs}
         <div className="flex flex-wrap items-center gap-1.5">
           {briefing.mood && <MoodBadge mood={briefing.mood} />}
           <span className="text-micro text-muted-foreground">
@@ -243,19 +316,38 @@ export function MarketBriefingCard({
         {/*
           시황 배지는 모델의 판단이라 실제 지수 등락률을 항상 옆에 같이 둔다 — 둘이
           어긋나는 날 배지만 보고 오해하지 않도록.
+
+          **누르면 아래 언급 종목 칩과 같이 창이 열린다** (2026-09-16 사용자 요청).
+          같은 카드 안에서 아래 줄은 눌리는데 위 줄은 안 눌리는 것이 이상했고, 무엇보다
+          이 칩이 가리키는 지수에는 이미 할 말이 있다 — 추세 점수·키워드·LLM 한 줄 해설·
+          60거래일 종가표가 전부 `IndexQuickLookModal` 안에 있다.
+
+          창을 여는 것은 전역 제공자다(`QuickLookProvider`). 여기서 모달을 직접 들면
+          지수 스냅샷과 점수 훅을 이 카드가 또 한 벌 들어야 하는데, 제공자는 **고른
+          순간에만** 그것들을 마운트한다.
         */}
         {indexChips.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {indexChips.map((idx) => (
-              <span
+              <button
                 key={idx.id}
-                className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-micro"
+                type="button"
+                onClick={() => quickLook?.openIndex(idx.id)}
+                /*
+                  제공자가 없는 자리(껍데기 밖)에서는 누를 것이 없으므로 아예 버튼처럼
+                  굴지 않는다 — 눌러도 아무 일이 없는 칩이 더 나쁘다.
+                */
+                disabled={!quickLook}
+                className={cn(
+                  "flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-micro",
+                  quickLook && "hover:bg-accent",
+                )}
               >
                 <span className="text-muted-foreground">{idx.name}</span>
                 <b className={cn("font-num tabular-nums", trendTextClass(idx.changeRate))}>
                   {formatPercent(idx.changeRate)}
                 </b>
-              </span>
+              </button>
             ))}
           </div>
         )}
@@ -316,7 +408,7 @@ export function MarketBriefingCard({
                   <button
                     key={m.symbol}
                     type="button"
-                    onClick={() => setPicked(m.symbol)}
+                    onClick={() => quickLook?.openSymbol(m.symbol)}
                     className={cn(buttonVariants({ variant: "outline", size: "xs" }), "rounded-full hover:border-foreground/20 hover:bg-accent")}
                   >
                     <span className="max-w-[7rem] truncate">{m.name || m.symbol}</span>
@@ -342,8 +434,6 @@ export function MarketBriefingCard({
           </div>
         )}
       </SectionCard>
-
-      <SymbolQuickLookModal symbol={picked} onClose={() => setPicked(null)} />
     </>
   );
 }

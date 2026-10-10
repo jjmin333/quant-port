@@ -9,6 +9,7 @@ import {
   type StreamHandlers,
   type StreamPort,
 } from "./list-price-hub";
+import { pinSymbol, __testing as pinTesting } from "./pinned-symbols";
 
 /*
 가짜 이음매. 진짜 EventSource 대신 「열린 연결」을 목록으로 들고 있어서, 시험이
@@ -81,6 +82,7 @@ const PAST_DEBOUNCE_MS = 100;
 
 afterEach(() => {
   __testing.reset();
+  pinTesting.reset();
 });
 
 describe("unionOf", () => {
@@ -233,10 +235,19 @@ describe("subscribeListPrices", () => {
   });
 });
 
-describe("탭이 뒤로 갔을 때 (사용자 요청 5)", () => {
-  it("숨는 것만으로는 끊지 않는다", () => {
+/*
+탭이 뒤로 갔을 때 (2026-09-15 사용자 요청 3·4).
+
+09-05에는 유예 3시간에 「지나면 통째로 닫는다」였다. 지금은 30분에 「지나면 **열어 둔
+종목만 남긴다**」이다. 아래 시험들은 그 두 가지 — **언제** 좁히나, **무엇이** 남나 —
+를 각각 센다.
+*/
+const GRACE_MS = 30 * 60 * 1000;
+
+describe("안 보이는 탭", () => {
+  it("숨는 것만으로는 끊지 않는다 — 창을 잠깐 옮겼다 오는 일이 여기 있다", () => {
     const p = makePort();
-    installStreamPort(p.port, 3 * 60 * 60 * 1000);
+    installStreamPort(p.port, GRACE_MS);
     subscribeListPrices("domestic", ["005930"], () => {});
     p.tick(PAST_DEBOUNCE_MS);
 
@@ -244,21 +255,21 @@ describe("탭이 뒤로 갔을 때 (사용자 요청 5)", () => {
     expect(p.live()).toHaveLength(1);
   });
 
-  it("유예가 지나면 놓는다", () => {
+  it("유예가 지나면 놓는다 — 열어 둔 종목이 없을 때", () => {
     const p = makePort();
-    installStreamPort(p.port, 3 * 60 * 60 * 1000);
-    subscribeListPrices("domestic", ["005930"], () => {});
+    installStreamPort(p.port, GRACE_MS);
+    subscribeListPrices("domestic", ["005930", "000660"], () => {});
     p.tick(PAST_DEBOUNCE_MS);
 
     setVisible(false);
-    p.tick(3 * 60 * 60 * 1000);
+    p.tick(GRACE_MS);
     p.tick(PAST_DEBOUNCE_MS);
     expect(p.live()).toHaveLength(0);
   });
 
   it("유예 안에 돌아오면 살아 있는 연결을 다시 열지 않는다", () => {
     const p = makePort();
-    installStreamPort(p.port, 3 * 60 * 60 * 1000);
+    installStreamPort(p.port, GRACE_MS);
     subscribeListPrices("domestic", ["005930"], () => {});
     p.tick(PAST_DEBOUNCE_MS);
 
@@ -271,17 +282,114 @@ describe("탭이 뒤로 갔을 때 (사용자 요청 5)", () => {
 
   it("유예가 지나 놓았더라도 돌아오면 다시 붙는다", () => {
     const p = makePort();
-    installStreamPort(p.port, 3 * 60 * 60 * 1000);
+    installStreamPort(p.port, GRACE_MS);
     subscribeListPrices("domestic", ["005930"], () => {});
     p.tick(PAST_DEBOUNCE_MS);
 
     setVisible(false);
-    p.tick(4 * 60 * 60 * 1000);
+    p.tick(2 * GRACE_MS);
     p.tick(PAST_DEBOUNCE_MS);
     expect(p.live()).toHaveLength(0);
 
     setVisible(true);
     p.tick(PAST_DEBOUNCE_MS);
     expect(p.live()).toHaveLength(1);
+  });
+});
+
+describe("열어 둔 종목은 숨어도 남는다 (사용자 요청 4)", () => {
+  it("서른 종목이 아니라 열어 둔 하나가 남는다", () => {
+    const p = makePort();
+    installStreamPort(p.port, GRACE_MS);
+    subscribeListPrices("domestic", ["005930", "000660", "035420"], () => {});
+    p.tick(PAST_DEBOUNCE_MS);
+    pinSymbol("000660", "domestic");
+
+    setVisible(false);
+    p.tick(GRACE_MS);
+    p.tick(PAST_DEBOUNCE_MS);
+
+    expect(p.live()).toHaveLength(1);
+    expect(p.live()[0]!.symbols).toEqual(["000660"]);
+  });
+
+  it("다시 보이면 목록 전체로 돌아온다 — 살아 있다고 건너뛰지 않는다", () => {
+    const p = makePort();
+    installStreamPort(p.port, GRACE_MS);
+    subscribeListPrices("domestic", ["005930", "000660"], () => {});
+    p.tick(PAST_DEBOUNCE_MS);
+    pinSymbol("000660", "domestic");
+
+    setVisible(false);
+    p.tick(GRACE_MS);
+    p.tick(PAST_DEBOUNCE_MS);
+    expect(p.live()[0]!.symbols).toEqual(["000660"]);
+
+    setVisible(true);
+    p.tick(PAST_DEBOUNCE_MS);
+    expect(p.live()).toHaveLength(1);
+    expect(p.live()[0]!.symbols.sort()).toEqual(["000660", "005930"]);
+  });
+
+  it("핀이 다른 시장이면 이 시장에는 아무것도 안 남는다", () => {
+    const p = makePort();
+    installStreamPort(p.port, GRACE_MS);
+    subscribeListPrices("domestic", ["005930"], () => {});
+    p.tick(PAST_DEBOUNCE_MS);
+    pinSymbol("AAPL", "us");
+
+    setVisible(false);
+    p.tick(GRACE_MS);
+    p.tick(PAST_DEBOUNCE_MS);
+    expect(p.live()).toHaveLength(0);
+  });
+
+  it("아무도 구독하지 않는 종목을 핀이 **새로 열지는 않는다**", () => {
+    const p = makePort();
+    installStreamPort(p.port, GRACE_MS);
+    subscribeListPrices("domestic", ["005930"], () => {});
+    p.tick(PAST_DEBOUNCE_MS);
+    // 종목 상세 화면이 건 핀 — 그 화면은 자기 체결 스트림을 따로 연다.
+    pinSymbol("068270", "domestic");
+
+    setVisible(false);
+    p.tick(GRACE_MS);
+    p.tick(PAST_DEBOUNCE_MS);
+    expect(p.live()).toHaveLength(0);
+  });
+
+  /*
+    창을 닫아도 **마지막으로 본 종목은 남는다** (2026-09-15 사용자 결정: 「× 까지
+    유지」). 브라우저 탭 제목이 그 값을 읽으므로, 모달을 닫자마자 구독이 끊기면
+    다른 메뉴로 옮긴 순간 제목이 멈춘 값을 들고 있게 된다.
+  */
+  it("숨어 있는 동안 창을 닫아도 마지막으로 본 종목은 남는다", () => {
+    const p = makePort();
+    installStreamPort(p.port, GRACE_MS);
+    subscribeListPrices("domestic", ["005930", "000660"], () => {});
+    p.tick(PAST_DEBOUNCE_MS);
+    const unpin = pinSymbol("000660", "domestic");
+
+    setVisible(false);
+    p.tick(GRACE_MS);
+    p.tick(PAST_DEBOUNCE_MS);
+    expect(p.live()[0]!.symbols).toEqual(["000660"]);
+
+    unpin();
+    p.tick(PAST_DEBOUNCE_MS);
+    expect(p.live()).toHaveLength(1);
+    expect(p.live()[0]!.symbols).toEqual(["000660"]);
+  });
+
+  it("종목을 한 번도 안 열었으면 숨은 탭은 통째로 놓는다", () => {
+    const p = makePort();
+    installStreamPort(p.port, GRACE_MS);
+    subscribeListPrices("domestic", ["005930", "000660"], () => {});
+    p.tick(PAST_DEBOUNCE_MS);
+
+    setVisible(false);
+    p.tick(GRACE_MS);
+    p.tick(PAST_DEBOUNCE_MS);
+    expect(p.live()).toHaveLength(0);
   });
 });

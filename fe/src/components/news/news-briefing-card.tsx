@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Sparkles, X } from "lucide-react";
 import type { NewsMarketBriefing } from "@/lib/news-briefing-api";
-import { formatBriefingClock, formatBriefingTimestamp } from "@/lib/news-market-briefing";
+import { formatBriefingTimestamp, formatCarryClock } from "@/lib/news-market-briefing";
 import { formatPercent } from "@/lib/format";
 import { trendTextClass } from "@/lib/trend-colors";
 import { cn } from "@/lib/utils";
@@ -128,7 +128,10 @@ function Tile({
  */
 export function BriefingSourceBadge({ briefing }: { briefing: NewsMarketBriefing }) {
   if (briefing.source === "llm_carry") {
-    const clock = briefing.carriedFrom ? formatBriefingClock(briefing.carriedFrom) : "";
+    // 자정을 넘긴 승계면 「어제 21:00」 — 시각만 적으면 아직 오지 않은 오늘 21시로 읽힌다.
+    const clock = briefing.carriedFrom
+      ? formatCarryClock(briefing.carriedFrom, briefing.generatedAt)
+      : "";
     return (
       <span
         className="rounded-md bg-[var(--brand)]/12 px-1.5 py-px text-micro font-semibold text-[var(--brand)]"
@@ -157,13 +160,15 @@ export function BriefingSourceBadge({ briefing }: { briefing: NewsMarketBriefing
 
 /** 시황 배지 — 홈 브리핑 카드도 같은 것을 쓴다(강세=빨강은 이 앱의 상승색이다). */
 export function MoodBadge({ mood }: { mood: string }) {
-  const tone =
-    mood === "강세"
-      ? "bg-[var(--profit)]/12 text-[var(--profit)]"
-      : mood === "약세"
-        ? "bg-[var(--loss)]/12 text-[var(--loss)]"
-        : "bg-[var(--surface-elevated)] text-[var(--text-muted)]";
-  const arrow = mood === "강세" ? "▲" : mood === "약세" ? "▼" : "―";
+  // 상승·하락은 홈 「부동산·금리 브리핑」(2026-10-03)의 분위기 — 같은 배지를 쓴다.
+  const up = mood === "강세" || mood === "상승";
+  const down = mood === "약세" || mood === "하락";
+  const tone = up
+    ? "bg-[var(--profit)]/12 text-[var(--profit)]"
+    : down
+      ? "bg-[var(--loss)]/12 text-[var(--loss)]"
+      : "bg-[var(--surface-elevated)] text-[var(--text-muted)]";
+  const arrow = up ? "▲" : down ? "▼" : "―";
   return (
     <span className={cn("rounded-full px-2 py-px text-cell font-bold", tone)}>
       {arrow} {mood}

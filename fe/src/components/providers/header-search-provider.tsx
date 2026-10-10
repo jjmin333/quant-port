@@ -23,6 +23,7 @@ import { analysisSymbolHref } from "@/lib/analysis-tabs";
 import { searchStocksCatalogClient } from "@/lib/market-api";
 import { rememberStock } from "@/lib/recent-stocks";
 import type { StockInfo } from "@/lib/quotes-types";
+import { fetchAssetSearch, type AssetSearchItem } from "@/lib/asset-search";
 
 const STOCK_SUGGEST_LIMIT = 8;
 const STOCK_SUGGEST_DEBOUNCE_MS = 200;
@@ -30,6 +31,7 @@ const STOCK_SUGGEST_DEBOUNCE_MS = 200;
 type SuggestResult = { key: string; items: StockInfo[] };
 
 const EMPTY_ITEMS: StockInfo[] = [];
+const EMPTY_ASSETS: AssetSearchItem[] = [];
 const EMPTY_SUGGEST: SuggestResult = { key: "", items: EMPTY_ITEMS };
 
 type HeaderSearchContextValue = {
@@ -43,6 +45,8 @@ type HeaderSearchContextValue = {
   clearSearch: () => void;
   submitSearch: () => void;
   stockSuggestions: StockInfo[];
+  /** 같은 검색어의 아파트·금융상품·금리·지역(2026-10-09). 종목 아래 한 무리로 뜬다. */
+  assetSuggestions: AssetSearchItem[];
   suggestionsLoading: boolean;
   suggestionsOpen: boolean;
   highlightedIndex: number;
@@ -60,6 +64,7 @@ export function HeaderSearchProvider({ children }: { children: ReactNode }) {
   const [inputValue, setInputValue] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [suggestResult, setSuggestResult] = useState<SuggestResult>(EMPTY_SUGGEST);
+  const [assetResult, setAssetResult] = useState<{ key: string; items: AssetSearchItem[] }>({ key: "", items: [] });
   const [highlightedIndex, setHighlightedIndex] = useState(0);
 
   /*
@@ -77,6 +82,7 @@ export function HeaderSearchProvider({ children }: { children: ReactNode }) {
    */
   const suggestQuery = supportsStockSuggestions(config.mode) ? inputValue.trim() : "";
   const stockSuggestions = suggestResult.key === suggestQuery ? suggestResult.items : EMPTY_ITEMS;
+  const assetSuggestions = assetResult.key === suggestQuery ? assetResult.items : EMPTY_ASSETS;
   const suggestionsLoading = suggestQuery.length > 0 && suggestResult.key !== suggestQuery;
   const stockSuggestionsRef = useRef<StockInfo[]>([]);
   const stockPickHandlerRef = useRef<((symbol: string) => void) | null>(null);
@@ -109,6 +115,10 @@ export function HeaderSearchProvider({ children }: { children: ReactNode }) {
 
     let cancelled = false;
     const timer = window.setTimeout(() => {
+      // 자산 칸은 종목과 따로 온다 — 늦거나 실패해도 종목 목록을 붙잡지 않는다.
+      void fetchAssetSearch(suggestQuery).then((items) => {
+        if (!cancelled) setAssetResult({ key: suggestQuery, items });
+      });
       searchStocksCatalogClient(suggestQuery, "", STOCK_SUGGEST_LIMIT)
         .then(({ items }) => {
           if (!cancelled) {
@@ -221,6 +231,7 @@ export function HeaderSearchProvider({ children }: { children: ReactNode }) {
       clearSearch,
       submitSearch,
       stockSuggestions,
+      assetSuggestions,
       suggestionsLoading,
       suggestionsOpen,
       highlightedIndex,
@@ -235,6 +246,7 @@ export function HeaderSearchProvider({ children }: { children: ReactNode }) {
       clearSearch,
       submitSearch,
       stockSuggestions,
+      assetSuggestions,
       suggestionsLoading,
       suggestionsOpen,
       highlightedIndex,

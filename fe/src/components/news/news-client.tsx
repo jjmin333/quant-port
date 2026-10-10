@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Check, RefreshCw, X } from "lucide-react";
-import type { NewsArticle, NewsMarket, NewsSort, NewsSourceId } from "@/lib/news-types";
+import type { NewsArticle, NewsMarket, NewsSort, NewsSourceId, NewsTopic } from "@/lib/news-types";
+import { NEWS_TOPIC_CHIPS } from "@/lib/news-types";
 import { getMockNews } from "@/lib/mock-news";
 import {
   fetchDomesticNews,
@@ -24,6 +25,8 @@ import { dedupeNewsArticles } from "@/lib/news-dedupe";
 import { allArticleSymbols } from "@/lib/news-derive";
 import { useMySymbols, useSymbolQuotesState } from "@/hooks/use-news-symbols";
 import { useMarketIndices } from "@/hooks/use-market-indices";
+import { useVisibleInterval } from "@/hooks/use-visible-interval";
+import { NEWS_REFRESH_MS } from "@/lib/screen-refresh";
 import { useHeaderSearch } from "@/components/providers/header-search-provider";
 import { PageScrollShell } from "@/components/layout/page-content-shell";
 import { PageColumns } from "@/components/layout/page-columns";
@@ -82,6 +85,11 @@ export function NewsClient({ market, initialArticles = [] }: NewsClientProps) {
       (market === "us" && mode === "news-us"));
 
   const [sourceId, setSourceId] = useState<NewsSourceId | "all">("all");
+  /** 국내 카테고리(2026-10-09 요청 4). `?topic=`으로 들어오면 그 칩부터(홈 카드에서 「더 보기」). */
+  const [topic, setTopic] = useState<NewsTopic | "">(() => {
+    const t = searchParams.get("topic");
+    return market === "domestic" && NEWS_TOPIC_CHIPS.some((c) => c.id === t) ? (t as NewsTopic) : "";
+  });
   /*
    * 목록을 좁히는 길이 **한 벌**이 됐다.
    *
@@ -139,6 +147,21 @@ export function NewsClient({ market, initialArticles = [] }: NewsClientProps) {
   const [loading, setLoading] = useState(isLiveNewsMarket(market) && initialArticles.length === 0);
   /** 서버가 준 목록으로 시작했는가 — 아래 첫 fetch가 스피너를 건너뛸지 가른다. */
   const hydratedFromServer = useRef(initialArticles.length > 0);
+  /**
+   * **주기 갱신인 회차의 `refreshKey`** (2026-09-16 사용자 요청).
+   *
+   * 새로고침 단추가 올린 회차와 90초 시계가 올린 회차는 같은 이펙트 셋을 타지만 요구가
+   * 반대다 — 사람이 누른 쪽은 「지금 다시 받는 중」이 보여야 하고, 시계가 올린 쪽은
+   * **아무 일도 없었던 것처럼** 지나가야 한다. 90초마다 목록이 스켈레톤으로 지워졌다
+   * 돌아오면 읽던 자리를 잃고, 사용자는 자기가 뭘 눌렀다고 읽는다.
+   *
+   * 불리언이 아니라 **회차 번호**를 드는 이유는 이 표식을 읽는 이펙트가 셋(목록·
+   * 브리핑·언급 종목)이기 때문이다. 먼저 도는 이펙트가 불리언을 내려 버리면 나머지
+   * 둘은 그 회차가 조용한 회차였다는 것을 알 수 없다.
+   *
+   * 상태가 아니라 ref인 이유는 렌더에 쓰이지 않아서다 — 이펙트만 읽는다.
+   */
+  const silentRefreshKey = useRef<number | null>(null);
   const [briefing, setBriefing] = useState<NewsMarketBriefing | null>(null);
   /*
    * 「많이 언급된 종목」 집계. **읽는 곳은 한참 아래지만 선언은 여기 있어야 한다.**
@@ -193,7 +216,8 @@ export function NewsClient({ market, initialArticles = [] }: NewsClientProps) {
      * 한 번 지워졌다가 돌아온다 — 미리 그린 보람이 없다. 두 번째 실행부터는
      * (정렬을 바꿨거나 새로고침을 눌렀거나) 평소대로 로딩을 보여 준다.
      */
-    const skipSpinner = hydratedFromServer.current;
+    const silent = silentRefreshKey.current === refreshKey;
+    const skipSpinner = hydratedFromServer.current || silent;
     hydratedFromServer.current = false;
     queueMicrotask(() => {
       if (!cancelled && !skipSpinner) {
@@ -207,6 +231,7 @@ export function NewsClient({ market, initialArticles = [] }: NewsClientProps) {
       market,
       sourceId,
       sort,
+      topic: market === "domestic" ? topic : "",
       query: newsSearchActive ? activeQuery : undefined,
     })
       .then(({ articles: items, totalCount: count }) => {
@@ -216,11 +241,17 @@ export function NewsClient({ market, initialArticles = [] }: NewsClientProps) {
         }
       })
       .catch((err: unknown) => {
-        if (!cancelled) {
-          setLoadError(toUserMessage(err, "뉴스를 불러오지 못했습니다"));
-          setArticles([]);
-          setTotalCount(0);
-        }
+        if (cancelled) return;
+        /*
+          **갱신의 실패는 화면을 비우지 않는다.** 첫 적재의 실패는 「못 불러왔다」가
+          맞지만, 90초짜리 시계가 올린 회차가 한 번 실패했다고 읽고 있던 기사 예순
+          건을 지우면 낡은 목록을 고치러 와서 목록을 없애는 일이 된다 —
+          다음 회차가 90초 뒤에 다시 채운다(`lib/screen-refresh`).
+        */
+        if (silent) return;
+        setLoadError(toUserMessage(err, "뉴스를 불러오지 못했습니다"));
+        setArticles([]);
+        setTotalCount(0);
       })
       .finally(() => {
         if (!cancelled) {
@@ -231,7 +262,7 @@ export function NewsClient({ market, initialArticles = [] }: NewsClientProps) {
     return () => {
       cancelled = true;
     };
-  }, [market, sourceId, sort, refreshKey, activeQuery, newsSearchActive]);
+  }, [market, sourceId, sort, topic, refreshKey, activeQuery, newsSearchActive]);
 
   /*
    * 브리핑은 **저장된 것을 읽기만** 한다 — 생성은 서버 배치의 몫이다(화면이 열릴 때
@@ -246,7 +277,8 @@ export function NewsClient({ market, initialArticles = [] }: NewsClientProps) {
         if (!cancelled) setBriefing(data);
       })
       .catch(() => {
-        if (!cancelled) setBriefing(null);
+        // 실패한 갱신은 직전 글을 남긴다 — 위 목록과 같은 규칙(`lib/screen-refresh`).
+        if (!cancelled && silentRefreshKey.current !== refreshKey) setBriefing(null);
       });
     return () => {
       cancelled = true;
@@ -281,7 +313,8 @@ export function NewsClient({ market, initialArticles = [] }: NewsClientProps) {
         if (!cancelled) setMentions(res.symbols);
       })
       .catch(() => {
-        if (!cancelled) setMentions([]);
+        // 갱신의 실패는 스트립을 비우지 않는다 — 위 둘과 같은 규칙.
+        if (!cancelled && silentRefreshKey.current !== refreshKey) setMentions([]);
       });
     return () => {
       cancelled = true;
@@ -369,6 +402,40 @@ export function NewsClient({ market, initialArticles = [] }: NewsClientProps) {
     setRefreshKey((k) => k + 1);
     window.setTimeout(() => setRefreshing(false), 400);
   }, []);
+
+  /*
+    **90초마다 스스로 새로고침한다** (2026-09-16 · 2026-09-17 사용자 요청, `lib/screen-refresh`).
+    주기가 5분에서 내려온 이유는 `NEWS_REFRESH_MS` 머리글에 있다 — 수집을 아무리
+    빠르게 해도 이 시계가 느리면 그만큼이 그대로 지연으로 얹힌다.
+
+    이 화면은 「실시간」을 내걸고도 마운트 시각의 기사 목록을 들고 서 있었다. 새 기사는
+    수집 배치가 쉬지 않고 밀어 넣는데, 탭을 열어 둔 사람에게는 그게 하나도 오지 않았다 —
+    새로고침 단추를 아는 사람만 최신을 봤다.
+
+    단추와 **같은 문**으로 들어간다(`refreshKey`). 목록·브리핑·언급 종목 셋이 이미
+    그 키에 매달려 있어서, 여기서 요청을 따로 걸면 같은 일을 하는 코드가 두 벌이 된다.
+    다른 것은 `silentRefreshKey` 하나뿐 — 스피너를 띄우지 않고 실패해도 화면을 비우지
+    않는다.
+
+    안 보이는 탭에서는 돌지 않고, 다시 보이는 순간 한 주기가 지났으면 한 번 메운다
+    (`useVisibleInterval`). 예시 목록을 보는 중이면(`isLiveNewsMarket`이 false) 부를
+    서버가 없으므로 아예 켜지 않는다.
+  */
+  useVisibleInterval(
+    () => {
+      /*
+        표식을 먼저 세우고 회차를 올린다. 갱신 함수(`setRefreshKey((k) => …)`) 안에서
+        ref를 건드리면 StrictMode가 그 함수를 두 번 부르며 순수성 규칙에 걸린다 —
+        `useVisibleInterval`이 콜백을 렌더마다 ref에 다시 담으므로 여기서 읽는
+        `refreshKey`는 언제나 지금 값이다.
+      */
+      const next = refreshKey + 1;
+      silentRefreshKey.current = next;
+      setRefreshKey(next);
+    },
+    NEWS_REFRESH_MS,
+    isLiveNewsMarket(market),
+  );
 
   /*
    * 셸 선택·문맥 블록·조회 기록은 `useNewsArticleModal`이 맡는다. 이 화면이 그 규칙을
@@ -468,6 +535,19 @@ export function NewsClient({ market, initialArticles = [] }: NewsClientProps) {
 
               {!newsSearchActive && (
                 <div className="mt-3 space-y-2">
+                  {market === "domestic" && (
+                    <div
+                      className="-mx-1 flex min-w-0 gap-1.5 overflow-x-auto px-1 pb-0.5"
+                      role="group"
+                      aria-label="뉴스 카테고리"
+                    >
+                      {NEWS_TOPIC_CHIPS.map((c) => (
+                        <Pill key={c.id || "all"} active={topic === c.id} onClick={() => setTopic(c.id)}>
+                          {c.label}
+                        </Pill>
+                      ))}
+                    </div>
+                  )}
                   {/*
                     **버튼으로 남은 것은 셋뿐이다.**
 

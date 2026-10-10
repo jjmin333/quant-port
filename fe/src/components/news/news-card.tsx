@@ -15,6 +15,7 @@ import type { QuoteSummary } from "@/lib/quotes-types";
 import type { MarketIndex } from "@/lib/quotes-types";
 import { articleDashboardIndexIds } from "@/lib/news-dashboard-indices";
 import { cn } from "@/lib/utils";
+import { newsTopicLabel } from "@/lib/news-types";
 
 type NewsCardProps = {
   article: NewsArticle;
@@ -125,6 +126,11 @@ export function NewsCard({ article, onClick, quotes, quotesLoading, indices }: N
             </span>
             <div className="flex min-w-0 items-center gap-1 overflow-hidden">
               {isBreaking && <NewsBreakingBadge className="px-1.5 py-px text-micro" />}
+              {newsTopicLabel(article.topic) && (
+                <span className="shrink-0 rounded-md bg-[var(--brand)]/10 px-1.5 py-px text-micro font-semibold text-[var(--brand)]">
+                  {newsTopicLabel(article.topic)}
+                </span>
+              )}
               <NewsKeywordBadges
                 keywords={article.keywords}
                 max={2}
@@ -169,8 +175,13 @@ export function NewsCard({ article, onClick, quotes, quotesLoading, indices }: N
               있어 둘째 줄이 가로로 베였다(실측 375px: 96px 칸에 내용 101px, 83행 중
               15행). 몇 개가 들어가는지는 `NewsChipRow`가 재서 정하고 나머지는 「+N」이
               말한다 — 스무 줄 위 키워드 묶음의 `flex-nowrap`과 같은 규칙이다.
+
+              폭은 **글 칸 전체**다(2026-10-09 요청 4). `w-fit`이면 이 칸의 폭이 「지금 그린 칩」의 폭이 되고,
+              NewsChipRow는 그 폭으로 몇 개가 들어가는지 잰다 — 한 번 0개가 되면 13px(「+2」)로 줄어
+              다시는 칩이 안 나왔다(실측: 국내 뉴스 목록 거의 모든 행이 「+N」만). 빈자리는 아래 덮개 버튼이 받게
+              클릭을 통과시키고, 칩 링크만 받는다.
             */
-            <div className="relative z-10 w-fit max-w-full">
+            <div className="pointer-events-none relative z-10 w-full [&_a]:pointer-events-auto">
               <NewsChipRow
                 article={article}
                 quotes={quotes!}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { OrderBook, QuoteDetail, QuoteStreamEvent, TradeTick } from "@/lib/quotes-types";
 import { fetchQuoteTerminalSnapshotClient, quotePriceStreamUrl } from "@/lib/market-api";
 import { isPageVisible } from "@/hooks/use-page-visible";
+import { useIsPinned } from "@/hooks/use-pinned-symbol";
 import { useStreamAwake } from "@/hooks/use-stream-awake";
 import { PRICE_POLL_MS } from "@/lib/price-cadence";
 
@@ -132,8 +133,21 @@ export function useQuoteDetail(symbol: string, options: UseQuoteDetailOptions = 
   const closed = isClosedSession(detail);
   const nextSessionAt = detail?.nextSessionAt;
 
-  /** 숨은 지 3시간이 안 됐는가 — 그 동안은 체결 스트림을 유지한다(`use-stream-awake`). */
+  /*
+    체결 스트림을 지금 붙여 둘 때인가.
+
+    숨은 지 유예(30분)가 안 됐으면 유지한다(`use-stream-awake`). 그리고 **이 종목이
+    열려 있으면 유예와 무관하게 유지한다** (2026-09-15 사용자 요청 4) — 사용자가
+    종목 하나를 열어 둔 채 다른 창으로 간 상황이고, 증권사 앱이 그때 시세를 계속
+    보여 주는 그 종목이 바로 이것이다.
+
+    핀을 거는 쪽도 이 훅을 쓰는 화면들이다(`usePinnedSymbol`). 자기가 건 핀으로
+    자기가 살아남는 모양이 이상해 보이지만, 「열려 있다」의 주체가 곧 그 화면이라
+    맞는 말이다 — 화면이 사라지면 핀도 같이 사라진다.
+  */
   const streamAwake = useStreamAwake();
+  const pinned = useIsPinned(symbol);
+  const keepStream = streamAwake || pinned;
 
   /*
     첫 적재와 「다시 보이는 순간」은 **세션과 무관하게** 한 번 부른다.
@@ -182,11 +196,11 @@ export function useQuoteDetail(symbol: string, options: UseQuoteDetailOptions = 
     체결 스트림도 마감 중에는 열지 않는다. 열어 두면 서버가 그 종목을 「보고 있는
     종목」으로 세어 웹소켓 구독까지 따라붙는데, 흘러올 체결이 없다.
 
-    **탭이 뒤로 가는 것만으로는 끊지 않는다** (2026-09-05 사용자 요청 5) — 규칙은
-    `useStreamAwake`가 들고 있다(숨어도 3시간). 위의 폴링은 그대로 숨으면 멈춘다.
+    **탭이 뒤로 가는 것만으로는 끊지 않는다** — 규칙은 위 `keepStream`이 들고 있다
+    (숨어도 30분, 열어 둔 종목이면 계속). 위의 폴링은 그대로 숨으면 멈춘다.
   */
   useEffect(() => {
-    if (!live || !symbol || closed || !streamAwake) return;
+    if (!live || !symbol || closed || !keepStream) return;
 
     let es: EventSource | null = null;
     let cancelled = false;
@@ -223,7 +237,7 @@ export function useQuoteDetail(symbol: string, options: UseQuoteDetailOptions = 
       document.removeEventListener("visibilitychange", onVis);
       es?.close();
     };
-  }, [symbol, live, closed, streamAwake]);
+  }, [symbol, live, closed, keepStream]);
 
   return { detail, orderBook, trades, loading };
 }

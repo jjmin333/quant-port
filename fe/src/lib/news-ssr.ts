@@ -9,7 +9,7 @@
  */
 export type NewsSearchParams = Record<string, string | string[] | undefined>;
 
-const FILTER_KEYS = ["sort", "q", "keyword", "symbol", "source", "article"] as const;
+const FILTER_KEYS = ["sort", "q", "keyword", "symbol", "source", "article", "topic"] as const;
 
 export function hasNewsFilterParams(params: NewsSearchParams): boolean {
   return FILTER_KEYS.some((key) => {

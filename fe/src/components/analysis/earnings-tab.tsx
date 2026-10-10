@@ -1,19 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarClock, Loader2 } from "lucide-react";
+import { CalendarClock, CircleHelp, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { fetchEarningsClient } from "@/lib/earnings-api";
 import {
   DateStatusBadge,
+  EarningsHint,
+  ReactionValue,
+  REACTION_COLUMN_HINT,
   SessionBadge,
   SurpriseValue,
   earningsEventKey,
 } from "@/components/earnings/earnings-shared";
+import { EarningsEventCard } from "@/components/earnings/earnings-event-card";
+import { HistoryStrip } from "@/components/earnings/earnings-detail-modal";
 import type {
   EarningsCalendarEvent,
-  EarningsConsensus,
   EarningsEvent,
+  EarningsMetricPair,
   EarningsQuarter,
   EarningsTabData,
 } from "@/lib/earnings-types";
@@ -85,11 +90,7 @@ export function EarningsTab({ symbol, currency, fundamentals }: EarningsTabProps
       ) : (
         <>
           <CalendarSection calendar={data?.calendar ?? []} assetType={data?.assetType} />
-          <AnnouncementsSection
-            announcements={data?.announcements ?? []}
-            consensus={data?.consensus}
-            currency={currency}
-          />
+          <AnnouncementsSection data={data} currency={currency} />
           <QuarterlySection quarterly={data?.quarterly ?? []} currency={currency} />
         </>
       )}
@@ -106,14 +107,14 @@ export function EarningsTab({ symbol, currency, fundamentals }: EarningsTabProps
  * 두 배 넘게 부풀고, 화면은 그게 왜 틀렸는지 말할 방법이 없다.
  */
 function AnnouncementsSection({
-  announcements,
-  consensus,
+  data,
   currency,
 }: {
-  announcements: EarningsEvent[];
-  consensus?: EarningsConsensus;
+  data: EarningsTabData | null;
   currency: QuoteCurrency;
 }) {
+  const announcements = data?.announcements ?? [];
+  const consensus = data?.consensus;
   if (announcements.length === 0) {
     if (!consensus?.message) return null;
     return (
@@ -126,44 +127,70 @@ function AnnouncementsSection({
     );
   }
 
+  /*
+    실적 일정 메뉴의 표와 **같은 값**을 보인다 (2026-10-09 사용자 요청 3): 헤드라인 지표(국내 영업이익 ·
+    해외 EPS)만 있던 것을 매출·매출 서프라이즈·발표 후 주가까지. 국내는 「기대 / 실적」, 해외는
+    「실적 / 기대」 순서도 그 표를 따른다. 카드 폭이 좁으면(컨테이너 40rem 미만) 줄마다 카드로 선다.
+  */
+  const us = announcements[0].market === "us";
+  const metric = us ? "EPS" : "영업이익";
+  const rows = announcements.slice(0, 8);
+  const money = (v: number) => formatFinancialAmount(v, currency);
+  const eps = (v: number) => `${currency === "USD" ? "$" : ""}${v.toFixed(2)}`;
+
   return (
-    <Card className="p-3">
-      <div className="mb-2 flex items-baseline justify-between gap-2">
+    <Card className="@container p-3">
+      <div className="mb-2 flex items-center gap-1.5">
         <h3 className="text-cell font-semibold text-[var(--text-primary)]">
           발표 실적 · 시장 기대치 대비
         </h3>
-        {consensus?.available && consensus.period && (
-          <span className="text-micro text-[var(--text-muted)]">
-            최근 {consensusPeriodLabel(consensus.period)} 기준
-          </span>
-        )}
+        <EarningsHint
+          content={
+            <>
+              <p><b>기대</b>는 발표 전 증권사 전망 평균, <b>서프라이즈</b>는 실적이 그보다 높은(+)·낮은(−) 정도입니다.</p>
+              <p className="mt-1">발표 당일 잠정치이고 그 분기만의 값입니다. 아래 「분기별 실적 상세」는 1월부터 누적한 확정치라 숫자가 다릅니다.</p>
+            </>
+          }
+        >
+          <CircleHelp className="size-3.5 text-[var(--text-muted)]" aria-label="이 표 읽는 법" />
+        </EarningsHint>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[500px] text-left text-cell">
+
+      <div className="mb-2 empty:hidden"><HistoryStrip detail={data} /></div>
+
+      <div className="space-y-2 @[40rem]:hidden">
+        {rows.map((ev) => (
+          <EarningsEventCard
+            key={earningsEventKey(ev)}
+            event={ev}
+            title={<span className="text-cell font-semibold">{announcementPeriodLabel(ev)}</span>}
+          />
+        ))}
+      </div>
+
+      <div className="hidden overflow-x-auto @[40rem]:block">
+        <table className="w-full text-left text-cell">
           <thead>
             <tr className="border-b border-[var(--border)] text-[var(--text-muted)]">
               <th className="py-1.5 pr-2 font-medium">발표일</th>
               <th className="py-1.5 pr-2 font-medium">기간</th>
-              {/* 「기대 / 발표 / 서프라이즈」는 업계 말이다. 초보자에게는 무엇과
-                  무엇을 비교한 값인지가 열 이름에서 바로 읽혀야 한다. */}
-              <th className="py-1.5 pr-2 font-medium">
-                시장 기대치
-                <span className="ml-1 font-normal text-[var(--text-muted)]">(증권사 전망)</span>
+              <th className="py-1.5 pr-2 text-right font-medium">
+                {metric} <span className="font-normal">{us ? "실적 / 기대" : "기대 / 실적"}</span>
               </th>
-              <th className="py-1.5 pr-2 font-medium">실제 발표</th>
-              <th className="py-1.5 font-medium">
-                기대 대비
-                <span className="ml-1 font-normal text-[var(--text-muted)]">(서프라이즈)</span>
+              <th className="py-1.5 pr-2 text-right font-medium">서프라이즈</th>
+              <th className="py-1.5 pr-2 text-right font-medium">
+                매출 <span className="font-normal">{us ? "실적 / 기대" : "기대 / 실적"}</span>
+              </th>
+              <th className="py-1.5 pr-2 text-right font-medium">매출 서프라이즈</th>
+              <th className="py-1.5 text-right font-medium">
+                <EarningsHint content={REACTION_COLUMN_HINT}>발표 후 주가</EarningsHint>
               </th>
             </tr>
           </thead>
           <tbody>
-            {announcements.slice(0, 8).map((ev) => (
-              <tr
-                key={earningsEventKey(ev)}
-                className="border-b border-[var(--border)]/60 last:border-0"
-              >
-                <td className="py-1.5 pr-2 tabular-nums text-[var(--text-secondary)]">
+            {rows.map((ev) => (
+              <tr key={earningsEventKey(ev)} className="border-b border-[var(--border)]/60 last:border-0">
+                <td className="whitespace-nowrap py-1.5 pr-2 tabular-nums text-[var(--text-secondary)]">
                   {ev.date.slice(2).replace(/-/g, ".")}
                   {/* 날짜는 원 발표일, 수치는 정정본이라는 사실을 밝힌다. */}
                   {ev.revisedAt && (
@@ -175,53 +202,54 @@ function AnnouncementsSection({
                     </span>
                   )}
                 </td>
-                <td className="py-1.5 pr-2 text-[var(--text-primary)]">
+                <td className="whitespace-nowrap py-1.5 pr-2 text-[var(--text-primary)]">
                   {announcementPeriodLabel(ev)}
-                  {ev.basis && (
-                    <span className="ml-1 text-micro text-[var(--text-muted)]">{ev.basis}</span>
-                  )}
+                  {ev.basis && <span className="ml-1 text-micro text-[var(--text-muted)]">{ev.basis}</span>}
                 </td>
-                <td className="py-1.5 pr-2 tabular-nums text-[var(--text-secondary)]">
-                  {metricText(ev, "estimate", currency)}
+                <td className="whitespace-nowrap py-1.5 pr-2 text-right">
+                  <PairText pair={us ? ev.eps : ev.opIncome} actualFirst={us} format={us ? eps : money} />
                 </td>
-                <td className="py-1.5 pr-2 tabular-nums text-[var(--text-primary)]">
-                  {metricText(ev, "actual", currency)}
-                </td>
-                <td className="py-1.5">
+                <td className="whitespace-nowrap py-1.5 pr-2 text-right">
                   <SurpriseValue surprise={ev.surprise} className="text-cell" />
+                </td>
+                <td className="whitespace-nowrap py-1.5 pr-2 text-right">
+                  <PairText pair={ev.revenue} actualFirst={us} format={money} />
+                </td>
+                <td className="whitespace-nowrap py-1.5 pr-2 text-right">
+                  <SurpriseValue surprise={ev.revenueSurprise} className="text-cell" />
+                </td>
+                <td className="whitespace-nowrap py-1.5 text-right">
+                  <ReactionValue reaction={ev.reaction} status={ev.dateStatus} currency={currency} className="text-cell" />
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-micro leading-relaxed text-[var(--text-muted)]">
-        <b>시장 기대치</b>는 증권사들이 발표 전에 내놓은 전망의 평균이고, <b>기대 대비</b>는
-        실제 발표가 그보다 얼마나 높았는지(+) 낮았는지(−)입니다. 여기 숫자는 발표 당일의{" "}
-        <b>잠정치</b>이며 <b>그 분기만</b>의 값입니다. 아래 「분기별 실적 상세」는 정기보고서
-        확정치이고 <b>연초부터 누적</b>이라 두 표의 숫자는 서로 다릅니다.
-      </p>
     </Card>
   );
 }
 
-/**
- * 서프라이즈 기준 지표의 값. 국내는 영업이익, 해외는 EPS이므로 어느 쪽으로
- * 비교했는지에 맞춰 같은 지표를 보여준다 — 기대는 EPS인데 발표는 영업이익을
- * 적으면 두 칸이 서로 다른 것을 말한다.
- */
-function metricText(
-  event: EarningsEvent,
-  side: "estimate" | "actual",
-  currency: QuoteCurrency,
-): string {
-  const metric = event.surprise?.metric ?? (event.market === "us" ? "eps" : "opIncome");
-  if (metric === "eps") {
-    const v = event.eps?.[side];
-    return v == null ? "—" : `${currency === "USD" ? "$" : ""}${v.toFixed(2)}`;
-  }
-  const v = event.opIncome?.[side];
-  return v == null ? "—" : formatFinancialAmount(v, currency);
+/** 「기대 / **실적**」(국내) · 「**실적** / 기대」(해외) — 실적 일정 표와 같은 짝. */
+function PairText({
+  pair,
+  actualFirst,
+  format,
+}: {
+  pair?: EarningsMetricPair;
+  actualFirst: boolean;
+  format: (v: number) => string;
+}) {
+  if (pair?.actual == null && pair?.estimate == null) return <span className="text-[var(--text-muted)]">—</span>;
+  const actual = <b className="text-[var(--text-primary)]">{pair.actual != null ? format(pair.actual) : "—"}</b>;
+  const estimate = (
+    <span className="text-[var(--text-muted)]">{pair.estimate != null ? format(pair.estimate) : "—"}</span>
+  );
+  return (
+    <span className="font-num tabular-nums">
+      {actualFirst ? actual : estimate} / {actualFirst ? estimate : actual}
+    </span>
+  );
 }
 
 /**
@@ -264,12 +292,6 @@ function announcementPeriodLabel(ev: EarningsEvent): string {
   return `${ev.fiscalYear}년 ${ev.fiscalPeriod}`;
 }
 
-/** "2026 2Q" → "2026년 2분기". 서버가 주는 컨센서스 기간 문자열을 그대로 옮긴다. */
-function consensusPeriodLabel(period: string): string {
-  const m = /^(\d{4})\s*([1-4])Q$/.exec(period.trim());
-  return m ? `${m[1]}년 ${m[2]}분기` : period;
-}
-
 /** "7월 7일" — 발표일. 연도는 기간 라벨이 이미 말한다. */
 function announceDateLabel(date: string): string {
   const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(date);
@@ -302,11 +324,14 @@ function MetricTile({
   value,
   change,
   changeCaption,
+  surprise,
 }: {
   label: string;
   value: string;
   change?: number;
   changeCaption: string;
+  /** 시장 기대치 대비 — 가장 최근 발표 타일에만(실적 일정 메뉴와 같은 값, 10-09 요청 3). */
+  surprise?: EarningsEvent["surprise"];
 }) {
   return (
     <div className="rounded-lg border border-[var(--border)] p-2">
@@ -314,6 +339,12 @@ function MetricTile({
       <p className="mt-0.5 text-cell font-semibold tabular-nums text-[var(--text-primary)]">
         {value}
       </p>
+      {surprise && (
+        <p className="mt-1 leading-tight">
+          <SurpriseValue surprise={surprise} className="text-micro" />
+          <span className="block whitespace-nowrap text-micro text-[var(--text-muted)]">기대 대비</span>
+        </p>
+      )}
       <ChangeNote value={change} caption={changeCaption} />
     </div>
   );
@@ -365,13 +396,25 @@ function SummarySection({
               value={amount(latest.revenue?.actual)}
               change={latest.revenue?.qoq}
               changeCaption="직전 분기 대비"
+              surprise={latest.revenueSurprise}
             />
-            <MetricTile
-              label="영업이익"
-              value={amount(latest.opIncome?.actual)}
-              change={latest.opIncome?.qoq}
-              changeCaption="직전 분기 대비"
-            />
+            {/* 해외는 영업이익 발표치가 없고 EPS가 헤드라인이다 — 실적 일정 표와 같은 기준. */}
+            {latest.market === "us" ? (
+              <MetricTile
+                label="EPS"
+                value={latest.eps?.actual != null ? `$${latest.eps.actual.toFixed(2)}` : "—"}
+                changeCaption="직전 분기 대비"
+                surprise={latest.surprise}
+              />
+            ) : (
+              <MetricTile
+                label="영업이익"
+                value={amount(latest.opIncome?.actual)}
+                change={latest.opIncome?.qoq}
+                changeCaption="직전 분기 대비"
+                surprise={latest.surprise}
+              />
+            )}
             <MetricTile
               label="순이익"
               value={amount(latest.netIncome?.actual)}
@@ -423,13 +466,6 @@ function SummarySection({
         </section>
       )}
 
-      {latest && hasConfirmed && (
-        <p className="mt-2 text-micro leading-relaxed text-[var(--text-muted)]">
-          <b>확정 실적</b>은 사업보고서로 확정된 숫자라 <b>가장 최근 발표</b>보다 몇 달 늦게
-          나옵니다. 두 층의 기간이 다르므로 숫자를 그대로 비교하지 마세요. 「작년 대비」는 1년 전
-          같은 기간과 견준 값(YoY), 「직전 분기 대비」는 바로 앞 분기와 견준 값(QoQ)입니다.
-        </p>
-      )}
     </Card>
   );
 }
@@ -488,6 +524,8 @@ export function CalendarSection({
                   </span>
                 )}
               </span>
+              {/* 이미 낸 공시는 기대 대비를 같은 줄에 — 실적 일정 메뉴와 같은 값(10-09 요청 3). */}
+              {ev.surprise && <SurpriseValue surprise={ev.surprise} className="shrink-0 text-cell" />}
               <SessionBadge session={ev.session} />
               {/* 확정·예정·추정 셋을 한 배지로 합치지 않는다. 예전에는 `kind`만 보고
                   「발표 예정」/「공시 제출」 둘로 갈랐는데, 그러면 우리가 역산한
@@ -503,13 +541,7 @@ export function CalendarSection({
           ))}
         </ul>
       )}
-      {isDomestic && calendar.length > 0 && (
-        <p className="mt-2 text-micro leading-relaxed text-[var(--text-muted)]">
-          국내는 향후 발표 일정을 제공하는 소스가 없습니다. 앞으로의 일정은{" "}
-          <b className="text-[var(--sample)]">작년 같은 분기의 발표일로 추정</b>한 값이고, 나머지는
-          이미 제출된 공시 이력입니다.
-        </p>
-      )}
+      {/* 「추정」이 무엇인지는 배지의 풀이(DATE_STATUS_META)와 같은 줄의 근거가 말한다. */}
     </Card>
   );
 }
@@ -545,18 +577,40 @@ function QuarterlySection({
   currency: QuoteCurrency;
 }) {
   return (
-    <Card className="p-3">
-      <div className="mb-2">
+    <Card className="@container p-3">
+      <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
         <h3 className="text-cell font-semibold text-[var(--text-primary)]">분기별 실적 상세</h3>
-        <p className="text-micro text-[var(--text-muted)]">
-          정기보고서 확정치 · 그 해 <b>1월부터 누적</b>한 값입니다
-        </p>
+        <span className="text-micro text-[var(--text-muted)]">정기보고서 확정치 · 1월부터 누적</span>
       </div>
       {quarterly.length === 0 ? (
         <p className="text-cell text-[var(--text-muted)]">분기별 실적 데이터가 아직 없습니다.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[440px] text-left text-cell">
+        <>
+        {/* 좁으면 기간마다 2×2 칸 (10-09 요청 3 — 표가 가로로 밀렸다). */}
+        <ul className="space-y-2 @[30rem]:hidden">
+          {quarterly.map((q, i) => (
+            <li key={`${q.fiscalYear}-${q.period}-${i}`} className="rounded-lg border border-[var(--border)] p-2.5">
+              <p className="text-cell font-semibold text-[var(--text-primary)]">{quarterPeriodLabel(q)}</p>
+              <dl className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-cell">
+                {(
+                  [
+                    ["매출", formatFinancialAmount(q.revenue, currency)],
+                    ["영업이익", formatFinancialAmount(q.operatingIncome, currency)],
+                    ["순이익", formatFinancialAmount(q.netIncome, currency)],
+                    ["EPS", q.epsBasic != null ? `${q.epsBasic.toLocaleString("ko-KR")}${currency === "USD" ? "" : "원"}` : "—"],
+                  ] as const
+                ).map(([label, value]) => (
+                  <div key={label} className="flex items-baseline justify-between gap-2">
+                    <dt className="text-[var(--text-muted)]">{label}</dt>
+                    <dd className="font-num tabular-nums text-[var(--text-secondary)]">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden overflow-x-auto @[30rem]:block">
+          <table className="w-full text-left text-cell">
             <thead>
               <tr className="border-b border-[var(--border)] text-[var(--text-muted)]">
                 <th className="py-1.5 pr-2 font-medium">기간</th>
@@ -594,6 +648,7 @@ function QuarterlySection({
             </tbody>
           </table>
         </div>
+        </>
       )}
     </Card>
   );

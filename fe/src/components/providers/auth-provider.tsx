@@ -11,17 +11,17 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { AuthSession } from "@/lib/auth-types";
-import { fetchMe, login as apiLogin, logout as apiLogout, signup as apiSignup } from "@/lib/auth";
-import { proactiveRefreshIntervalMs, refreshSession } from "@/lib/session-fetch";
-import { isAuthPage } from "@/lib/auth-routes";
+import { fetchInitialSession, fetchMe, login as apiLogin, logout as apiLogout, signup as apiSignup } from "@/lib/auth";
+import { proactiveRefreshIntervalMs, refreshSession, setSignedOutHandler } from "@/lib/session-fetch";
+import { isAuthPage, safeNext, welcomeHref } from "@/lib/auth-routes";
 import { resetWatchlist } from "@/lib/watchlist-store";
 import { isSignedOutError } from "@/lib/auth-error";
 
 type AuthContextValue = {
   session: AuthSession | null;
   loading: boolean;
-  login: (email: string, password: string, redirectTo?: string) => Promise<void>;
-  signup: (email: string, password: string, displayName: string) => Promise<void>;
+  login: (loginId: string, password: string, redirectTo?: string) => Promise<void>;
+  signup: (loginId: string, password: string, displayName: string, redirectTo?: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 };
@@ -53,7 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
-        const me = await fetchMe();
+        // 비로그인도 200인 경로로 묻는다 — 첫 방문자 콘솔에 401이 찍히지 않게(lib/auth.ts).
+        const me = await fetchInitialSession();
         if (!cancelled) setSession(me);
       } catch (err) {
         // 첫 조회는 아직 세션이 null이므로 유지든 비움이든 결과가 같다. 그래도
@@ -66,6 +67,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // 갱신이 401·403이면 세션이 끝난 것이다 — 헤더와 「내 종목」을 비로그인으로 맞춘다.
+  useEffect(() => {
+    setSignedOutHandler(() => {
+      setSession(null);
+      resetWatchlist();
+    });
+    return () => setSignedOutHandler(null);
   }, []);
 
   useEffect(() => {
@@ -87,24 +97,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [session]);
 
   const login = useCallback(
-    async (email: string, password: string, redirectTo?: string) => {
-      const next = await apiLogin(email, password);
+    async (loginId: string, password: string, redirectTo?: string) => {
+      const next = await apiLogin(loginId, password);
       setSession(next);
-      if (redirectTo && redirectTo.startsWith("/") && !isAuthPage(redirectTo)) {
-        router.push(redirectTo);
-      } else {
-        router.push("/");
-      }
+      // `startsWith("/")`만 보면 `//다른호스트`가 통과한다 — 검사는 `safeNext` 한 곳.
+      router.push(safeNext(redirectTo) ?? "/");
       router.refresh();
     },
     [router],
   );
 
   const signup = useCallback(
-    async (email: string, password: string, displayName: string) => {
-      const next = await apiSignup(email, password, displayName);
+    async (loginId: string, password: string, displayName: string, redirectTo?: string) => {
+      const next = await apiSignup(loginId, password, displayName);
       setSession(next);
-      router.push("/");
+      /*
+        가입 직후에는 **관심 종목 고르기**로 간다 (2026-09-26 재방문 개선 B). 예전에는 홈으로
+        떨어졌는데 홈은 비로그인 화면과 똑같아서 「가입해서 달라진 것」이 없었다. 보던 곳이
+        있으면(`?next=`) 고르기를 마친 뒤 그리로 돌아간다 — 로그인과 같은 약속이다.
+      */
+      router.push(welcomeHref(redirectTo));
       router.refresh();
     },
     [router],

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { analysisSymbolHref } from "@/lib/analysis-tabs";
 import { StockAvatar } from "@/components/stocks/stock-avatar";
 import { PriceDisplay } from "@/components/ui/price-display";
 import { formatDateKST, formatPercent } from "@/lib/format";
@@ -52,9 +54,19 @@ export function PredictionCard({
       <div className="flex items-center gap-2">
         <StockAvatar symbol={p.symbol} name={p.symbolName} size="xs" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-note font-semibold text-[var(--text-primary)]">
+          {/*
+            **목표가에서 근거로 가는 길** (2026-09-20, 요구 9).
+
+            이 화면은 종목 화면으로 가는 링크가 하나도 없었다(`analysisSymbolHref` 사용
+            0건). 목표가를 적어 둔 종목이야말로 「지금은 어떤가」를 다시 보러 가는
+            빈도가 높은데, 그 길이 없어 흐름이 여기서 끊겼다.
+          */}
+          <Link
+            href={analysisSymbolHref(p.symbol)}
+            className="block truncate text-note font-semibold text-[var(--text-primary)] hover:text-[var(--brand)]"
+          >
             {p.symbolName}
-          </p>
+          </Link>
           <p className="text-micro text-[var(--text-muted)]">
             {formatDateKST(p.createdAt)} 등록 · {horizonLabel(p)}
             {p.conviction !== undefined && <> · 확신 {p.conviction}</>}

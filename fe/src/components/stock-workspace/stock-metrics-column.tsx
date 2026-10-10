@@ -2,7 +2,6 @@
 
 import { PriceDisplay } from "@/components/ui/price-display";
 import { formatChangeRate } from "@/lib/format";
-import type { FundamentalsData } from "@/lib/fundamentals-types";
 import type { QuoteDetail } from "@/lib/quotes-types";
 import { quoteChangeBaseline, QUOTE_CHANGE_BASIS_LABEL } from "@/lib/quotes-types";
 import { trendTextClass } from "@/lib/trend-colors";
@@ -31,9 +30,6 @@ export const METRICS_GRID_VISIBILITY: Record<MetricsRailBreakpoint, string> = {
 
 type StockMetricsColumnProps = {
   quote: QuoteDetail | null;
-  fundamentals: FundamentalsData | null;
-  /** full: 시세 + 52주 범위. fundamentals: 재무 지표만 (종목 분석). */
-  variant?: "full" | "fundamentals";
   railFrom?: MetricsRailBreakpoint;
   className?: string;
 };
@@ -125,57 +121,10 @@ function MetricSection({
 
 export function StockMetricsColumn({
   quote,
-  fundamentals,
-  variant = "full",
   railFrom = "lg",
   className,
 }: StockMetricsColumnProps) {
   const railVisibility = RAIL_VISIBILITY[railFrom];
-
-  if (variant === "fundamentals") {
-    const financeRows: MetricRow[] = [
-      {
-        label: "PER",
-        text:
-          fundamentals?.per != null && fundamentals.per > 0
-            ? fundamentals.per.toFixed(2)
-            : "—",
-      },
-      {
-        label: "PBR",
-        text:
-          fundamentals?.pbr != null && fundamentals.pbr > 0
-            ? fundamentals.pbr.toFixed(2)
-            : "—",
-      },
-      {
-        label: "ROE",
-        text:
-          fundamentals?.roe != null && fundamentals.roe !== 0
-            ? `${fundamentals.roe.toFixed(2)}%`
-            : "—",
-      },
-      {
-        label: "EPS",
-        text:
-          fundamentals?.epsBasic != null && fundamentals.epsBasic !== 0
-            ? fundamentals.epsBasic.toFixed(2)
-            : "—",
-      },
-    ];
-
-    return (
-      <aside
-        className={cn(
-          "shrink-0 flex-col overflow-y-auto border-r border-[var(--border)] bg-[var(--surface)]",
-          railVisibility,
-          className,
-        )}
-      >
-        <MetricSection title="재무" rows={financeRows} currency={quote?.currency ?? "KRW"} />
-      </aside>
-    );
-  }
 
   if (!quote) {
     return (

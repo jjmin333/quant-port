@@ -155,10 +155,6 @@ export function MarketBriefing({
             )}
           </div>
         )}
-
-        <p className="text-micro leading-relaxed text-[var(--text-muted)]">
-          가격대는 이동평균·최근 스윙 고저·52주 범위 등 실제 계산된 지표입니다. 목표가가 아닙니다.
-        </p>
       </div>
     </Card>
   );

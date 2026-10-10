@@ -1,6 +1,9 @@
+import type { ContentTopic } from "@/lib/topics";
 export type JournalNote = {
   id: number;
   title: string;
+  /** 주식·부동산·금융상품(2026-10-09 요청 9). 옛 응답에는 없다 — 없으면 주식. */
+  topic?: ContentTopic;
   body: string;
   symbol?: string;
   symbolName?: string;
@@ -20,6 +23,7 @@ export type JournalNote = {
 
 export type JournalNoteInput = {
   title: string;
+  topic?: ContentTopic;
   body: string;
   symbol?: string;
   symbolName?: string;
@@ -32,6 +36,16 @@ export type JournalNoteInput = {
  * 만드는 것이 태그 필터를 쓸모 있게 하는 유일한 조건이다.
  */
 export const JOURNAL_TAG_PRESETS = ["매수근거", "리스크", "관찰", "복기"] as const;
+
+/**
+ * 주제별 프리셋(2026-10-09 요청 9). 주식은 기존 넷 그대로. 부동산·금융상품 메모에는 여기에
+ * 단지·지역·상품 이름 태그(자산 검색으로 붙인다)가 더해진다.
+ */
+export const JOURNAL_TOPIC_PRESETS: Record<ContentTopic, readonly string[]> = {
+  stock: JOURNAL_TAG_PRESETS,
+  real_estate: ["매수검토", "임장", "청약", "시세관찰"],
+  finance: ["예금", "적금", "대출", "금리관찰"],
+};
 
 /** 프리셋 태그의 색. 나머지는 중립색 하나로 간다 — 자유 태그마다 색을 주면 목록이 얼룩진다. */
 export const JOURNAL_TAG_TONE: Record<string, string> = {

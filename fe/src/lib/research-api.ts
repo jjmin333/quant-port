@@ -1,3 +1,4 @@
+import type { ContentTopic } from "@/lib/topics";
 import { apiRequest } from "@/lib/api-client";
 import type {
   ResearchAuthorProfile,
@@ -20,6 +21,7 @@ function jsonBody(payload?: unknown): RequestInit {
 }
 
 export type ResearchListParams = {
+  topic?: ContentTopic | "";
   symbol?: string;
   status?: string;
   direction?: string;
@@ -90,6 +92,11 @@ export async function updateResearchClient(id: number, input: ResearchUpdateInpu
  */
 export async function retractResearchClient(id: number): Promise<ResearchCall> {
   return apiRequest<ResearchCall>(`/api/v1/research/calls/${id}/retract`, { method: "POST" });
+}
+
+/** 완전 삭제 — 작성자·관리자. 성적 집계에서도 빠진다. */
+export async function deleteResearchClient(id: number): Promise<{ ok: boolean }> {
+  return apiRequest<{ ok: boolean }>(`/api/v1/research/calls/${id}`, { method: "DELETE" });
 }
 
 /** Toggle a like/bookmark. Returns whether it is now on. */

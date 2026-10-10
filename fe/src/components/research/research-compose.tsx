@@ -6,6 +6,8 @@ import { ChevronDown, Loader2, Sparkles } from "lucide-react";
 import { PageScrollShell } from "@/components/layout/page-content-shell";
 import { Card } from "@/components/ui/card";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import { ComposeWithSidePreview, useDebouncedValue } from "@/components/mentions/compose-side-preview";
+import { MentionMarkdownPreview } from "@/components/mentions/mention-markdown";
 import { StockCatalogSearchField } from "@/components/market/stock-catalog-search-field";
 import { StockAvatar } from "@/components/stocks/stock-avatar";
 import {
@@ -63,7 +65,8 @@ const PREVIEW_DEBOUNCE_MS = 350;
  * 카드들은 의견을 **펼 때만** 보인다 — 그것들은 전부 「목표가를 얼마로 둘까」에
  * 답하는 자료라, 목표가 칸과 떨어져 있으면 읽을 이유가 없다.
  */
-export function ResearchCompose() {
+/** header — 주제 고르기 줄(2026-10-09 요청 9). 이 화면의 셸 안 맨 위에 선다. */
+export function ResearchCompose({ header }: { header?: React.ReactNode } = {}) {
   const router = useRouter();
   const params = useSearchParams();
   const confirm = useConfirm();
@@ -84,6 +87,8 @@ export function ResearchCompose() {
   const [previewing, setPreviewing] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 옆 미리보기(2026-10-01 요청 4) — 안내 문구(draftMd)는 본문이 아니다.
+  const previewBody = useDebouncedValue(body === preview?.draftMd ? "" : body);
 
   // The draft is injected once per symbol. Re-injecting on every preview would
   // wipe whatever the author has already written.
@@ -307,7 +312,21 @@ export function ResearchCompose() {
 
   return (
     <>
-      <PageScrollShell width="reading" contentClassName="space-y-4">
+      <PageScrollShell width="reading" contentClassName="xl:max-w-none!">
+        <ComposeWithSidePreview
+          preview={() => (
+            <Card className="space-y-2 p-4">
+              <p className="text-micro font-semibold text-[var(--text-muted)]">본문 미리보기 · 태그를 누르면 종목 창이 열립니다</p>
+              {title.trim() && <h2 className="text-lg font-bold text-[var(--text-primary)]">{title.trim()}</h2>}
+              {previewBody.trim() ? (
+                <MentionMarkdownPreview source={previewBody} />
+              ) : (
+                <p className="text-sm text-[var(--text-muted)]">아직 작성된 내용이 없습니다.</p>
+              )}
+            </Card>
+          )}
+        >
+        {header}
         {/* ---- 1. 종목 ---- */}
         <Card className="space-y-3 p-4">
           <SectionLabel step={1} title="종목" />
@@ -445,6 +464,8 @@ export function ResearchCompose() {
               />
 
               <MarkdownEditor
+                mentions
+                sidePreview
                 value={body}
                 onChange={setBody}
                 clearOnFirstEdit={preview?.draftMd}
@@ -758,6 +779,7 @@ export function ResearchCompose() {
             </Card>
           </>
         )}
+        </ComposeWithSidePreview>
       </PageScrollShell>
     </>
   );

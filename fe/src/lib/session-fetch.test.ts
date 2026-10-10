@@ -4,6 +4,7 @@ import {
   markRefreshUsable,
   refreshSession,
   sessionFetch,
+  setSignedOutHandler,
 } from "./session-fetch";
 
 /*
@@ -62,6 +63,18 @@ describe("refreshSession", () => {
     markRefreshUsable(); // 로그인 성공이 부르는 것
     await refreshSession();
     expect(calls).toHaveLength(2);
+  });
+
+  it("갱신 401은 화면에 로그아웃을 알리고, 5xx는 알리지 않는다 (10-07 제보 2)", async () => {
+    const signedOut = vi.fn();
+    setSignedOutHandler(signedOut);
+    stubFetch(() => new Response(null, { status: 503 }));
+    await refreshSession();
+    expect(signedOut).not.toHaveBeenCalled();
+    stubFetch(() => new Response(null, { status: 401 }));
+    await refreshSession();
+    expect(signedOut).toHaveBeenCalledTimes(1);
+    setSignedOutHandler(null);
   });
 
   it("로그아웃하면 곧바로 닫힌다 — 해 보지도 않는다", async () => {

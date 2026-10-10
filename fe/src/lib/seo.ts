@@ -12,6 +12,14 @@ export const SITE_URL = "https://www.quant-port.com";
 export const SITE_NAME = "Quant Port";
 
 /**
+ * GA4 측정 ID (2026-09-25 사용자 결정으로 설치).
+ *
+ * 공개 값이다 — 모든 방문자의 HTML에 그대로 실린다. 비밀은 GA 데이터 API용 서비스 계정이고
+ * 그것은 FE가 아니라 worker-growth만 읽는다(docs/GROWTH.md).
+ */
+export const GA_MEASUREMENT_ID = "G-T8RNF91MRH";
+
+/**
  * 홈 title/description.
  *
  * 「증권사 계좌 API 통합」이 아니라 **흩어진 기록을 한곳에 모은다**가 이 서비스의

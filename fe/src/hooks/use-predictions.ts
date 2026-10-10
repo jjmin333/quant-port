@@ -16,9 +16,12 @@ import {
   type PredictionStatusFilter,
 } from "@/lib/prediction-types";
 import {
+  refreshPriceTargets,
   usePriceTargetsState,
   type PriceTarget,
 } from "@/lib/price-targets";
+import { useVisibleInterval } from "@/hooks/use-visible-interval";
+import { SCREEN_SLOW_REFRESH_MS } from "@/lib/screen-refresh";
 import type { QuoteSummary } from "@/lib/quotes-types";
 import { fetchSampleStamps, fetchSampleTargets } from "@/lib/sample-api";
 import {
@@ -74,25 +77,36 @@ export function usePredictions({ sample = false }: { sample?: boolean } = {}) {
     setLoaded(false);
   }
 
-  const loadStamps = useCallback(async () => {
-    try {
-      const rows = isSample
-        ? await fetchSampleStamps()
-        : await fetchStampsClient({ limit: 500 });
-      setStamps(rows);
-      setStampsError(null);
-    } catch (err) {
-      // 401은 「로그인하지 않았다」는 사실이지 오류가 아니다 — 예시 모드로 둘러보는
-      // 비로그인 방문자가 정상적으로 지나는 길이라 빈 목록으로 둔다.
-      const status = (err as { status?: number }).status;
-      setStamps([]);
-      setStampsError(
-        status === 401 || status === 403 ? null : "기한 있는 예측을 불러오지 못했습니다.",
-      );
-    } finally {
-      setLoaded(true);
-    }
-  }, [isSample]);
+  /**
+   * `background`면 **실패해도 화면을 건드리지 않는다** (2026-09-16 주기 갱신).
+   *
+   * 첫 적재의 실패는 빈 목록과 안내가 맞지만, 30분짜리 시계가 올린 회차 하나가
+   * 실패했다고 보고 있던 예측을 지우면 낡은 값을 고치러 와서 값을 없애는 일이 된다
+   * (`lib/screen-refresh`).
+   */
+  const loadStamps = useCallback(
+    async (background = false) => {
+      try {
+        const rows = isSample
+          ? await fetchSampleStamps()
+          : await fetchStampsClient({ limit: 500 });
+        setStamps(rows);
+        setStampsError(null);
+      } catch (err) {
+        if (background) return;
+        // 401은 「로그인하지 않았다」는 사실이지 오류가 아니다 — 예시 모드로 둘러보는
+        // 비로그인 방문자가 정상적으로 지나는 길이라 빈 목록으로 둔다.
+        const status = (err as { status?: number }).status;
+        setStamps([]);
+        setStampsError(
+          status === 401 || status === 403 ? null : "기한 있는 예측을 불러오지 못했습니다.",
+        );
+      } finally {
+        setLoaded(true);
+      }
+    },
+    [isSample],
+  );
 
   useEffect(() => {
     // `then`으로 걸어야 이펙트 본문에서 동기적으로 setState가 일어나지 않는다.
@@ -252,6 +266,28 @@ export function usePredictions({ sample = false }: { sample?: boolean } = {}) {
   const reload = useCallback(async () => {
     await Promise.all([loadStamps(), isSample ? Promise.resolve() : retryTargets()]);
   }, [loadStamps, retryTargets, isSample]);
+
+  /*
+    **30분마다 스스로 다시 받는다** (2026-09-16 사용자 요청, `lib/screen-refresh`).
+
+    개봉 대기가 풀리는 시각, 목표가 도달 판정, 스탬프 성적 — 셋 다 화면 밖에서
+    바뀌는 값인데, 예측 화면을 열어 둔 사람에게는 마운트 시각의 판정이 그대로 서
+    있었다. 「D-1」이라고 적힌 배지가 다음 날에도 「D-1」이었다.
+
+    바꾸는 것이 하루 한 번 도는 배치라 느린 쪽을 쓴다. 예시 모드에서는 서버가 주는
+    고정 데이터라 부를 이유가 없다.
+
+    목표가 쪽은 공유 저장소(`lib/price-targets`)가 들고 있고, 그쪽은 실패해도 이미
+    받아 둔 목록을 지우지 않는다 — 그래서 여기서는 그냥 다시 받으라고만 한다.
+  */
+  useVisibleInterval(
+    () => {
+      void loadStamps(true);
+      void refreshPriceTargets();
+    },
+    SCREEN_SLOW_REFRESH_MS,
+    !isSample,
+  );
 
   const openPrediction = useCallback(
     async (p: Prediction) => {

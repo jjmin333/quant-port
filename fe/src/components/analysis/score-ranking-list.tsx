@@ -15,10 +15,26 @@ import { analysisSymbolHref } from "@/lib/analysis-tabs";
 import { toggleWatchlistSymbol } from "@/lib/watchlist-store";
 import type { ScoreRankingParams } from "@/lib/score-ranking-config";
 import { cn } from "@/lib/utils";
+import type { StockScoreListItem } from "@/lib/stock-score-api";
 
 type ScoreRankingListProps = {
   params: ScoreRankingParams;
+  /**
+   * 툴바 **바로 아래**에 끼울 것. 좁은 화면의 「이 랭킹의 성적」 접힌 줄이 여기 선다.
+   *
+   * 목록 밖(부모)에서 그리면 국내/해외 탭보다 위로 올라간다 — 시장을 고르기도 전에
+   * 그 시장의 성적이 먼저 보이는 순서가 된다.
+   */
+  afterToolbar?: React.ReactNode;
+  /** 시장 탭의 「국내 ETF」를 눌렀을 때. 없으면 그 탭이 없다. */
+  onEtf?: () => void;
   onParamsChange: (next: ScoreRankingParams) => void;
+  /**
+   * 서버가 미리 받아 둔 첫 목록. 기본 손잡이(국내·종합·실시간)로 들어왔을 때만
+   * 온다 — 다른 손잡이면 서버가 받아 둔 것이 **틀린 목록**이다
+   * (`app/(main)/analysis/page.tsx`).
+   */
+  seed?: { items: StockScoreListItem[]; tradeDate: string };
   activeSymbol?: string | null;
   onSelect: (symbol: string) => void;
   compact?: boolean;
@@ -53,6 +69,9 @@ AI 추천 랭킹의 **왼쪽 목록** — 실시간 차트(마켓 레이더)와 
 */
 export function ScoreRankingList({
   params,
+  afterToolbar,
+  onEtf,
+  seed,
   onParamsChange,
   activeSymbol,
   onSelect,
@@ -64,6 +83,7 @@ export function ScoreRankingList({
   const { items, tradeDate, loading, error, retry } = useScoreRankings(
     params,
     SCORE_RANKING_COUNT,
+    seed,
   );
 
   const [busySymbol, setBusySymbol] = useState<string | null>(null);
@@ -111,7 +131,7 @@ export function ScoreRankingList({
         currency: (item.currency ?? "KRW") as "KRW" | "USD",
         assetType: item.assetType as RankingMemoTarget["assetType"],
         price: item.closePrice ?? 0,
-        originLabel: "AI 추천 랭킹",
+        originLabel: "AI 점수 순위",
       });
     },
     [session, requireLogin],
@@ -123,8 +143,11 @@ export function ScoreRankingList({
         params={params}
         tradeDate={tradeDate}
         onChange={onParamsChange}
+        onEtf={onEtf}
         compact={compact}
       />
+
+      {afterToolbar}
 
       <div
         className={cn(

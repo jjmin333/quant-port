@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ContentTopic } from "@/lib/topics";
 import { isSampleModeActive } from "@/components/common/sample-mode";
 import {
   createJournalNoteClient,
@@ -30,6 +31,7 @@ export function useJournalNotes({ sample = false }: { sample?: boolean } = {}) {
   const [query, setQuery] = useState("");
   const [symbolFilter, setSymbolFilter] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [topicFilter, setTopicFilter] = useState<ContentTopic | "">("");
   const [sort, setSort] = useState<JournalSort>("updated");
   const [quotes, setQuotes] = useState<Record<string, QuoteSummary>>({});
 
@@ -124,6 +126,7 @@ export function useJournalNotes({ sample = false }: { sample?: boolean } = {}) {
     const filtered = notes.filter((note) => {
       if (symbolFilter && note.symbol !== symbolFilter) return false;
       if (tagFilter && !(note.tags ?? []).includes(tagFilter)) return false;
+      if (topicFilter && (note.topic ?? "stock") !== topicFilter) return false;
       if (!q) return true;
       return (
         note.title.toLowerCase().includes(q) ||
@@ -132,7 +135,7 @@ export function useJournalNotes({ sample = false }: { sample?: boolean } = {}) {
       );
     });
     return sortNotes(filtered, sort);
-  }, [notes, query, symbolFilter, tagFilter, sort]);
+  }, [notes, query, symbolFilter, tagFilter, topicFilter, sort]);
 
   const createNote = useCallback(async (input: JournalNoteInput) => {
     const note = await createJournalNoteClient(input);
@@ -178,6 +181,8 @@ export function useJournalNotes({ sample = false }: { sample?: boolean } = {}) {
     setSymbolFilter,
     tagFilter,
     setTagFilter,
+    topicFilter,
+    setTopicFilter,
     sort,
     setSort,
     symbols,

@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { HeaderStockSuggestions } from "@/components/layout/header-stock-suggestions";
 import { useHeaderSearch } from "@/components/providers/header-search-provider";
 import { supportsStockSuggestions } from "@/lib/header-search-config";
@@ -31,12 +32,14 @@ export function StockSearchField({
     clearSearch,
     submitSearch,
     stockSuggestions,
+    assetSuggestions,
     suggestionsLoading,
     suggestionsOpen,
     highlightedIndex,
     setHighlightedIndex,
     selectStockSuggestion,
   } = useHeaderSearch();
+  const router = useRouter();
   const searchAnchorRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -191,6 +194,12 @@ export function StockSearchField({
           onHighlight={setHighlightedIndex}
           onSelect={pickStock}
           listboxId={suggestionsId}
+          assets={assetSuggestions}
+          onAssetSelect={(a) => {
+            clearSearch();
+            inputRef.current?.blur();
+            router.push(a.href);
+          }}
         />
       )}
       {/*

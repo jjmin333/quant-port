@@ -1,18 +1,18 @@
 {
   "generatedAt": "2026-07-29T23:25:53Z",
-  "refreshedAt": "2026-09-02T08:00:53Z",
+  "refreshedAt": "2026-10-03T11:46:42Z",
   "summary": {
     "domestic": {
-      "total": 4681,
-      "naverSuccess": 4299,
-      "naverFail": 382,
-      "fmpFallback": 382
+      "total": 4817,
+      "naverSuccess": 4319,
+      "naverFail": 498,
+      "fmpFallback": 498
     },
     "us": {
-      "total": 13503,
-      "naverSkipped": 13503,
-      "fmpAvailable": 11205,
-      "fmpUnavailable": 2298
+      "total": 2413,
+      "naverSkipped": 2413,
+      "fmpAvailable": 11217,
+      "fmpUnavailable": 4699
     }
   },
   "entries": {
@@ -334,8 +334,7 @@
     "0007C0": {
       "region": "domestic",
       "source": "naver",
-      "path": "/logos/kr/0007C0.png",
-      "tone": "blank"
+      "path": "/logos/kr/0007C0.png"
     },
     "0007F0": {
       "region": "domestic",
@@ -480,8 +479,7 @@
     "001070": {
       "region": "domestic",
       "source": "naver",
-      "path": "/logos/kr/001070.png",
-      "tone": "blank"
+      "path": "/logos/kr/001070.png"
     },
     "001080": {
       "region": "domestic",
@@ -492,6 +490,11 @@
       "region": "domestic",
       "source": "naver",
       "path": "/logos/kr/0010F0.png"
+    },
+    "0010S0": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/0010S0.png"
     },
     "0010V0": {
       "region": "domestic",
@@ -1318,6 +1321,11 @@
       "source": "naver",
       "path": "/logos/kr/003580.png"
     },
+    "0035S0": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/0035S0.png"
+    },
     "0035T0": {
       "region": "domestic",
       "source": "naver",
@@ -1396,8 +1404,7 @@
     "003850": {
       "region": "domestic",
       "source": "naver",
-      "path": "/logos/kr/003850.png",
-      "tone": "blank"
+      "path": "/logos/kr/003850.png"
     },
     "0038A0": {
       "region": "domestic",
@@ -1602,14 +1609,12 @@
     "004540": {
       "region": "domestic",
       "source": "naver",
-      "path": "/logos/kr/004540.png",
-      "tone": "blank"
+      "path": "/logos/kr/004540.png"
     },
     "004545": {
       "region": "domestic",
       "source": "naver",
-      "path": "/logos/kr/004545.png",
-      "tone": "blank"
+      "path": "/logos/kr/004545.png"
     },
     "004560": {
       "region": "domestic",
@@ -3994,13 +3999,17 @@
     "016090": {
       "region": "domestic",
       "source": "naver",
-      "path": "/logos/kr/016090.png",
-      "tone": "blank"
+      "path": "/logos/kr/016090.png"
     },
     "016100": {
       "region": "domestic",
       "source": "naver",
       "path": "/logos/kr/016100.png"
+    },
+    "0161M0": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/0161M0.png"
     },
     "016250": {
       "region": "domestic",
@@ -4642,6 +4651,11 @@
       "source": "naver",
       "path": "/logos/kr/019770.png"
     },
+    "0197V0": {
+      "region": "domestic",
+      "source": "fmp",
+      "reason": "download https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock0197V0.png: HTTP 404"
+    },
     "0197W0": {
       "region": "domestic",
       "source": "naver",
@@ -4681,6 +4695,11 @@
       "region": "domestic",
       "source": "naver",
       "path": "/logos/kr/020000.png"
+    },
+    "0200G0": {
+      "region": "domestic",
+      "source": "fmp",
+      "reason": "download https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock0200G0.png: HTTP 404"
     },
     "020120": {
       "region": "domestic",
@@ -4766,6 +4785,11 @@
       "region": "domestic",
       "source": "naver",
       "path": "/logos/kr/0209D0.png"
+    },
+    "0209J0": {
+      "region": "domestic",
+      "source": "fmp",
+      "reason": "download https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock0209J0.png: HTTP 404"
     },
     "0209Z0": {
       "region": "domestic",
@@ -4932,6 +4956,16 @@
       "source": "naver",
       "path": "/logos/kr/0224X0.png"
     },
+    "0225V0": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/0225V0.png"
+    },
+    "0228G0": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/0228G0.png"
+    },
     "023000": {
       "region": "domestic",
       "source": "naver",
@@ -4947,6 +4981,11 @@
       "source": "naver",
       "path": "/logos/kr/023160.png"
     },
+    "0231Z0": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/0231Z0.png"
+    },
     "023350": {
       "region": "domestic",
       "source": "naver",
@@ -4956,6 +4995,11 @@
       "region": "domestic",
       "source": "naver",
       "path": "/logos/kr/0233J0.png"
+    },
+    "0233N0": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/0233N0.png"
     },
     "023410": {
       "region": "domestic",
@@ -4971,6 +5015,11 @@
       "region": "domestic",
       "source": "naver",
       "path": "/logos/kr/023450.png"
+    },
+    "0234N0": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/0234N0.png"
     },
     "023530": {
       "region": "domestic",
@@ -5012,6 +5061,16 @@
       "source": "naver",
       "path": "/logos/kr/023810.png"
     },
+    "0238F0": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/0238F0.png"
+    },
+    "0238P0": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/0238P0.png"
+    },
     "023900": {
       "region": "domestic",
       "source": "naver",
@@ -5026,6 +5085,11 @@
       "region": "domestic",
       "source": "naver",
       "path": "/logos/kr/023960.png"
+    },
+    "0239Z0": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/0239Z0.png"
     },
     "024060": {
       "region": "domestic",
@@ -5042,6 +5106,11 @@
       "source": "naver",
       "path": "/logos/kr/024090.png"
     },
+    "0240J0": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/0240J0.png"
+    },
     "024110": {
       "region": "domestic",
       "source": "naver",
@@ -5051,6 +5120,11 @@
       "region": "domestic",
       "source": "naver",
       "path": "/logos/kr/024120.png"
+    },
+    "0241R0": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/0241R0.png"
     },
     "024720": {
       "region": "domestic",
@@ -5680,8 +5754,7 @@
     "034590": {
       "region": "domestic",
       "source": "naver",
-      "path": "/logos/kr/034590.png",
-      "tone": "blank"
+      "path": "/logos/kr/034590.png"
     },
     "034730": {
       "region": "domestic",
@@ -6496,8 +6569,7 @@
     "045520": {
       "region": "domestic",
       "source": "naver",
-      "path": "/logos/kr/045520.png",
-      "tone": "blank"
+      "path": "/logos/kr/045520.png"
     },
     "045660": {
       "region": "domestic",
@@ -6722,8 +6794,7 @@
     "049960": {
       "region": "domestic",
       "source": "naver",
-      "path": "/logos/kr/049960.png",
-      "tone": "blank"
+      "path": "/logos/kr/049960.png"
     },
     "050090": {
       "region": "domestic",
@@ -10103,8 +10174,7 @@
     "123690": {
       "region": "domestic",
       "source": "naver",
-      "path": "/logos/kr/123690.png",
-      "tone": "blank"
+      "path": "/logos/kr/123690.png"
     },
     "123700": {
       "region": "domestic",
@@ -12344,8 +12414,7 @@
     "225220": {
       "region": "domestic",
       "source": "naver",
-      "path": "/logos/kr/225220.png",
-      "tone": "blank"
+      "path": "/logos/kr/225220.png"
     },
     "225430": {
       "region": "domestic",
@@ -13501,6 +13570,11 @@
       "region": "domestic",
       "source": "naver",
       "path": "/logos/kr/266550.png"
+    },
+    "266690": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/266690.png"
     },
     "267080": {
       "region": "domestic",
@@ -14685,8 +14759,7 @@
     "308430": {
       "region": "domestic",
       "source": "naver",
-      "path": "/logos/kr/308430.png",
-      "tone": "blank"
+      "path": "/logos/kr/308430.png"
     },
     "308620": {
       "region": "domestic",
@@ -15011,8 +15084,7 @@
     "322780": {
       "region": "domestic",
       "source": "naver",
-      "path": "/logos/kr/322780.png",
-      "tone": "blank"
+      "path": "/logos/kr/322780.png"
     },
     "322970": {
       "region": "domestic",
@@ -16369,6 +16441,11 @@
       "source": "naver",
       "path": "/logos/kr/385720.png"
     },
+    "386380": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/386380.png"
+    },
     "387270": {
       "region": "domestic",
       "source": "naver",
@@ -16797,8 +16874,7 @@
     "405920": {
       "region": "domestic",
       "source": "naver",
-      "path": "/logos/kr/405920.png",
-      "tone": "blank"
+      "path": "/logos/kr/405920.png"
     },
     "406820": {
       "region": "domestic",
@@ -18578,7 +18654,7 @@
     "465320": {
       "region": "domestic",
       "source": "fmp",
-      "reason": "download https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock465320.png: HTTP 404"
+      "reason": "naver basic api: HTTP 409"
     },
     "465330": {
       "region": "domestic",
@@ -18695,6 +18771,11 @@
       "source": "naver",
       "path": "/logos/kr/468630.png"
     },
+    "468670": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/468670.png"
+    },
     "468760": {
       "region": "domestic",
       "source": "fmp",
@@ -18783,7 +18864,7 @@
     "471050": {
       "region": "domestic",
       "source": "fmp",
-      "reason": "download https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock471050.png: HTTP 404"
+      "reason": "naver basic api: HTTP 409"
     },
     "471230": {
       "region": "domestic",
@@ -18833,7 +18914,7 @@
     "472220": {
       "region": "domestic",
       "source": "fmp",
-      "reason": "download https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock472220.png: HTTP 404"
+      "reason": "naver basic api: HTTP 409"
     },
     "472230": {
       "region": "domestic",
@@ -19078,8 +19159,7 @@
     "475580": {
       "region": "domestic",
       "source": "naver",
-      "path": "/logos/kr/475580.png",
-      "tone": "blank"
+      "path": "/logos/kr/475580.png"
     },
     "475630": {
       "region": "domestic",
@@ -19530,6 +19610,11 @@
       "region": "domestic",
       "source": "naver",
       "path": "/logos/kr/486450.png"
+    },
+    "486510": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/486510.png"
     },
     "486630": {
       "region": "domestic",
@@ -20466,6 +20551,11 @@
       "source": "naver",
       "path": "/logos/kr/520094.png"
     },
+    "520096": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/520096.png"
+    },
     "520097": {
       "region": "domestic",
       "source": "naver",
@@ -20750,6 +20840,11 @@
       "region": "domestic",
       "source": "naver",
       "path": "/logos/kr/530145.png"
+    },
+    "530148": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/530148.png"
     },
     "550041": {
       "region": "domestic",
@@ -21981,6 +22076,11 @@
       "source": "naver",
       "path": "/logos/kr/760028.png"
     },
+    "760032": {
+      "region": "domestic",
+      "source": "naver",
+      "path": "/logos/kr/760032.png"
+    },
     "900070": {
       "region": "domestic",
       "source": "naver",
@@ -22084,8 +22184,7 @@
     "950250": {
       "region": "domestic",
       "source": "naver",
-      "path": "/logos/kr/950250.png",
-      "tone": "blank"
+      "path": "/logos/kr/950250.png"
     },
     "950260": {
       "region": "domestic",
@@ -22590,6 +22689,11 @@
       "source": "fmp",
       "path": "/logos/us/ACCS.png"
     },
+    "ACCV": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/ACCV.png: HTTP 404"
+    },
     "ACDC": {
       "region": "us",
       "source": "fmp",
@@ -22623,8 +22727,7 @@
     "ACFN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ACFN.png",
-      "tone": "blank"
+      "path": "/logos/us/ACFN.png"
     },
     "ACGC": {
       "region": "us",
@@ -22872,8 +22975,7 @@
     "ACT": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ACT.png",
-      "tone": "blank"
+      "path": "/logos/us/ACT.png"
     },
     "ACTG": {
       "region": "us",
@@ -23032,6 +23134,11 @@
       "source": "fmp",
       "path": "/logos/us/ADBG.png"
     },
+    "ADBT": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/ADBT.png: HTTP 404"
+    },
     "ADBU": {
       "region": "us",
       "source": "fmp",
@@ -23071,7 +23178,7 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/ADI.png",
-      "tone": "blank"
+      "tone": "light"
     },
     "ADIL": {
       "region": "us",
@@ -23124,6 +23231,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/ADPV.png"
+    },
+    "ADRX": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/ADRX.png: HTTP 404"
     },
     "ADSE": {
       "region": "us",
@@ -23230,8 +23342,7 @@
     "AEF": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AEF.png",
-      "tone": "blank"
+      "path": "/logos/us/AEF.png"
     },
     "AEFC": {
       "region": "us",
@@ -23363,8 +23474,7 @@
     "AESR": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AESR.png",
-      "tone": "blank"
+      "path": "/logos/us/AESR.png"
     },
     "AETH": {
       "region": "us",
@@ -23411,8 +23521,7 @@
     "AFGB": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AFGB.png",
-      "tone": "blank"
+      "path": "/logos/us/AFGB.png"
     },
     "AFGC": {
       "region": "us",
@@ -23427,8 +23536,7 @@
     "AFGE": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AFGE.png",
-      "tone": "blank"
+      "path": "/logos/us/AFGE.png"
     },
     "AFGR": {
       "region": "us",
@@ -23438,8 +23546,7 @@
     "AFIF": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AFIF.png",
-      "tone": "blank"
+      "path": "/logos/us/AFIF.png"
     },
     "AFIX": {
       "region": "us",
@@ -23578,6 +23685,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/AGGH.png"
+    },
+    "AGGM": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/AGGM.png: HTTP 404"
     },
     "AGGS": {
       "region": "us",
@@ -23880,7 +23992,7 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/AI.png",
-      "tone": "blank"
+      "tone": "light"
     },
     "AIA": {
       "region": "us",
@@ -23902,6 +24014,11 @@
       "source": "fmp",
       "path": "/logos/us/AIBD.png",
       "tone": "light"
+    },
+    "AIBF": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/AIBF.png: HTTP 404"
     },
     "AIBU": {
       "region": "us",
@@ -24044,8 +24161,7 @@
     "AIOS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AIOS.png",
-      "tone": "blank"
+      "path": "/logos/us/AIOS.png"
     },
     "AIOT": {
       "region": "us",
@@ -24355,8 +24471,7 @@
     "ALCO": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ALCO.png",
-      "tone": "blank"
+      "path": "/logos/us/ALCO.png"
     },
     "ALDB": {
       "region": "us",
@@ -24677,8 +24792,7 @@
     "ALUB": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ALUB.png",
-      "tone": "blank"
+      "path": "/logos/us/ALUB.png"
     },
     "ALV": {
       "region": "us",
@@ -24704,8 +24818,7 @@
     "ALXO": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ALXO.png",
-      "tone": "blank"
+      "path": "/logos/us/ALXO.png"
     },
     "ALZN": {
       "region": "us",
@@ -24726,6 +24839,11 @@
       "region": "us",
       "source": "fmp",
       "reason": "download https://financialmodelingprep.com/image-stock/AMAA.png: HTTP 404"
+    },
+    "AMAC": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/AMAC.png: HTTP 404"
     },
     "AMACU": {
       "region": "us",
@@ -24993,7 +25111,7 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/AMPL.png",
-      "tone": "blank"
+      "tone": "light"
     },
     "AMPU": {
       "region": "us",
@@ -25145,8 +25263,7 @@
     "AMZE": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AMZE.png",
-      "tone": "blank"
+      "path": "/logos/us/AMZE.png"
     },
     "AMZG": {
       "region": "us",
@@ -25261,6 +25378,11 @@
       "source": "fmp",
       "path": "/logos/us/ANGO.png"
     },
+    "ANGU": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/ANGU.png: HTTP 404"
+    },
     "ANGX": {
       "region": "us",
       "source": "fmp",
@@ -25337,6 +25459,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/ANTA.png"
+    },
+    "ANTW": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/ANTW.png: HTTP 404"
     },
     "ANTX": {
       "region": "us",
@@ -25501,7 +25628,7 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/APEI.png",
-      "tone": "blank"
+      "tone": "light"
     },
     "APG": {
       "region": "us",
@@ -25597,8 +25724,12 @@
     "APMCU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/APMCU.png",
-      "tone": "blank"
+      "path": "/logos/us/APMCU.png"
+    },
+    "APMD": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/APMD.png: HTTP 404"
     },
     "APMI": {
       "region": "us",
@@ -25911,6 +26042,11 @@
       "source": "fmp",
       "path": "/logos/us/ARCO.png"
     },
+    "ARCP": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/ARCP.png: HTTP 404"
+    },
     "ARCT": {
       "region": "us",
       "source": "fmp",
@@ -26062,6 +26198,11 @@
       "path": "/logos/us/ARKX.png",
       "tone": "light"
     },
+    "ARKY": {
+      "region": "us",
+      "source": "fmp",
+      "path": "/logos/us/ARKY.png"
+    },
     "ARL": {
       "region": "us",
       "source": "fmp",
@@ -26116,6 +26257,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/ARMP.png"
+    },
+    "ARMS": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/ARMS.png: HTTP 404"
     },
     "ARMU": {
       "region": "us",
@@ -26254,8 +26400,7 @@
     "ARXS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ARXS.png",
-      "tone": "blank"
+      "path": "/logos/us/ARXS.png"
     },
     "AS": {
       "region": "us",
@@ -26281,6 +26426,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/ASBA.png"
+    },
+    "ASBH": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/ASBH.png: HTTP 404"
     },
     "ASBP": {
       "region": "us",
@@ -26461,8 +26611,7 @@
     "ASPN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ASPN.png",
-      "tone": "blank"
+      "path": "/logos/us/ASPN.png"
     },
     "ASPS": {
       "region": "us",
@@ -27024,38 +27173,32 @@
     "AVDE": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVDE.png",
-      "tone": "blank"
+      "path": "/logos/us/AVDE.png"
     },
     "AVDS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVDS.png",
-      "tone": "blank"
+      "path": "/logos/us/AVDS.png"
     },
     "AVDV": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVDV.png",
-      "tone": "blank"
+      "path": "/logos/us/AVDV.png"
     },
     "AVEE": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVEE.png",
-      "tone": "blank"
+      "path": "/logos/us/AVEE.png"
     },
     "AVEM": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVEM.png",
-      "tone": "blank"
+      "path": "/logos/us/AVEM.png"
     },
     "AVES": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVES.png",
-      "tone": "blank"
+      "path": "/logos/us/AVES.png"
     },
     "AVEX": {
       "region": "us",
@@ -27065,8 +27208,7 @@
     "AVGB": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVGB.png",
-      "tone": "blank"
+      "path": "/logos/us/AVGB.png"
     },
     "AVGC": {
       "region": "us",
@@ -27076,8 +27218,7 @@
     "AVGE": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVGE.png",
-      "tone": "blank"
+      "path": "/logos/us/AVGE.png"
     },
     "AVGG": {
       "region": "us",
@@ -27097,8 +27238,7 @@
     "AVGV": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVGV.png",
-      "tone": "blank"
+      "path": "/logos/us/AVGV.png"
     },
     "AVGW": {
       "region": "us",
@@ -27113,14 +27253,12 @@
     "AVIE": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVIE.png",
-      "tone": "blank"
+      "path": "/logos/us/AVIE.png"
     },
     "AVIG": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVIG.png",
-      "tone": "blank"
+      "path": "/logos/us/AVIG.png"
     },
     "AVIR": {
       "region": "us",
@@ -27130,8 +27268,7 @@
     "AVIV": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVIV.png",
-      "tone": "blank"
+      "path": "/logos/us/AVIV.png"
     },
     "AVK": {
       "region": "us",
@@ -27146,8 +27283,7 @@
     "AVLC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVLC.png",
-      "tone": "blank"
+      "path": "/logos/us/AVLC.png"
     },
     "AVLN": {
       "region": "us",
@@ -27157,44 +27293,37 @@
     "AVLV": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVLV.png",
-      "tone": "blank"
+      "path": "/logos/us/AVLV.png"
     },
     "AVMA": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVMA.png",
-      "tone": "blank"
+      "path": "/logos/us/AVMA.png"
     },
     "AVMC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVMC.png",
-      "tone": "blank"
+      "path": "/logos/us/AVMC.png"
     },
     "AVMU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVMU.png",
-      "tone": "blank"
+      "path": "/logos/us/AVMU.png"
     },
     "AVMV": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVMV.png",
-      "tone": "blank"
+      "path": "/logos/us/AVMV.png"
     },
     "AVNM": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVNM.png",
-      "tone": "blank"
+      "path": "/logos/us/AVNM.png"
     },
     "AVNS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVNS.png",
-      "tone": "blank"
+      "path": "/logos/us/AVNS.png"
     },
     "AVNT": {
       "region": "us",
@@ -27204,8 +27333,7 @@
     "AVNV": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVNV.png",
-      "tone": "blank"
+      "path": "/logos/us/AVNV.png"
     },
     "AVNW": {
       "region": "us",
@@ -27235,8 +27363,7 @@
     "AVRE": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVRE.png",
-      "tone": "blank"
+      "path": "/logos/us/AVRE.png"
     },
     "AVRY": {
       "region": "us",
@@ -27251,32 +27378,27 @@
     "AVSC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVSC.png",
-      "tone": "blank"
+      "path": "/logos/us/AVSC.png"
     },
     "AVSD": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVSD.png",
-      "tone": "blank"
+      "path": "/logos/us/AVSD.png"
     },
     "AVSE": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVSE.png",
-      "tone": "blank"
+      "path": "/logos/us/AVSE.png"
     },
     "AVSF": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVSF.png",
-      "tone": "blank"
+      "path": "/logos/us/AVSF.png"
     },
     "AVSU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVSU.png",
-      "tone": "blank"
+      "path": "/logos/us/AVSU.png"
     },
     "AVT": {
       "region": "us",
@@ -27287,8 +27409,7 @@
     "AVTM": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVTM.png",
-      "tone": "blank"
+      "path": "/logos/us/AVTM.png"
     },
     "AVTR": {
       "region": "us",
@@ -27303,20 +27424,17 @@
     "AVUQ": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVUQ.png",
-      "tone": "blank"
+      "path": "/logos/us/AVUQ.png"
     },
     "AVUS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVUS.png",
-      "tone": "blank"
+      "path": "/logos/us/AVUS.png"
     },
     "AVUV": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVUV.png",
-      "tone": "blank"
+      "path": "/logos/us/AVUV.png"
     },
     "AVX": {
       "region": "us",
@@ -27326,8 +27444,7 @@
     "AVXC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AVXC.png",
-      "tone": "blank"
+      "path": "/logos/us/AVXC.png"
     },
     "AVXL": {
       "region": "us",
@@ -27416,8 +27533,7 @@
     "AXIL": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AXIL.png",
-      "tone": "blank"
+      "path": "/logos/us/AXIL.png"
     },
     "AXIN": {
       "region": "us",
@@ -27485,6 +27601,11 @@
       "source": "fmp",
       "reason": "download https://financialmodelingprep.com/image-stock/AXTL.png: HTTP 404"
     },
+    "AXTQ": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/AXTQ.png: HTTP 404"
+    },
     "AXTU": {
       "region": "us",
       "source": "fmp",
@@ -27518,8 +27639,7 @@
     "AZI": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/AZI.png",
-      "tone": "blank"
+      "path": "/logos/us/AZI.png"
     },
     "AZIO": {
       "region": "us",
@@ -27808,6 +27928,11 @@
       "source": "fmp",
       "path": "/logos/us/BANC.png"
     },
+    "BANC-F": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/BANC-F.png: HTTP 404"
+    },
     "BANC^F": {
       "region": "us",
       "source": "fmp",
@@ -27851,8 +27976,7 @@
     "BAP": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/BAP.png",
-      "tone": "blank"
+      "path": "/logos/us/BAP.png"
     },
     "BAPR": {
       "region": "us",
@@ -28216,20 +28340,17 @@
     "BCAR": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/BCAR.png",
-      "tone": "blank"
+      "path": "/logos/us/BCAR.png"
     },
     "BCARU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/BCARU.png",
-      "tone": "blank"
+      "path": "/logos/us/BCARU.png"
     },
     "BCARW": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/BCARW.png",
-      "tone": "blank"
+      "path": "/logos/us/BCARW.png"
     },
     "BCAT": {
       "region": "us",
@@ -28255,6 +28376,11 @@
       "region": "us",
       "source": "fmp",
       "reason": "download https://financialmodelingprep.com/image-stock/BCCC.png: HTTP 404"
+    },
+    "BCCQ": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/BCCQ.png: HTTP 404"
     },
     "BCCQU": {
       "region": "us",
@@ -28371,8 +28497,7 @@
     "BCOR": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/BCOR.png",
-      "tone": "blank"
+      "path": "/logos/us/BCOR.png"
     },
     "BCPC": {
       "region": "us",
@@ -28602,8 +28727,7 @@
     "BEAM": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/BEAM.png",
-      "tone": "blank"
+      "path": "/logos/us/BEAM.png"
     },
     "BEAT": {
       "region": "us",
@@ -29135,8 +29259,7 @@
     "BHE": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/BHE.png",
-      "tone": "blank"
+      "path": "/logos/us/BHE.png"
     },
     "BHF": {
       "region": "us",
@@ -29243,6 +29366,11 @@
       "source": "fmp",
       "path": "/logos/us/BIBL.png"
     },
+    "BID": {
+      "region": "us",
+      "source": "fmp",
+      "path": "/logos/us/BID.png"
+    },
     "BIDD": {
       "region": "us",
       "source": "fmp",
@@ -29286,8 +29414,7 @@
     "BILD": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/BILD.png",
-      "tone": "blank"
+      "path": "/logos/us/BILD.png"
     },
     "BILI": {
       "region": "us",
@@ -29343,6 +29470,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/BIOA.png"
+    },
+    "BIOT": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/BIOT.png: HTTP 404"
     },
     "BIOX": {
       "region": "us",
@@ -29550,8 +29682,7 @@
     "BKCH": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/BKCH.png",
-      "tone": "blank"
+      "path": "/logos/us/BKCH.png"
     },
     "BKCI": {
       "region": "us",
@@ -29867,6 +29998,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/BLSH.png"
+    },
+    "BLSM": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/BLSM.png: HTTP 404"
     },
     "BLST": {
       "region": "us",
@@ -30419,8 +30555,7 @@
     "BOLD": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/BOLD.png",
-      "tone": "blank"
+      "path": "/logos/us/BOLD.png"
     },
     "BOLT": {
       "region": "us",
@@ -30888,6 +31023,11 @@
       "source": "fmp",
       "path": "/logos/us/BRT.png"
     },
+    "BRTM": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/BRTM.png: HTTP 404"
+    },
     "BRTR": {
       "region": "us",
       "source": "fmp",
@@ -30909,6 +31049,11 @@
       "source": "fmp",
       "path": "/logos/us/BRUNW.png"
     },
+    "BRVE": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/BRVE.png: HTTP 404"
+    },
     "BRW": {
       "region": "us",
       "source": "fmp",
@@ -30927,8 +31072,7 @@
     "BRZU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/BRZU.png",
-      "tone": "blank"
+      "path": "/logos/us/BRZU.png"
     },
     "BRZX": {
       "region": "us",
@@ -30938,8 +31082,7 @@
     "BSAA": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/BSAA.png",
-      "tone": "blank"
+      "path": "/logos/us/BSAA.png"
     },
     "BSAAR": {
       "region": "us",
@@ -30949,8 +31092,7 @@
     "BSAAU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/BSAAU.png",
-      "tone": "blank"
+      "path": "/logos/us/BSAAU.png"
     },
     "BSAC": {
       "region": "us",
@@ -31021,6 +31163,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/BSCZ.png"
+    },
+    "BSEM": {
+      "region": "us",
+      "source": "fmp",
+      "path": "/logos/us/BSEM.png"
     },
     "BSEP": {
       "region": "us",
@@ -31554,6 +31701,11 @@
       "source": "fmp",
       "path": "/logos/us/BUI.png"
     },
+    "BUIL": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/BUIL.png: HTTP 404"
+    },
     "BUL": {
       "region": "us",
       "source": "fmp",
@@ -31622,8 +31774,7 @@
     "BUUU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/BUUU.png",
-      "tone": "blank"
+      "path": "/logos/us/BUUU.png"
     },
     "BUXX": {
       "region": "us",
@@ -31695,7 +31846,7 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/BWA.png",
-      "tone": "blank"
+      "tone": "light"
     },
     "BWAY": {
       "region": "us",
@@ -31716,7 +31867,7 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/BWEN.png",
-      "tone": "blank"
+      "tone": "light"
     },
     "BWET": {
       "region": "us",
@@ -31808,6 +31959,11 @@
       "source": "fmp",
       "path": "/logos/us/BX.png"
     },
+    "BXBL": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/BXBL.png: HTTP 404"
+    },
     "BXC": {
       "region": "us",
       "source": "fmp",
@@ -31856,8 +32012,7 @@
     "BYFC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/BYFC.png",
-      "tone": "blank"
+      "path": "/logos/us/BYFC.png"
     },
     "BYLD": {
       "region": "us",
@@ -32254,8 +32409,7 @@
     "CARK": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CARK.png",
-      "tone": "blank"
+      "path": "/logos/us/CARK.png"
     },
     "CARL": {
       "region": "us",
@@ -32342,6 +32496,11 @@
       "source": "fmp",
       "path": "/logos/us/CATH.png"
     },
+    "CATL": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/CATL.png: HTTP 404"
+    },
     "CATO": {
       "region": "us",
       "source": "fmp",
@@ -32360,8 +32519,7 @@
     "CAVA": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CAVA.png",
-      "tone": "blank"
+      "path": "/logos/us/CAVA.png"
     },
     "CB": {
       "region": "us",
@@ -32433,6 +32591,12 @@
       "region": "us",
       "source": "fmp",
       "reason": "download https://financialmodelingprep.com/image-stock/CBOA.png: HTTP 404"
+    },
+    "CBOE": {
+      "region": "us",
+      "source": "fmp",
+      "path": "/logos/us/CBOE.png",
+      "tone": "light"
     },
     "CBOJ": {
       "region": "us",
@@ -32547,8 +32711,7 @@
     "CBUS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CBUS.png",
-      "tone": "blank"
+      "path": "/logos/us/CBUS.png"
     },
     "CBXA": {
       "region": "us",
@@ -32624,6 +32787,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/CCCC.png"
+    },
+    "CCCT": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/CCCT.png: HTTP 404"
     },
     "CCCTU": {
       "region": "us",
@@ -33306,8 +33474,7 @@
     "CGBD": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CGBD.png",
-      "tone": "blank"
+      "path": "/logos/us/CGBD.png"
     },
     "CGBL": {
       "region": "us",
@@ -33328,6 +33495,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/CGCB.png"
+    },
+    "CGCF": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/CGCF.png: HTTP 404"
     },
     "CGCFU": {
       "region": "us",
@@ -33537,8 +33709,7 @@
     "CHAU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CHAU.png",
-      "tone": "blank"
+      "path": "/logos/us/CHAU.png"
     },
     "CHCI": {
       "region": "us",
@@ -33584,6 +33755,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/CHEF.png"
+    },
+    "CHGA": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/CHGA.png: HTTP 404"
     },
     "CHGG": {
       "region": "us",
@@ -33708,8 +33884,7 @@
     "CHRN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CHRN.png",
-      "tone": "blank"
+      "path": "/logos/us/CHRN.png"
     },
     "CHRS": {
       "region": "us",
@@ -33749,8 +33924,7 @@
     "CHSN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CHSN.png",
-      "tone": "blank"
+      "path": "/logos/us/CHSN.png"
     },
     "CHT": {
       "region": "us",
@@ -33771,7 +33945,7 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/CHWY.png",
-      "tone": "blank"
+      "tone": "light"
     },
     "CHY": {
       "region": "us",
@@ -34159,8 +34333,7 @@
     "CLNN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CLNN.png",
-      "tone": "blank"
+      "path": "/logos/us/CLNN.png"
     },
     "CLOA": {
       "region": "us",
@@ -34244,8 +34417,7 @@
     "CLS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CLS.png",
-      "tone": "blank"
+      "path": "/logos/us/CLS.png"
     },
     "CLSE": {
       "region": "us",
@@ -34383,8 +34555,7 @@
     "CMCT": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CMCT.png",
-      "tone": "blank"
+      "path": "/logos/us/CMCT.png"
     },
     "CMDB": {
       "region": "us",
@@ -34519,20 +34690,17 @@
     "CMSA": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CMSA.png",
-      "tone": "blank"
+      "path": "/logos/us/CMSA.png"
     },
     "CMSC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CMSC.png",
-      "tone": "blank"
+      "path": "/logos/us/CMSC.png"
     },
     "CMSD": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CMSD.png",
-      "tone": "blank"
+      "path": "/logos/us/CMSD.png"
     },
     "CMS^B": {
       "region": "us",
@@ -34713,8 +34881,7 @@
     "CNTN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CNTN.png",
-      "tone": "blank"
+      "path": "/logos/us/CNTN.png"
     },
     "CNTX": {
       "region": "us",
@@ -34739,8 +34906,7 @@
     "CNXC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CNXC.png",
-      "tone": "blank"
+      "path": "/logos/us/CNXC.png"
     },
     "CNXN": {
       "region": "us",
@@ -34765,8 +34931,7 @@
     "COAG": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/COAG.png",
-      "tone": "blank"
+      "path": "/logos/us/COAG.png"
     },
     "COAL": {
       "region": "us",
@@ -34791,8 +34956,7 @@
     "COCP": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/COCP.png",
-      "tone": "blank"
+      "path": "/logos/us/COCP.png"
     },
     "CODA": {
       "region": "us",
@@ -34885,6 +35049,11 @@
       "source": "fmp",
       "path": "/logos/us/COHN.png"
     },
+    "COHQ": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/COHQ.png: HTTP 404"
+    },
     "COHR": {
       "region": "us",
       "source": "fmp",
@@ -34968,8 +35137,7 @@
     "COM": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/COM.png",
-      "tone": "blank"
+      "path": "/logos/us/COM.png"
     },
     "COMB": {
       "region": "us",
@@ -35055,8 +35223,7 @@
     "COPL": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/COPL.png",
-      "tone": "blank"
+      "path": "/logos/us/COPL.png"
     },
     "COPP": {
       "region": "us",
@@ -35102,8 +35269,7 @@
     "CORN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CORN.png",
-      "tone": "blank"
+      "path": "/logos/us/CORN.png"
     },
     "CORO": {
       "region": "us",
@@ -35341,8 +35507,7 @@
     "CPRI": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CPRI.png",
-      "tone": "blank"
+      "path": "/logos/us/CPRI.png"
     },
     "CPRJ": {
       "region": "us",
@@ -35467,8 +35632,7 @@
     "CPZ": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CPZ.png",
-      "tone": "blank"
+      "path": "/logos/us/CPZ.png"
     },
     "CQP": {
       "region": "us",
@@ -35519,8 +35683,7 @@
     "CRAN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CRAN.png",
-      "tone": "blank"
+      "path": "/logos/us/CRAN.png"
     },
     "CRANR": {
       "region": "us",
@@ -35530,8 +35693,7 @@
     "CRANU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CRANU.png",
-      "tone": "blank"
+      "path": "/logos/us/CRANU.png"
     },
     "CRAQ": {
       "region": "us",
@@ -35627,8 +35789,7 @@
     "CRDF": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CRDF.png",
-      "tone": "blank"
+      "path": "/logos/us/CRDF.png"
     },
     "CRDL": {
       "region": "us",
@@ -35724,8 +35885,7 @@
     "CRL": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CRL.png",
-      "tone": "blank"
+      "path": "/logos/us/CRL.png"
     },
     "CRM": {
       "region": "us",
@@ -36365,8 +36525,7 @@
     "CURE": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CURE.png",
-      "tone": "blank"
+      "path": "/logos/us/CURE.png"
     },
     "CURI": {
       "region": "us",
@@ -36585,8 +36744,7 @@
     "CWEB": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/CWEB.png",
-      "tone": "blank"
+      "path": "/logos/us/CWEB.png"
     },
     "CWEN": {
       "region": "us",
@@ -36959,8 +37117,7 @@
     "DBA": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DBA.png",
-      "tone": "blank"
+      "path": "/logos/us/DBA.png"
     },
     "DBAW": {
       "region": "us",
@@ -36980,8 +37137,7 @@
     "DBCA": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DBCA.png",
-      "tone": "blank"
+      "path": "/logos/us/DBCA.png"
     },
     "DBCAU": {
       "region": "us",
@@ -37087,8 +37243,7 @@
     "DBVT": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DBVT.png",
-      "tone": "blank"
+      "path": "/logos/us/DBVT.png"
     },
     "DBX": {
       "region": "us",
@@ -37169,8 +37324,7 @@
     "DCOY": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DCOY.png",
-      "tone": "blank"
+      "path": "/logos/us/DCOY.png"
     },
     "DCRE": {
       "region": "us",
@@ -37520,8 +37674,7 @@
     "DEMZ": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DEMZ.png",
-      "tone": "blank"
+      "path": "/logos/us/DEMZ.png"
     },
     "DEO": {
       "region": "us",
@@ -37651,8 +37804,7 @@
     "DFEN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DFEN.png",
-      "tone": "blank"
+      "path": "/logos/us/DFEN.png"
     },
     "DFEV": {
       "region": "us",
@@ -37767,14 +37919,12 @@
     "DFSC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DFSC.png",
-      "tone": "blank"
+      "path": "/logos/us/DFSC.png"
     },
     "DFSCW": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DFSCW.png",
-      "tone": "blank"
+      "path": "/logos/us/DFSCW.png"
     },
     "DFSD": {
       "region": "us",
@@ -38167,8 +38317,7 @@
     "DIVP": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DIVP.png",
-      "tone": "blank"
+      "path": "/logos/us/DIVP.png"
     },
     "DIVS": {
       "region": "us",
@@ -38509,26 +38658,22 @@
     "DNLI": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DNLI.png",
-      "tone": "blank"
+      "path": "/logos/us/DNLI.png"
     },
     "DNMX": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DNMX.png",
-      "tone": "blank"
+      "path": "/logos/us/DNMX.png"
     },
     "DNMXW": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DNMXW.png",
-      "tone": "blank"
+      "path": "/logos/us/DNMXW.png"
     },
     "DNN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DNN.png",
-      "tone": "blank"
+      "path": "/logos/us/DNN.png"
     },
     "DNOV": {
       "region": "us",
@@ -38713,6 +38858,11 @@
       "source": "fmp",
       "reason": "download https://financialmodelingprep.com/image-stock/DQJN.png: HTTP 404"
     },
+    "DQSE": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/DQSE.png: HTTP 404"
+    },
     "DRAI": {
       "region": "us",
       "source": "fmp",
@@ -38827,8 +38977,7 @@
     "DRN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DRN.png",
-      "tone": "blank"
+      "path": "/logos/us/DRN.png"
     },
     "DRNL": {
       "region": "us",
@@ -38985,8 +39134,7 @@
     "DSX": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DSX.png",
-      "tone": "blank"
+      "path": "/logos/us/DSX.png"
     },
     "DSX^B": {
       "region": "us",
@@ -38996,14 +39144,12 @@
     "DSY": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DSY.png",
-      "tone": "blank"
+      "path": "/logos/us/DSY.png"
     },
     "DSYWW": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DSYWW.png",
-      "tone": "blank"
+      "path": "/logos/us/DSYWW.png"
     },
     "DT": {
       "region": "us",
@@ -39013,8 +39159,7 @@
     "DTAN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DTAN.png",
-      "tone": "blank"
+      "path": "/logos/us/DTAN.png"
     },
     "DTB": {
       "region": "us",
@@ -39084,20 +39229,17 @@
     "DTSQ": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DTSQ.png",
-      "tone": "blank"
+      "path": "/logos/us/DTSQ.png"
     },
     "DTSQR": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DTSQR.png",
-      "tone": "blank"
+      "path": "/logos/us/DTSQR.png"
     },
     "DTSQU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DTSQU.png",
-      "tone": "blank"
+      "path": "/logos/us/DTSQU.png"
     },
     "DTSS": {
       "region": "us",
@@ -39107,8 +39249,7 @@
     "DTST": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DTST.png",
-      "tone": "blank"
+      "path": "/logos/us/DTST.png"
     },
     "DTW": {
       "region": "us",
@@ -39228,14 +39369,12 @@
     "DUSL": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DUSL.png",
-      "tone": "blank"
+      "path": "/logos/us/DUSL.png"
     },
     "DUST": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DUST.png",
-      "tone": "blank"
+      "path": "/logos/us/DUST.png"
     },
     "DUTY": {
       "region": "us",
@@ -39405,8 +39544,7 @@
     "DWSH": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DWSH.png",
-      "tone": "blank"
+      "path": "/logos/us/DWSH.png"
     },
     "DWSN": {
       "region": "us",
@@ -39536,8 +39674,7 @@
     "DYLD": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DYLD.png",
-      "tone": "blank"
+      "path": "/logos/us/DYLD.png"
     },
     "DYLG": {
       "region": "us",
@@ -39557,14 +39694,12 @@
     "DYNC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DYNC.png",
-      "tone": "blank"
+      "path": "/logos/us/DYNC.png"
     },
     "DYNCU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/DYNCU.png",
-      "tone": "blank"
+      "path": "/logos/us/DYNCU.png"
     },
     "DYNF": {
       "region": "us",
@@ -39824,8 +39959,7 @@
     "ECML": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ECML.png",
-      "tone": "blank"
+      "path": "/logos/us/ECML.png"
     },
     "ECNS": {
       "region": "us",
@@ -39882,8 +40016,7 @@
     "ECXWW": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ECXWW.png",
-      "tone": "blank"
+      "path": "/logos/us/ECXWW.png"
     },
     "ECYAF": {
       "region": "us",
@@ -39908,8 +40041,7 @@
     "EDC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/EDC.png",
-      "tone": "blank"
+      "path": "/logos/us/EDC.png"
     },
     "EDD": {
       "region": "us",
@@ -40023,11 +40155,15 @@
       "source": "fmp",
       "path": "/logos/us/EDV.png"
     },
+    "EDVA": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/EDVA.png: HTTP 404"
+    },
     "EDZ": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/EDZ.png",
-      "tone": "blank"
+      "path": "/logos/us/EDZ.png"
     },
     "EE": {
       "region": "us",
@@ -40478,8 +40614,7 @@
     "ELAB": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ELAB.png",
-      "tone": "blank"
+      "path": "/logos/us/ELAB.png"
     },
     "ELAN": {
       "region": "us",
@@ -40566,8 +40701,7 @@
     "ELOG": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ELOG.png",
-      "tone": "blank"
+      "path": "/logos/us/ELOG.png"
     },
     "ELOX": {
       "region": "us",
@@ -40712,14 +40846,12 @@
     "EMEM": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/EMEM.png",
-      "tone": "blank"
+      "path": "/logos/us/EMEM.png"
     },
     "EMEQ": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/EMEQ.png",
-      "tone": "blank"
+      "path": "/logos/us/EMEQ.png"
     },
     "EMES": {
       "region": "us",
@@ -40864,8 +40996,7 @@
     "EMSC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/EMSC.png",
-      "tone": "blank"
+      "path": "/logos/us/EMSC.png"
     },
     "EMSF": {
       "region": "us",
@@ -41001,6 +41132,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/ENRDW.png"
+    },
+    "ENRG": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/ENRG.png: HTTP 404"
     },
     "ENS": {
       "region": "us",
@@ -41317,8 +41453,7 @@
     "EQIX": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/EQIX.png",
-      "tone": "blank"
+      "path": "/logos/us/EQIX.png"
     },
     "EQL": {
       "region": "us",
@@ -41474,14 +41609,12 @@
     "ERX": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ERX.png",
-      "tone": "blank"
+      "path": "/logos/us/ERX.png"
     },
     "ERY": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ERY.png",
-      "tone": "blank"
+      "path": "/logos/us/ERY.png"
     },
     "ES": {
       "region": "us",
@@ -41527,8 +41660,7 @@
     "ESG": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ESG.png",
-      "tone": "blank"
+      "path": "/logos/us/ESG.png"
     },
     "ESGD": {
       "region": "us",
@@ -41543,8 +41675,7 @@
     "ESGG": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ESGG.png",
-      "tone": "blank"
+      "path": "/logos/us/ESGG.png"
     },
     "ESGU": {
       "region": "us",
@@ -41569,14 +41700,12 @@
     "ESLA": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ESLA.png",
-      "tone": "blank"
+      "path": "/logos/us/ESLA.png"
     },
     "ESLAW": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ESLAW.png",
-      "tone": "blank"
+      "path": "/logos/us/ESLAW.png"
     },
     "ESLG": {
       "region": "us",
@@ -41636,8 +41765,7 @@
     "ESRT": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ESRT.png",
-      "tone": "blank"
+      "path": "/logos/us/ESRT.png"
     },
     "ESS": {
       "region": "us",
@@ -41802,11 +41930,15 @@
       "source": "fmp",
       "path": "/logos/us/ETR.png"
     },
+    "ETRA": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/ETRA.png: HTTP 404"
+    },
     "ETS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ETS.png",
-      "tone": "blank"
+      "path": "/logos/us/ETS.png"
     },
     "ETSLF": {
       "region": "us",
@@ -41926,8 +42058,7 @@
     "EURL": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/EURL.png",
-      "tone": "blank"
+      "path": "/logos/us/EURL.png"
     },
     "EUSA": {
       "region": "us",
@@ -42182,6 +42313,11 @@
       "source": "fmp",
       "path": "/logos/us/EWA.png"
     },
+    "EWAV": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/EWAV.png: HTTP 404"
+    },
     "EWBC": {
       "region": "us",
       "source": "fmp",
@@ -42410,8 +42546,7 @@
     "EXUS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/EXUS.png",
-      "tone": "blank"
+      "path": "/logos/us/EXUS.png"
     },
     "EXYN": {
       "region": "us",
@@ -42612,8 +42747,7 @@
     "FAS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/FAS.png",
-      "tone": "blank"
+      "path": "/logos/us/FAS.png"
     },
     "FAST": {
       "region": "us",
@@ -42644,8 +42778,7 @@
     "FAZ": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/FAZ.png",
-      "tone": "blank"
+      "path": "/logos/us/FAZ.png"
     },
     "FB": {
       "region": "us",
@@ -42667,6 +42800,11 @@
       "source": "fmp",
       "path": "/logos/us/FBDC.png"
     },
+    "FBDT": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/FBDT.png: HTTP 404"
+    },
     "FBGL": {
       "region": "us",
       "source": "fmp",
@@ -42680,14 +42818,12 @@
     "FBIO": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/FBIO.png",
-      "tone": "blank"
+      "path": "/logos/us/FBIO.png"
     },
     "FBIOP": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/FBIOP.png",
-      "tone": "blank"
+      "path": "/logos/us/FBIOP.png"
     },
     "FBIZ": {
       "region": "us",
@@ -43070,6 +43206,11 @@
       "source": "fmp",
       "path": "/logos/us/FDM.png"
     },
+    "FDMM": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/FDMM.png: HTTP 404"
+    },
     "FDMMU": {
       "region": "us",
       "source": "fmp",
@@ -43238,8 +43379,7 @@
     "FEED": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/FEED.png",
-      "tone": "blank"
+      "path": "/logos/us/FEED.png"
     },
     "FEGE": {
       "region": "us",
@@ -43506,6 +43646,11 @@
       "source": "fmp",
       "reason": "download https://financialmodelingprep.com/image-stock/FFLV.png: HTTP 404"
     },
+    "FFLX": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/FFLX.png: HTTP 404"
+    },
     "FFND": {
       "region": "us",
       "source": "fmp",
@@ -43520,6 +43665,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/FFOX.png"
+    },
+    "FFR": {
+      "region": "us",
+      "source": "fmp",
+      "path": "/logos/us/FFR.png"
     },
     "FFSM": {
       "region": "us",
@@ -43956,6 +44106,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/FJAN.png"
+    },
+    "FJDI": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/FJDI.png: HTTP 404"
     },
     "FJET": {
       "region": "us",
@@ -44483,8 +44638,7 @@
     "FMCX": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/FMCX.png",
-      "tone": "blank"
+      "path": "/logos/us/FMCX.png"
     },
     "FMDE": {
       "region": "us",
@@ -44589,8 +44743,7 @@
     "FN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/FN.png",
-      "tone": "blank"
+      "path": "/logos/us/FN.png"
     },
     "FNB": {
       "region": "us",
@@ -45097,8 +45250,7 @@
     "FRVO": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/FRVO.png",
-      "tone": "blank"
+      "path": "/logos/us/FRVO.png"
     },
     "FRWD": {
       "region": "us",
@@ -45405,6 +45557,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/FTFT.png"
+    },
+    "FTG": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/FTG.png: HTTP 404"
     },
     "FTGC": {
       "region": "us",
@@ -45739,8 +45896,7 @@
     "FUSEW": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/FUSEW.png",
-      "tone": "blank"
+      "path": "/logos/us/FUSEW.png"
     },
     "FUSI": {
       "region": "us",
@@ -45816,6 +45972,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/FVRR.png"
+    },
+    "FWAC": {
+      "region": "us",
+      "source": "fmp",
+      "path": "/logos/us/FWAC.png"
     },
     "FWACU": {
       "region": "us",
@@ -46055,8 +46216,7 @@
     "GAIA": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/GAIA.png",
-      "tone": "blank"
+      "path": "/logos/us/GAIA.png"
     },
     "GAIN": {
       "region": "us",
@@ -46191,8 +46351,7 @@
     "GBAB": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/GBAB.png",
-      "tone": "blank"
+      "path": "/logos/us/GBAB.png"
     },
     "GBCI": {
       "region": "us",
@@ -46324,6 +46483,11 @@
       "source": "fmp",
       "path": "/logos/us/GCOW.png"
     },
+    "GCPB": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/GCPB.png: HTTP 404"
+    },
     "GCSH": {
       "region": "us",
       "source": "fmp",
@@ -46377,8 +46541,7 @@
     "GDEV": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/GDEV.png",
-      "tone": "blank"
+      "path": "/logos/us/GDEV.png"
     },
     "GDEVW": {
       "region": "us",
@@ -46811,8 +46974,7 @@
     "GGN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/GGN.png",
-      "tone": "blank"
+      "path": "/logos/us/GGN.png"
     },
     "GGN^B": {
       "region": "us",
@@ -46904,6 +47066,11 @@
       "source": "fmp",
       "path": "/logos/us/GHTA.png"
     },
+    "GHXI": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/GHXI.png: HTTP 404"
+    },
     "GHXIU": {
       "region": "us",
       "source": "fmp",
@@ -46978,8 +47145,7 @@
     "GIII": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/GIII.png",
-      "tone": "blank"
+      "path": "/logos/us/GIII.png"
     },
     "GIL": {
       "region": "us",
@@ -46995,6 +47161,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/GILT.png"
+    },
+    "GINC": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/GINC.png: HTTP 404"
     },
     "GIND": {
       "region": "us",
@@ -47019,8 +47190,7 @@
     "GIPRW": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/GIPRW.png",
-      "tone": "blank"
+      "path": "/logos/us/GIPRW.png"
     },
     "GIS": {
       "region": "us",
@@ -47120,8 +47290,7 @@
     "GKOS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/GKOS.png",
-      "tone": "blank"
+      "path": "/logos/us/GKOS.png"
     },
     "GL": {
       "region": "us",
@@ -47176,14 +47345,12 @@
     "GLDB": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/GLDB.png",
-      "tone": "blank"
+      "path": "/logos/us/GLDB.png"
     },
     "GLDG": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/GLDG.png",
-      "tone": "blank"
+      "path": "/logos/us/GLDG.png"
     },
     "GLDI": {
       "region": "us",
@@ -47274,8 +47441,7 @@
     "GLO": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/GLO.png",
-      "tone": "blank"
+      "path": "/logos/us/GLO.png"
     },
     "GLOB": {
       "region": "us",
@@ -47310,8 +47476,7 @@
     "GLOW": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/GLOW.png",
-      "tone": "blank"
+      "path": "/logos/us/GLOW.png"
     },
     "GLP": {
       "region": "us",
@@ -47322,7 +47487,7 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/GLPI.png",
-      "tone": "blank"
+      "tone": "light"
     },
     "GLP^B": {
       "region": "us",
@@ -47357,8 +47522,7 @@
     "GLU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/GLU.png",
-      "tone": "blank"
+      "path": "/logos/us/GLU.png"
     },
     "GLUE": {
       "region": "us",
@@ -47378,8 +47542,7 @@
     "GLV": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/GLV.png",
-      "tone": "blank"
+      "path": "/logos/us/GLV.png"
     },
     "GLW": {
       "region": "us",
@@ -47840,6 +48003,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/GOVZ.png"
+    },
+    "GOW": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/GOW.png: HTTP 404"
     },
     "GP": {
       "region": "us",
@@ -48370,8 +48538,7 @@
     "GSPY": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/GSPY.png",
-      "tone": "blank"
+      "path": "/logos/us/GSPY.png"
     },
     "GSRF": {
       "region": "us",
@@ -48451,8 +48618,7 @@
     "GT": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/GT.png",
-      "tone": "blank"
+      "path": "/logos/us/GT.png"
     },
     "GTBP": {
       "region": "us",
@@ -48467,8 +48633,7 @@
     "GTEC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/GTEC.png",
-      "tone": "blank"
+      "path": "/logos/us/GTEC.png"
     },
     "GTEK": {
       "region": "us",
@@ -48643,8 +48808,7 @@
     "GUSH": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/GUSH.png",
-      "tone": "blank"
+      "path": "/logos/us/GUSH.png"
     },
     "GUT": {
       "region": "us",
@@ -48699,8 +48863,7 @@
     "GVLU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/GVLU.png",
-      "tone": "blank"
+      "path": "/logos/us/GVLU.png"
     },
     "GVUS": {
       "region": "us",
@@ -48822,6 +48985,11 @@
       "source": "fmp",
       "path": "/logos/us/GXUS.png"
     },
+    "GYGY": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/GYGY.png: HTTP 404"
+    },
     "GYLD": {
       "region": "us",
       "source": "fmp",
@@ -48835,8 +49003,7 @@
     "GYRO": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/GYRO.png",
-      "tone": "blank"
+      "path": "/logos/us/GYRO.png"
     },
     "H": {
       "region": "us",
@@ -48852,14 +49019,12 @@
     "HACQ": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/HACQ.png",
-      "tone": "blank"
+      "path": "/logos/us/HACQ.png"
     },
     "HACQU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/HACQU.png",
-      "tone": "blank"
+      "path": "/logos/us/HACQU.png"
     },
     "HACQW": {
       "region": "us",
@@ -48869,8 +49034,7 @@
     "HAE": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/HAE.png",
-      "tone": "blank"
+      "path": "/logos/us/HAE.png"
     },
     "HAFC": {
       "region": "us",
@@ -48966,6 +49130,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/HAVA.png"
+    },
+    "HAWG": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/HAWG.png: HTTP 404"
     },
     "HAWK": {
       "region": "us",
@@ -49270,8 +49439,7 @@
     "HDSN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/HDSN.png",
-      "tone": "blank"
+      "path": "/logos/us/HDSN.png"
     },
     "HDUS": {
       "region": "us",
@@ -49338,6 +49506,11 @@
       "source": "fmp",
       "path": "/logos/us/HEI.png",
       "tone": "light"
+    },
+    "HEI.A": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "unsafe symbol"
     },
     "HEI/A": {
       "region": "us",
@@ -49562,8 +49735,7 @@
     "HHH": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/HHH.png",
-      "tone": "blank"
+      "path": "/logos/us/HHH.png"
     },
     "HHS": {
       "region": "us",
@@ -49765,8 +49937,7 @@
     "HLIT": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/HLIT.png",
-      "tone": "blank"
+      "path": "/logos/us/HLIT.png"
     },
     "HLLY": {
       "region": "us",
@@ -49792,6 +49963,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/HLP.png"
+    },
+    "HLSQ": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/HLSQ.png: HTTP 404"
     },
     "HLT": {
       "region": "us",
@@ -49867,8 +50043,7 @@
     "HNDL": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/HNDL.png",
-      "tone": "blank"
+      "path": "/logos/us/HNDL.png"
     },
     "HNGE": {
       "region": "us",
@@ -50015,6 +50190,16 @@
       "source": "fmp",
       "path": "/logos/us/HOPE.png"
     },
+    "HOS": {
+      "region": "us",
+      "source": "fmp",
+      "path": "/logos/us/HOS.png"
+    },
+    "HOST": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/HOST.png: HTTP 404"
+    },
     "HOUR": {
       "region": "us",
       "source": "fmp",
@@ -50023,14 +50208,12 @@
     "HOV": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/HOV.png",
-      "tone": "blank"
+      "path": "/logos/us/HOV.png"
     },
     "HOVNP": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/HOVNP.png",
-      "tone": "blank"
+      "path": "/logos/us/HOVNP.png"
     },
     "HOVR": {
       "region": "us",
@@ -50301,8 +50484,7 @@
     "HTAX": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/HTAX.png",
-      "tone": "blank"
+      "path": "/logos/us/HTAX.png"
     },
     "HTB": {
       "region": "us",
@@ -50322,8 +50504,7 @@
     "HTD": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/HTD.png",
-      "tone": "blank"
+      "path": "/logos/us/HTD.png"
     },
     "HTEC": {
       "region": "us",
@@ -50968,8 +51149,7 @@
     "IBAC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/IBAC.png",
-      "tone": "blank"
+      "path": "/logos/us/IBAC.png"
     },
     "IBASF": {
       "region": "us",
@@ -51330,8 +51510,7 @@
     "IBRX": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/IBRX.png",
-      "tone": "blank"
+      "path": "/logos/us/IBRX.png"
     },
     "IBTA": {
       "region": "us",
@@ -51431,8 +51610,7 @@
     "ICCC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ICCC.png",
-      "tone": "blank"
+      "path": "/logos/us/ICCC.png"
     },
     "ICCM": {
       "region": "us",
@@ -51513,8 +51691,7 @@
     "ICMB": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ICMB.png",
-      "tone": "blank"
+      "path": "/logos/us/ICMB.png"
     },
     "ICMNF": {
       "region": "us",
@@ -52040,8 +52217,7 @@
     "IFN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/IFN.png",
-      "tone": "blank"
+      "path": "/logos/us/IFN.png"
     },
     "IFRA": {
       "region": "us",
@@ -52927,14 +53103,12 @@
     "INAC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/INAC.png",
-      "tone": "blank"
+      "path": "/logos/us/INAC.png"
     },
     "INACU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/INACU.png",
-      "tone": "blank"
+      "path": "/logos/us/INACU.png"
     },
     "INBK": {
       "region": "us",
@@ -53015,8 +53189,7 @@
     "INDL": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/INDL.png",
-      "tone": "blank"
+      "path": "/logos/us/INDL.png"
     },
     "INDO": {
       "region": "us",
@@ -53141,8 +53314,7 @@
     "INLX": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/INLX.png",
-      "tone": "blank"
+      "path": "/logos/us/INLX.png"
     },
     "INM": {
       "region": "us",
@@ -53288,8 +53460,7 @@
     "INTL": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/INTL.png",
-      "tone": "blank"
+      "path": "/logos/us/INTL.png"
     },
     "INTM": {
       "region": "us",
@@ -53340,8 +53511,7 @@
     "INVA": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/INVA.png",
-      "tone": "blank"
+      "path": "/logos/us/INVA.png"
     },
     "INVE": {
       "region": "us",
@@ -53407,6 +53577,11 @@
       "region": "us",
       "source": "fmp",
       "reason": "download https://financialmodelingprep.com/image-stock/IONC.png: HTTP 404"
+    },
+    "IOND": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/IOND.png: HTTP 404"
     },
     "IONL": {
       "region": "us",
@@ -53502,8 +53677,7 @@
     "IPAR": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/IPAR.png",
-      "tone": "blank"
+      "path": "/logos/us/IPAR.png"
     },
     "IPAV": {
       "region": "us",
@@ -53563,8 +53737,7 @@
     "IPGP": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/IPGP.png",
-      "tone": "blank"
+      "path": "/logos/us/IPGP.png"
     },
     "IPHA": {
       "region": "us",
@@ -53626,11 +53799,15 @@
       "source": "fmp",
       "path": "/logos/us/IPST.png"
     },
+    "IPVV": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/IPVV.png: HTTP 404"
+    },
     "IPVVU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/IPVVU.png",
-      "tone": "blank"
+      "path": "/logos/us/IPVVU.png"
     },
     "IPW": {
       "region": "us",
@@ -53826,8 +54003,7 @@
     "IRHO": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/IRHO.png",
-      "tone": "blank"
+      "path": "/logos/us/IRHO.png"
     },
     "IRIX": {
       "region": "us",
@@ -54264,6 +54440,11 @@
       "source": "fmp",
       "path": "/logos/us/ISMXF.png"
     },
+    "ISNR": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/ISNR.png: HTTP 404"
+    },
     "ISNRU": {
       "region": "us",
       "source": "fmp",
@@ -54628,8 +54809,7 @@
     "ITAN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ITAN.png",
-      "tone": "blank"
+      "path": "/logos/us/ITAN.png"
     },
     "ITB": {
       "region": "us",
@@ -54925,6 +55105,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/IVA.png"
+    },
+    "IVAI": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/IVAI.png: HTTP 404"
     },
     "IVAL": {
       "region": "us",
@@ -55681,8 +55866,7 @@
     "JCAP": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/JCAP.png",
-      "tone": "blank"
+      "path": "/logos/us/JCAP.png"
     },
     "JCE": {
       "region": "us",
@@ -55738,8 +55922,7 @@
     "JDST": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/JDST.png",
-      "tone": "blank"
+      "path": "/logos/us/JDST.png"
     },
     "JDVI": {
       "region": "us",
@@ -55750,6 +55933,11 @@
       "region": "us",
       "source": "fmp",
       "reason": "download https://financialmodelingprep.com/image-stock/JDVL.png: HTTP 404"
+    },
+    "JDZG": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/JDZG.png: HTTP 404"
     },
     "JEDI": {
       "region": "us",
@@ -56011,6 +56199,11 @@
       "source": "fmp",
       "path": "/logos/us/JILL.png"
     },
+    "JINT": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/JINT.png: HTTP 404"
+    },
     "JIRE": {
       "region": "us",
       "source": "fmp",
@@ -56106,6 +56299,11 @@
       "source": "fmp",
       "path": "/logos/us/JMID.png"
     },
+    "JMKE": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/JMKE.png: HTTP 404"
+    },
     "JMM": {
       "region": "us",
       "source": "fmp",
@@ -56164,8 +56362,7 @@
     "JNUG": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/JNUG.png",
-      "tone": "blank"
+      "path": "/logos/us/JNUG.png"
     },
     "JOB": {
       "region": "us",
@@ -56207,6 +56404,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/JOJO.png"
+    },
+    "JONE": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/JONE.png: HTTP 404"
     },
     "JONEU": {
       "region": "us",
@@ -56466,20 +56668,17 @@
     "JSM": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/JSM.png",
-      "tone": "blank"
+      "path": "/logos/us/JSM.png"
     },
     "JSMD": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/JSMD.png",
-      "tone": "blank"
+      "path": "/logos/us/JSMD.png"
     },
     "JSML": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/JSML.png",
-      "tone": "blank"
+      "path": "/logos/us/JSML.png"
     },
     "JSPR": {
       "region": "us",
@@ -56570,6 +56769,11 @@
       "region": "us",
       "source": "fmp",
       "reason": "download https://financialmodelingprep.com/image-stock/JULU.png: HTTP 404"
+    },
+    "JULV": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/JULV.png: HTTP 404"
     },
     "JULW": {
       "region": "us",
@@ -56697,6 +56901,11 @@
       "source": "fmp",
       "path": "/logos/us/KAI.png"
     },
+    "KAIT": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/KAIT.png: HTTP 404"
+    },
     "KALA": {
       "region": "us",
       "source": "fmp",
@@ -56755,8 +56964,7 @@
     "KB": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/KB.png",
-      "tone": "blank"
+      "path": "/logos/us/KB.png"
     },
     "KBA": {
       "region": "us",
@@ -57277,8 +57485,7 @@
     "KLRA": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/KLRA.png",
-      "tone": "blank"
+      "path": "/logos/us/KLRA.png"
     },
     "KLRS": {
       "region": "us",
@@ -57424,8 +57631,7 @@
     "KNOW": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/KNOW.png",
-      "tone": "blank"
+      "path": "/logos/us/KNOW.png"
     },
     "KNRG": {
       "region": "us",
@@ -57536,8 +57742,7 @@
     "KORU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/KORU.png",
-      "tone": "blank"
+      "path": "/logos/us/KORU.png"
     },
     "KOS": {
       "region": "us",
@@ -57584,7 +57789,7 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/KPRX.png",
-      "tone": "blank"
+      "tone": "light"
     },
     "KPTI": {
       "region": "us",
@@ -57973,8 +58178,7 @@
     "KYMR": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/KYMR.png",
-      "tone": "blank"
+      "path": "/logos/us/KYMR.png"
     },
     "KYN": {
       "region": "us",
@@ -58009,8 +58213,7 @@
     "LABD": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/LABD.png",
-      "tone": "blank"
+      "path": "/logos/us/LABD.png"
     },
     "LABT": {
       "region": "us",
@@ -58338,8 +58541,7 @@
     "LCUT": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/LCUT.png",
-      "tone": "blank"
+      "path": "/logos/us/LCUT.png"
     },
     "LCYFF": {
       "region": "us",
@@ -58470,8 +58672,7 @@
     "LEN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/LEN.png",
-      "tone": "blank"
+      "path": "/logos/us/LEN.png"
     },
     "LEND": {
       "region": "us",
@@ -58621,8 +58822,7 @@
     "LFWD": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/LFWD.png",
-      "tone": "blank"
+      "path": "/logos/us/LFWD.png"
     },
     "LGCF": {
       "region": "us",
@@ -58900,8 +59100,12 @@
     "LITE": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/LITE.png",
-      "tone": "blank"
+      "path": "/logos/us/LITE.png"
+    },
+    "LITG": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/LITG.png: HTTP 404"
     },
     "LITL": {
       "region": "us",
@@ -58966,8 +59170,7 @@
     "LKOR": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/LKOR.png",
-      "tone": "blank"
+      "path": "/logos/us/LKOR.png"
     },
     "LKQ": {
       "region": "us",
@@ -59229,8 +59432,7 @@
     "LONA": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/LONA.png",
-      "tone": "blank"
+      "path": "/logos/us/LONA.png"
     },
     "LONZ": {
       "region": "us",
@@ -59296,20 +59498,17 @@
     "LPAA": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/LPAA.png",
-      "tone": "blank"
+      "path": "/logos/us/LPAA.png"
     },
     "LPAAW": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/LPAAW.png",
-      "tone": "blank"
+      "path": "/logos/us/LPAAW.png"
     },
     "LPBB": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/LPBB.png",
-      "tone": "blank"
+      "path": "/logos/us/LPBB.png"
     },
     "LPBBW": {
       "region": "us",
@@ -59465,8 +59664,7 @@
     "LRGG": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/LRGG.png",
-      "tone": "blank"
+      "path": "/logos/us/LRGG.png"
     },
     "LRHC": {
       "region": "us",
@@ -59502,8 +59700,7 @@
     "LSAF": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/LSAF.png",
-      "tone": "blank"
+      "path": "/logos/us/LSAF.png"
     },
     "LSAK": {
       "region": "us",
@@ -59513,8 +59710,7 @@
     "LSAT": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/LSAT.png",
-      "tone": "blank"
+      "path": "/logos/us/LSAT.png"
     },
     "LSBK": {
       "region": "us",
@@ -59594,8 +59790,7 @@
     "LTAX": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/LTAX.png",
-      "tone": "blank"
+      "path": "/logos/us/LTAX.png"
     },
     "LTBR": {
       "region": "us",
@@ -59611,6 +59806,16 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/LTCC.png"
+    },
+    "LTGO": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/LTGO.png: HTTP 404"
+    },
+    "LTGR": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/LTGR.png: HTTP 404"
     },
     "LTGRU": {
       "region": "us",
@@ -59737,8 +59942,7 @@
     "LVHD": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/LVHD.png",
-      "tone": "blank"
+      "path": "/logos/us/LVHD.png"
     },
     "LVHI": {
       "region": "us",
@@ -59784,20 +59988,17 @@
     "LWAC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/LWAC.png",
-      "tone": "blank"
+      "path": "/logos/us/LWAC.png"
     },
     "LWACU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/LWACU.png",
-      "tone": "blank"
+      "path": "/logos/us/LWACU.png"
     },
     "LWACW": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/LWACW.png",
-      "tone": "blank"
+      "path": "/logos/us/LWACW.png"
     },
     "LWAY": {
       "region": "us",
@@ -59883,6 +60084,11 @@
       "region": "us",
       "source": "fmp",
       "reason": "download https://financialmodelingprep.com/image-stock/LYLD.png: HTTP 404"
+    },
+    "LYTE": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/LYTE.png: HTTP 404"
     },
     "LYTS": {
       "region": "us",
@@ -60144,8 +60350,7 @@
     "MAS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/MAS.png",
-      "tone": "blank"
+      "path": "/logos/us/MAS.png"
     },
     "MASK": {
       "region": "us",
@@ -60200,8 +60405,7 @@
     "MAX": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/MAX.png",
-      "tone": "blank"
+      "path": "/logos/us/MAX.png"
     },
     "MAXI": {
       "region": "us",
@@ -60386,8 +60590,7 @@
     "MBSD": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/MBSD.png",
-      "tone": "blank"
+      "path": "/logos/us/MBSD.png"
     },
     "MBSF": {
       "region": "us",
@@ -60528,8 +60731,7 @@
     "MCI": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/MCI.png",
-      "tone": "blank"
+      "path": "/logos/us/MCI.png"
     },
     "MCK": {
       "region": "us",
@@ -60759,8 +60961,7 @@
     "MEDP": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/MEDP.png",
-      "tone": "blank"
+      "path": "/logos/us/MEDP.png"
     },
     "MEDS": {
       "region": "us",
@@ -60871,8 +61072,7 @@
     "MESO": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/MESO.png",
-      "tone": "blank"
+      "path": "/logos/us/MESO.png"
     },
     "MET": {
       "region": "us",
@@ -60920,6 +61120,11 @@
       "source": "fmp",
       "path": "/logos/us/METL.png"
     },
+    "METQ": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/METQ.png: HTTP 404"
+    },
     "METU": {
       "region": "us",
       "source": "fmp",
@@ -60964,8 +61169,7 @@
     "MEXX": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/MEXX.png",
-      "tone": "blank"
+      "path": "/logos/us/MEXX.png"
     },
     "MFA": {
       "region": "us",
@@ -61238,8 +61442,7 @@
     "MGTX": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/MGTX.png",
-      "tone": "blank"
+      "path": "/logos/us/MGTX.png"
     },
     "MGV": {
       "region": "us",
@@ -61326,6 +61529,11 @@
       "source": "fmp",
       "path": "/logos/us/MI.png"
     },
+    "MIAC": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/MIAC.png: HTTP 404"
+    },
     "MIACU": {
       "region": "us",
       "source": "fmp",
@@ -61364,8 +61572,7 @@
     "MIDU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/MIDU.png",
-      "tone": "blank"
+      "path": "/logos/us/MIDU.png"
     },
     "MIG": {
       "region": "us",
@@ -61420,8 +61627,7 @@
     "MINT": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/MINT.png",
-      "tone": "blank"
+      "path": "/logos/us/MINT.png"
     },
     "MINV": {
       "region": "us",
@@ -61710,8 +61916,7 @@
     "MLSS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/MLSS.png",
-      "tone": "blank"
+      "path": "/logos/us/MLSS.png"
     },
     "MLTAF": {
       "region": "us",
@@ -61906,8 +62111,7 @@
     "MNOV": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/MNOV.png",
-      "tone": "blank"
+      "path": "/logos/us/MNOV.png"
     },
     "MNPR": {
       "region": "us",
@@ -61992,14 +62196,12 @@
     "MNY": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/MNY.png",
-      "tone": "blank"
+      "path": "/logos/us/MNY.png"
     },
     "MNYWW": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/MNYWW.png",
-      "tone": "blank"
+      "path": "/logos/us/MNYWW.png"
     },
     "MNZL": {
       "region": "us",
@@ -62157,6 +62359,16 @@
       "source": "fmp",
       "path": "/logos/us/MPG.png"
     },
+    "MPIA": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/MPIA.png: HTTP 404"
+    },
+    "MPIM": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/MPIM.png: HTTP 404"
+    },
     "MPL": {
       "region": "us",
       "source": "fmp",
@@ -62258,6 +62470,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/MRBK.png"
+    },
+    "MRCO": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/MRCO.png: HTTP 404"
     },
     "MRCOU": {
       "region": "us",
@@ -62716,6 +62933,11 @@
       "source": "fmp",
       "path": "/logos/us/MTA.png"
     },
+    "MTAK": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/MTAK.png: HTTP 404"
+    },
     "MTAL": {
       "region": "us",
       "source": "fmp",
@@ -62829,8 +63051,7 @@
     "MTNB": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/MTNB.png",
-      "tone": "blank"
+      "path": "/logos/us/MTNB.png"
     },
     "MTNE": {
       "region": "us",
@@ -62936,6 +63157,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/MUFG.png"
+    },
+    "MUG": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/MUG.png: HTTP 404"
     },
     "MUIB": {
       "region": "us",
@@ -63219,6 +63445,11 @@
       "source": "fmp",
       "path": "/logos/us/MXL.png"
     },
+    "MXLL": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/MXLL.png: HTTP 404"
+    },
     "MXXEF": {
       "region": "us",
       "source": "fmp",
@@ -63477,8 +63708,7 @@
     "NAIL": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/NAIL.png",
-      "tone": "blank"
+      "path": "/logos/us/NAIL.png"
     },
     "NAK": {
       "region": "us",
@@ -63578,8 +63808,7 @@
     "NAVI": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/NAVI.png",
-      "tone": "blank"
+      "path": "/logos/us/NAVI.png"
     },
     "NAVN": {
       "region": "us",
@@ -63649,8 +63878,7 @@
     "NBH": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/NBH.png",
-      "tone": "blank"
+      "path": "/logos/us/NBH.png"
     },
     "NBHC": {
       "region": "us",
@@ -64038,7 +64266,7 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/NEON.png",
-      "tone": "blank"
+      "tone": "light"
     },
     "NEOV": {
       "region": "us",
@@ -64083,8 +64311,7 @@
     "NETL": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/NETL.png",
-      "tone": "blank"
+      "path": "/logos/us/NETL.png"
     },
     "NEU": {
       "region": "us",
@@ -64450,8 +64677,7 @@
     "NIPG": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/NIPG.png",
-      "tone": "blank"
+      "path": "/logos/us/NIPG.png"
     },
     "NIQ": {
       "region": "us",
@@ -64522,8 +64748,7 @@
     "NKLR": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/NKLR.png",
-      "tone": "blank"
+      "path": "/logos/us/NKLR.png"
     },
     "NKOUF": {
       "region": "us",
@@ -65084,7 +65309,7 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/NRXP.png",
-      "tone": "blank"
+      "tone": "light"
     },
     "NRXS": {
       "region": "us",
@@ -65190,7 +65415,7 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/NTAP.png",
-      "tone": "blank"
+      "tone": "light"
     },
     "NTB": {
       "region": "us",
@@ -65464,6 +65689,11 @@
       "source": "fmp",
       "path": "/logos/us/NUMV.png"
     },
+    "NUR": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/NUR.png: HTTP 404"
+    },
     "NURE": {
       "region": "us",
       "source": "fmp",
@@ -65548,8 +65778,7 @@
     "NVCR": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/NVCR.png",
-      "tone": "blank"
+      "path": "/logos/us/NVCR.png"
     },
     "NVCT": {
       "region": "us",
@@ -65824,6 +66053,11 @@
       "source": "fmp",
       "path": "/logos/us/NX.png"
     },
+    "NXAT": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/NXAT.png: HTTP 404"
+    },
     "NXB": {
       "region": "us",
       "source": "fmp",
@@ -65863,6 +66097,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/NXGLW.png"
+    },
+    "NXH": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/NXH.png: HTTP 404"
     },
     "NXL": {
       "region": "us",
@@ -65973,8 +66212,7 @@
     "NYNY": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/NYNY.png",
-      "tone": "blank"
+      "path": "/logos/us/NYNY.png"
     },
     "NYSX": {
       "region": "us",
@@ -66146,6 +66384,11 @@
       "source": "fmp",
       "path": "/logos/us/OC.png"
     },
+    "OCAC": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/OCAC.png: HTTP 404"
+    },
     "OCC": {
       "region": "us",
       "source": "fmp",
@@ -66164,8 +66407,7 @@
     "OCCIN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/OCCIN.png",
-      "tone": "blank"
+      "path": "/logos/us/OCCIN.png"
     },
     "OCDB": {
       "region": "us",
@@ -66316,8 +66558,7 @@
     "ODYS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ODYS.png",
-      "tone": "blank"
+      "path": "/logos/us/ODYS.png"
     },
     "OEC": {
       "region": "us",
@@ -66399,6 +66640,11 @@
       "source": "fmp",
       "path": "/logos/us/OGEN.png",
       "tone": "light"
+    },
+    "OGG": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/OGG.png: HTTP 404"
     },
     "OGI": {
       "region": "us",
@@ -66530,8 +66776,7 @@
     "OKLO": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/OKLO.png",
-      "tone": "blank"
+      "path": "/logos/us/OKLO.png"
     },
     "OKLS": {
       "region": "us",
@@ -66762,6 +67007,11 @@
       "source": "fmp",
       "path": "/logos/us/ONEH.png"
     },
+    "ONEN": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/ONEN.png: HTTP 404"
+    },
     "ONEO": {
       "region": "us",
       "source": "fmp",
@@ -66825,14 +67075,12 @@
     "ONMD": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ONMD.png",
-      "tone": "blank"
+      "path": "/logos/us/ONMD.png"
     },
     "ONMDW": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ONMDW.png",
-      "tone": "blank"
+      "path": "/logos/us/ONMDW.png"
     },
     "ONOF": {
       "region": "us",
@@ -66956,6 +67204,11 @@
       "source": "fmp",
       "path": "/logos/us/OPLN.png"
     },
+    "OPNW": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/OPNW.png: HTTP 404"
+    },
     "OPP": {
       "region": "us",
       "source": "fmp",
@@ -66999,8 +67252,7 @@
     "OPRX": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/OPRX.png",
-      "tone": "blank"
+      "path": "/logos/us/OPRX.png"
     },
     "OPTH": {
       "region": "us",
@@ -67040,8 +67292,7 @@
     "OPY": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/OPY.png",
-      "tone": "blank"
+      "path": "/logos/us/OPY.png"
     },
     "OR": {
       "region": "us",
@@ -67071,8 +67322,7 @@
     "ORC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ORC.png",
-      "tone": "blank"
+      "path": "/logos/us/ORC.png"
     },
     "ORCL": {
       "region": "us",
@@ -67107,8 +67357,7 @@
     "ORGO": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ORGO.png",
-      "tone": "blank"
+      "path": "/logos/us/ORGO.png"
     },
     "ORI": {
       "region": "us",
@@ -67281,6 +67530,11 @@
       "source": "fmp",
       "path": "/logos/us/OTAI.png"
     },
+    "OTAX": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/OTAX.png: HTTP 404"
+    },
     "OTEX": {
       "region": "us",
       "source": "fmp",
@@ -67429,8 +67683,7 @@
     "OWLT": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/OWLT.png",
-      "tone": "blank"
+      "path": "/logos/us/OWLT.png"
     },
     "OWN": {
       "region": "us",
@@ -67480,8 +67733,7 @@
     "OXLCM": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/OXLCM.png",
-      "tone": "blank"
+      "path": "/logos/us/OXLCM.png"
     },
     "OXLCN": {
       "region": "us",
@@ -67491,8 +67743,7 @@
     "OXLCO": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/OXLCO.png",
-      "tone": "blank"
+      "path": "/logos/us/OXLCO.png"
     },
     "OXLCZ": {
       "region": "us",
@@ -67568,6 +67819,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/PAAC.png"
+    },
+    "PAAI": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/PAAI.png: HTTP 404"
     },
     "PAAS": {
       "region": "us",
@@ -67740,6 +67996,12 @@
       "source": "fmp",
       "path": "/logos/us/PAR.png"
     },
+    "PARA": {
+      "region": "us",
+      "source": "fmp",
+      "path": "/logos/us/PARA.png",
+      "tone": "light"
+    },
     "PARK": {
       "region": "us",
       "source": "fmp",
@@ -67808,8 +68070,7 @@
     "PAX": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/PAX.png",
-      "tone": "blank"
+      "path": "/logos/us/PAX.png"
     },
     "PAXS": {
       "region": "us",
@@ -67870,6 +68131,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/PBA.png"
+    },
+    "PBAM": {
+      "region": "us",
+      "source": "fmp",
+      "path": "/logos/us/PBAM.png"
     },
     "PBAP": {
       "region": "us",
@@ -68046,6 +68312,11 @@
       "source": "fmp",
       "path": "/logos/us/PBR.png"
     },
+    "PBR.A": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "unsafe symbol"
+    },
     "PBRG": {
       "region": "us",
       "source": "fmp",
@@ -68064,8 +68335,7 @@
     "PBT": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/PBT.png",
-      "tone": "blank"
+      "path": "/logos/us/PBT.png"
     },
     "PBTP": {
       "region": "us",
@@ -68266,6 +68536,12 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/PCOR.png"
+    },
+    "PCPC": {
+      "region": "us",
+      "source": "fmp",
+      "path": "/logos/us/PCPC.png",
+      "tone": "light"
     },
     "PCPI": {
       "region": "us",
@@ -68660,8 +68936,7 @@
     "PFDE": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/PFDE.png",
-      "tone": "blank"
+      "path": "/logos/us/PFDE.png"
     },
     "PFE": {
       "region": "us",
@@ -68776,8 +69051,7 @@
     "PFOE": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/PFOE.png",
-      "tone": "blank"
+      "path": "/logos/us/PFOE.png"
     },
     "PFRL": {
       "region": "us",
@@ -68802,8 +69076,7 @@
     "PFX": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/PFX.png",
-      "tone": "blank"
+      "path": "/logos/us/PFX.png"
     },
     "PFXF": {
       "region": "us",
@@ -68813,8 +69086,7 @@
     "PFXNZ": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/PFXNZ.png",
-      "tone": "blank"
+      "path": "/logos/us/PFXNZ.png"
     },
     "PG": {
       "region": "us",
@@ -69075,8 +69347,7 @@
     "PILL": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/PILL.png",
-      "tone": "blank"
+      "path": "/logos/us/PILL.png"
     },
     "PIM": {
       "region": "us",
@@ -69196,8 +69467,7 @@
     "PKBK": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/PKBK.png",
-      "tone": "blank"
+      "path": "/logos/us/PKBK.png"
     },
     "PKE": {
       "region": "us",
@@ -69334,8 +69604,7 @@
     "PLRZ": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/PLRZ.png",
-      "tone": "blank"
+      "path": "/logos/us/PLRZ.png"
     },
     "PLSE": {
       "region": "us",
@@ -69687,6 +69956,11 @@
       "source": "fmp",
       "path": "/logos/us/PN.png"
     },
+    "PNAQ": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/PNAQ.png: HTTP 404"
+    },
     "PNBK": {
       "region": "us",
       "source": "fmp",
@@ -69745,8 +70019,7 @@
     "PNRG": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/PNRG.png",
-      "tone": "blank"
+      "path": "/logos/us/PNRG.png"
     },
     "PNTG": {
       "region": "us",
@@ -69877,7 +70150,7 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/POWW.png",
-      "tone": "blank"
+      "tone": "light"
     },
     "POWWP": {
       "region": "us",
@@ -70200,14 +70473,12 @@
     "PRLD": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/PRLD.png",
-      "tone": "blank"
+      "path": "/logos/us/PRLD.png"
     },
     "PRM": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/PRM.png",
-      "tone": "blank"
+      "path": "/logos/us/PRM.png"
     },
     "PRMAF": {
       "region": "us",
@@ -70248,8 +70519,7 @@
     "PROK": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/PROK.png",
-      "tone": "blank"
+      "path": "/logos/us/PROK.png"
     },
     "PROP": {
       "region": "us",
@@ -71024,11 +71294,15 @@
       "source": "fmp",
       "path": "/logos/us/PWB.png"
     },
+    "PWCM": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/PWCM.png: HTTP 404"
+    },
     "PWER": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/PWER.png",
-      "tone": "blank"
+      "path": "/logos/us/PWER.png"
     },
     "PWP": {
       "region": "us",
@@ -71054,6 +71328,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/PWRL.png"
+    },
+    "PWRX": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/PWRX.png: HTTP 404"
     },
     "PWRZ": {
       "region": "us",
@@ -71308,8 +71587,7 @@
     "QBTS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/QBTS.png",
-      "tone": "blank"
+      "path": "/logos/us/QBTS.png"
     },
     "QBTX": {
       "region": "us",
@@ -71577,8 +71855,7 @@
     "QLC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/QLC.png",
-      "tone": "blank"
+      "path": "/logos/us/QLC.png"
     },
     "QLD": {
       "region": "us",
@@ -71684,6 +71961,11 @@
       "region": "us",
       "source": "fmp",
       "reason": "download https://financialmodelingprep.com/image-stock/QMY.png: HTTP 404"
+    },
+    "QNBC": {
+      "region": "us",
+      "source": "fmp",
+      "path": "/logos/us/QNBC.png"
     },
     "QNC": {
       "region": "us",
@@ -71825,8 +72107,7 @@
     "QQQE": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/QQQE.png",
-      "tone": "blank"
+      "path": "/logos/us/QQQE.png"
     },
     "QQQG": {
       "region": "us",
@@ -71912,8 +72193,7 @@
     "QRED": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/QRED.png",
-      "tone": "blank"
+      "path": "/logos/us/QRED.png"
     },
     "QRHC": {
       "region": "us",
@@ -72054,8 +72334,7 @@
     "QTTB": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/QTTB.png",
-      "tone": "blank"
+      "path": "/logos/us/QTTB.png"
     },
     "QTUM": {
       "region": "us",
@@ -72151,6 +72430,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/QVAL.png"
+    },
+    "QVCG": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/QVCG.png: HTTP 404"
     },
     "QVML": {
       "region": "us",
@@ -72454,7 +72738,7 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/RBLX.png",
-      "tone": "blank"
+      "tone": "light"
     },
     "RBLY": {
       "region": "us",
@@ -72495,6 +72779,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/RCAX.png"
+    },
+    "RCBC": {
+      "region": "us",
+      "source": "fmp",
+      "path": "/logos/us/RCBC.png"
     },
     "RCD": {
       "region": "us",
@@ -72621,8 +72910,7 @@
     "RDCM": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/RDCM.png",
-      "tone": "blank"
+      "path": "/logos/us/RDCM.png"
     },
     "RDDC": {
       "region": "us",
@@ -72787,8 +73075,7 @@
     "RECT": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/RECT.png",
-      "tone": "blank"
+      "path": "/logos/us/RECT.png"
     },
     "REED": {
       "region": "us",
@@ -72799,6 +73086,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/REET.png"
+    },
+    "REF": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/REF.png: HTTP 404"
     },
     "REFA": {
       "region": "us",
@@ -72939,8 +73231,7 @@
     "RETL": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/RETL.png",
-      "tone": "blank"
+      "path": "/logos/us/RETL.png"
     },
     "RETO": {
       "region": "us",
@@ -73141,8 +73432,7 @@
     "RGEF": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/RGEF.png",
-      "tone": "blank"
+      "path": "/logos/us/RGEF.png"
     },
     "RGEN": {
       "region": "us",
@@ -73309,14 +73599,12 @@
     "RILYG": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/RILYG.png",
-      "tone": "blank"
+      "path": "/logos/us/RILYG.png"
     },
     "RILYL": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/RILYL.png",
-      "tone": "blank"
+      "path": "/logos/us/RILYL.png"
     },
     "RILYN": {
       "region": "us",
@@ -73336,8 +73624,7 @@
     "RILYZ": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/RILYZ.png",
-      "tone": "blank"
+      "path": "/logos/us/RILYZ.png"
     },
     "RIME": {
       "region": "us",
@@ -73438,8 +73725,7 @@
     "RIV": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/RIV.png",
-      "tone": "blank"
+      "path": "/logos/us/RIV.png"
     },
     "RIVC": {
       "region": "us",
@@ -73627,8 +73913,7 @@
     "RMCA": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/RMCA.png",
-      "tone": "blank"
+      "path": "/logos/us/RMCA.png"
     },
     "RMCF": {
       "region": "us",
@@ -73664,8 +73949,7 @@
     "RMM": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/RMM.png",
-      "tone": "blank"
+      "path": "/logos/us/RMM.png"
     },
     "RMME": {
       "region": "us",
@@ -73690,14 +73974,12 @@
     "RMNY": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/RMNY.png",
-      "tone": "blank"
+      "path": "/logos/us/RMNY.png"
     },
     "RMOP": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/RMOP.png",
-      "tone": "blank"
+      "path": "/logos/us/RMOP.png"
     },
     "RMR": {
       "region": "us",
@@ -73738,6 +74020,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/RNAC.png"
+    },
+    "RNAQ": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/RNAQ.png: HTTP 404"
     },
     "RNAZ": {
       "region": "us",
@@ -74116,8 +74403,7 @@
     "RSF": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/RSF.png",
-      "tone": "blank"
+      "path": "/logos/us/RSF.png"
     },
     "RSG": {
       "region": "us",
@@ -74152,8 +74438,7 @@
     "RSMC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/RSMC.png",
-      "tone": "blank"
+      "path": "/logos/us/RSMC.png"
     },
     "RSMR": {
       "region": "us",
@@ -74168,8 +74453,7 @@
     "RSP": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/RSP.png",
-      "tone": "blank"
+      "path": "/logos/us/RSP.png"
     },
     "RSPA": {
       "region": "us",
@@ -74406,6 +74690,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/RVI.png"
+    },
+    "RVII": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/RVII.png: HTTP 404"
     },
     "RVLV": {
       "region": "us",
@@ -74668,6 +74957,11 @@
       "source": "fmp",
       "path": "/logos/us/RYZ.png"
     },
+    "RZAI": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/RZAI.png: HTTP 404"
+    },
     "RZC": {
       "region": "us",
       "source": "fmp",
@@ -74706,8 +75000,7 @@
     "SA": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SA.png",
-      "tone": "blank"
+      "path": "/logos/us/SA.png"
     },
     "SAA": {
       "region": "us",
@@ -74824,10 +75117,20 @@
       "source": "fmp",
       "path": "/logos/us/SAIL.png"
     },
+    "SAIQ": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/SAIQ.png: HTTP 404"
+    },
     "SAJ": {
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/SAJ.png"
+    },
+    "SALI": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/SALI.png: HTTP 404"
     },
     "SAM": {
       "region": "us",
@@ -74843,6 +75146,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/SAMM.png"
+    },
+    "SAMO": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/SAMO.png: HTTP 404"
     },
     "SAMT": {
       "region": "us",
@@ -75029,14 +75337,12 @@
     "SBGI": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SBGI.png",
-      "tone": "blank"
+      "path": "/logos/us/SBGI.png"
     },
     "SBH": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SBH.png",
-      "tone": "blank"
+      "path": "/logos/us/SBH.png"
     },
     "SBI": {
       "region": "us",
@@ -75422,8 +75728,7 @@
     "SCM": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SCM.png",
-      "tone": "blank"
+      "path": "/logos/us/SCM.png"
     },
     "SCMB": {
       "region": "us",
@@ -75503,8 +75808,7 @@
     "SCWO": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SCWO.png",
-      "tone": "blank"
+      "path": "/logos/us/SCWO.png"
     },
     "SCYB": {
       "region": "us",
@@ -75579,8 +75883,7 @@
     "SDGR": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SDGR.png",
-      "tone": "blank"
+      "path": "/logos/us/SDGR.png"
     },
     "SDHC": {
       "region": "us",
@@ -75661,6 +75964,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/SDTY.png"
+    },
+    "SDUR": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/SDUR.png: HTTP 404"
     },
     "SDVD": {
       "region": "us",
@@ -75765,8 +76073,7 @@
     "SEG": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SEG.png",
-      "tone": "blank"
+      "path": "/logos/us/SEG.png"
     },
     "SEGG": {
       "region": "us",
@@ -75962,8 +76269,7 @@
     "SFB": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SFB.png",
-      "tone": "blank"
+      "path": "/logos/us/SFB.png"
     },
     "SFBC": {
       "region": "us",
@@ -76083,8 +76389,7 @@
     "SG": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SG.png",
-      "tone": "blank"
+      "path": "/logos/us/SG.png"
     },
     "SGA": {
       "region": "us",
@@ -76186,6 +76491,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/SGRW.png"
+    },
+    "SGRX": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/SGRX.png: HTTP 404"
     },
     "SGRY": {
       "region": "us",
@@ -76400,8 +76710,7 @@
     "SHRT": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SHRT.png",
-      "tone": "blank"
+      "path": "/logos/us/SHRT.png"
     },
     "SHRY": {
       "region": "us",
@@ -76816,8 +77125,7 @@
     "SKOR": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SKOR.png",
-      "tone": "blank"
+      "path": "/logos/us/SKOR.png"
     },
     "SKRE": {
       "region": "us",
@@ -77576,8 +77884,7 @@
     "SNDX": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SNDX.png",
-      "tone": "blank"
+      "path": "/logos/us/SNDX.png"
     },
     "SNES": {
       "region": "us",
@@ -77739,8 +78046,7 @@
     "SOCA": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SOCA.png",
-      "tone": "blank"
+      "path": "/logos/us/SOCA.png"
     },
     "SOCL": {
       "region": "us",
@@ -77871,8 +78177,7 @@
     "SOR": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SOR.png",
-      "tone": "blank"
+      "path": "/logos/us/SOR.png"
     },
     "SORA": {
       "region": "us",
@@ -77943,8 +78248,7 @@
     "SOXS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SOXS.png",
-      "tone": "blank"
+      "path": "/logos/us/SOXS.png"
     },
     "SOXX": {
       "region": "us",
@@ -78125,8 +78429,7 @@
     "SPDN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SPDN.png",
-      "tone": "blank"
+      "path": "/logos/us/SPDN.png"
     },
     "SPDRF": {
       "region": "us",
@@ -78489,8 +78792,7 @@
     "SPUU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SPUU.png",
-      "tone": "blank"
+      "path": "/logos/us/SPUU.png"
     },
     "SPVM": {
       "region": "us",
@@ -78541,8 +78843,7 @@
     "SPXL": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SPXL.png",
-      "tone": "blank"
+      "path": "/logos/us/SPXL.png"
     },
     "SPXN": {
       "region": "us",
@@ -78552,8 +78853,7 @@
     "SPXS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SPXS.png",
-      "tone": "blank"
+      "path": "/logos/us/SPXS.png"
     },
     "SPXT": {
       "region": "us",
@@ -78669,8 +78969,7 @@
     "SQLV": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SQLV.png",
-      "tone": "blank"
+      "path": "/logos/us/SQLV.png"
     },
     "SQM": {
       "region": "us",
@@ -79126,8 +79425,7 @@
     "STAX": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/STAX.png",
-      "tone": "blank"
+      "path": "/logos/us/STAX.png"
     },
     "STBA": {
       "region": "us",
@@ -79217,8 +79515,7 @@
     "STHO": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/STHO.png",
-      "tone": "blank"
+      "path": "/logos/us/STHO.png"
     },
     "STI": {
       "region": "us",
@@ -79301,8 +79598,7 @@
     "STNG": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/STNG.png",
-      "tone": "blank"
+      "path": "/logos/us/STNG.png"
     },
     "STOK": {
       "region": "us",
@@ -79382,8 +79678,7 @@
     "STRS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/STRS.png",
-      "tone": "blank"
+      "path": "/logos/us/STRS.png"
     },
     "STRT": {
       "region": "us",
@@ -79459,8 +79754,7 @@
     "STXF": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/STXF.png",
-      "tone": "blank"
+      "path": "/logos/us/STXF.png"
     },
     "STXG": {
       "region": "us",
@@ -79590,8 +79884,7 @@
     "SUNB": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SUNB.png",
-      "tone": "blank"
+      "path": "/logos/us/SUNB.png"
     },
     "SUNC": {
       "region": "us",
@@ -79723,6 +80016,11 @@
       "source": "fmp",
       "path": "/logos/us/SVCO.png"
     },
+    "SVIA": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/SVIA.png: HTTP 404"
+    },
     "SVIV": {
       "region": "us",
       "source": "fmp",
@@ -79828,8 +80126,7 @@
     "SWKS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SWKS.png",
-      "tone": "blank"
+      "path": "/logos/us/SWKS.png"
     },
     "SWMR": {
       "region": "us",
@@ -79894,8 +80191,7 @@
     "SXT": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SXT.png",
-      "tone": "blank"
+      "path": "/logos/us/SXT.png"
     },
     "SXTC": {
       "region": "us",
@@ -79965,8 +80261,7 @@
     "SYNX": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/SYNX.png",
-      "tone": "blank"
+      "path": "/logos/us/SYNX.png"
     },
     "SYPR": {
       "region": "us",
@@ -80328,8 +80623,7 @@
     "TBN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/TBN.png",
-      "tone": "blank"
+      "path": "/logos/us/TBN.png"
     },
     "TBNPF": {
       "region": "us",
@@ -80529,8 +80823,7 @@
     "TDF": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/TDF.png",
-      "tone": "blank"
+      "path": "/logos/us/TDF.png"
     },
     "TDG": {
       "region": "us",
@@ -80692,14 +80985,12 @@
     "TECL": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/TECL.png",
-      "tone": "blank"
+      "path": "/logos/us/TECL.png"
     },
     "TECS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/TECS.png",
-      "tone": "blank"
+      "path": "/logos/us/TECS.png"
     },
     "TECX": {
       "region": "us",
@@ -80749,8 +81040,7 @@
     "TELO": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/TELO.png",
-      "tone": "blank"
+      "path": "/logos/us/TELO.png"
     },
     "TEM": {
       "region": "us",
@@ -80923,8 +81213,7 @@
     "TFFI": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/TFFI.png",
-      "tone": "blank"
+      "path": "/logos/us/TFFI.png"
     },
     "TFGZ": {
       "region": "us",
@@ -81019,8 +81308,7 @@
     "TGHL": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/TGHL.png",
-      "tone": "blank"
+      "path": "/logos/us/TGHL.png"
     },
     "TGL": {
       "region": "us",
@@ -81052,6 +81340,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/TGRW.png"
+    },
+    "TGRZ": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/TGRZ.png: HTTP 404"
     },
     "TGS": {
       "region": "us",
@@ -81234,6 +81527,11 @@
       "source": "fmp",
       "path": "/logos/us/TIGR.png"
     },
+    "TIH": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/TIH.png: HTTP 404"
+    },
     "TII": {
       "region": "us",
       "source": "fmp",
@@ -81400,8 +81698,7 @@
     "TKNO": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/TKNO.png",
-      "tone": "blank"
+      "path": "/logos/us/TKNO.png"
     },
     "TKNQ": {
       "region": "us",
@@ -81432,6 +81729,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/TLA.png"
+    },
+    "TLAC": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/TLAC.png: HTTP 404"
     },
     "TLCI": {
       "region": "us",
@@ -81583,7 +81885,7 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/TMC.png",
-      "tone": "blank"
+      "tone": "light"
     },
     "TMCI": {
       "region": "us",
@@ -81759,8 +82061,7 @@
     "TMV": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/TMV.png",
-      "tone": "blank"
+      "path": "/logos/us/TMV.png"
     },
     "TMVE": {
       "region": "us",
@@ -81775,8 +82076,7 @@
     "TNA": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/TNA.png",
-      "tone": "blank"
+      "path": "/logos/us/TNA.png"
     },
     "TNC": {
       "region": "us",
@@ -81822,7 +82122,7 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/TNON.png",
-      "tone": "blank"
+      "tone": "light"
     },
     "TNONW": {
       "region": "us",
@@ -82038,8 +82338,7 @@
     "TPCS": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/TPCS.png",
-      "tone": "blank"
+      "path": "/logos/us/TPCS.png"
     },
     "TPET": {
       "region": "us",
@@ -82104,14 +82403,12 @@
     "TPOR": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/TPOR.png",
-      "tone": "blank"
+      "path": "/logos/us/TPOR.png"
     },
     "TPR": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/TPR.png",
-      "tone": "blank"
+      "path": "/logos/us/TPR.png"
     },
     "TPRY": {
       "region": "us",
@@ -83131,8 +83428,7 @@
     "TWN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/TWN.png",
-      "tone": "blank"
+      "path": "/logos/us/TWN.png"
     },
     "TWNSF": {
       "region": "us",
@@ -83334,8 +83630,7 @@
     "TYO": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/TYO.png",
-      "tone": "blank"
+      "path": "/logos/us/TYO.png"
     },
     "TYRA": {
       "region": "us",
@@ -83355,8 +83650,7 @@
     "TZA": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/TZA.png",
-      "tone": "blank"
+      "path": "/logos/us/TZA.png"
     },
     "TZOO": {
       "region": "us",
@@ -83458,8 +83752,7 @@
     "UBOT": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/UBOT.png",
-      "tone": "blank"
+      "path": "/logos/us/UBOT.png"
     },
     "UBR": {
       "region": "us",
@@ -83500,8 +83793,7 @@
     "UBXG": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/UBXG.png",
-      "tone": "blank"
+      "path": "/logos/us/UBXG.png"
     },
     "UCAPF": {
       "region": "us",
@@ -83651,8 +83943,7 @@
     "UFG": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/UFG.png",
-      "tone": "blank"
+      "path": "/logos/us/UFG.png"
     },
     "UFI": {
       "region": "us",
@@ -83727,8 +84018,7 @@
     "UHAL": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/UHAL.png",
-      "tone": "blank"
+      "path": "/logos/us/UHAL.png"
     },
     "UHS": {
       "region": "us",
@@ -84150,8 +84440,7 @@
     "URBN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/URBN.png",
-      "tone": "blank"
+      "path": "/logos/us/URBN.png"
     },
     "URE": {
       "region": "us",
@@ -84242,8 +84531,7 @@
     "USAU": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/USAU.png",
-      "tone": "blank"
+      "path": "/logos/us/USAU.png"
     },
     "USAX": {
       "region": "us",
@@ -84609,8 +84897,7 @@
     "UTSL": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/UTSL.png",
-      "tone": "blank"
+      "path": "/logos/us/UTSL.png"
     },
     "UTWO": {
       "region": "us",
@@ -84804,6 +85091,11 @@
       "region": "us",
       "source": "fmp",
       "reason": "download https://financialmodelingprep.com/image-stock/VAGPF.png: HTTP 404"
+    },
+    "VAI": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/VAI.png: HTTP 404"
     },
     "VAIE": {
       "region": "us",
@@ -85278,7 +85570,7 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/VFC.png",
-      "tone": "blank"
+      "tone": "light"
     },
     "VFCAF": {
       "region": "us",
@@ -85553,8 +85845,7 @@
     "VHC": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/VHC.png",
-      "tone": "blank"
+      "path": "/logos/us/VHC.png"
     },
     "VHCP": {
       "region": "us",
@@ -85584,8 +85875,7 @@
     "VIA": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/VIA.png",
-      "tone": "blank"
+      "path": "/logos/us/VIA.png"
     },
     "VIAG": {
       "region": "us",
@@ -85640,8 +85930,7 @@
     "VINP": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/VINP.png",
-      "tone": "blank"
+      "path": "/logos/us/VINP.png"
     },
     "VIOG": {
       "region": "us",
@@ -85874,6 +86163,11 @@
       "source": "fmp",
       "path": "/logos/us/VMO.png"
     },
+    "VMRK": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/VMRK.png: HTTP 404"
+    },
     "VMSB": {
       "region": "us",
       "source": "fmp",
@@ -85887,8 +86181,7 @@
     "VNCE": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/VNCE.png",
-      "tone": "blank"
+      "path": "/logos/us/VNCE.png"
     },
     "VNCUF": {
       "region": "us",
@@ -86133,8 +86426,7 @@
     "VOXR": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/VOXR.png",
-      "tone": "blank"
+      "path": "/logos/us/VOXR.png"
     },
     "VOYA": {
       "region": "us",
@@ -86199,8 +86491,7 @@
     "VRA": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/VRA.png",
-      "tone": "blank"
+      "path": "/logos/us/VRA.png"
     },
     "VRAI": {
       "region": "us",
@@ -86711,6 +87002,11 @@
       "source": "fmp",
       "path": "/logos/us/VYLD.png"
     },
+    "VYLR": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/VYLR.png: HTTP 404"
+    },
     "VYM": {
       "region": "us",
       "source": "fmp",
@@ -86809,8 +87105,7 @@
     "WANT": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/WANT.png",
-      "tone": "blank"
+      "path": "/logos/us/WANT.png"
     },
     "WAR": {
       "region": "us",
@@ -86830,8 +87125,7 @@
     "WAT": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/WAT.png",
-      "tone": "blank"
+      "path": "/logos/us/WAT.png"
     },
     "WATS": {
       "region": "us",
@@ -86932,6 +87226,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/WCC.png"
+    },
+    "WCCB": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/WCCB.png: HTTP 404"
     },
     "WCEO": {
       "region": "us",
@@ -87371,8 +87670,7 @@
     "WHWK": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/WHWK.png",
-      "tone": "blank"
+      "path": "/logos/us/WHWK.png"
     },
     "WIA": {
       "region": "us",
@@ -87427,8 +87725,7 @@
     "WIW": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/WIW.png",
-      "tone": "blank"
+      "path": "/logos/us/WIW.png"
     },
     "WIX": {
       "region": "us",
@@ -87459,6 +87756,11 @@
       "region": "us",
       "source": "fmp",
       "path": "/logos/us/WKSP.png"
+    },
+    "WLCO": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/WLCO.png: HTTP 404"
     },
     "WLCOU": {
       "region": "us",
@@ -88040,8 +88342,7 @@
     "WVVIP": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/WVVIP.png",
-      "tone": "blank"
+      "path": "/logos/us/WVVIP.png"
     },
     "WW": {
       "region": "us",
@@ -88269,8 +88570,7 @@
     "XCBE": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/XCBE.png",
-      "tone": "blank"
+      "path": "/logos/us/XCBE.png"
     },
     "XCCC": {
       "region": "us",
@@ -88316,6 +88616,11 @@
       "region": "us",
       "source": "fmp",
       "reason": "download https://financialmodelingprep.com/image-stock/XCOWF.png: HTTP 404"
+    },
+    "XCSH": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/XCSH.png: HTTP 404"
     },
     "XCUR": {
       "region": "us",
@@ -88567,6 +88872,11 @@
       "region": "us",
       "source": "fmp",
       "reason": "download https://financialmodelingprep.com/image-stock/XIGV.png: HTTP 404"
+    },
+    "XIII": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/XIII.png: HTTP 404"
     },
     "XIJN": {
       "region": "us",
@@ -89326,6 +89636,11 @@
       "source": "fmp",
       "path": "/logos/us/XTEN.png"
     },
+    "XTER": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/XTER.png: HTTP 404"
+    },
     "XTIA": {
       "region": "us",
       "source": "fmp",
@@ -89574,8 +89889,7 @@
     "XZO": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/XZO.png",
-      "tone": "blank"
+      "path": "/logos/us/XZO.png"
     },
     "YAAS": {
       "region": "us",
@@ -89595,8 +89909,7 @@
     "YANG": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/YANG.png",
-      "tone": "blank"
+      "path": "/logos/us/YANG.png"
     },
     "YB": {
       "region": "us",
@@ -89709,6 +90022,11 @@
       "source": "fmp",
       "path": "/logos/us/YFFI.png"
     },
+    "YFOR": {
+      "region": "us",
+      "source": "fmp",
+      "reason": "download https://financialmodelingprep.com/image-stock/YFOR.png: HTTP 404"
+    },
     "YFYA": {
       "region": "us",
       "source": "fmp",
@@ -89767,8 +90085,7 @@
     "YINN": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/YINN.png",
-      "tone": "blank"
+      "path": "/logos/us/YINN.png"
     },
     "YJ": {
       "region": "us",
@@ -89964,8 +90281,7 @@
     "YYAI": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/YYAI.png",
-      "tone": "blank"
+      "path": "/logos/us/YYAI.png"
     },
     "YYGH": {
       "region": "us",
@@ -90296,8 +90612,7 @@
     "ZNTL": {
       "region": "us",
       "source": "fmp",
-      "path": "/logos/us/ZNTL.png",
-      "tone": "blank"
+      "path": "/logos/us/ZNTL.png"
     },
     "ZOCT": {
       "region": "us",

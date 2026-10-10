@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useVisibleInterval } from "@/hooks/use-visible-interval";
 import {
   ChipCollapseRow,
   ChipCollapseToggle,
@@ -64,6 +65,15 @@ type TrendingKeywordsCardProps = {
    * 않는 이유는 부르는 쪽이 그 목록을 이미 화면에 그리고 있기 때문이다.
    */
   articles?: NewsArticle[] | null;
+  /**
+   * 0보다 크면 **탭이 보이는 동안** 이 주기로 칩을 다시 받는다.
+   *
+   * 기본값은 0(한 번만)이다 — 레일은 화면을 오갈 때마다 다시 받는다. 홈처럼 **열어
+   * 둔 채 하루가 지나는** 자리만 주기를 준다(2026-09-16 사용자 요청). 각주의 속보
+   * 수는 `articles`를 주는 쪽이 갱신하지만, **칩은 이 카드가 직접 받는 값**이라
+   * 그쪽만 갱신하면 각주와 칩의 시각이 어긋난다.
+   */
+  refreshMs?: number;
 };
 
 export function TrendingKeywordsCard({
@@ -72,6 +82,7 @@ export function TrendingKeywordsCard({
   onSelect,
   variant = "full",
   articles = null,
+  refreshMs = 0,
 }: TrendingKeywordsCardProps) {
   const router = useRouter();
   /*
@@ -83,24 +94,45 @@ export function TrendingKeywordsCard({
   const [loaded, setLoaded] = useState<{ key: string; top: NewsTopKeywords } | null>(null);
   const key = `${market}:${limit}`;
 
+  /*
+    **마지막으로 건 요청만 쓴다.** 요청을 거는 자리가 둘(첫 적재·주기)이 되면서 이펙트
+    안의 `alive` 지역변수로는 부족해졌다 — 늦게 도착한 앞 회차가 새 회차의 답을 덮으면
+    시장을 바꾼 뒤 옛 키워드가 되돌아온다. 언마운트도 같은 번호표로 버린다.
+  */
+  const seqRef = useRef(0);
+  useEffect(
+    () => () => {
+      seqRef.current += 1;
+    },
+    [],
+  );
+
+  const load = useCallback(
+    (initial: boolean) => {
+      seqRef.current += 1;
+      const seq = seqRef.current;
+      fetchTopKeywords(market, limit)
+        .then((res) => {
+          if (seq === seqRef.current) setLoaded({ key: `${market}:${limit}`, top: res });
+        })
+        .catch(() => {
+          // 갱신의 실패는 칩을 지우지 않는다 — 첫 적재의 실패만 빈 카드로 떨어진다.
+          if (seq === seqRef.current && initial) {
+            setLoaded({
+              key: `${market}:${limit}`,
+              top: { keywords: [], articleCount: 0, minMentions: 2 },
+            });
+          }
+        });
+    },
+    [market, limit],
+  );
+
   useEffect(() => {
-    let alive = true;
-    fetchTopKeywords(market, limit)
-      .then((res) => {
-        if (alive) setLoaded({ key: `${market}:${limit}`, top: res });
-      })
-      .catch(() => {
-        if (alive) {
-          setLoaded({
-            key: `${market}:${limit}`,
-            top: { keywords: [], articleCount: 0, minMentions: 2 },
-          });
-        }
-      });
-    return () => {
-      alive = false;
-    };
-  }, [market, limit]);
+    load(true);
+  }, [load]);
+
+  useVisibleInterval(() => load(false), refreshMs, refreshMs > 0);
 
   const top = loaded && loaded.key === key ? loaded.top : null;
   const keywords = top ? top.keywords.map((k) => [k.keyword, k.count] as const) : null;

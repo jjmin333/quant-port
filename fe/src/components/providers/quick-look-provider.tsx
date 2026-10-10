@@ -1,6 +1,10 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AssetQuickLook } from "@/components/mentions/asset-mention";
+import type { AssetMention, MentionSet, PreviewAssetKind } from "@/lib/mentions";
+import { fetchAssetPeek } from "@/lib/wealth-api";
 import { IndexQuickLookModal } from "@/components/market/index-quick-look-modal";
 import { SymbolQuickLookModal } from "@/components/stocks/symbol-quick-look-modal";
 import { useIndexScores } from "@/hooks/use-index-scores";
@@ -43,12 +47,21 @@ import type { QuoteSummary } from "@/lib/quotes-types";
 
 type Picked =
   | { kind: "symbol"; symbol: string; seed: QuoteSummary | null }
-  | { kind: "index"; id: string };
+  | { kind: "index"; id: string }
+  | { kind: "asset"; asset: AssetRef };
+
+/**
+ * 자산 하나 — 단지(apt)·지역(region, 법정동 시군구 5자리)·금융상품(product, 상품 id)·금리(rate, ECOS 계열 키).
+ * 글 속 자산 태그와 같은 키다. `name`은 응답이 오기 전 제목으로만 쓴다.
+ */
+export type AssetRef = { kind: PreviewAssetKind; key: string; name?: string };
 
 export type QuickLookApi = {
   /** `seed`(목록이 이미 들고 있는 시세)를 주면 시세 요청 없이 연다. */
   openSymbol: (symbol: string, seed?: QuoteSummary | null) => void;
   openIndex: (indexId: string) => void;
+  /** 부동산·금리·금융상품 미리보기 (2026-10-09 요청 5 — 페이지로 바로 떠나지 않는다). */
+  openAsset: (asset: AssetRef) => void;
   close: () => void;
 };
 
@@ -72,6 +85,7 @@ export function QuickLookProvider({ children }: { children: React.ReactNode }) {
       openSymbol: (symbol, seed) =>
         setPicked({ kind: "symbol", symbol: symbol.trim().toUpperCase(), seed: seed ?? null }),
       openIndex: (indexId) => setPicked({ kind: "index", id: indexId }),
+      openAsset: (asset) => setPicked({ kind: "asset", asset }),
       close: () => setPicked(null),
     }),
     [],
@@ -89,6 +103,9 @@ export function QuickLookProvider({ children }: { children: React.ReactNode }) {
       />
       {picked?.kind === "index" && (
         <IndexQuickLookHost indexId={picked.id} onClose={api.close} />
+      )}
+      {picked?.kind === "asset" && (
+        <AssetQuickLookHost key={`${picked.asset.kind}|${picked.asset.key}`} asset={picked.asset} onClose={api.close} />
       )}
     </QuickLookContext.Provider>
   );
@@ -117,5 +134,40 @@ function IndexQuickLookHost({ indexId, onClose }: { indexId: string; onClose: ()
       open
       onClose={onClose}
     />
+  );
+}
+
+/**
+ * 자산을 **키만으로** 연다 — `/assets/peek`를 열 때 한 번 부르고, 글 속 태그와 같은 모달에 넘긴다.
+ * 받는 동안·실패하면 같은 크기의 창에 그 사실만 적는다(창이 떴다 사라지지 않게).
+ */
+function AssetQuickLookHost({ asset, onClose }: { asset: AssetRef; onClose: () => void }) {
+  const [state, setState] = useState<{ a: AssetMention; set: MentionSet } | "error" | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetchAssetPeek(asset.kind, asset.key)
+      .then((r) => {
+        if (!alive) return;
+        const fields = Object.fromEntries(r.fields.map((f) => [f.id, f]));
+        setState({ a: r.asset, set: { tokens: [], symbols: [], fields, assets: [r.asset] } });
+      })
+      .catch(() => alive && setState("error"));
+    return () => {
+      alive = false;
+    };
+  }, [asset.kind, asset.key]);
+
+  if (state && state !== "error") return <AssetQuickLook a={state.a} set={state.set} onClose={onClose} />;
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="p-4 sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-cell">{asset.name ?? asset.key}</DialogTitle>
+          <DialogDescription className="text-cell">
+            {state === "error" ? "정보를 불러오지 못했습니다." : "불러오는 중…"}
+          </DialogDescription>
+        </DialogHeader>
+      </DialogContent>
+    </Dialog>
   );
 }

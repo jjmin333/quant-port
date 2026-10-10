@@ -1,3 +1,5 @@
+import { plainMentions } from "@/lib/mention-text";
+
 /**
  * A small Markdown parser for user-written 투자 리포트 bodies.
  *
@@ -394,7 +396,7 @@ export function markdownToPlainText(source: string): string {
 
 /** First `limit` characters of the body, ellipsised on a real cut only. */
 export function markdownExcerpt(source: string, limit = 140): string {
-  const text = markdownToPlainText(source);
+  const text = plainMentions(markdownToPlainText(source));
   if (text.length <= limit) return text;
   return `${text.slice(0, limit).trimEnd()}…`;
 }

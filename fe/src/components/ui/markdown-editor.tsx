@@ -18,6 +18,9 @@ import {
   Table,
 } from "lucide-react";
 import { Markdown } from "@/components/ui/markdown";
+import { useMentionAssist } from "@/components/mentions/mention-assist";
+import { MentionMarkdownPreview } from "@/components/mentions/mention-markdown";
+import { useWideCompose } from "@/components/mentions/compose-side-preview";
 import {
   MEDIA_IMAGE_ACCEPT,
   isUploadableImage,
@@ -83,6 +86,8 @@ export function MarkdownEditor({
   hint,
   clearOnFirstEdit,
   uploadImage = uploadImageClient,
+  mentions = false,
+  sidePreview = false,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -100,15 +105,22 @@ export function MarkdownEditor({
   clearOnFirstEdit?: string;
   /** Injected so a caller can swap the storage backend or stub it in tests. */
   uploadImage?: (file: File) => Promise<MediaUpload>;
+  /** 데이터 태그(@·#) 자동완성·도우미·미리보기를 켠다 — 리포트 본문(2026-09-28 요청 2). */
+  mentions?: boolean;
+  /** 페이지가 넓은 화면에서 옆 미리보기를 띄운다 — 그 폭에선 작성/미리보기 탭을 숨긴다(2026-10-01 요청 4). */
+  sidePreview?: boolean;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [tab, setTab] = useState<"write" | "preview">("write");
+  const [tabState, setTab] = useState<"write" | "preview">("write");
+  const wide = useWideCompose();
+  const tab = sidePreview && wide ? "write" : tabState;
   const [uploading, setUploading] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
 
   const showingHint = Boolean(clearOnFirstEdit) && value === clearOnFirstEdit;
+  const assist = useMentionAssist({ textareaRef: ref, value, onChange, enabled: mentions });
 
   // An upload takes a round trip, during which the author may keep typing and
   // the `value` captured by the handler's closure goes stale. Inserting against
@@ -223,7 +235,7 @@ export function MarkdownEditor({
   return (
     <div className={cn("space-y-2", className)}>
       <div className="flex items-center justify-between gap-2">
-        <div className="flex gap-0.5 rounded-lg bg-[var(--surface-elevated)] p-0.5">
+        <div className={cn("flex gap-0.5 rounded-lg bg-[var(--surface-elevated)] p-0.5", sidePreview && wide && "invisible")}>
           <TabButton active={tab === "write"} onClick={() => setTab("write")} icon={PencilLine}>
             작성
           </TabButton>
@@ -283,13 +295,18 @@ export function MarkdownEditor({
             />
           </div>
 
+          {mentions && assist.tools}
           <textarea
             ref={ref}
             value={value}
             onChange={(e) => {
               latest.current = e.target.value;
               onChange(e.target.value);
+              if (mentions) assist.syncCaret();
             }}
+            onKeyDown={mentions ? assist.onKeyDown : undefined}
+            onKeyUp={mentions ? assist.syncCaret : undefined}
+            onClick={mentions ? assist.syncCaret : undefined}
             onPointerDown={() => {
               // "클릭하면 사라진다" — the guidance goes away the moment the
               // author reaches for the editor, before they type anything.
@@ -332,6 +349,7 @@ export function MarkdownEditor({
             )}
           />
 
+          {mentions && assist.popup}
           {uploadError && <p className="text-cell text-[var(--loss)]">{uploadError}</p>}
         </>
       ) : (
@@ -339,7 +357,7 @@ export function MarkdownEditor({
           {value.trim() === "" || showingHint ? (
             <p className="text-sm text-[var(--text-muted)]">아직 작성된 내용이 없습니다.</p>
           ) : (
-            <Markdown source={value} />
+            mentions ? <MentionMarkdownPreview source={value} /> : <Markdown source={value} />
           )}
         </div>
       )}

@@ -253,7 +253,7 @@ function Tile({
 }
 
 /** 적중 이력 · 평균/중위 서프라이즈 · 다음 발표. */
-function HistoryStrip({ detail }: { detail: EarningsTabData | null }) {
+export function HistoryStrip({ detail }: { detail: EarningsTabData | null }) {
   const next = useMemo(
     () => (detail?.calendar ?? []).find((c) => c.kind === "upcoming"),
     [detail],
@@ -351,10 +351,6 @@ function AlternatesBlock({ event }: { event: EarningsEvent }) {
               <SurpriseValue surprise={alt.surprise} className="text-cell" />
             </div>
           ))}
-          <p className="mt-1 border-t pt-1 text-micro leading-relaxed text-muted-foreground">
-            국내 실적 보도의 기준은 <b>연결</b>이라 그쪽을 대표로 보여줍니다. 지주회사처럼
-            개별이 의미 있는 경우가 있어 지우지 않고 접어 둡니다.
-          </p>
         </div>
       )}
     </div>

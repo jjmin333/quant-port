@@ -1,13 +1,16 @@
 import { LegalDocument, LegalSection } from "@/components/legal/legal-document";
-import { breadcrumbJsonLd, pageMetadata } from "@/lib/seo";
+import { resolvePageMetadata } from "@/lib/page-meta.server";
+import { breadcrumbJsonLd } from "@/lib/seo";
 import { JsonLd } from "@/components/seo/json-ld";
 
-export const metadata = pageMetadata({
-  title: "이용약관",
-  description:
-    "Quant Port 서비스 이용약관입니다. 서비스가 제공하는 것과 제공하지 않는 것, 투자 판단의 책임 소재, 이용자가 올린 글의 취급을 정합니다.",
-  path: "/legal/terms",
-});
+/*
+ * 제목·설명은 `lib/page-meta-routes`의 기본값이고, 관리자가 `/admin/seo`에서
+ * 덮어쓸 수 있다 (2026-09-15 사용자 요청 2). `const metadata`가 아니라 함수인
+ * 이유는 그 덮어쓰기를 **렌더 시점에** 읽어야 하기 때문이다.
+ */
+export function generateMetadata() {
+  return resolvePageMetadata("/legal/terms");
+}
 
 export default function TermsPage() {
   return (

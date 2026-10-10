@@ -22,6 +22,7 @@ import { WlList } from "@/components/watchlist/lab/wl-list";
 import { WlSummaryBar } from "@/components/watchlist/lab/wl-summary-bar";
 import { WlToolbar, type WlSort } from "@/components/watchlist/lab/wl-toolbar";
 import { useQuoteStreamByMarket } from "@/hooks/use-quote-stream";
+import { useVisibleInterval } from "@/hooks/use-visible-interval";
 import { useUpcomingEvents } from "@/hooks/use-upcoming-events";
 import { fetchJournalNotesClient } from "@/lib/journal-api";
 import { useIsRailColumn } from "@/lib/layout-lab";
@@ -211,12 +212,12 @@ export function WatchlistLabClient({ variant }: { variant: LabVariant }) {
     [quotes, streamPrices],
   );
 
-  useEffect(() => {
-    if (sample || symbols.length === 0) return;
-    const every = streaming ? PRICE_POLL_MS_WHILE_STREAMING : PRICE_POLL_MS;
-    const id = window.setInterval(() => void refreshQuotes(symbols), every);
-    return () => window.clearInterval(id);
-  }, [sample, symbols, refreshQuotes, streaming]);
+  // 안 보이는 탭에서는 돌지 않는다 (2026-09-15 사용자 요청 3 — `useVisibleInterval`).
+  useVisibleInterval(
+    () => void refreshQuotes(symbols),
+    streaming ? PRICE_POLL_MS_WHILE_STREAMING : PRICE_POLL_MS,
+    !sample && symbols.length > 0,
+  );
 
   const rows = useMemo(
     () => buildWatchlistRows(items, liveQuotes, scores),

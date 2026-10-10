@@ -2,6 +2,8 @@
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ProvenanceStamp } from "@/components/ui/provenance-stamp";
+import { fundamentalsProvenance } from "@/lib/data-reliability";
 import {
   COVERAGE_TIER_LABEL,
   type FundamentalsData,
@@ -109,7 +111,22 @@ export function FundamentalsIndicatorsPanel({
             {COVERAGE_TIER_LABEL[panel.coverageTier]}
           </Badge>
         </div>
+        {/*
+          기준(회계기간)·출처(DART/EDGAR)는 커버리지 등급이 **말하지 않는** 것이다
+          (요구 8). 등급은 「얼마나 채워졌나」이고 이것은 「언제 것이고 어디서 왔나」다.
+
+          2026-09-03에 뺀 각주("재무제표·발행주식수는 실시간이 아니며…")를 되살리는
+          것이 아니다 — 그것은 모든 종목에 똑같이 붙는 산문이었고, 이것은 종목마다
+          다른 사실 두 개다.
+        */}
+        <ProvenanceStamp className="ml-auto" parts={fundamentalsProvenance(data)} />
       </div>
+      {data.supplement && data.supplement.fields.length > 0 && (
+        <p className="border-b border-[var(--border)] px-3 py-1.5 text-micro text-[var(--text-muted)]">
+          {supplementLabel(data.supplement.fields)}은 공시 재무에 없어 Finnhub 값(본국 상장 기준 ·{" "}
+          {data.supplement.asOf.slice(5, 10).replace("-", "/")})으로 채웠습니다.
+        </p>
+      )}
 
       <div className="grid gap-2 p-3 sm:grid-cols-2">
         {panel.metrics.map((metric) => (
@@ -155,3 +172,21 @@ function MetricCard({ metric }: { metric: StockFundamentalsPanel["metrics"][numb
   );
 }
 
+
+const SUPPLEMENT_FIELD_LABEL: Record<string, string> = {
+  per: "PER",
+  pbr: "PBR",
+  psr: "PSR",
+  roe: "ROE",
+  operatingMargin: "영업이익률",
+  netProfitMargin: "순이익률",
+  revenueGrowthYoy: "매출 성장",
+  epsGrowthYoy: "EPS 성장",
+  currentRatio: "유동비율",
+};
+
+/** 「PER·PBR·ROE 등 5개」 꼴 — 칸 이름을 다 늘어놓으면 한 줄을 넘는다. */
+function supplementLabel(fields: string[]): string {
+  const names = fields.map((f) => SUPPLEMENT_FIELD_LABEL[f] ?? f);
+  return names.length <= 3 ? names.join("·") : `${names.slice(0, 3).join("·")} 등 ${names.length}개`;
+}

@@ -1,6 +1,7 @@
 import { getApiBaseUrl } from "@/lib/api-client";
 import type { ApiResponse } from "@/lib/api-types";
-import type { ResearchCall } from "@/lib/research-types";
+import type { ResearchAuthorProfile, ResearchCall } from "@/lib/research-types";
+import { fetchWithDeadline } from "@/lib/fetch-timeout";
 
 /**
  * 크롤러에게 보여 줄 **첫 화면을 서버에서 미리 받아 오는** 경로.
@@ -33,7 +34,7 @@ export const RESEARCH_SSR_LIMIT = 30;
 
 async function publicGet<T>(path: string, revalidate: number): Promise<T | null> {
   try {
-    const res = await fetch(`${getApiBaseUrl()}${path}`, {
+    const res = await fetchWithDeadline(`${getApiBaseUrl()}${path}`, {
       // 쿠키 없음 = 익명. `credentials`도 건드리지 않는다.
       next: { revalidate },
     });
@@ -53,4 +54,9 @@ export async function fetchResearchCallsServer(
 
 export async function fetchResearchCallServer(id: number): Promise<ResearchCall | null> {
   return publicGet<ResearchCall>(`/api/v1/research/calls/${id}`, DETAIL_REVALIDATE);
+}
+
+/** 작성자 프로필 — 익명으로 받으므로 공개 리포트만 온다(BE `AuthorProfile`). */
+export async function fetchResearchAuthorServer(userId: number): Promise<ResearchAuthorProfile | null> {
+  return publicGet<ResearchAuthorProfile>(`/api/v1/research/authors/${userId}`, LIST_REVALIDATE);
 }

@@ -33,7 +33,8 @@ type FinancialDetailModalProps = {
   open: boolean;
   onClose: () => void;
   symbol: string;
-  currency: QuoteCurrency;
+  /** 상장 통화, 또는 20-F 해외 발행사의 공시 통화 코드(TWD 등). */
+  currency: QuoteCurrency | string;
   preset: FinancialDetailPreset;
 };
 
@@ -114,7 +115,7 @@ function formatPeriodLabel(p: FinancialHistoryPeriod): string {
 function buildHeadline(
   periods: FinancialHistoryPeriod[],
   config: PresetConfig,
-  currency: QuoteCurrency,
+  currency: QuoteCurrency | string,
 ): { text: string; positive: boolean } | null {
   if (periods.length === 0) return null;
   const cur = periods[periods.length - 1];
@@ -314,7 +315,7 @@ export function FinancialDetailModal({ open, onClose, symbol, currency, preset }
                 </table>
               </div>
               <p className="mt-2 text-micro text-[var(--text-muted)]">
-                성장률은 직전 분기 대비 증감입니다. 국내 종목은 DART, 미국 종목은 SEC EDGAR 공시 기준입니다.
+                성장률: 직전 분기 대비 · 출처 DART(국내) · SEC EDGAR(미국)
               </p>
             </>
           )}
@@ -338,7 +339,7 @@ function MetricRow({
   hollow?: boolean;
   periods: FinancialHistoryPeriod[];
   pick: (p: FinancialHistoryPeriod) => number | undefined;
-  currency?: QuoteCurrency;
+  currency?: QuoteCurrency | string;
   percent?: boolean;
 }) {
   return (

@@ -22,25 +22,33 @@ import { PortfolioFetchError } from "@/lib/api-client";
 
 /** 서버가 내려주는 알려진 오류 문자열 → 사용자 문구. 소문자로 비교한다. */
 const KNOWN: { match: (msg: string) => boolean; text: string }[] = [
+  /*
+    가입은 아이디 기반이다 (2026-09-27 요청 3). 옛 서버 문구(`invalid email …`)도 같이
+    맞춰 둔다 — 배포 순서가 어긋나도 영어가 새지 않게.
+  */
   {
-    match: (m) => m.includes("invalid email or password"),
-    text: "이메일 또는 비밀번호가 올바르지 않습니다.",
+    match: (m) => m.includes("invalid login id or password") || m.includes("invalid email or password"),
+    text: "아이디 또는 비밀번호가 올바르지 않습니다.",
   },
   {
-    match: (m) => m.includes("email already registered"),
-    text: "이미 가입된 이메일입니다.",
+    match: (m) => m.includes("login id already registered") || m.includes("email already registered"),
+    text: "이미 사용 중인 아이디입니다.",
   },
   {
-    match: (m) => m.includes("password must be at least"),
-    text: "비밀번호는 8자 이상이어야 합니다.",
+    match: (m) => m.includes("display name already taken"),
+    text: "이미 사용 중인 닉네임입니다.",
+  },
+  {
+    match: (m) => m.includes("password must be"),
+    text: "비밀번호는 8~15자여야 합니다.",
   },
   {
     match: (m) => m.includes("display name must be"),
-    text: "표시 이름은 2~100자여야 합니다.",
+    text: "닉네임은 2~10자여야 합니다.",
   },
   {
-    match: (m) => m.includes("invalid email address"),
-    text: "이메일 주소 형식이 올바르지 않습니다.",
+    match: (m) => m.includes("login id must be"),
+    text: "아이디는 영문 소문자로 시작하는 소문자·숫자 4~20자여야 합니다.",
   },
   {
     match: (m) => m.includes("authentication required") || m.includes("unauthorized"),
@@ -69,6 +77,15 @@ const KNOWN: { match: (msg: string) => boolean; text: string }[] = [
   {
     match: (m) => m === "internal" || m.includes("internal server error"),
     text: "서버에서 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+  },
+  {
+    /*
+      우리가 상한을 넘겨 끊은 요청(`FetchTimeoutError`). **「실패했다」가 아니라
+      「기다리다 그만뒀다」**라고 말해야 사용자가 다시 시도할 이유를 안다 — 서버가
+      죽은 것이 아니라 느린 경우가 대부분이고, 그때 한 번 더 누르면 대개 된다.
+    */
+    match: (m) => m.includes("timed out"),
+    text: "응답이 너무 늦어 중단했습니다. 다시 시도해 주세요.",
   },
 ];
 

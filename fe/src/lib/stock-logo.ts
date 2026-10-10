@@ -62,6 +62,11 @@ export function fmpStockLogoKey(input: StockLogoInput): string {
   return isDomesticStockLogo(input) ? `${sym}.KS` : sym;
 }
 
+/** 네이버 증권 로고 CDN — 월간 갱신(`migrate-logos`)이 내려받는 바로 그 그림이다. */
+export function naverStockLogoUrl(symbol: string): string {
+  return `https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock${encodeURIComponent(symbol)}.png`;
+}
+
 export function fmpStockLogoUrl(input: StockLogoInput): string | null {
   const key = fmpStockLogoKey(input);
   if (!key) return null;
@@ -105,7 +110,7 @@ export function stockLogoUrls(input: StockLogoInput): StockLogoUrls {
   /*
     `blank`은 **그림을 아예 쓰지 않는다.** 불투명한 흰 이미지라 어두운 판이 뒤에 가려져
     소용이 없고, 원격 URL도 같은 그림이라 대안이 못 된다. 아무것도 안 보이는 상자보다
-    글자 두 자(`stockLogoMonogram`)가 낫다 — 실측 391개가 여기 해당한다.
+    글자 두 자(`stockLogoMonogram`)가 낫다 — 10-03 판정 기준을 고친 뒤로는 순백 사각형 1개(KNX)만 남았다(be tone.go).
   */
   if (blank.has(sym)) return NO_LOGO;
 
@@ -121,7 +126,13 @@ export function stockLogoUrls(input: StockLogoInput): StockLogoUrls {
   /*
     원격 URL로 떨어지는 종목에는 판을 깔지 않는다. 파일이 없어 밝기를 잰 적이 없고,
     재 보지도 않은 것에 어두운 판을 씌우면 멀쩡한 로고가 검은 동그라미에 갇힌다.
+
+    국내는 네이버 CDN이 먼저다 — 월간 갱신 사이에 상장한 종목은 FMP `.KS`가 거의 다
+    404라(10-03 실측: 거래대금 상위 468670·486510·0035S0 전부) 모노그램만 나왔다.
   */
+  if (isDomesticStockLogo(input)) {
+    return { primary: naverStockLogoUrl(sym), fallback: fmp, needsDarkPlate: false, suppressed: false };
+  }
   return { primary: fmp, fallback: null, needsDarkPlate: false, suppressed: false };
 }
 

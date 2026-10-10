@@ -5,7 +5,8 @@ import {
   type ListPriceMap,
   type ListPriceTick,
 } from "@/lib/quote-stream-state";
-import { shouldKeepStream } from "@/lib/stream-awake";
+import { pinnedSymbolsFor, subscribePinned } from "@/lib/pinned-symbols";
+import { STREAM_BACKGROUND_GRACE_MS, shouldKeepStream } from "@/lib/stream-awake";
 
 /*
 목록 가격 SSE를 **시장당 연결 하나**로 모은다 (2026-09-05 사용자 지적 6).
@@ -41,10 +42,16 @@ import { shouldKeepStream } from "@/lib/stream-awake";
 화면에는 영향이 없다. 대신 맵을 나눠 들면 같은 종목이 카드마다 다른 값이 될 수 있다 —
 09-04에 고친 「한 값은 한 값이다」가 다시 갈라지는 자리다.
 
-# 탭이 뒤로 가도 끊지 않는다 (사용자 요청 5)
+# 안 보이는 탭은 30분 뒤에 **한 종목만 남는다** (2026-09-15 사용자 요청 3·4)
 
-판정은 `lib/stream-awake`가 한다. 여기서는 `visibilitychange`를 **앱 전체에 하나만**
-듣는다 — 훅마다 듣던 것을 허브로 올리면서 얻은 덤이다.
+언제 놓을지는 `lib/stream-awake`가, 그래도 남길 종목은 `lib/pinned-symbols`가 답한다.
+여기서는 `visibilitychange`를 **앱 전체에 하나만** 듣는다 — 훅마다 듣던 것을 허브로
+올리면서 얻은 덤이다.
+
+09-05에는 유예가 3시간이었고 지나면 통째로 닫았다. 지금은 30분이고, 지나면 **닫는
+대신 좁힌다** — 보유 서른 종목이 떠 있던 탭이 숨으면 서른이 아니라 「열어 둔 종목」
+하나가 남는다. 증권사 앱이 다른 화면으로 가도 클릭해 둔 종목의 시세만은 계속
+보여 주는 것과 같은 규칙이다.
 */
 
 /** 합집합이 바뀐 뒤 실제로 다시 열기까지 기다리는 시간. */
@@ -116,6 +123,8 @@ let port: StreamPort | null = null;
 let hiddenSince: number | null = null;
 let graceMs: number | undefined;
 let awakeTimer: number | null = null;
+/** 열어 둔 종목 구독을 끊는 함수. 이음매를 다시 꽂을 때 갈아 끼운다. */
+let unsubscribePinned: (() => void) | null = null;
 
 function market(assetType: string): Market {
   let m = markets.get(assetType);
@@ -176,13 +185,34 @@ function clearTimers(m: Market): void {
   }
 }
 
+/**
+ * 숨은 탭이 유예를 넘겼을 때 **그래도 남길 심볼**.
+ *
+ * 열려 있는 종목(`lib/pinned-symbols`)과 지금 구독 중인 심볼의 **교집합**이다
+ * (2026-09-15 사용자 요청 4). 교집합인 것이 중요하다 — 핀만 보고 열면, 아무도
+ * 구독하지 않는 시장에 이 자리가 **새 연결을 만든다**. 종목 상세 화면은 자기
+ * 체결 스트림을 따로 열고 있으므로 그러면 같은 종목에 연결이 둘 생긴다.
+ *
+ * 여기서 하는 일은 **좁히는 것뿐**이고, 넓히는 일은 절대 하지 않는다.
+ */
+function narrowToPinned(assetType: string, symbols: string[]): string[] {
+  if (symbols.length === 0) return symbols;
+  const pinned = new Set(pinnedSymbolsFor(assetType));
+  if (pinned.size === 0) return [];
+  return symbols.filter((sym) => pinned.has(sym));
+}
+
 /** 지금 상태에 맞게 연결을 열거나 닫는다. 같은 심볼로 이미 열려 있으면 아무것도 안 한다. */
 function reconcile(m: Market): void {
   if (!port) return;
-  const symbols = unionOf(m.subs);
+  /*
+    보이는 동안은 구독자들이 원하는 전부, 유예를 넘긴 뒤에는 **열어 둔 종목만**.
+    보유 서른 종목을 띄워 둔 탭이 숨으면 서른이 아니라 하나가 남는다.
+  */
+  const symbols = awake() ? unionOf(m.subs) : narrowToPinned(m.assetType, unionOf(m.subs));
   const key = streamSymbolsKey(symbols);
 
-  if (key === "" || !awake()) {
+  if (key === "") {
     closeStream(m);
     /*
       구독자가 하나도 없으면 가격도 버린다. 남겨 두면 다음에 같은 시장을 여는 화면이
@@ -261,14 +291,28 @@ function scheduleSessionWake(m: Market): void {
 export function installStreamPort(next: StreamPort, backgroundGraceMs?: number): void {
   port = next;
   graceMs = backgroundGraceMs;
+  /*
+    숨어 있는 동안 열어 둔 종목이 바뀔 수 있다 — 모달을 닫거나 다른 종목으로 옮기는
+    일은 탭이 다시 보이지 않아도 일어난다(브라우저 뒤로가기). 그때 좁혀 둔 구독을
+    다시 맞춘다. 보이는 중에는 `awake()`가 참이라 이 자리가 아무것도 바꾸지 않는다.
+  */
+  unsubscribePinned?.();
+  unsubscribePinned = subscribePinned(() => {
+    if (awake()) return;
+    for (const m of markets.values()) scheduleReconcile(m);
+  });
 }
 
 /**
  * 탭이 보이거나 숨었다.
  *
- * 숨는 것만으로는 끊지 않고, 유예가 지나면 그때 놓는다(`lib/stream-awake`).
- * 다시 보일 때는 **죽어 있는 연결만** 되살린다 — 살아 있는 것을 다시 열면
- * 스냅샷을 한 벌 더 받는 셈이라, 끊지 않으려고 한 일을 스스로 되돌린다.
+ * 숨는 것만으로는 끊지 않고, 유예가 지나면 그때 **열어 둔 종목만 남기고** 놓는다
+ * (`lib/stream-awake` · `lib/pinned-symbols`). 아무것도 열어 두지 않았으면 연결이
+ * 통째로 닫힌다.
+ *
+ * 다시 보일 때는 시장마다 한 번씩 맞춰 본다. 심볼이 그대로인 연결은 `reconcile`이
+ * 곧바로 돌아 나가므로 살아 있는 것을 다시 여는 일은 없다 — 다시 여는 것은 스냅샷을
+ * 한 벌 더 받는 일이라, 끊지 않으려고 한 일을 스스로 되돌린다.
  */
 export function setVisible(visible: boolean): void {
   if (!port) return;
@@ -278,9 +322,12 @@ export function setVisible(visible: boolean): void {
       port.clearTimer(awakeTimer);
       awakeTimer = null;
     }
-    for (const m of markets.values()) {
-      if (!m.handle || m.handle.isClosed()) reconcile(m);
-    }
+    /*
+      **모든 시장을 맞춘다.** 예전에는 「죽어 있는 연결만」이었는데, 이제는 숨은
+      동안 연결이 살아 있으면서 **심볼만 하나로 줄어 있을 수** 있다. 살아 있다는
+      이유로 건너뛰면 돌아온 사용자의 목록이 한 종목만 움직인다.
+    */
+    for (const m of markets.values()) reconcile(m);
     return;
   }
 
@@ -289,11 +336,9 @@ export function setVisible(visible: boolean): void {
   awakeTimer = port.setTimer(() => {
     awakeTimer = null;
     if (awake()) return;
-    for (const m of markets.values()) {
-      clearTimers(m);
-      closeStream(m);
-    }
-  }, graceMs ?? 3 * 60 * 60 * 1000);
+    // 닫는 것이 아니라 **좁히는 것**이다 — 판정은 `reconcile` 한 곳에만 둔다.
+    for (const m of markets.values()) reconcile(m);
+  }, graceMs ?? STREAM_BACKGROUND_GRACE_MS);
 }
 
 /** 이 시장의 지금 상태. `useSyncExternalStore`의 `getSnapshot`이 부른다. */
@@ -332,6 +377,8 @@ export const __testing = {
     hiddenSince = null;
     graceMs = undefined;
     awakeTimer = null;
+    unsubscribePinned?.();
+    unsubscribePinned = null;
   },
   openKey: (assetType: string) => markets.get(assetType)?.openKey ?? "",
   subCount: (assetType: string) => markets.get(assetType)?.subs.size ?? 0,

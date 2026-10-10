@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { ScoreMoversCard } from "@/components/analysis/score-movers-card";
 import { StockAvatar } from "@/components/stocks/stock-avatar";
 import { useSymbolQuickLook } from "@/components/stocks/symbol-quick-look-modal";
 import { IndexPulseCard } from "@/components/market/index-pulse-card";
@@ -93,6 +94,13 @@ export function WatchlistSideRail({
    */
   const quickLook = useSymbolQuickLook();
 
+  /* 목록이 이미 들고 있는 값으로 만든다 — 점수 변화 조회 한 번 말고는 추가 요청이 없다. */
+  const watchNames = useMemo(
+    () => new Map(rows.map((r) => [r.symbol.toUpperCase(), r.quote?.name ?? r.symbol])),
+    [rows],
+  );
+  const watchSymbols = useMemo(() => rows.map((r) => r.symbol), [rows]);
+
   return (
     <>
       <SectionCard title="종목 추가">
@@ -146,6 +154,14 @@ export function WatchlistSideRail({
         </SectionCard>
       )}
 
+      {watchSymbols.length > 0 && (
+        <ScoreMoversCard
+          symbols={watchSymbols}
+          names={watchNames}
+          onSelect={quickLook.open}
+          title="관심종목 점수 변화"
+        />
+      )}
       {/* 보유 화면·뉴스 레일과 같은 부품 — 2026-09-05 사용자 요청 7 */}
       {rows.length > 0 && <PersonalScheduleCard events={events} onPick={quickLook.open} />}
       {rows.length > 0 && <WatchlistSinceAddedCard rows={rows} onPick={quickLook.open} />}

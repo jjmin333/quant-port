@@ -20,8 +20,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { usePinnedSymbol } from "@/hooks/use-pinned-symbol";
 import { useSparklineCandles } from "@/hooks/use-sparkline-candles";
 import { analysisSymbolHref } from "@/lib/analysis-tabs";
+import { quickLookAISummary } from "@/lib/daily-close-ai-summary";
 import { fetchStockDailyCloses } from "@/lib/daily-close-api";
 import type { DailyCloseRow } from "@/lib/daily-close-types";
 import {
@@ -47,7 +49,6 @@ import {
   SCORE_AXIS_ORDER,
   type StockScoreData,
 } from "@/lib/stock-score-api";
-import { firstSentences, hasMoreThan } from "@/lib/summary-sentences";
 import { trendTextClass } from "@/lib/trend-colors";
 import { cn } from "@/lib/utils";
 
@@ -128,6 +129,15 @@ export function StockQuickLookModal({
   const [aiDetail, setAiDetail] = useState<"brief" | "full">("brief");
 
   const { points, times } = useSparklineCandles(symbol, open);
+
+  /*
+    이 창이 떠 있는 동안은 **이 종목을 보고 있다** (2026-09-15 사용자 요청 4).
+
+    탭이 숨어 유예가 지나면 가격 구독이 목록 전체에서 이 한 종목으로 줄어든다
+    (`lib/pinned-symbols`). 창을 닫거나 다른 종목으로 옮기면 그 순간 핀도 옮겨 간다 —
+    이펙트의 정리 함수가 그 일을 한다.
+  */
+  usePinnedSymbol(symbol, market, open);
 
   /*
     일별 종가를 **한 번에 최대치로** 받는다 (2026-09-05 사용자 요청 7-1·7-2).
@@ -221,20 +231,14 @@ export function StockQuickLookModal({
   );
 
   /*
-    「간단」이 보여 줄 **짧은 판** (2026-09-14 사용자 요청 2).
+    「간단」이 보여 줄 **짧은 판** (2026-09-15 사용자 요청 1).
 
-    예전에는 해설 전문에 `line-clamp-3`을 걸었다. 그건 줄 수로 자르는 장치라 어디서
-    끊길지를 글자 너비가 정하고, 실제로 사용자 화면에서는 「…효과를 상쇄하」에서
-    낱말 가운데가 잘렸다. 「간단」은 짧은 판이어야지 잘린 판이면 안 된다.
-
-    종목 개요 탭의 간단은 원래 그렇게 안 한다 — 서버가 갈래마다 **첫 문장**만 뽑아
-    엮은 요약을 쓴다(BE `composeOverview`). 모달에는 그 서버 요약이 없고 일별 해설
-    한 덩어리만 오므로, 같은 규칙을 화면에서 적용한다. 두 문장인 이유는 개요 탭의
-    요약(네 갈래 × 첫 문장)과 대략 같은 분량이면서 한 문장보다 덜 잘리기 때문이다.
+    이제 서버가 그날의 요약 한 문단을 일별 행에 같이 실어 준다(`aiOverview`) — 네
+    갈래를 전부 근거로 **다시 쓴** 글이다. 예전에는 본문의 앞 두 문장을 잘라 썼는데,
+    본문은 네 갈래를 순서대로 이어붙인 것이라 앞 두 문장이 언제나 밸류에이션
+    이야기였다. 규칙 전체와 되돌아가는 조건은 `lib/daily-close-ai-summary`에 있다.
   */
-  const aiBrief = useMemo(() => firstSentences(llmDaily?.aiSummary, 2), [llmDaily]);
-  // 요약이 원문과 같으면 토글이 아무 일도 안 한다 — 그 버튼은 안 세운다.
-  const aiHasMore = hasMoreThan(aiBrief, llmDaily?.aiSummary);
+  const ai = useMemo(() => quickLookAISummary(llmDaily), [llmDaily]);
 
   /*
    * 기사는 앱 전체와 **같은 방식**으로 연다 — 여기서 부르는 목록이 이 종목 기사라
@@ -490,16 +494,16 @@ export function StockQuickLookModal({
                       옮길 때마다 되돌아온다(상태를 저장하지 않는다 — 창으로 종목을
                       훑는 일의 목적이 한눈에 보기다).
 
-                      모달에는 서버가 만든 짧은 요약이 없고 일별 해설 한 덩어리뿐이라,
-                      「간단」은 그 해설의 **앞 두 문장**이다(`aiBrief`). 예전에는 줄
-                      수로 잘랐는데(`line-clamp-3`) 그러면 끊기는 자리를 글자 너비가
-                      정해 낱말 가운데가 잘렸다 — 사용자가 보낸 화면이 그것이다.
+                      「간단」은 그날의 **핵심 요약 한 문단**이다(`aiOverview`) —
+                      2026-09-15부터 서버가 일별 행에 같이 실어 준다. 그 이전 날짜에는
+                      값이 없어 예전처럼 본문의 앞 두 문장으로 돌아간다
+                      (`lib/daily-close-ai-summary`).
 
-                      요약이 원문과 같으면 토글을 아예 안 세운다. 눌러도 아무것도 안
-                      바뀌는 버튼은 「고장났나」로 읽힌다.
+                      간단과 본문이 같은 글이면 토글을 아예 안 세운다. 눌러도 아무것도
+                      안 바뀌는 버튼은 「고장났나」로 읽힌다.
                     */
                     action={
-                      aiHasMore ? (
+                      ai.hasDetail ? (
                         <MiniToggle
                           options={AI_DETAIL_OPTIONS}
                           value={aiDetail}
@@ -509,7 +513,7 @@ export function StockQuickLookModal({
                     }
                   >
                     <p className="whitespace-pre-line rounded-lg border px-2.5 py-2 text-read">
-                      {aiHasMore && aiDetail === "brief" ? aiBrief : llmDaily.aiSummary}
+                      {ai.hasDetail && aiDetail === "brief" ? ai.brief : ai.full}
                     </p>
                   </QuickLookSection>
                 )}

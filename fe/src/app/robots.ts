@@ -23,6 +23,7 @@ const PUBLIC_API_PREFIXES = [
   "/api/v1/news/",
   "/api/v1/earnings/",
   "/api/v1/research/",
+  "/api/v1/community/",
   "/api/v1/stocks/",
   "/api/v1/quotes/",
   "/api/v1/rankings/",
@@ -52,9 +53,11 @@ export default function robots(): MetadataRoute.Robots {
         "/settings",
         "/login",
         "/signup",
-        // 글쓰기 화면. 리포트 본문(`/reports/<id>`)은 공개 색인 대상이다.
+        "/welcome",
+        // 글쓰기 화면. 리포트 본문(`/reports/<id>`)과 작성자 페이지(공개 리포트가 있을 때,
+        // 2026-10-09)는 공개 색인 대상이다.
         "/reports/new",
-        "/reports/authors/",
+        "/community/new",
       ],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,

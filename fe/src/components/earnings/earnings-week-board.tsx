@@ -155,9 +155,6 @@ export function EarningsWeekBoard({
           );
         })}
       </div>
-      <p className="mt-2 border-t pt-2 text-micro text-muted-foreground">
-        칸 안 종목은 <b>서프라이즈가 가장 컸던 발표</b>입니다. 날짜를 누르면 그날 전체를 봅니다.
-      </p>
     </div>
   );
 }

@@ -7,6 +7,7 @@
  * 스탬프와는 독립된 기능이므로 스냅샷 형태를 직접 소유한다 — 다른 기능이
  * 바뀌었다는 이유로 바뀔 수 있는 스냅샷은 박제된 게 아니다.
  */
+import type { ContentTopic } from "@/lib/topics";
 
 export type ScoreBreakdown = {
   technical?: number;
@@ -89,7 +90,9 @@ export type ResearchStatus =
   | "expired_hit"
   | "expired_miss"
   | "expired_unknown"
-  | "retracted";
+  | "retracted"
+  /** 부동산·금융상품 「분석 리포트」 — 종목·목표가·판정이 없다(2026-10-09 요청 9). */
+  | "note";
 
 export type PriceLevel = {
   label: string;
@@ -169,6 +172,8 @@ export type ResearchCall = {
   id: number;
   userId: number;
   authorName?: string;
+  /** 주식이 아니면 분석 리포트다(status "note", symbol 빈 값). 옛 응답에는 없다 — 없으면 주식. */
+  topic?: ContentTopic;
   symbol: string;
   symbolName?: string;
   assetType?: string;
@@ -208,6 +213,8 @@ export type ResearchCall = {
 
   bodyMd: string;
   bodyRev: number;
+  /** 본문의 데이터 태그(상세에서만, 2026-09-28). */
+  mentions?: import("@/lib/mentions").MentionSet;
   /**
    * 목록 카드의 표지 이미지. 비어 있으면 화면이 종목 로고로 대신한다 — 목적은
    * 모든 카드에 무언가가 있는 것이지, 모든 작성자가 그림을 찾는 것이 아니다.
@@ -402,6 +409,7 @@ export type ResearchSymbolSummary = {
 };
 
 export type ResearchPublishInput = {
+  topic?: ContentTopic;
   symbol: string;
   title?: string;
   direction: ResearchDirection;
@@ -448,6 +456,7 @@ export const STATUS_LABELS: Record<ResearchStatus, string> = {
   expired_miss: "만기 빗나감",
   expired_unknown: "판정 불가",
   retracted: "철회",
+  note: "분석 리포트",
 };
 
 export const VISIBILITY_LABELS: Record<ResearchVisibility, string> = {

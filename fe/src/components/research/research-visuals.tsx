@@ -1,5 +1,6 @@
 "use client";
 
+import { Building2, PiggyBank } from "lucide-react";
 import { useMemo } from "react";
 import { StockAvatar } from "@/components/stocks/stock-avatar";
 
@@ -312,6 +313,15 @@ export function ResearchThumbnail({
         loading="lazy"
         className={cn("size-full object-cover", className)}
       />
+    );
+  }
+  if (call.status === "note") {
+    // 분석 리포트 — 종목 로고 대신 주제 아이콘(2026-10-09 요청 9).
+    const Icon = call.topic === "finance" ? PiggyBank : Building2;
+    return (
+      <span className={cn("flex size-full items-center justify-center bg-[var(--surface-elevated)]", className)}>
+        <Icon className="h-8 w-8 text-[var(--text-muted)]" aria-hidden />
+      </span>
     );
   }
   return (

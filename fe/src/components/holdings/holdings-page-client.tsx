@@ -17,14 +17,21 @@ import { PageActions, PageScrollShell } from "@/components/layout/page-content-s
 import { useHeaderSearch } from "@/components/providers/header-search-provider";
 import { HoldingDetailModal } from "@/components/holdings/holding-detail-modal";
 import { HoldingsAllocationCard } from "@/components/holdings/holdings-allocation-card";
+import { HoldingsRiskCard } from "@/components/holdings/holdings-risk-card";
 import { HoldingsContributionCard } from "@/components/holdings/holdings-contribution-card";
+import { HoldingsDiagnosisCard } from "@/components/holdings/holdings-diagnosis-card";
 import { HoldingsList, HoldingsToolbar } from "@/components/holdings/holdings-list";
 import { HoldingsScoreCard } from "@/components/holdings/holdings-score-card";
 import { HoldingsSideRail } from "@/components/holdings/holdings-side-rail";
 import { HoldingsSummaryCard } from "@/components/holdings/holdings-summary-card";
 import { HoldingsValuationChart } from "@/components/holdings/holdings-valuation-chart";
+import { NetWorthCard, useWealth, WealthAssetsSection, type AddKind } from "@/components/holdings/holdings-wealth-section";
+import { AssetFormDialog, LiabilityFormDialog } from "@/components/wealth/wealth-forms";
+import type { AssetType } from "@/lib/wealth-api";
+import { ASSET_FEATURES_HIDDEN } from "@/lib/hidden-features";
 import { Card } from "@/components/ui/card";
 import { useExchangeRate } from "@/hooks/use-exchange-rate";
+import { useHoldingsDiagnosis } from "@/hooks/use-holdings-diagnosis";
 import {
   deleteUserHoldingClient,
   fetchUserHoldingsClient,
@@ -45,6 +52,7 @@ import {
   mergeQuoteSummariesForSymbols,
 } from "@/lib/merge-quotes";
 import { useQuoteStreamByMarket } from "@/hooks/use-quote-stream";
+import { useVisibleInterval } from "@/hooks/use-visible-interval";
 import { PRICE_POLL_MS, PRICE_POLL_MS_WHILE_STREAMING } from "@/lib/price-cadence";
 import { fetchScoresBatchClient, type StockScoreData } from "@/lib/stock-score-api";
 import type { QuoteSummary } from "@/lib/quotes-types";
@@ -104,6 +112,16 @@ export function HoldingsPageClient() {
   const { activeQuery, mode, isSearchActive } = useHeaderSearch();
   const stockFilter = mode === "stock" && isSearchActive ? activeQuery : "";
   const exchangeRate = useExchangeRate(true);
+  /*
+    보유 이유 점검은 **로그인한 실제 보유**에만 묻는다.
+
+    예시 모드의 보유는 매매 이력이 없어 보유 기간이 없고, 보유 기간이 없으면 실적·
+    내부자를 자를 기준이 없다 — 남는 근거가 점수 하나뿐이라 판정이 언제나 「판단
+    보류」가 된다. 예시로 둘러보는 사람에게 보류만 다섯 줄 보여 줄 이유가 없다.
+
+    `tradesVersion`을 키로 쓰는 이유는 매매가 바뀌면 그 보유 기간이 바뀌기 때문이다.
+  */
+  const diagnosis = useHoldingsDiagnosis(tradesVersion, Boolean(session) && !sample);
 
   /*
    * 목록 새로고침은 **버전 번호를 올려** 이펙트를 다시 돌리는 방식이다.
@@ -163,6 +181,8 @@ export function HoldingsPageClient() {
             costCurrency: r.costCurrency,
             source: r.source,
             updatedAt: r.updatedAt,
+            sector: r.sector,
+            sectorLabel: r.sectorLabel,
           })) as UserHolding[],
         );
         setCashBalances({ krw: 3_200_000, usd: 5_000 } as UserCashBalances);
@@ -263,34 +283,58 @@ export function HoldingsPageClient() {
     [quotes, streamPrices],
   );
 
-  useEffect(() => {
-    /*
-     * 예시도 실시간 시세를 받는다. 예전에는 막아뒀는데, 그때는 평단이 손으로 적은
-     * 값이라 현재가만 진짜로 갈아끼우면 평가손익이 +231% 같은 숫자가 됐기 때문이다.
-     * 지금은 평단이 **매수일의 실제 종가**라 두 끝이 같은 세계에 있다.
-     */
-    if (holdingSymbols.length === 0) return;
-    const every = streaming ? PRICE_POLL_MS_WHILE_STREAMING : QUOTES_POLL_MS;
-    const id = window.setInterval(() => {
+  /*
+   * 예시도 실시간 시세를 받는다. 예전에는 막아뒀는데, 그때는 평단이 손으로 적은
+   * 값이라 현재가만 진짜로 갈아끼우면 평가손익이 +231% 같은 숫자가 됐기 때문이다.
+   * 지금은 평단이 **매수일의 실제 종가**라 두 끝이 같은 세계에 있다.
+   *
+   * 주기 폴링은 **보이는 동안만** 돈다 (2026-09-15 사용자 요청 3). 예전에는 숨은
+   * 탭도 보유 종목 전부를 계속 당겼고, 창을 다섯 띄우면 그대로 다섯 배였다.
+   * 첫 적재는 위 `load()`가 하므로 여기는 되풀이만 맡는다.
+   */
+  useVisibleInterval(
+    () => {
       void refreshQuotes(holdingSymbols).catch(() => {
         // 폴링 실패는 조용히 — mergeQuoteSummary가 마지막 시세를 유지한다.
       });
-    }, every);
-    return () => window.clearInterval(id);
-  }, [holdingSymbols, refreshQuotes, streaming]);
+    },
+    streaming ? PRICE_POLL_MS_WHILE_STREAMING : QUOTES_POLL_MS,
+    holdingSymbols.length > 0,
+  );
 
   const loading = holdings === null || cashBalances === null;
+  /*
+    주식 밖의 자산·부채(2026-10-01 — 순자산 메뉴를 이 화면으로 합침). 예시 여부와 상관없이 로그인이면 읽는다 —
+    아래 「아직 없다」 판정에 들어가야 집만 등록한 사람이 예시 화면으로 넘어가지 않는다.
+  */
+  // 부동산·금융상품 비노출(lib/hidden-features, 2026-10-10)이면 자산·부채 칸을 통째로 끈다 — 이 화면은 주식만.
+  const wealthOn = Boolean(session) && !ASSET_FEATURES_HIDDEN;
+  const wealth = useWealth(wealthOn);
+  const wealthEmpty = !wealthOn || (wealth.data != null && wealth.data.assets.length === 0 && wealth.data.liabilities.length === 0);
+  const wealthLoading = wealthOn && wealth.data == null;
+  const [assetAdd, setAssetAdd] = useState<AssetType | null>(null);
+  const [liabAdd, setLiabAdd] = useState(false);
   /*
     「내 것이 아직 없다」 — **`sample`을 빼고** 잰다 (2026-09-14 사용자 요청 4).
     `useAutoSample`이 이 값으로 예시를 켜는데, `!sample`이 섞이면 켜짐 → 0건 아님 →
     꺼짐이 무한히 반복된다. 화면이 안내 카드를 세우는 조건은 그 위에 `!sample`을
     얹은 `isEmpty`다 — 예시를 **끈** 사람에게만 카드가 보인다.
   */
-  const hasNothingYet = !loading && !error && (holdings?.length ?? 0) === 0;
-  useAutoSample(hasNothingYet);
+  const hasNothingYet = !loading && !wealthLoading && !error && (holdings?.length ?? 0) === 0 && wealthEmpty;
+  useAutoSample(loading || wealthLoading ? null : hasNothingYet);
   const isEmpty = !sample && hasNothingYet;
+  // 주식은 없고 부동산·금융상품만 있는 사람 — 빈 주식 분석 카드 대신 자산 목록을 위로(2026-10-02).
+  const stocksEmpty = !sample && !loading && (holdings?.length ?? 0) === 0;
   /** 0건 안내에서 여는 추가 폼. 사이드 레일이 없는 상태의 유일한 진입점이다. */
   const [addOpen, setAddOpen] = useState(false);
+  const onAdd = (kind: AddKind) => {
+    if (kind === "stock") setAddOpen(true);
+    else if (kind === "liability") setLiabAdd(true);
+    else setAssetAdd(kind);
+  };
+  const wealthSection = !sample && wealthOn && (
+    <WealthAssetsSection wealth={wealth.data} rates={wealth.rates} onChanged={wealth.refresh} onAdd={onAdd} />
+  );
 
   // 점수는 목록과 **따로** 불러온다. 배치 API가 죽어도 손익은 보여야 한다.
   const scoreKey = (holdings ?? []).map((h) => h.symbol).join(",");
@@ -431,7 +475,18 @@ export function HoldingsPageClient() {
             }
             footnote={COPY.emptyFootnote}
           />
-        ) : (
+        ) : null}
+        {isEmpty && wealthOn && (
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-cell">
+            <span className="text-[var(--text-muted)]">주식 말고도:</span>
+            {([["real_estate", "부동산"], ["deposit", "예금"], ["saving", "적금"], ["crypto", "코인"], ["gold", "금"]] as const).map(([k, label]) => (
+              <button key={k} type="button" onClick={() => setAssetAdd(k)}
+                className="h-7 rounded-full border px-2.5 text-[var(--text-secondary)] hover:bg-muted">+ {label}</button>
+            ))}
+            <button type="button" onClick={() => setLiabAdd(true)} className="h-7 rounded-full border px-2.5 text-[var(--text-secondary)] hover:bg-muted">+ 대출</button>
+          </div>
+        )}
+        {isEmpty ? null : (
         <PageColumns
           rail={
             <HoldingsSideRail
@@ -449,6 +504,11 @@ export function HoldingsPageClient() {
               </Card>
             )}
 
+            {!sample && wealthOn && (
+              <NetWorthCard metrics={metrics} totals={loading ? null : totals} wealth={wealth.data} onAdd={onAdd} />
+            )}
+            {stocksEmpty && wealthSection}
+
             <HoldingsSummaryCard
               totals={loading ? null : totals}
               loading={loading}
@@ -456,8 +516,21 @@ export function HoldingsPageClient() {
               onChanged={onTradesChanged}
             />
 
+            {/*
+              「얼마 벌었나」 다음이 「왜 들고 있나」다 (2026-09-18 사용자 결정 A).
+              모바일에서도 두 번째 카드라 스크롤 없이 닿는다.
+            */}
+            {!stocksEmpty && (<>
+            <HoldingsDiagnosisCard
+              data={diagnosis.data}
+              loading={diagnosis.loading}
+              error={diagnosis.error}
+            />
+
             <div className="grid gap-3 2xl:grid-cols-2">
               <HoldingsAllocationCard metrics={metrics} totals={loading ? null : totals} />
+              {/* 위험 — 자산 배분 옆(좁은 화면에선 아래) (2026-09-24 사용자 결정). */}
+              {!loading && <HoldingsRiskCard metrics={metrics} />}
               <HoldingsContributionCard
                 metrics={metrics}
                 totals={loading ? null : totals}
@@ -492,6 +565,7 @@ export function HoldingsPageClient() {
                 onTradesChanged={onTradesChanged}
               />
             )}
+            </>)}
 
             <div className="space-y-2">
               <HoldingsToolbar count={metrics.length} />
@@ -503,10 +577,18 @@ export function HoldingsPageClient() {
                 onSelect={setSelected}
               />
             </div>
+
+            {!stocksEmpty && wealthSection}
           </div>
         </PageColumns>
         )}
         <AddHoldingDialog open={addOpen} onOpenChange={setAddOpen} onAdded={onTradesChanged} />
+        {assetAdd && (
+          <AssetFormDialog key={assetAdd} open prefill={{ assetType: assetAdd }} onClose={() => setAssetAdd(null)} onSaved={wealth.refresh} />
+        )}
+        {liabAdd && (
+          <LiabilityFormDialog open assets={wealth.data?.assets ?? []} onClose={() => setLiabAdd(false)} onSaved={wealth.refresh} />
+        )}
       </PageScrollShell>
 
       <HoldingDetailModal

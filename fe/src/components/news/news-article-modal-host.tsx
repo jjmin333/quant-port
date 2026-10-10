@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { NewsArticleContext, articleModalContextHasContent } from "@/components/news/news-article-context";
 import { NewsArticleModal } from "@/components/news/news-article-modal";
 import { useModalHistory } from "@/hooks/use-modal-history";
+import { leaveModal } from "@/lib/modal-history";
 import { NewsReaderModal } from "@/components/news/news-reader-modal";
 import { NewsUsHeadlineModal } from "@/components/news/news-us-headline-modal";
 import { recordNewsView } from "@/lib/news-api";
@@ -67,6 +68,8 @@ export function useNewsArticleModal(
   }, []);
 
   const close = useCallback(() => setArticle(null), []);
+  // 문맥 블록의 링크(관련 종목 카드 등)는 화면을 떠나며 닫는다 — lib/modal-history 경합.
+  const leaveClose = useCallback(() => leaveModal(close), [close]);
 
   /*
     뒤로가기로 기사 모달을 닫는다 (§C-3).
@@ -91,10 +94,10 @@ export function useNewsArticleModal(
           pool={pool}
           quotes={quotes}
           onArticleClick={open}
-          onNavigate={close}
+          onNavigate={leaveClose}
         />
       ) : undefined,
-    [article, pool, quotes, open, close],
+    [article, pool, quotes, open, leaveClose],
   );
 
   const shell = article ? shellFor(article) : null;

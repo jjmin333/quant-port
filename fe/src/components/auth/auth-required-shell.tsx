@@ -13,6 +13,7 @@ import {
 } from "@/components/common/sample-mode";
 import { useAuth } from "@/components/providers/auth-provider";
 import { MENU_COPY, type MenuKey } from "@/lib/menu-copy";
+import { signupHref } from "@/lib/auth-routes";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -123,7 +124,7 @@ function LoggedOutIntro({
             className="border border-[var(--sample-border)] px-3.5 py-1.5"
           />
           <Link
-            href="/signup"
+            href={signupHref(loginNext)}
             className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]")}
           >
             회원가입

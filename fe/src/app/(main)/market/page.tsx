@@ -1,249 +1,63 @@
-"use client";
+import { Suspense } from "react";
 
-import dynamic from "next/dynamic";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useHeaderSearch } from "@/components/providers/header-search-provider";
-import { useShellMode } from "@/components/providers/shell-mode-provider";
-import { MarketRadarList } from "@/components/market-radar/market-radar-list";
-import { MarketRadarToolbar } from "@/components/market-radar/market-radar-toolbar";
-import {
-  parseMarketRadarFromSearchParams,
-  syncMarketRadarUrl,
-  useMarketRankings,
-} from "@/hooks/use-market-rankings";
-import type { MarketRadarParams } from "@/lib/market-radar-types";
-import {
-  compactShowsDetail,
-  shouldHistoryBackOnCompactBack,
-  shouldPinListOnParamsChange,
-  symbolSelectNavMode,
-} from "@/lib/market-radar-mobile-nav";
-import { marketRadarParamsKey, marketRadarSearchParams, parseMarketRadarSymbol } from "@/lib/market-radar-config";
+import { MarketRadarPageClient } from "@/components/market-radar/market-radar-page-client";
+import { fetchRankingsServer } from "@/lib/market-api.server";
+import { parseMarketRadarParams } from "@/lib/market-radar-config";
+import { PageHeading } from "@/components/layout/page-heading";
 
-import {
-  MARKET_RADAR_WORKSPACE_TABS,
-  type StockWorkspaceTabId,
-} from "@/lib/stock-workspace-tabs";
-import { cn } from "@/lib/utils";
+/*
+ * 메타데이터는 `market/layout.tsx`가 들고 있다. 이 페이지가 `"use client"`였던
+ * 동안 `generateMetadata`를 내보낼 수 없어 그리로 갔던 것인데(2026-09-22에 서버
+ * 컴포넌트로 되돌아왔다), **그대로 둔다** — 같은 값을 두 곳에서 내보내면 어느
+ * 쪽이 이기는지가 규약이 아니라 프레임워크 세부가 된다. 옮길 거면 한 번에 옮기고
+ * 레이아웃을 지우는 게 맞고, 그건 이 작업의 범위가 아니다.
+ */
 
-const StockWorkspaceClient = dynamic(
-  () =>
-    import("@/components/stock-workspace/stock-workspace-client").then((m) => ({
-      default: m.StockWorkspaceClient,
-    })),
-  {
-    loading: () => (
-      <div className="flex flex-1 items-center justify-center text-cell text-[var(--text-muted)]">
-        차트 패널 로딩 중…
-      </div>
-    ),
-  },
-);
-
-function WorkspaceSkeleton() {
-  return (
-    <div className="flex flex-1 items-center justify-center text-cell text-[var(--text-muted)]">
-      차트 패널 준비 중…
-    </div>
-  );
-}
-
-function MarketRadarPageInner() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const { registerStockPickHandler } = useHeaderSearch();
-  const { isCompact } = useShellMode();
-
-  const params = useMemo(
-    () => parseMarketRadarFromSearchParams(searchParams),
-    [searchParams],
-  );
-
-  const paramsKey = marketRadarParamsKey(params);
-  const symbolParam = parseMarketRadarSymbol(searchParams);
-
-  const [selectedSymbol, setSelectedSymbol] = useState("");
-  const [workspaceTab, setWorkspaceTab] = useState<StockWorkspaceTabId>("overview");
+/**
+ * 마켓 레이더의 첫 목록을 **서버에서 미리 받는다** (2026-09-22 QA 기획서 §0 문제 3).
+ *
+ * 그전까지 이 화면의 서버 HTML에는 「**마켓 레이더 로딩 중…** / 랭킹 로딩 중… /
+ * 차트 패널 준비 중…」이 전부였다 — 종목명이 한 개도 없었다. 실측은
+ * `lib/market-api.server.ts` 머리글.
+ *
+ * **기본 손잡이일 때만 받는다.** 사용자가 `?market=US&duration=1w`를 달고 오면
+ * 서버가 미리 받은 국내·거래대금·실시간 목록은 **틀린 목록**이고, 그걸 심으면
+ * 화면이 한 프레임 동안 거짓말을 한다. `analysis/page.tsx`가 `!params.market &&
+ * !params.axis`로, `news/domestic/page.tsx`가 `hasNewsFilterParams`로 같은 판단을
+ * 한다 — 크롤러는 언제나 맨 주소로 오므로 이 조건이 크롤러를 놓치지 않는다.
+ *
+ * `?symbol=`은 손잡이가 아니라 **오른쪽 칸**이 무엇을 여는지라 목록과 무관하다 —
+ * 그래서 여기서 보지 않는다.
+ */
+export default async function MarketRadarPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const defaultKnobs = !params.market && !params.type && !params.duration;
   /*
-    시장·정렬·기간을 바꿨을 때 URL에 symbol이 남아 있어도 compact는 목록을
-    보여 준다. deep link(`?symbol=`) 첫 진입에는 false — paramsKey effect가
-    마운트 때는 건너뛴다.
+    기본값은 지어내지 않고 **화면과 같은 파서**에서 받는다. 빈 쿼리를 넣으면
+    `parseMarketRadarParams`가 국내·거래대금·실시간·100건을 돌려주는데, 그건
+    손잡이 없이 들어온 브라우저가 첫 렌더에서 계산할 값과 정의상 같다. 여기에
+    리터럴을 따로 적으면 기본값이 바뀌는 날 둘이 조용히 갈라진다.
   */
-  const [listPinned, setListPinned] = useState(false);
-
-  const { data, items, loading, error, pricesAt, syncWatchlistSymbol } =
-    useMarketRankings(params);
-
-  const showCompactDetail = compactShowsDetail(isCompact, symbolParam, listPinned);
-  const workspaceSymbol = symbolParam || selectedSymbol;
-
-  useEffect(() => {
-    if (symbolParam) setSelectedSymbol(symbolParam);
-  }, [symbolParam]);
-
-  useEffect(() => {
-    if (symbolParam) return;
-    if (items.length === 0) return;
-    setSelectedSymbol((prev) =>
-      prev && items.some((i) => i.symbol === prev) ? prev : items[0].symbol,
-    );
-  }, [items, symbolParam]);
-
-  const prevParamsKey = useRef(paramsKey);
-  useEffect(() => {
-    if (!shouldPinListOnParamsChange(prevParamsKey.current, paramsKey, isCompact)) {
-      prevParamsKey.current = paramsKey;
-      return;
-    }
-    prevParamsKey.current = paramsKey;
-    setListPinned(true);
-  }, [paramsKey, isCompact]);
-
-  const selectSymbol = useCallback(
-    (symbol: string) => {
-      setSelectedSymbol(symbol);
-      setListPinned(false);
-
-      const q = marketRadarSearchParams(params);
-      q.set("symbol", symbol);
-      const url = `/market?${q.toString()}`;
-      const nav = symbolSelectNavMode(isCompact, symbolParam);
-
-      if (nav === "push") router.push(url, { scroll: false });
-      else router.replace(url, { scroll: false });
-    },
-    [isCompact, params, router, symbolParam],
-  );
-
-  const backToRankingList = useCallback(() => {
-    if (shouldHistoryBackOnCompactBack(symbolParam)) router.back();
-  }, [router, symbolParam]);
-
-  useEffect(() => {
-    registerStockPickHandler(selectSymbol);
-    return () => registerStockPickHandler(null);
-  }, [registerStockPickHandler, selectSymbol]);
-
-  function updateParams(next: MarketRadarParams) {
-    syncMarketRadarUrl(router, next, selectedSymbol || symbolParam || null);
-  }
-
-  const showWorkspace =
-    Boolean(workspaceSymbol) && (!isCompact || showCompactDetail);
-
-  const listPanel = (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <MarketRadarToolbar
-        params={params}
-        rankedAt={data?.rankedAt ?? null}
-        refreshedAt={data?.refreshedAt ?? null}
-        pricesAt={pricesAt}
-        sessionClosedAt={data?.sessionClosedAt ?? null}
-        onChange={updateParams}
-        compact={isCompact}
-      />
-      {error && (
-        <p className="shrink-0 border-b border-[var(--border)] bg-rose-500/10 px-3 py-2 text-cell text-rose-400">
-          {error}
-        </p>
-      )}
-      <MarketRadarList
-        items={items}
-        selectedSymbol={selectedSymbol}
-        radarParams={params}
-        loading={loading}
-        compact={isCompact}
-        onSelect={selectSymbol}
-        onWatchlistChange={syncWatchlistSymbol}
-      />
-    </div>
-  );
-
-  if (isCompact) {
-    return (
-      <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {/*
-          compact 목록은 **항상 마운트**한다. 상세일 때 `hidden`만 걸어 스크롤·DOM을
-          유지 — 뒤로가면 remount 없이 즉시 보인다. `inert`로 숨겨진 목록이 포커스를
-          받지 않게 한다.
-        */}
-        <div
-          className={cn(
-            "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
-            showCompactDetail && "hidden",
-          )}
-          aria-hidden={showCompactDetail}
-          {...(showCompactDetail ? { inert: true as const } : {})}
-        >
-          {listPanel}
-        </div>
-
-        {showCompactDetail && (
-          <div className="absolute inset-0 z-10 flex min-h-0 flex-col overflow-hidden bg-[var(--background)]">
-            {/*
-              하단의 「밸류에이션 →」 전폭 링크는 뺐다(2026-09-03 사용자 결정).
-              좁은 화면에서 상시로 한 줄을 차지했는데, 같은 곳은 바로 위 탭바의
-              밸류에이션 탭으로 이미 한 번에 닿는다.
-            */}
-            {showWorkspace ? (
-              <StockWorkspaceClient
-                symbol={workspaceSymbol}
-                embedded
-                compact
-                tabs={MARKET_RADAR_WORKSPACE_TABS}
-                activeTab={workspaceTab}
-                onTabChange={setWorkspaceTab}
-                onBack={backToRankingList}
-                railFrom="xl"
-                className="min-h-0 flex-1"
-              />
-            ) : (
-              <WorkspaceSkeleton />
-            )}
-          </div>
-        )}
-      </main>
-    );
-  }
+  const seed = defaultKnobs
+    ? await fetchRankingsServer(parseMarketRadarParams(new URLSearchParams()))
+    : null;
 
   return (
-    <main className="flex min-h-0 min-w-0 flex-1 justify-center overflow-hidden">
-      <div className="page-shell-wide flex h-full min-w-0 flex-row">
-        <div className="flex h-full min-h-0 w-[min(100%,20rem)] min-w-[13.75rem] shrink-0 flex-col overflow-hidden border-r border-[var(--border)] lg:min-w-[17.5rem] 2xl:w-[23rem]">
-          {listPanel}
-        </div>
-        {showWorkspace ? (
-          <StockWorkspaceClient
-            symbol={workspaceSymbol}
-            embedded
-            tabs={MARKET_RADAR_WORKSPACE_TABS}
-            activeTab={workspaceTab}
-            onTabChange={setWorkspaceTab}
-            railFrom="xl"
-            className="min-h-0 min-w-0 flex-1"
-          />
-        ) : (
-          <div className="flex flex-1 items-center justify-center text-sm text-[var(--text-muted)]">
-            {loading ? "랭킹 로딩 중…" : "종목을 선택하면 차트가 표시됩니다."}
-          </div>
-        )}
-      </div>
-    </main>
+    <>
+      <PageHeading>실시간 차트</PageHeading>
+      <Suspense
+        fallback={
+          <main className="flex flex-1 items-center justify-center p-8 text-sm text-[var(--text-muted)]">
+            마켓 레이더 로딩 중…
+          </main>
+        }
+      >
+        <MarketRadarPageClient seed={seed} />
+      </Suspense>
+    </>
   );
 }
-
-export default function MarketRadarPage() {
-  return (
-    <Suspense
-      fallback={
-        <main className="flex flex-1 items-center justify-center p-8 text-sm text-[var(--text-muted)]">
-          마켓 레이더 로딩 중…
-        </main>
-      }
-    >
-      <MarketRadarPageInner />
-    </Suspense>
-  );
-}
-

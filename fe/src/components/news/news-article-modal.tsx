@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ExternalLink, X } from "lucide-react";
+import { NewsCommunityShareLink } from "@/components/news/news-community-share-link";
 import type { NewsArticle } from "@/lib/news-types";
 import { newsArticleLink } from "@/lib/news-types";
 import { formatRelativeTime } from "@/lib/format-news";
@@ -201,6 +202,8 @@ function NewsArticleModalFrame({
           <span className="text-cell text-[var(--text-muted)]">
             수집: {article.source.name}
           </span>
+          <span className="flex items-center gap-2">
+          <NewsCommunityShareLink article={article} onClose={onClose} />
           {hasUrl && (
             <a
               href={link}
@@ -212,6 +215,7 @@ function NewsArticleModalFrame({
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           )}
+          </span>
         </footer>
       </div>
     </div>

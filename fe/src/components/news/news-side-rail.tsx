@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Eye } from "lucide-react";
 import {
   SectionCard,
@@ -12,6 +12,8 @@ import {
   NewsUpcomingEventsCard,
 } from "@/components/news/news-rail-cards";
 import { TrendingKeywordsCard } from "@/components/news/trending-keywords-card";
+import { useVisibleInterval } from "@/hooks/use-visible-interval";
+import { NEWS_REFRESH_MS } from "@/lib/screen-refresh";
 import type { QuoteSummary } from "@/lib/quotes-types";
 import { fetchDomesticNews, fetchUsNews } from "@/lib/news-api";
 import { formatRelativeTime } from "@/lib/format";
@@ -65,7 +67,20 @@ export function NewsSideRail({
         홈과 **같은 부품**이다 (2026-09-05 사용자 요청 7 — `trending-keywords-card`).
         레일에서는 접힘·각주를 빼고(`variant="rail"`), 누르면 이 화면에서 좁힌다.
       */}
-      <TrendingKeywordsCard market={market} variant="rail" limit={12} onSelect={onKeywordSelect} />
+      {/*
+        **레일도 목록과 같은 시각을 산다** (2026-09-16 사용자 요청).
+
+        `refreshMs`를 안 주면 이 카드는 마운트 시각에 멈춘다. 옆의 기사 목록이 90초마다
+        새로 오는 화면에서 그러면 한 화면에 시각이 둘 섞이고, 그건 홈에서 이미 한 번
+        밟은 함정이다(`lib/screen-refresh`의 「한 카드 안에서 두 시각」).
+      */}
+      <TrendingKeywordsCard
+        market={market}
+        variant="rail"
+        limit={12}
+        refreshMs={NEWS_REFRESH_MS}
+        onSelect={onKeywordSelect}
+      />
       <NewsUpcomingEventsCard
         market={market}
         symbols={mySymbols}
@@ -95,10 +110,15 @@ function MostReadCard({
 }) {
   const [items, setItems] = useState<NewsArticle[] | null>(null);
 
+  const load = useCallback(
+    () =>
+      (market === "domestic" ? fetchDomesticNews : fetchUsNews)({ market, sort: "popular" }),
+    [market],
+  );
+
   useEffect(() => {
     let alive = true;
-    const fetchNews = market === "domestic" ? fetchDomesticNews : fetchUsNews;
-    fetchNews({ market, sort: "popular" })
+    load()
       .then(({ articles }) => {
         if (alive) setItems(articles.slice(0, 6));
       })
@@ -108,7 +128,18 @@ function MostReadCard({
     return () => {
       alive = false;
     };
-  }, [market]);
+  }, [load]);
+
+  /*
+    조회수는 **사람이 지금 만드는 값**이라 목록과 같은 90초 주기를 쓴다. 갱신이
+    실패하면 직전 순위를 남긴다 — 「집계된 조회 기록이 없습니다」로 떨어뜨리면
+    있던 것을 없애는 일이 된다(`lib/screen-refresh`).
+  */
+  useVisibleInterval(() => {
+    load()
+      .then(({ articles }) => setItems(articles.slice(0, 6)))
+      .catch(() => {});
+  }, NEWS_REFRESH_MS);
 
   return (
     <SectionCard title="많이 본 뉴스">

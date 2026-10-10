@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useVisibleInterval } from "@/hooks/use-visible-interval";
 import { fetchEarningsHighlights } from "@/lib/earnings-api";
 import type { EarningsHighlights, EarningsMarket } from "@/lib/earnings-types";
 
@@ -20,10 +21,17 @@ import type { EarningsHighlights, EarningsMarket } from "@/lib/earnings-types";
 const EMPTY: EarningsHighlights = { big: [], divergent: [], consistent: [] };
 
 /**
+ * @param refreshMs 0보다 크면 **탭이 보이는 동안** 이 주기로 다시 받는다. 기본값은
+ *                  0(한 번만) — 화면을 오갈 때마다 다시 받는 구조라 대부분은 그것으로
+ *                  충분하고, 홈처럼 **열어 둔 채 하루가 지나는** 자리만 주기를 준다
+ *                  (2026-09-16 사용자 요청, `lib/screen-refresh`).
  * @returns 아직 받는 중이면 `null`. 실패는 빈 하이라이트로 떨어진다 — 전부 부가
  *          정보라 본문은 그대로 떠야 한다.
  */
-export function useEarningsHighlights(market: EarningsMarket): EarningsHighlights | null {
+export function useEarningsHighlights(
+  market: EarningsMarket,
+  refreshMs = 0,
+): EarningsHighlights | null {
   /*
     **어느 시장의 결과인지 함께 들고 있는다.** 시장이 바뀔 때 이펙트에서 동기로 null을
     넣으면 렌더가 한 번 더 돌고(`react-hooks/set-state-in-effect`), 안 넣으면 새 응답이
@@ -31,19 +39,40 @@ export function useEarningsHighlights(market: EarningsMarket): EarningsHighlight
   */
   const [loaded, setLoaded] = useState<{ key: string; data: EarningsHighlights } | null>(null);
 
+  /*
+    **마지막으로 건 요청만 쓴다.** 요청을 거는 자리가 둘(첫 적재·주기)이 되면서
+    이펙트 안의 `alive` 지역변수로는 부족해졌다 — 늦게 도착한 앞 회차가 새 회차의
+    답을 덮으면 시장을 바꾼 뒤 옛 목록이 되돌아온다. 언마운트도 같은 번호표로 버린다.
+  */
+  const seqRef = useRef(0);
+  useEffect(
+    () => () => {
+      seqRef.current += 1;
+    },
+    [],
+  );
+
+  const load = useCallback(
+    (initial: boolean) => {
+      seqRef.current += 1;
+      const seq = seqRef.current;
+      fetchEarningsHighlights(market)
+        .then((data) => {
+          if (seq === seqRef.current) setLoaded({ key: market, data });
+        })
+        .catch(() => {
+          // 갱신의 실패는 목록을 지우지 않는다 — 첫 적재만 빈 하이라이트로 떨어진다.
+          if (seq === seqRef.current && initial) setLoaded({ key: market, data: EMPTY });
+        });
+    },
+    [market],
+  );
+
   useEffect(() => {
-    let alive = true;
-    fetchEarningsHighlights(market)
-      .then((data) => {
-        if (alive) setLoaded({ key: market, data });
-      })
-      .catch(() => {
-        if (alive) setLoaded({ key: market, data: EMPTY });
-      });
-    return () => {
-      alive = false;
-    };
-  }, [market]);
+    load(true);
+  }, [load]);
+
+  useVisibleInterval(() => load(false), refreshMs, refreshMs > 0);
 
   return loaded?.key === market ? loaded.data : null;
 }

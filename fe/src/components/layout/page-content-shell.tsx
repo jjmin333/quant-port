@@ -69,7 +69,7 @@ export function PageScrollShell({
   return (
     <main
       className={cn(
-        "flex-1 overflow-y-auto overflow-x-hidden bg-[var(--background)]",
+        "relative flex-1 overflow-y-auto overflow-x-hidden bg-[var(--background)]",
         className,
       )}
     >

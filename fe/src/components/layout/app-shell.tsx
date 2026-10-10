@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { OfflineBanner } from "@/components/common/offline-banner";
 import { Header } from "@/components/layout/header";
+import { QuoteTabTitle } from "@/components/layout/quote-tab-title";
 import { Sidebar } from "@/components/layout/sidebar";
 import { HeaderSearchProvider } from "@/components/providers/header-search-provider";
 import { QuickLookProvider } from "@/components/providers/quick-look-provider";
@@ -68,7 +69,7 @@ function AppShellFrame({ children }: { children: React.ReactNode }) {
 
   return (
     <HeaderSearchProvider>
-      <div className="flex h-[100dvh] flex-col overflow-hidden bg-[var(--background)]">
+      <div className="relative flex h-[100dvh] flex-col overflow-hidden bg-[var(--background)]">
         {/* 끊긴 동안 화면마다 다른 말을 하지 않도록 앱 전체가 한 번만 알린다. */}
         <OfflineBanner />
         <div className="relative z-50 shrink-0">
@@ -117,6 +118,15 @@ export function AppShell({
         여러 겹 안쪽에 있는 칩이 창을 열 수 있어야 하고, 그 창은 한 번에 하나뿐이다
         (`quick-look-provider.tsx` 머리말).
       */}
+      {/*
+        브라우저 탭 제목이 마지막으로 연 종목의 시세를 말한다 (2026-09-15 사용자 요청 4).
+        아무것도 그리지 않는다 — `document.title`만 쥔다. 껍데기에 **하나만** 있어야
+        하므로(제목을 쥐는 곳이 둘이면 서로를 덮는다) 여기 둔다.
+
+        이 컴포넌트가 그 종목의 **구독자**이기도 하다. 안 보이는 탭이 목록을 다 놓고도
+        이 한 줄을 살려 두는 근거가 그 구독이다(`lib/pinned-symbols` 머리글).
+      */}
+      <QuoteTabTitle />
       <QuickLookProvider>
         <AppShellFrame>{children}</AppShellFrame>
       </QuickLookProvider>

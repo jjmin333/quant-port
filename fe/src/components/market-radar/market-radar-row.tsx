@@ -1,6 +1,8 @@
 "use client";
 
 import { memo } from "react";
+import Link from "next/link";
+import { isPlainLeftClick } from "@/lib/plain-click";
 import { Heart, NotepadText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PriceDisplay } from "@/components/ui/price-display";
@@ -81,9 +83,19 @@ function MarketRadarRowImpl({
         active ? "bg-[var(--brand-muted)]" : "hover:bg-[var(--surface-elevated)]",
       )}
     >
-      <button
-        type="button"
-        onClick={() => onSelect(item.symbol)}
+      {/*
+        주 동작은 종목 페이지로 가는 **진짜 링크**다(2026-10-09 — 검색 색인 개선 B). 크롤러는
+        이 href로 종목 페이지를 찾고, Ctrl/가운데 클릭은 새 탭으로 연다. 일반 클릭은 지금처럼
+        옆 패널을 연다.
+      */}
+      <Link
+        href={`/stocks/${encodeURIComponent(item.symbol)}`}
+        prefetch={false}
+        onClick={(e) => {
+          if (!isPlainLeftClick(e)) return;
+          e.preventDefault();
+          onSelect(item.symbol);
+        }}
         aria-current={active ? "true" : undefined}
         aria-label={`${item.name} ${item.rank}위`}
         className={cn(
@@ -177,7 +189,7 @@ function MarketRadarRowImpl({
         </div>
       </div>
 
-      </button>
+      </Link>
 
       {/* 주 동작의 **형제**다 — 버튼 안에 들어가면 다시 중첩이 된다. */}
       <div className="flex shrink-0 items-center gap-0.5">

@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { LogIn } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { signupHref } from "@/lib/auth-routes";
 
 export function isAuthErrorMessage(message: string): boolean {
   const lower = message.toLowerCase();
@@ -37,7 +38,7 @@ export function LoginRequiredPanel({
               로그인
             </Link>
             <Link
-              href="/signup"
+              href={signupHref(loginNext)}
               className={cn(buttonVariants({ variant: "outline", size: "lg" }), "border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]")}
             >
               회원가입

@@ -5,11 +5,12 @@ import { useSearchParams } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { toUserMessage } from "@/lib/error-message";
+import { signupHref } from "@/lib/auth-routes";
 
 export default function LoginPage() {
   const { login } = useAuth();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
+  const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -19,7 +20,7 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await login(email, password, searchParams.get("next") ?? undefined);
+      await login(loginId, password, searchParams.get("next") ?? undefined);
     } catch (err) {
       setError(toUserMessage(err, "로그인에 실패했습니다."));
     } finally {
@@ -37,13 +38,19 @@ export default function LoginPage() {
 
       <form onSubmit={onSubmit} className="space-y-4">
         <label className="block">
-          <span className="mb-1 block text-sm text-[var(--text-secondary)]">이메일</span>
+          <span className="mb-1 block text-sm text-[var(--text-secondary)]">아이디</span>
+          {/*
+            기존 회원은 가입 때 쓴 **이메일이 그대로 아이디**다 (2026-09-27 요청 3). 그래서
+            type="email"을 쓰지 않는다 — 새 아이디(영문·숫자)를 브라우저가 형식 오류로 막는다.
+          */}
           <input
-            type="email"
-            autoComplete="email"
+            type="text"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={loginId}
+            onChange={(e) => setLoginId(e.target.value)}
             className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
           />
         </label>
@@ -75,7 +82,7 @@ export default function LoginPage() {
 
       <p className="mt-6 text-center text-sm text-[var(--text-muted)]">
         계정이 없으신가요?{" "}
-        <Link href="/signup" className="text-[var(--brand)] hover:underline">
+        <Link href={signupHref(searchParams.get("next"))} className="text-[var(--brand)] hover:underline">
           회원가입
         </Link>
       </p>

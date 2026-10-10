@@ -7,6 +7,7 @@ import {
 } from "@/lib/api-client";
 import { cachedGet } from "@/lib/fetch-cache";
 import { batchQuotes } from "@/lib/quote-batch";
+import { fetchWithTimeout } from "@/lib/fetch-timeout";
 
 /*
   # 같은 값을 두 번 묻지 않는다 (2026-09-03 사용자 지적)
@@ -83,29 +84,34 @@ function apiDelete<T>(path: string): Promise<T> {
 export async function fetchMarketIndicesClient(): Promise<{
   indices: MarketIndex[];
   updatedAt: string | null;
+  /** 서버가 마지막으로 갱신 회차를 끝낸 시각 — 값이 안 바뀌어도 움직인다. */
+  checkedAt: string | null;
   groups: Record<string, IndexGroupMeta>;
 }> {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 8_000);
-  try {
-    const res = await fetch(`${getApiBaseUrl()}/api/v1/quotes/indices`, {
-      cache: "no-store",
-      signal: controller.signal,
-    });
-    await ensureOk(res, "Failed to load indices");
-    const body = await parseJson<{
-      data: MarketIndex[] | null;
-      updatedAt?: string;
-      groups?: Record<string, IndexGroupMeta>;
-    }>(res);
-    return {
-      indices: body.data ?? [],
-      updatedAt: body.updatedAt ?? null,
-      groups: body.groups ?? {},
-    };
-  } finally {
-    window.clearTimeout(timeout);
-  }
+  /*
+    손으로 세우던 8초 AbortController를 걷어냈다 — 같은 상한이 이제 `fetchWithTimeout`
+    안에 있고, 앱의 **모든** 요청이 그것을 지난다. 이 함수만 상한을 갖고 있던 것이
+    2026-09-20 점검의 출발점이었다(`lib/fetch-timeout.ts` 머리글).
+
+    `window.setTimeout`을 쓰던 자리라 이 함수는 서버에서 부르면 터졌었다. 이제는
+    환경에 맞는 상한이 자동으로 걸려 **SSR 선반입에서도 그대로 쓸 수 있다.**
+  */
+  const res = await fetchWithTimeout(`${getApiBaseUrl()}/api/v1/quotes/indices`, {
+    cache: "no-store",
+  });
+  await ensureOk(res, "Failed to load indices");
+  const body = await parseJson<{
+    data: MarketIndex[] | null;
+    updatedAt?: string;
+    checkedAt?: string;
+    groups?: Record<string, IndexGroupMeta>;
+  }>(res);
+  return {
+    indices: body.data ?? [],
+    updatedAt: body.updatedAt ?? null,
+    checkedAt: body.checkedAt ?? null,
+    groups: body.groups ?? {},
+  };
 }
 
 export async function fetchQuotesClient(
@@ -135,7 +141,7 @@ export async function fetchExchangeRateClient(): Promise<number> {
   return cachedGet(
     path,
     async () => {
-      const res = await fetch(`${getApiBaseUrl()}${path}`, { cache: "no-store" });
+      const res = await fetchWithTimeout(`${getApiBaseUrl()}${path}`, { cache: "no-store" });
       await ensureOk(res, "Failed to load exchange rate");
       const body = await parseJson<{ data: { midRate?: string; rate?: string } | null }>(res);
       const raw = body.data?.midRate ?? body.data?.rate ?? "0";
@@ -155,7 +161,7 @@ export async function searchStocksCatalogClient(
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   if (q.trim()) params.set("q", q.trim());
   if (market) params.set("market", market);
-  const res = await fetch(`${getApiBaseUrl()}/api/v1/stocks/search?${params}`, { cache: "no-store" });
+  const res = await fetchWithTimeout(`${getApiBaseUrl()}/api/v1/stocks/search?${params}`, { cache: "no-store" });
   await ensureOk(res, "Failed to search stocks");
   const body = await parseJson<{ data: StockInfo[] | null; total?: number }>(res);
   return { items: body.data ?? [], total: body.total ?? 0 };
@@ -197,7 +203,7 @@ export async function fetchQuotesBatchClient(
 async function fetchQuotesBatchRaw(symbols: string[]): Promise<QuoteSummary[]> {
   const params = new URLSearchParams({ symbols: symbols.join(",") });
   const path = `/api/v1/quotes/batch?${params}`;
-  const res = await fetch(`${getApiBaseUrl()}${path}`, { cache: "no-store" });
+  const res = await fetchWithTimeout(`${getApiBaseUrl()}${path}`, { cache: "no-store" });
   await ensureOk(res, "Failed to load batch quotes");
   const body = await parseJson<{ data: QuoteSummary[] | null }>(res);
   return body.data ?? [];
@@ -237,7 +243,7 @@ export async function fetchCandleSnapshotClient(
   return cachedGet(
     path,
     async () => {
-      const res = await fetch(`${getApiBaseUrl()}${path}`, { cache: "no-store" });
+      const res = await fetchWithTimeout(`${getApiBaseUrl()}${path}`, { cache: "no-store" });
       await ensureOk(res, "Failed to load candle snapshot");
       const body = await parseJson<{ data: CandleSnapshot; source?: string }>(res);
       return { ...body.data, source: body.data.source ?? body.source ?? "unknown" };
@@ -285,7 +291,7 @@ export async function fetchCandlesPageClient(
 ): Promise<CandlesPage & { source?: string }> {
   const params = new URLSearchParams({ interval });
   if (before) params.set("before", before);
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `${getApiBaseUrl()}/api/v1/quotes/${encodeURIComponent(symbol)}/candles?${params}`,
     { cache: "no-store" },
   );
@@ -347,7 +353,7 @@ export async function fetchStocksBatchClient(symbols: string[]): Promise<StockIn
   return cachedGet(
     path,
     async () => {
-      const res = await fetch(`${getApiBaseUrl()}${path}`, { cache: "no-store" });
+      const res = await fetchWithTimeout(`${getApiBaseUrl()}${path}`, { cache: "no-store" });
       await ensureOk(res, "Failed to load stocks");
       const body = await parseJson<{ data: StockInfo[] | null }>(res);
       return body.data ?? [];
@@ -379,7 +385,7 @@ export async function fetchMarketDataSettingsClient(): Promise<MarketDataSetting
   return cachedGet(
     path,
     async () => {
-      const res = await fetch(`${getApiBaseUrl()}${path}`, { cache: "no-store" });
+      const res = await fetchWithTimeout(`${getApiBaseUrl()}${path}`, { cache: "no-store" });
       await ensureOk(res, "Failed to load market data settings");
       const body = await parseJson<{ data: MarketDataSettingsResponse }>(res);
       return body.data;
@@ -409,7 +415,7 @@ export async function fetchRankingsClient(params: {
   // 랭킹 스냅샷은 서버가 주기적으로 갱신한다. 같은 파라미터로 잇달아 물어보는 건
   // (홈의 거래대금 카드 ↔ 마켓 화면) 같은 답을 두 번 받는 것뿐이다.
   return cachedGet(`/api/v1/rankings?${q}`, async () => {
-    const res = await fetch(`${getApiBaseUrl()}/api/v1/rankings?${q}`, { cache: "no-store" });
+    const res = await fetchWithTimeout(`${getApiBaseUrl()}/api/v1/rankings?${q}`, { cache: "no-store" });
     await ensureOk(res, "랭킹 조회 실패");
     const body = await parseJson<{ data: RankingsResponse }>(res);
     return body.data ?? { rankedAt: null, rankings: [] };
@@ -442,7 +448,7 @@ export async function fetchRankingPricesClient(params: {
   if (params.count != null && params.count > 0) {
     q.set("count", String(params.count));
   }
-  const res = await fetch(`${getApiBaseUrl()}/api/v1/rankings/prices?${q}`, { cache: "no-store" });
+  const res = await fetchWithTimeout(`${getApiBaseUrl()}/api/v1/rankings/prices?${q}`, { cache: "no-store" });
   await ensureOk(res, "랭킹 시세 조회 실패");
   const body = await parseJson<{ data: RankingPriceRow[] }>(res);
   return body.data ?? [];

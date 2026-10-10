@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   anyAutoVote,
+  nextAutoVote,
   resolveSample,
   sampleBase,
   shouldDropOverride,
@@ -140,5 +141,47 @@ describe("anyAutoVote", () => {
     expect(resolveSample({ ...base, auto })).toBe(true);
     // 사용자가 끈 것은 그래도 이긴다.
     expect(resolveSample({ ...base, auto, override: off(HOLDINGS) })).toBe(false);
+  });
+});
+
+describe("nextAutoVote — 예시 자동 켜기가 스스로를 끄지 않는다 (2026-09-27 제보 1)", () => {
+  it("내 목록을 받아 0건이면 표를 참으로 낸다", () => {
+    expect(nextAutoVote(false, true, false)).toBe(true);
+  });
+
+  it("받는 중(null)에는 직전 표를 그대로 둔다", () => {
+    expect(nextAutoVote(true, null, false)).toBe(true);
+    expect(nextAutoVote(false, null, false)).toBe(false);
+  });
+
+  it("예시가 켜진 동안 예시 목록의 개수로 표를 뒤집지 않는다", () => {
+    // 예시 목록은 0건이 아니므로 화면은 false를 관찰하지만 그건 내 것이 아니다.
+    expect(nextAutoVote(true, false, true)).toBe(true);
+  });
+
+  it("예전 루프 시나리오: 켜짐 → 재적재 → 예시 개수 관찰이 반복돼도 표는 한 번만 바뀐다", () => {
+    let vote = false;
+    let changes = 0;
+    // [관찰, 예시 표시 중] 순서 — 내 0건 → 예시 켜짐(로딩) → 예시 목록 → 예시 목록 …
+    const frames: Array<[boolean | null, boolean]> = [
+      [null, false],
+      [true, false],
+      [null, true],
+      [false, true],
+      [false, true],
+      [null, true],
+      [false, true],
+    ];
+    for (const [observed, showing] of frames) {
+      const next = nextAutoVote(vote, observed, showing);
+      if (next !== vote) changes += 1;
+      vote = next;
+    }
+    expect(vote).toBe(true);
+    expect(changes).toBe(1);
+  });
+
+  it("예시를 끈 뒤 첫 항목을 만들면 표가 거짓으로 돌아간다", () => {
+    expect(nextAutoVote(true, false, false)).toBe(false);
   });
 });

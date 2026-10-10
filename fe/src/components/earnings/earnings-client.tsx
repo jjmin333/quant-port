@@ -9,6 +9,8 @@ import { SectionEmpty, SectionSkeleton } from "@/components/ui/section-card";
 import { EarningsDayStrip } from "@/components/earnings/earnings-day-strip";
 import { EarningsMonthGrid } from "@/components/earnings/earnings-month-grid";
 import { EarningsWeekBoard } from "@/components/earnings/earnings-week-board";
+import { EarningsAIDigestCard } from "@/components/earnings/earnings-ai-digest-card";
+import { EarningsPreviewCard } from "@/components/earnings/earnings-preview-card";
 import { EarningsSideRail } from "@/components/earnings/earnings-side-rail";
 import { EarningsSurpriseView } from "@/components/earnings/earnings-surprise-view";
 import { EarningsScoreboard } from "@/components/earnings/earnings-scoreboard";
@@ -288,6 +290,10 @@ export function EarningsClient({ market }: { market: EarningsMarket }) {
             />
           }
         >
+          {/* 맨 위 AI 실적 요약 (2026-10-09 요청 1) — 달력·서프라이즈 보기 모두 위에. 없으면 서지 않는다. */}
+          <div className="mb-3 empty:hidden">
+            <EarningsAIDigestCard market={market} />
+          </div>
           {view === "surprise" ? (
             <EarningsSurpriseView market={market} onPickEvent={setOpenEvent} />
           ) : (
@@ -300,6 +306,9 @@ export function EarningsClient({ market }: { market: EarningsMarket }) {
                 카드가 정중앙에서 한 번만 한다 — 같은 사실을 두 카드가 나눠 말하면
                 어느 쪽이 답인지 흐려진다.
               */}
+              {/* 이번 주 실적 관전 포인트 — 배치가 저장한 AI 요약(2026-09-27 결정 C ②). 없으면 서지 않는다. */}
+              <EarningsPreviewCard market={market} />
+
               {!monthIsEmpty && <EarningsScoreboard stats={stats} rangeLabel={rangeLabel} />}
 
               {mode === "month" &&

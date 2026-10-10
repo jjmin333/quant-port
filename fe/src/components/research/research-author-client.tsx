@@ -18,13 +18,19 @@ import { formatDateTimeKST, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { PriceDisplay } from "@/components/ui/price-display";
 
-export function ResearchAuthorClient({ userId }: { userId: number }) {
-  const [profile, setProfile] = useState<ResearchAuthorProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+export function ResearchAuthorClient({
+  userId,
+  initial = null,
+}: {
+  userId: number;
+  /** 서버가 익명으로 미리 받은 프로필(공개 리포트만). 마운트 뒤 내 세션으로 다시 받아 덮는다. */
+  initial?: ResearchAuthorProfile | null;
+}) {
+  const [profile, setProfile] = useState<ResearchAuthorProfile | null>(initial);
+  const [loading, setLoading] = useState(initial === null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
     setError(null);
     try {
       setProfile(await fetchResearchAuthorClient(userId));

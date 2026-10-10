@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { StockAvatar } from "@/components/stocks/stock-avatar";
+import { EarningsEventCard } from "@/components/earnings/earnings-event-card";
 import {
   DateStatusBadge,
   DivergenceFlag,
@@ -40,6 +41,11 @@ import { cn } from "@/lib/utils";
  * # 기본 정렬
  *
  * **시가총액 내림차순**으로 시작한다 — 큰 회사부터 본다.
+ *
+ * # 좁으면 카드 (2026-10-09 사용자 요청 3)
+ *
+ * 열이 열 개라 폰·세로 태블릿에서 가로로 밀렸다. 표가 놓인 **칸의 폭**(컨테이너 쿼리)이
+ * 46rem 미만이면 같은 줄을 `EarningsEventCard`로 세우고, 머리글 정렬은 선택 상자가 맡는다.
  */
 
 type SortKey =
@@ -65,7 +71,7 @@ type Column = {
   markets?: EarningsMarket[];
 };
 
-function defaultSort(_market: EarningsMarket): { key: SortKey; dir: SortDir } {
+function defaultSort(): { key: SortKey; dir: SortDir } {
   return { key: "marketCap", dir: "desc" };
 }
 
@@ -108,7 +114,7 @@ export function EarningsTable({
   quotes: Map<string, QuoteSummary>;
   onPickEvent: (event: EarningsEvent) => void;
 }) {
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>(() => defaultSort(market));
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>(defaultSort);
 
   const columns = useMemo(() => columnsFor(market), [market]);
 
@@ -140,8 +146,46 @@ export function EarningsTable({
     return copy;
   }, [events, sort, market, quotes]);
 
+  const sortLabel = (col: Column) => (col.key === "metricActual" || col.key === "revenue" ? `${col.label} 실적` : col.label);
+
   return (
-    <div className="overflow-x-auto">
+    <div className="@container">
+      <div className="space-y-2 @[46rem]:hidden">
+        <div className="flex items-center justify-end gap-1.5 text-cell">
+          <label htmlFor="earnings-sort" className="text-muted-foreground">
+            정렬
+          </label>
+          <select
+            id="earnings-sort"
+            value={sort.key}
+            onChange={(e) => toggle(e.target.value as SortKey)}
+            className="h-8 rounded-md border border-[var(--border)] bg-card px-2 text-cell"
+          >
+            {columns.map((col) => (
+              <option key={col.key} value={col.key}>
+                {sortLabel(col)}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => setSort((cur) => ({ ...cur, dir: cur.dir === "asc" ? "desc" : "asc" }))}
+            aria-label={sort.dir === "asc" ? "오름차순 — 눌러서 내림차순" : "내림차순 — 눌러서 오름차순"}
+            className="grid size-8 place-items-center rounded-md border border-[var(--border)] bg-card"
+          >
+            {sort.dir === "asc" ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
+          </button>
+        </div>
+        {rows.map((event) => (
+          <EarningsEventCard
+            key={earningsEventKey(event)}
+            event={event}
+            quote={quotes.get(event.symbol)}
+            onPick={onPickEvent}
+          />
+        ))}
+      </div>
+    <div className="hidden overflow-x-auto @[46rem]:block">
       <table className="w-full min-w-[900px] border-collapse text-cell">
         <thead>
           <tr>
@@ -184,6 +228,7 @@ export function EarningsTable({
           ))}
         </tbody>
       </table>
+    </div>
     </div>
   );
 }

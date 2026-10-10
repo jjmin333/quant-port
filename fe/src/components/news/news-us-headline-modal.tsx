@@ -10,6 +10,7 @@ import { isArticleBreakingNews } from "@/lib/news-breaking";
 import { NewsBreakingBadge } from "@/components/news/news-breaking-badge";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
+import { NewsCommunityShareLink } from "@/components/news/news-community-share-link";
 
 type NewsUsHeadlineModalProps = {
   article: NewsArticle | null;
@@ -135,7 +136,7 @@ function NewsUsHeadlineModalFrame({
                 className={cn(
                   "rounded-full px-4 py-1.5 text-note font-medium transition-colors",
                   !showOriginal
-                    ? "bg-violet-500/20 text-violet-300"
+                    ? "bg-violet-500/20 text-violet-700 dark:text-violet-300"
                     : "text-[var(--text-muted)] hover:text-[var(--text-primary)]",
                 )}
               >
@@ -147,7 +148,7 @@ function NewsUsHeadlineModalFrame({
                 className={cn(
                   "rounded-full px-4 py-1.5 text-note font-medium transition-colors",
                   showOriginal
-                    ? "bg-violet-500/20 text-violet-300"
+                    ? "bg-violet-500/20 text-violet-700 dark:text-violet-300"
                     : "text-[var(--text-muted)] hover:text-[var(--text-primary)]",
                 )}
               >
@@ -175,6 +176,8 @@ function NewsUsHeadlineModalFrame({
 
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border)] px-4 py-3 sm:px-5">
           <span className="text-cell text-[var(--text-muted)]">헤드라인 · {article.source.name}</span>
+          <span className="flex items-center gap-2">
+          <NewsCommunityShareLink article={article} onClose={onClose} />
           {link && (
             <a
               href={link}
@@ -186,6 +189,7 @@ function NewsUsHeadlineModalFrame({
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           )}
+          </span>
         </footer>
       </div>
     </div>

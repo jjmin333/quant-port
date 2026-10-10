@@ -5,8 +5,20 @@ import { IndexOverviewModal } from "@/components/market/index-overview-modal";
 import { IndexQuickLookModal } from "@/components/market/index-quick-look-modal";
 import { IndexTagChips } from "@/components/market/index-tag-chips";
 import { useIndexScores, type IndexScoreSummary } from "@/hooks/use-index-scores";
-import { useMarketIndices } from "@/hooks/use-market-indices";
+import {
+  INDEX_SERVER_LOOP_MS,
+  retryMarketIndices,
+  seedMarketIndices,
+  useMarketIndices,
+} from "@/hooks/use-market-indices";
+import { useFreshness } from "@/hooks/use-freshness";
+import { LoadErrorState } from "@/components/common/load-error-state";
+import { StaleBadge } from "@/components/common/stale-badge";
+import { updatedAtLabel } from "@/lib/data-freshness";
+import type { ServerIndicesSeed } from "@/lib/home-api.server";
+import { SCREEN_SLOW_REFRESH_MS } from "@/lib/screen-refresh";
 import { formatPercent } from "@/lib/format";
+import { formatRateChange, RATE_INDEX_IDS } from "@/lib/market-indices-catalog";
 import type { MarketIndex } from "@/lib/quotes-types";
 import { trendTextClass } from "@/lib/trend-colors";
 import { cn } from "@/lib/utils";
@@ -169,14 +181,56 @@ function useStripDrag(viewportRef: React.RefObject<HTMLDivElement | null>) {
   return { dragging, onPointerDown, onPointerMove, endDrag, onClickCapture };
 }
 
-export function IndexTickerStrip() {
-  const { indices, updatedAt } = useMarketIndices();
-  const scoresById = useIndexScores();
+export function IndexTickerStrip({ seed }: { seed?: ServerIndicesSeed }) {
+  /*
+    **서버가 받아 온 지수를 렌더 전에 넣는다** (2026-09-20 점검 요청 5·9).
+
+    `useSyncExternalStore`의 `getServerSnapshot`이 이 값을 읽으므로, 서버 렌더와
+    hydration이 **같은 값을 본다** — 넣는 시점이 양쪽 다 이 줄이다. 이펙트로
+    옮기면 서버 HTML은 다시 비고, 첫 그림이 스켈레톤으로 돌아간다.
+
+    모듈 전역을 렌더 중에 건드리지만 `seedMarketIndices`는 알림을 보내지 않고
+    이미 값이 있으면 물러난다 — 그 함수 주석에 왜 그래도 되는지 적어 두었다.
+  */
+  if (seed) seedMarketIndices(seed);
+
+  const { indices, updatedAt, checkedAt, loaded, error } = useMarketIndices();
+  /*
+    값은 `useMarketIndices`가 30초마다 밀어 주지만 **점수 배지는 하루 한 번 도는
+    배치**가 만든다 — 홈을 열어 둔 채 날짜가 바뀌면 어제 등급이 오늘 값 옆에 붙어
+    있었다. 이 스트립은 홈에만 있다(2026-09-16 사용자 요청).
+  */
+  const scoresById = useIndexScores(SCREEN_SLOW_REFRESH_MS);
   const [picked, setPicked] = useState<MarketIndex | null>(null);
   const [overview, setOverview] = useState(false);
 
   const rows = indices.filter((i) => i.value > 0);
-  const loading = rows.length === 0;
+  /*
+    **네 상태를 가른다** (2026-09-20 점검 요청 6).
+
+    예전에는 `rows.length === 0` 하나로 「로딩」을 판정했고, 그래서 적재 실패도
+    빈 응답도 전부 「갱신 중…」 + 스켈레톤이었다 — 실패가 로딩과 같은 모습이면
+    사용자는 영원히 기다린다.
+
+      loading  아직 안 받아 봤다            → 스켈레톤
+      error    받으려다 실패했다            → LoadErrorState + 다시 시도
+      empty    받았는데 값이 없다           → 한 줄 안내
+      ready    값이 있다                    → 띠
+  */
+  const loading = !loaded && rows.length === 0;
+  const showError = error != null && rows.length === 0;
+  const empty = loaded && rows.length === 0 && error == null;
+
+  /*
+    「낡은 값」은 **서버가 마지막으로 확인한 시각**(`checkedAt`)으로 판정한다 (2026-09-26).
+
+    예전에는 `updatedAt`을 30초 × 3으로 쟀는데, `updatedAt`은 「값이 바뀐 시각」이라
+    휴장에는 **멈춘다** — 주말에는 비트코인·금만 5분마다 움직여, 5분 중 3분 반 동안
+    멀쩡한 값에 「낡은 값」이 붙었다(09-26 토요일 실측). 서버의 갱신 회차는 1분이므로
+    그 세 배(3분)를 넘기면 정말로 파이프라인이 멈춘 것이다. 옛 서버 응답에 `checkedAt`이
+    없으면 예전처럼 `updatedAt`으로 잰다.
+  */
+  const freshness = useFreshness(checkedAt ?? updatedAt, INDEX_SERVER_LOOP_MS);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const copyRef = useRef<HTMLDivElement>(null);
@@ -319,20 +373,32 @@ export function IndexTickerStrip() {
       <div className="mb-2 flex items-baseline justify-between gap-3">
         <h2 className="text-section font-semibold">오늘의 시장</h2>
         <span className="flex items-baseline gap-2">
+          {/*
+            **「갱신 중…」은 진짜로 받고 있을 때만 적는다** (2026-09-20 점검 요청 3·6).
+
+            예전에는 `updatedAt ? 시각 : "갱신 중…"` 한 줄이었다. 그래서 적재가
+            실패해 `updatedAt`이 영영 null로 남으면 화면은 **끝나지 않는 「갱신
+            중…」**을 그렸다 — 실패했다는 말도, 다시 시도할 길도 없었다.
+          */}
           <span className="text-cell text-muted-foreground">
-            {updatedAt
-              ? `${new Date(updatedAt).toLocaleTimeString("ko-KR", {
-                  timeZone: "Asia/Seoul",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })} 기준 · 지수 ${rows.length}종`
-              : "갱신 중…"}
+            {freshness.at
+              ? `${updatedAtLabel(freshness.at)} · 지수 ${rows.length}종`
+              : showError
+                ? "갱신 실패"
+                : empty
+                  ? "표시할 지수 없음"
+                  : "갱신 중…"}
           </span>
+          {/*
+            값은 그대로 두고 늙었다는 것만 알린다. 마운트 전에는 뜨지 않는다 —
+            `useFreshness`가 hydration 불일치를 피하는 방식이다.
+          */}
+          <StaleBadge ageMs={freshness.stale ? freshness.ageMs : null} at={freshness.at} />
           {/*
             흐르는 띠에서 나가는 문. 모바일에서는 한 번에 한두 칸밖에 안 보여, 두 지수를
             견주려면 띠가 한 바퀴 돌기를 기다려야 했다 — `IndexOverviewModal` 참고.
           */}
-          {!loading && (
+          {rows.length > 0 && (
             <button
               type="button"
               onClick={() => setOverview(true)}
@@ -344,7 +410,27 @@ export function IndexTickerStrip() {
         </span>
       </div>
 
-      {loading ? (
+      {showError ? (
+        /*
+          **실패에는 되돌아갈 길을 함께 준다** — 뉴스 화면이 이미 쓰는 규칙이고
+          (§BUG-11), 홈에만 빠져 있었다. 값이 하나도 없을 때만 이 자리를 쓴다:
+          보고 있던 지수가 있으면 위의 「갱신 실패」 한 줄로 충분하고, 띠를
+          지워 버리면 갱신 한 번의 실패가 화면을 없애는 일이 된다.
+        */
+        <LoadErrorState
+          compact
+          message={error ?? "지수를 불러오지 못했습니다."}
+          onRetry={retryMarketIndices}
+        />
+      ) : empty ? (
+        /*
+          받았는데 비어 있는 경우. 실패와 **다른 말**을 해야 한다 — 여기서
+          「다시 시도」를 권하면 사용자는 고칠 수 없는 것을 고치려 든다.
+        */
+        <p className="px-3 py-6 text-center text-cell text-[var(--text-muted)]">
+          표시할 지수가 없습니다. 잠시 후 다시 확인해 주세요.
+        </p>
+      ) : loading ? (
         <div className="flex gap-2 overflow-hidden">
           {Array.from({ length: 7 }).map((_, i) => (
             <div
@@ -437,6 +523,8 @@ export function IndexTickerStrip() {
         </div>
       )}
 
+      {/* 출처·저작권은 지수 모달 안에 있다(`INDEX_ATTRIBUTION`, 2026-10-07 요청 3 — 홈 공간 절약). */}
+
       <IndexOverviewModal
         open={overview}
         indices={rows}
@@ -513,6 +601,7 @@ function TickerCell({
             )}
           >
             {index.value.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}
+            {RATE_INDEX_IDS.has(index.id) ? "%" : ""}
           </span>
           <span
             className={cn(
@@ -520,7 +609,7 @@ function TickerCell({
               index.changeRate === 0 ? "text-muted-foreground" : trendTextClass(index.changeRate),
             )}
           >
-            {formatPercent(index.changeRate)}
+            {RATE_INDEX_IDS.has(index.id) ? formatRateChange(index.change) : formatPercent(index.changeRate)}
           </span>
         </span>
       </span>

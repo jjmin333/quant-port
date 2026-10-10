@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/components/providers/auth-provider";
+import { isAdminSession } from "@/lib/admin-features";
 import { useLoginHref } from "@/components/news/news-login-gate";
 import {
   addResearchCommentClient,
@@ -497,6 +498,8 @@ function CommentRow({
   onReply?: () => void;
 }) {
   const confirm = useConfirm();
+  const { session } = useAuth();
+  const canManage = comment.canEdit || isAdminSession(session);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(comment.body);
 
@@ -608,7 +611,7 @@ function CommentRow({
                 답글
               </button>
             )}
-            {comment.canEdit && (
+            {canManage && (
               <>
                 <button
                   type="button"

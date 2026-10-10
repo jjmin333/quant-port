@@ -9,6 +9,7 @@ import { trendTextClass } from "@/lib/trend-colors";
 import { cn } from "@/lib/utils";
 import { PriceDisplay } from "@/components/ui/price-display";
 import type { QuoteSummary, StockInfo } from "@/lib/quotes-types";
+import { ASSET_SEARCH_KIND_LABEL, type AssetSearchItem } from "@/lib/asset-search";
 
 type HeaderStockSuggestionsProps = {
   anchorRef: RefObject<HTMLElement | null>;
@@ -24,6 +25,9 @@ type HeaderStockSuggestionsProps = {
   heading?: string;
   /** 결과 0건일 때의 문구. 「최근 본 종목」 패널에서는 안내가 달라야 한다. */
   emptyText?: string;
+  /** 헤더 검색만 — 종목 아래 「아파트·금융상품·금리」 무리(2026-10-09). 키보드 선택은 종목만. */
+  assets?: AssetSearchItem[];
+  onAssetSelect?: (item: AssetSearchItem) => void;
 };
 
 type PanelPosition = {
@@ -146,6 +150,8 @@ export function HeaderStockSuggestions({
   listboxId = "header-stock-suggestions",
   heading,
   emptyText = "검색 결과가 없습니다.",
+  assets = [],
+  onAssetSelect,
 }: HeaderStockSuggestionsProps) {
   const trimmedQuery = query.trim();
   const position = useSuggestionPanelPosition(anchorRef, open, trimmedQuery);
@@ -197,7 +203,7 @@ export function HeaderStockSuggestions({
       {loading && items.length === 0 ? (
         <p className="px-3 py-2.5 text-cell text-[var(--text-muted)]">검색 중…</p>
       ) : items.length === 0 ? (
-        <p className="px-3 py-2.5 text-cell text-[var(--text-muted)]">{emptyText}</p>
+        assets.length === 0 && <p className="px-3 py-2.5 text-cell text-[var(--text-muted)]">{emptyText}</p>
       ) : (
         <ul className="py-1">
           {items.map((item, index) => (
@@ -241,6 +247,28 @@ export function HeaderStockSuggestions({
             </li>
           ))}
         </ul>
+      )}
+      {assets.length > 0 && onAssetSelect && (
+        <div className="border-t border-[var(--border)] py-1" role="group" aria-label="아파트·금융상품·금리">
+          <p className="px-3 py-1 text-micro font-medium text-[var(--text-muted)]">아파트 · 금융상품 · 금리</p>
+          {assets.map((a) => (
+            <button
+              key={`${a.kind}:${a.key}`}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onAssetSelect(a)}
+              className="flex w-full items-center gap-2 px-3 py-1 text-left text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]"
+            >
+              <span className="w-12 shrink-0 rounded bg-[var(--brand-muted)] px-1 text-center text-micro font-semibold text-[var(--brand)]">
+                {ASSET_SEARCH_KIND_LABEL[a.kind]}
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-note font-medium leading-tight">{a.name}</span>
+                {a.sub && <span className="truncate text-micro leading-tight text-[var(--text-muted)]">{a.sub}</span>}
+              </span>
+            </button>
+          ))}
+        </div>
       )}
     </div>,
     document.body,

@@ -107,3 +107,24 @@ export function shouldDropOverride({
   if (override.pathname !== pathname) return true;
   return override.value === sampleBase({ pathname, fromUrl, auto });
 }
+
+/**
+ * 「내 것이 아직 없다」 표를 **언제 고쳐 쓰는가** (2026-09-27 사용자 제보 1).
+ *
+ * 예전에는 화면이 매 렌더 `!loading && count === 0`을 그대로 표로 냈다. 그런데
+ * 예시가 켜지면 화면이 **예시 목록**을 세고(0건 아님) 로딩도 처음부터 다시 돈다 —
+ * 표가 거짓으로 뒤집혀 예시가 꺼지고, 꺼지면 다시 내 목록 0건을 받아 켜진다.
+ * 목표가 예측·메모장이 그렇게 무한히 재적재하다 429를 맞았다(실측).
+ *
+ * 그래서 표는 **내 데이터를 실제로 본 순간에만** 고친다.
+ *  - `observed === null` — 아직 받는 중이라 모른다 → 직전 표 유지.
+ *  - `showingSample` — 지금 화면의 숫자는 예시다, 내 것에 대해 아무것도 말하지 않는다 → 직전 표 유지.
+ */
+export function nextAutoVote(
+  prev: boolean,
+  observed: boolean | null,
+  showingSample: boolean,
+): boolean {
+  if (showingSample || observed === null) return prev;
+  return observed;
+}

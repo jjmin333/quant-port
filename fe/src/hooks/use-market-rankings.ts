@@ -214,14 +214,36 @@ function scheduleIdle(task: () => void): () => void {
   return () => window.clearTimeout(id);
 }
 
-export function useMarketRankings(params: MarketRadarParams) {
+/**
+ * @param seed 서버가 미리 받아 둔 첫 목록 (`lib/market-api.server.ts`). 기본 손잡이로
+ *   들어온 요청에만 붙는다 — 손잡이가 달린 주소에 기본 목록을 심으면 화면이 한
+ *   프레임 동안 **틀린 목록**을 보여 준다.
+ */
+export function useMarketRankings(
+  params: MarketRadarParams,
+  seed?: RankingsResponse | null,
+) {
   const { session } = useAuth();
   const { rankingsClientPollMs } = useMarketDataSettings();
   const paramsKey = marketRadarParamsKey(params);
 
-  const [data, setData] = useState<RankingsResponse | null>(null);
-  const [items, setItems] = useState<EnrichedRankingItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  /*
+    **선반입값으로 첫 프레임을 그린다** (2026-09-22).
+
+    `enrichRows`에 넘기는 관심·보유 집합이 서버와 브라우저에서 같아야 hydration이
+    어긋나지 않는다. 같다 — `watchlist-store`의 집합은 모듈 전역이고 localStorage를
+    읽지 않아 새 탭의 첫 렌더에서 **양쪽 다 비어 있고**, 보유는 여기서도 원래
+    빈 집합으로 시작해 idle 뒤에 채운다. 종목명·자산구분·로고는 응답이 들고 오고,
+    거래소 표시는 `stockMap`이 비어 있어 양쪽 다 「—」다.
+
+    화면 이동으로 들어온 경우(RSC 네비게이션)에는 저장소가 이미 차 있을 수 있는데,
+    그때는 hydration 자체가 없으므로 아는 값으로 그리는 쪽이 맞다.
+  */
+  const [data, setData] = useState<RankingsResponse | null>(seed ?? null);
+  const [items, setItems] = useState<EnrichedRankingItem[]>(() =>
+    seed ? enrichRows(seed, new Map(), getWatchlistSymbols(), new Set(), new Map()) : [],
+  );
+  const [loading, setLoading] = useState(!seed);
   const [error, setError] = useState<string | null>(null);
   /*
     **마지막으로 가격을 받아 온 시각.** 목록 머리의 시계가 이 값을 찍는다
@@ -256,7 +278,14 @@ export function useMarketRankings(params: MarketRadarParams) {
   */
   const heldRef = useRef<Set<string>>(new Set());
   const mountedRef = useRef(true);
-  const lastRespRef = useRef<RankingsResponse | null>(null);
+  /*
+    선반입값도 여기 둔다. 관심 목록이 도착해 `reenrich()`가 돌 때 이 자리가 비어
+    있으면 **그냥 돌아가고**, 서버가 그려 준 100행의 하트는 첫 갱신이 올 때까지
+    꺼져 있다 — 이 저장소를 만든 이유가 바로 그 빈 프레임이었다.
+  */
+  const lastRespRef = useRef<RankingsResponse | null>(seed ?? null);
+  /** 선반입값으로 이미 그려져 있는가. 아래 초기화 이펙트가 **첫 실행에서만** 본다. */
+  const seedPendingRef = useRef(Boolean(seed));
 
   useEffect(() => {
     mountedRef.current = true;
@@ -417,13 +446,36 @@ export function useMarketRankings(params: MarketRadarParams) {
     새 목록을 받은 **그 자리에서** 가격을 한 번 당겨온다 — 왕복 한 번 안에 끝난다.
   */
   useEffect(() => {
+    /*
+      **서버가 심어 준 목록은 비우지 않는다** (2026-09-22).
+
+      이 이펙트는 마운트 때도 한 번 돈다. 선반입이 있는 첫 실행에서 위 네 줄을
+      그대로 실행하면 서버가 그린 100행이 하이드레이션 직후 **사라졌다가 한 왕복
+      뒤에 돌아온다** — 화면에는 선반입을 하기 전과 똑같이 「랭킹 로딩 중…」이
+      스쳐 지나가고, 그러면 서버에서 미리 받아 온 값이 하는 일이 없다.
+
+      **첫 실행에서만** 건너뛴다. 이후의 시장·정렬·기간 전환은 전과 똑같이 비운다 —
+      그때 남아 있는 목록과 시각은 앞 시장의 것이라 지우는 게 맞다(09-04 사용자 지적:
+      「국내에서 해외로 바꾸면 시간이 조금 느리게 바뀐다」).
+    */
+    const seeded = seedPendingRef.current;
+    seedPendingRef.current = false;
+
+    /*
+      `prevRanksRef`는 선반입이 있어도 비운다. 서버가 심은 순위를 「이전 순위」로
+      두면 첫 갱신에서 60초짜리 창의 순위 변동 화살표가 뜨는데, 새로고침으로 막
+      들어온 사람에게 그건 비교할 앞이 없는 값이다. 선반입 전에도 첫 목록의
+      `rankDelta`는 전부 null이었고, 그 약속을 그대로 지킨다.
+    */
     prevRanksRef.current = new Map();
-    setLoading(true);
-    setError(null);
-    setData(null);
-    setPricesAt(null);
+    if (!seeded) {
+      setLoading(true);
+      setError(null);
+      setData(null);
+      setPricesAt(null);
+    }
     let cancelled = false;
-    void refresh(true).then((resp) => {
+    void refresh(!seeded).then((resp) => {
       // 마감 시장에는 당겨올 가격이 없다 — 시계는 서버가 준 마감 시각을 찍는다.
       if (cancelled || !resp || resp.marketSession === "closed") return;
       void refreshPrices();

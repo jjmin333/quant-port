@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
+import { HelpHint } from "@/components/ui/help-hint";
 import { MiniToggle } from "@/components/ui/mini-toggle";
 import { SectionEmpty, SectionSkeleton } from "@/components/ui/section-card";
 import { StockAvatar } from "@/components/stocks/stock-avatar";
@@ -69,6 +70,11 @@ export function EarningsSurpriseView({
         <h2 className="text-section font-semibold text-foreground">
           컨센서스 대비 실적
           <span className="ml-1.5 font-normal text-muted-foreground">최근 90일</span>
+          {/* 늘 깔려 있던 두 문단을 필요할 때만 여는 풀이로 (2026-10-09 요청 9). */}
+          <HelpHint className="ml-1.5">
+            <p>국내는 <b>영업이익</b>, 해외는 <b>EPS</b> 기준입니다. 적자 예상 종목과 컨센서스가 너무 작은 종목(영업이익 50억원 · EPS 0.1달러 미만)은 이 줄 세우기에서 빠집니다.</p>
+            <p className="mt-1">해외의 수백 %대 상회·하회는 대개 자산 매각·세금 환입 같은 일회성 항목 때문입니다(발표는 GAAP, 컨센서스는 조정 EPS).</p>
+          </HelpHint>
         </h2>
         <MiniToggle options={ORDERS} value={order} onChange={setOrder} />
       </div>
@@ -135,23 +141,6 @@ export function EarningsSurpriseView({
           ))}
         </ol>
       )}
-
-      <div className="mt-2 space-y-1 border-t pt-2 text-micro leading-relaxed text-muted-foreground">
-        <p>
-          국내는 <b>영업이익</b>, 해외는 <b>EPS</b> 기준입니다 — 각 시장이 「어닝
-          서프라이즈」로 부르는 지표가 다릅니다. 두 종류는 이 줄 세우기에서 빠집니다: 적자를
-          예상했던 종목(증감률을 낼 기준선이 없음)과 <b>컨센서스가 너무 작은 종목</b>
-          (영업이익 50억원 · EPS 0.1달러 미만 — 기준선이 0에 가까우면 몇 배가 나와도 회사
-          규모의 이야기입니다). 둘 다 캘린더 본문에서는 그대로 보입니다.
-        </p>
-        <p>
-          ⚠️ 해외에서 <b>수백 %대 상회·하회</b>는 대개 자산 매각·세금 환입 같은{" "}
-          <b>일회성 항목</b> 때문입니다. 발표치는 회계 기준(GAAP) EPS인데 컨센서스는 그런
-          항목을 뺀 조정 EPS라, 한 번의 특별이익이 그대로 배수로 나타납니다. 영업의
-          개선·악화를 보려면 함께 적힌 <b>기대 → 발표</b> 금액과 종목 상세의 분기 추이를
-          같이 보십시오.
-        </p>
-      </div>
     </Card>
   );
 }

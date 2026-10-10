@@ -6,6 +6,7 @@ import {
   readAccessTokenClaims,
 } from "@/lib/access-token-claims";
 import { formatRequestLog, shouldLogRequest } from "@/lib/request-log";
+import { isHiddenRoute } from "@/lib/hidden-features";
 
 /*
 `middleware.ts`에서 이름만 바꿔 왔다.
@@ -66,7 +67,8 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  if (isRemovedAccountPath(pathname)) {
+  // 노출을 끈 기능(2026-10-10) — 되살릴 수 있으므로 307(임시)로 홈에 보낸다.
+  if (isRemovedAccountPath(pathname) || isHiddenRoute(pathname)) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 

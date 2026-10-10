@@ -1,9 +1,13 @@
 "use client";
 
+import { useMemo } from "react";
+
 import { AddHoldingCard } from "@/components/holdings/add-holding-card";
 import { SymbolNewsCard } from "@/components/stocks/symbol-news-card";
 import { PersonalScheduleCard } from "@/components/earnings/personal-schedule-card";
 import { HoldingsTargetsCard } from "@/components/holdings/holdings-targets-card";
+import { PREDICTION_FEATURES_HIDDEN } from "@/lib/hidden-features";
+import { ScoreMoversCard } from "@/components/analysis/score-movers-card";
 import { ScreenshotImportWizard } from "@/components/holdings/screenshot-import-wizard";
 import { IndexPulseCard } from "@/components/market/index-pulse-card";
 import { useSymbolQuickLook } from "@/components/stocks/symbol-quick-look-modal";
@@ -67,10 +71,32 @@ export function HoldingsSideRail({
   */
   const { events } = useUpcomingEvents(ranked, SCHEDULE_SYMBOL_LIMIT);
 
+  /*
+    점수가 달라진 종목 — `/stocks/scores/changes` **한 번**으로 전 보유 종목을 본다
+    (종목당 약 260B). 이름표는 이미 들고 있으므로 추가 조회가 없다.
+  */
+  const holdingNames = useMemo(
+    () => new Map(metrics.map((m) => [m.symbol.toUpperCase(), m.name])),
+    [metrics],
+  );
+  const holdingSymbols = useMemo(() => metrics.map((m) => m.symbol), [metrics]);
+
   return (
     <>
       <AddHoldingCard onAdded={onAdded} exchangeRate={exchangeRate} />
       <ScreenshotImportWizard placement="rail" onCommitted={onAdded} />
+      {/*
+        점수 변화는 일정보다 위다 (2026-09-17 사용자 결정 C) — 보유 화면에 들어오는
+        이유가 「내 것에 무슨 일이 있었나」이고, 이 카드가 그 질문에 가장 먼저 답한다.
+      */}
+      {holdingSymbols.length > 0 && (
+        <ScoreMoversCard
+          symbols={holdingSymbols}
+          names={holdingNames}
+          onSelect={quickLook.open}
+          title="보유 종목 점수 변화"
+        />
+      )}
       {/* 관심 화면·뉴스 레일과 같은 부품 — 2026-09-05 사용자 요청 7 */}
       {ranked.length > 0 && <PersonalScheduleCard events={events} onPick={quickLook.open} />}
       {/*
@@ -88,7 +114,7 @@ export function HoldingsSideRail({
         있어(targets-client.tsx) 스토어에까지 예시 데이터를 담으면 모드를 끈 뒤에도
         예시가 남는, 지금 고치는 것과 **같은 종류의 버그**가 생긴다.
       */}
-      {!sample && <HoldingsTargetsCard metrics={metrics} onPick={quickLook.open} />}
+      {!sample && !PREDICTION_FEATURES_HIDDEN && <HoldingsTargetsCard metrics={metrics} onPick={quickLook.open} />}
       {/* 관심 화면과 같은 부품 — 2026-09-05 사용자 요청 7 */}
       {ranked.length > 0 && (
         <SymbolNewsCard symbols={ranked} title="보유 종목 뉴스" subjectLabel="보유 비중 상위" />

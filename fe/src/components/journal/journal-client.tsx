@@ -34,6 +34,7 @@ import { MENU_COPY } from "@/lib/menu-copy";
 import type { QuoteSummary } from "@/lib/quotes-types";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
+import { TOPIC_FILTERS, type ContentTopic } from "@/lib/topics";
 
 const COPY = MENU_COPY.journal;
 
@@ -76,6 +77,8 @@ export function JournalClient() {
     setSymbolFilter,
     tagFilter,
     setTagFilter,
+    topicFilter,
+    setTopicFilter,
     sort,
     setSort,
     symbols,
@@ -112,7 +115,7 @@ export function JournalClient() {
     것은 사용자 몫이다) 그것 때문에 예시가 켜졌다 꺼졌다 하면 안 된다.
   */
   const hasNothingYet = !loading && !error && totalCount === 0;
-  useAutoSample(hasNothingYet);
+  useAutoSample(loading ? null : hasNothingYet);
   const isEmpty = !sample && hasNothingYet && !composing;
 
   // 목록이 필터로 줄어 고른 메모가 사라지면 첫 행으로 내린다. 선택이 허공을
@@ -212,6 +215,20 @@ export function JournalClient() {
               <div className="grid min-w-0 gap-3 lg:grid-cols-[290px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]">
                 {/* ── 왼쪽: 목록 ─────────────────────────────────────────── */}
                 <Card className="min-w-0 p-0">
+                  <div className="border-b border-[var(--border)] px-3 py-2">
+                    <select
+                      value={topicFilter}
+                      onChange={(e) => setTopicFilter(e.target.value as ContentTopic | "")}
+                      aria-label="주제로 거르기"
+                      className="h-7 w-full rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-2 text-cell text-[var(--text-secondary)]"
+                    >
+                      {TOPIC_FILTERS.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <CardHeader className="mb-0 gap-2 border-b border-[var(--border)] px-3 py-2.5">
                     <CardTitle className="text-cell">메모 목록</CardTitle>
                     <div className="flex items-center gap-1.5">

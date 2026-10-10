@@ -28,9 +28,9 @@ describe("compactShowsDetail", () => {
 });
 
 describe("symbolSelectNavMode", () => {
-  it("데스크톱은 replace", () => {
-    expect(symbolSelectNavMode(false, "")).toBe("replace");
-    expect(symbolSelectNavMode(false, "000660")).toBe("replace");
+  it("데스크톱은 언제나 push — 뒤로 가기가 직전 종목으로", () => {
+    expect(symbolSelectNavMode(false, "")).toBe("push");
+    expect(symbolSelectNavMode(false, "000660")).toBe("push");
   });
 
   it("compact 목록→상세는 push", () => {
