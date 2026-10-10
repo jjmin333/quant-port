@@ -41,6 +41,9 @@ import { cn } from "@/lib/utils";
  * 시나리오가 없거나(이력 부족) 못 받았으면 **아무것도 그리지 않는다** — 점수 카드 안에서
  * 「없다」를 한 줄 더 적는 것은 높이만 쓴다.
  */
+/** 범위 폭(약세~강세 ÷ 현재가)이 이 이상이면 접는다. 연 변동성 ≈ 40%인 종목의 90일 범위가 대략 이 폭이다. */
+const SCENARIO_WIDE_PCT = 60;
+
 export function PriceScenarioSection({
   scenario,
   loading,
@@ -72,6 +75,23 @@ export function PriceScenarioSection({
     넓은 범위가 정확한 예측처럼 읽힌다 — 범위가 넓을수록 그 안에 들어갈 확률은 저절로 오른다.
   */
   const widthPct = bear && bull && base && base.price > 0 ? ((bull.price - bear.price) / base.price) * 100 : null;
+  /*
+    폭이 이 이상이면 「가능성이 높다」는 말과 세 칸 타일을 접는다(2026-10-10 사업화 검토 N4).
+    삼성전자 99%(−38%~+61%)처럼 넓은 범위는 방향을 말해 주지 않는데, 크게 그리면 예측처럼 읽힌다.
+  */
+  const wide = widthPct != null && widthPct >= SCENARIO_WIDE_PCT;
+
+  const tiles = (
+    <>
+      <div className="grid grid-cols-3 gap-1.5">
+        {(["bear", "base", "bull"] as const).map((kind) => {
+          const p = points.find((x) => x.kind === kind);
+          return p ? <ScenarioTile key={kind} point={p} currency={scenario.currency} /> : <span key={kind} />;
+        })}
+      </div>
+      <PriceAxis points={points} axis={axis} />
+    </>
+  );
 
   return (
     <div className={cn("space-y-2 px-3 py-2.5", className)}>
@@ -84,7 +104,15 @@ export function PriceScenarioSection({
         <span className="text-micro text-[var(--text-muted)]">{scenario.asOf} 종가 기준</span>
       </div>
 
-      {bear && bull && (
+      {bear && bull && wide && (
+        <p className="text-cell leading-relaxed text-[var(--text-secondary)]">
+          변동성이 커서 {scenario.horizonDays}일 범위가 넓습니다(
+          {formatScenarioPrice(bear.price, scenario.currency)} ~ {formatScenarioPrice(bull.price, scenario.currency)},
+          폭 {widthPct?.toFixed(0)}%). 이 범위로는 방향을 말하기 어렵습니다.
+        </p>
+      )}
+
+      {bear && bull && !wide && (
         <p className="text-cell leading-relaxed text-[var(--text-secondary)]">
           {scenario.horizonDays}일 뒤{" "}
           <b className={SCENARIO_TONE.bear}>{formatScenarioPrice(bear.price, scenario.currency)}</b> ~{" "}
@@ -104,14 +132,14 @@ export function PriceScenarioSection({
         </p>
       )}
 
-      <div className="grid grid-cols-3 gap-1.5">
-        {(["bear", "base", "bull"] as const).map((kind) => {
-          const p = points.find((x) => x.kind === kind);
-          return p ? <ScenarioTile key={kind} point={p} currency={scenario.currency} /> : <span key={kind} />;
-        })}
-      </div>
-
-      <PriceAxis points={points} axis={axis} />
+      {wide ? (
+        <details className="text-micro text-[var(--text-muted)]">
+          <summary className="cursor-pointer select-none hover:text-[var(--text-primary)]">세 갈래 보기</summary>
+          <div className="mt-1.5 space-y-2">{tiles}</div>
+        </details>
+      ) : (
+        tiles
+      )}
 
       <p className="text-micro text-[var(--text-muted)]">
         {scenario.horizonDays}일 변동성{" "}

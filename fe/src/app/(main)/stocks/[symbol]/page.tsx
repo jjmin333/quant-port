@@ -70,6 +70,7 @@ export default async function StockWorkspacePage({ params }: Props) {
           qa={details?.qa ?? null}
           fundamentals={details?.fundamentals ?? null}
           earnings={details?.earnings ?? null}
+          overview={details?.overview ?? null}
           peers={peers}
         />
       )}

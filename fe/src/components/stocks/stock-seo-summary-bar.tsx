@@ -2,7 +2,8 @@ import Link from "next/link";
 import type { FundamentalsData } from "@/lib/fundamentals-types";
 import { answerEarnings, type StockQA } from "@/lib/stock-qa";
 import type { EarningsTabData } from "@/lib/earnings-types";
-import { stockSummarySentence, type StockSeoSummary } from "@/lib/stock-seo";
+import { comparePath, sectorPath, stockSummarySentence, stylePath, type StockSeoSummary } from "@/lib/stock-seo";
+import { stockStyle } from "@/lib/stock-style";
 import type { IndexableStock } from "@/lib/stock-seo.server";
 
 /*
@@ -17,6 +18,14 @@ import type { IndexableStock } from "@/lib/stock-seo.server";
  */
 
 type Metric = { label: string; value: string };
+
+const AXES = [
+  ["technical", "추세"],
+  ["quality", "수익성"],
+  ["growth", "성장"],
+  ["valuation", "가치"],
+  ["sentiment", "심리·수급"],
+] as const;
 
 function fixed(v: number | undefined, digits: number, suffix: string, signed = false): string | null {
   if (v == null || !Number.isFinite(v)) return null;
@@ -46,18 +55,22 @@ export function StockSeoSummaryBar({
   qa,
   fundamentals,
   earnings,
+  overview,
   peers,
 }: {
   summary: StockSeoSummary;
   qa: StockQA | null;
   fundamentals: FundamentalsData | null;
   earnings?: EarningsTabData | null;
+  overview?: string | null;
   peers: IndexableStock[];
 }) {
   const sentence = stockSummarySentence(summary);
   const items = metrics(summary, fundamentals);
   const changes = (qa?.changes ?? []).slice(0, 3);
   const earningsLines = earnings ? answerEarnings(earnings).lines : [];
+  const style = stockStyle(summary.axes);
+  const axes = AXES.filter(([k]) => typeof summary.axes?.[k] === "number");
 
   return (
     <details className="group/seo shrink-0 border-b border-[var(--border)]">
@@ -85,6 +98,31 @@ export function StockSeoSummaryBar({
             ))}
           </dl>
         )}
+        {axes.length > 0 && (
+          <section>
+            <h2 className="mb-1 text-micro font-semibold text-[var(--text-muted)]">
+              {summary.name} AI 점수 다섯 축
+              {style && (
+                <>
+                  {" · "}
+                  <Link href={stylePath(style.slug)} prefetch={false} className="text-[var(--brand)] hover:underline">
+                    {style.label}
+                  </Link>
+                </>
+              )}
+            </h2>
+            <p className="text-[var(--text-secondary)]">
+              {axes.map(([k, label]) => `${label} ${Math.round(summary.axes![k] as number)}점`).join(" · ")}
+              <span className="text-[var(--text-muted)]"> — 같은 시장·업종 안 백분위(100이 가장 좋음, 가치는 쌀수록 높음)</span>
+            </p>
+          </section>
+        )}
+        {overview && (
+          <section>
+            <h2 className="mb-1 text-micro font-semibold text-[var(--text-muted)]">{summary.name} AI 요약</h2>
+            <p className="leading-relaxed text-[var(--text-secondary)]">{overview}</p>
+          </section>
+        )}
         {earningsLines.length > 0 && (
           <section>
             <h2 className="mb-1 text-micro font-semibold text-[var(--text-muted)]">{summary.name} 실적 발표</h2>
@@ -111,6 +149,18 @@ export function StockSeoSummaryBar({
           <section>
             <h2 className="mb-1 text-micro font-semibold text-[var(--text-muted)]">
               같은 섹터{summary.sectorLabel ? `(${summary.sectorLabel})` : ""} 종목
+              {summary.sectorLabel && (
+                <>
+                  {" · "}
+                  <Link
+                    href={sectorPath(summary.assetType, summary.sectorLabel)}
+                    prefetch={false}
+                    className="font-normal text-[var(--brand)] hover:underline"
+                  >
+                    {summary.sectorLabel} 업종 점수 순위
+                  </Link>
+                </>
+              )}
             </h2>
             <ul className="flex flex-wrap gap-1.5">
               {peers.map((p) => (
@@ -126,6 +176,18 @@ export function StockSeoSummaryBar({
                 </li>
               ))}
             </ul>
+            <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+              {peers.slice(0, 3).map((p) => (
+                <Link
+                  key={p.symbol}
+                  href={comparePath(summary.symbol, p.symbol)}
+                  prefetch={false}
+                  className="text-[var(--brand)] hover:underline"
+                >
+                  {summary.name} vs {p.name}
+                </Link>
+              ))}
+            </p>
           </section>
         )}
       </div>

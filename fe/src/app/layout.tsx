@@ -21,7 +21,7 @@ import "./globals.css";
 /*
  * 루트 메타도 **함수**다 (2026-09-15 사용자 요청 2).
  *
- * 홈 제목 「Quant Port — 흩어진 투자 기록을 한 곳에」는 여기 `title.default`에서
+ * 홈 제목(`SITE_TITLE`)은 여기 `title.default`에서
  * 나온다. 그 문구를 관리자가 고칠 수 있게 하려면 상수로는 안 되고, 덮어쓰기를
  * **렌더 시점에** 읽어야 한다(`lib/page-meta.server`).
  *

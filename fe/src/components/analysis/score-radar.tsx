@@ -20,18 +20,30 @@ function polygon(ratios: number[]): string {
   return ratios.map((r, i) => point(i, r).map((v) => v.toFixed(1)).join(",")).join(" ");
 }
 
-/** `labels={false}` — 작은 카드(홈 대표 종목)용. 축 이름·값을 빼고 도형만. */
+function ratiosOf(b: ScoreBreakdown | undefined): number[] {
+  return SCORE_AXIS_ORDER.map((axis) => {
+    const v = b?.[axis];
+    return typeof v === "number" ? Math.max(0.04, Math.min(1, v / 100)) : 0.04;
+  });
+}
+
+/**
+ * `labels={false}` — 작은 카드(홈 대표 종목)용. 축 이름·값을 빼고 도형만.
+ * `compare` — 두 종목 비교(`/compare`)에서 둘째 종목을 점선으로 겹친다. 그때 축 값은 그리지 않는다(표가 대신한다).
+ */
 export function ScoreRadar({
   breakdown,
+  compare,
   className,
   labels = true,
 }: {
   breakdown: ScoreBreakdown | undefined;
+  compare?: ScoreBreakdown;
   className?: string;
   labels?: boolean;
 }) {
   const values = SCORE_AXIS_ORDER.map((axis) => breakdown?.[axis]);
-  const ratios = values.map((v) => (typeof v === "number" ? Math.max(0.04, Math.min(1, v / 100)) : 0.04));
+  const ratios = ratiosOf(breakdown);
   const label = SCORE_AXIS_ORDER.map((axis, i) => {
     const v = values[i];
     return `${SCORE_AXIS_LABELS[axis]} ${typeof v === "number" ? Math.round(v) : "없음"}`;
@@ -58,6 +70,15 @@ export function ScoreRadar({
         style={{ fill: "color-mix(in oklab, var(--brand) 22%, transparent)", stroke: "var(--brand)" }}
         strokeWidth={2}
       />
+      {compare && (
+        <polygon
+          points={polygon(ratiosOf(compare))}
+          fill="none"
+          style={{ stroke: "var(--text-secondary)" }}
+          strokeWidth={2}
+          strokeDasharray="4 3"
+        />
+      )}
       {labels && SCORE_AXIS_ORDER.map((axis, i) => {
         const [x, y] = point(i, 1.42);
         const v = values[i];
@@ -67,7 +88,7 @@ export function ScoreRadar({
               {SCORE_AXIS_LABELS[axis]}
             </tspan>
             <tspan x={x} dy="1.15em" fontWeight={600} style={{ fill: "var(--text-primary)" }}>
-              {typeof v === "number" ? Math.round(v) : "–"}
+              {compare ? "" : typeof v === "number" ? Math.round(v) : "–"}
             </tspan>
           </text>
         );

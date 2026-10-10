@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { OfflineBanner } from "@/components/common/offline-banner";
 import { Header } from "@/components/layout/header";
 import { QuoteTabTitle } from "@/components/layout/quote-tab-title";
+import { SectionTabs } from "@/components/layout/section-tabs";
 import { Sidebar } from "@/components/layout/sidebar";
 import { HeaderSearchProvider } from "@/components/providers/header-search-provider";
 import { QuickLookProvider } from "@/components/providers/quick-look-provider";
@@ -95,7 +96,11 @@ function AppShellFrame({ children }: { children: React.ReactNode }) {
           >
             {!isWebView && <Sidebar open={sidebarOpen} onClose={closeSidebar} />}
 
-            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+              {/* 묶인 메뉴(종목 찾기·뉴스·실적)의 탭 줄 — 그 밖의 화면에서는 아무것도 그리지 않는다. */}
+              <SectionTabs />
+              {children}
+            </div>
           </div>
         </div>
       </div>

@@ -167,3 +167,32 @@ export function sectorPeers<T extends IndexedRow>(stocks: T[], self: IndexedRow,
     .slice(0, limit)
     .map(({ s }) => s);
 }
+
+/* ── 목록 페이지 주소 (2026-10-10 사업화 검토: 업종 순위 · 스타일 · 두 종목 비교) ────────────── */
+
+export const MARKET_SEGMENTS = { domestic: "kr", us: "us" } as const;
+export const MARKET_SEGMENT_LABEL: Record<string, string> = { kr: "국내", us: "미국" };
+
+export function assetTypeOfSegment(seg: string): "domestic" | "us" | null {
+  return seg === "kr" ? "domestic" : seg === "us" ? "us" : null;
+}
+
+export function sectorPath(assetType: string, sector: string): string {
+  const seg = assetType === "domestic" ? "kr" : "us";
+  return `/stocks/sector/${seg}/${encodeURIComponent(sector)}`;
+}
+
+export function stylePath(slug: string): string {
+  return `/stocks/style/${slug}`;
+}
+
+/** `/compare/005930-vs-000660`. 순서를 고정(작은 쪽 먼저)해 같은 쌍이 주소 둘로 갈라지지 않게 한다. */
+export function comparePath(a: string, b: string): string {
+  const [x, y] = [a, b].sort();
+  return `/compare/${encodeURIComponent(x)}-vs-${encodeURIComponent(y)}`;
+}
+
+export function parseComparePair(pair: string): [string, string] | null {
+  const parts = decodeURIComponent(pair).split("-vs-");
+  return parts.length === 2 && parts[0] && parts[1] && parts[0] !== parts[1] ? [parts[0], parts[1]] : null;
+}

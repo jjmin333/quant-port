@@ -80,6 +80,11 @@ export async function EarningsSeoList({ market }: { market: EarningsMarket }) {
           </li>
         ))}
       </ul>
+      <p className="px-3 pb-3 text-cell">
+        <Link href="/earnings/surprises" prefetch={false} className="text-[var(--brand)] hover:underline">
+          최근 90일 실적 서프라이즈 종목 →
+        </Link>
+      </p>
     </details>
   );
 }
