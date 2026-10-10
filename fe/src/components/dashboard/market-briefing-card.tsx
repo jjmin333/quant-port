@@ -21,6 +21,7 @@ import { SCREEN_REFRESH_MS } from "@/lib/screen-refresh";
 import { ValueFlash } from "@/components/ui/value-flash";
 import { fetchNewsBriefing, type NewsMarketBriefing } from "@/lib/news-briefing-api";
 import type { MarketIndex } from "@/lib/quotes-types";
+import { formatRateChange, RATE_INDEX_IDS } from "@/lib/market-indices-catalog";
 import { formatPercent } from "@/lib/format";
 import { formatBriefingTimestamp } from "@/lib/news-market-briefing";
 import { trendTextClass } from "@/lib/trend-colors";
@@ -138,7 +139,7 @@ export function useMarketBriefings(): BriefingPair {
 function liveIndexChips(
   snapshot: NewsMarketBriefing["facts"]["indices"],
   live: MarketIndex[],
-): { id: string; name: string; changeRate: number }[] {
+): { id: string; name: string; changeRate: number; change?: number }[] {
   const picked = snapshot ?? [];
   if (picked.length === 0) return [];
   const byId = new Map(live.filter((i) => i.value > 0).map((i) => [i.id, i]));
@@ -148,6 +149,7 @@ function liveIndexChips(
       id: idx.id,
       name: now?.name || idx.name,
       changeRate: now ? now.changeRate : idx.changeRate,
+      change: now?.change,
     };
   });
 }
@@ -345,7 +347,10 @@ export function MarketBriefingCard({
               >
                 <span className="text-muted-foreground">{idx.name}</span>
                 <b className={cn("font-num tabular-nums", trendTextClass(idx.changeRate))}>
-                  {formatPercent(idx.changeRate)}
+                  {/* 금리는 시세 띠처럼 bp로 — 「미 국채 10년 −1.14%」가 위 띠의 「−6bp」와 달라 보였다(2026-10-10). */}
+                  {RATE_INDEX_IDS.has(idx.id) && idx.change != null
+                    ? formatRateChange(idx.change)
+                    : formatPercent(idx.changeRate)}
                 </b>
               </button>
             ))}

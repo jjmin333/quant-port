@@ -5,7 +5,9 @@ import { fetchResearchCallsServer } from "@/lib/research-api.server";
 import { fetchCommunitySitemapServer } from "@/lib/community-api.server";
 import { isHiddenRoute } from "@/lib/hidden-features";
 import { fetchChangesServer } from "@/components/changes/changes-seo-list";
-import { fetchIndexableStockSymbols } from "@/lib/stock-seo.server";
+import { fetchIndexableStocks } from "@/lib/stock-seo.server";
+import { comparePath, groupBySector, sectorPath, stylePath } from "@/lib/stock-seo";
+import { STOCK_STYLES } from "@/lib/stock-style";
 
 /*
  * **빌드 때 미리 굽지 않는다** (2026-10-09). 예전 `revalidate = 600`은 `next build`가 사이트맵을
@@ -37,6 +39,7 @@ const ROUTES: { path: string; changeFrequency: MetadataRoute.Sitemap[number]["ch
   { path: "/news/us", changeFrequency: "hourly", priority: 0.9 },
   { path: "/earnings/domestic", changeFrequency: "daily", priority: 0.8 },
   { path: "/earnings/us", changeFrequency: "daily", priority: 0.8 },
+  { path: "/earnings/surprises", changeFrequency: "daily", priority: 0.7 },
   { path: "/market", changeFrequency: "hourly", priority: 0.8 },
   { path: "/analysis", changeFrequency: "daily", priority: 0.7 },
   // 색인·canonical을 내보내면서 사이트맵에서 빠져 있던 공개 화면(2026-10-09 색인 점검).
@@ -90,11 +93,29 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }));
 
   // 실패하면 빈 목록 — 종목 주소만 빠지고 나머지는 그대로 나간다.
-  const stockUrls = (await fetchIndexableStockSymbols()).map((symbol) => ({
+  const indexable = await fetchIndexableStocks();
+  const stockUrls = indexable.map(({ symbol }) => ({
     url: `${SITE_URL}/stocks/${encodeURIComponent(symbol)}`,
     changeFrequency: "daily" as const,
     priority: 0.5,
   }));
+
+  // 업종 순위 · 스타일 · 업종 대표 비교(2026-10-10 사업화 검토 — 롱테일). 비교는 업종마다 거래대금 1위와 2~5위 네 쌍만
+  // 싣는다 — 종목 페이지가 가까운 순위 셋과 잇는 링크로 나머지는 발견된다.
+  const listUrls: MetadataRoute.Sitemap = STOCK_STYLES.map((st) => ({
+    url: `${SITE_URL}${stylePath(st.slug)}`,
+    changeFrequency: "daily" as const,
+    priority: 0.6,
+  }));
+  for (const assetType of ["domestic", "us"]) {
+    for (const g of groupBySector(indexable, assetType)) {
+      if (g.sector === "기타") continue;
+      listUrls.push({ url: `${SITE_URL}${sectorPath(assetType, g.sector)}`, changeFrequency: "daily", priority: 0.6 });
+      for (const other of g.stocks.slice(1, 5)) {
+        listUrls.push({ url: `${SITE_URL}${comparePath(g.stocks[0].symbol, other.symbol)}`, changeFrequency: "daily", priority: 0.4 });
+      }
+    }
+  }
 
   // 커뮤니티 글 — 공개 글만(서버가 visible만 준다), 최근 1,000개. 검색 색인 허용(2026-09-27 결정).
   const communityUrls = (await fetchCommunitySitemapServer()).map((row) => ({
@@ -114,6 +135,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   // 노출을 끈 기능(lib/hidden-features, 2026-10-10)의 주소는 싣지 않는다 — 열면 홈으로 간다.
-  return [...staticUrls, ...reportUrls, ...authorUrls, ...communityUrls, ...changeUrls, ...stockUrls]
+  return [...staticUrls, ...reportUrls, ...authorUrls, ...communityUrls, ...changeUrls, ...listUrls, ...stockUrls]
     .filter((entry) => !isHiddenRoute(new URL(entry.url).pathname));
 }

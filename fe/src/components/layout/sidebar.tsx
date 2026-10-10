@@ -4,8 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  LayoutList,
-  Globe,
   Briefcase,
   Heart,
   Newspaper,
@@ -20,14 +18,11 @@ import {
   Sparkles,
   Calculator,
   ListChecks,
-  SlidersHorizontal,
-  Trophy,
   LineChart,
+  ScanSearch,
   CalendarClock,
-  CalendarRange,
   Search,
   TrendingUp,
-  Activity,
   MessagesSquare,
   MessageSquareWarning,
   PiggyBank,
@@ -38,6 +33,7 @@ import {
 } from "lucide-react";
 import { isAdminNavVisible, isAdminSession } from "@/lib/admin-features";
 import { isHiddenRoute } from "@/lib/hidden-features";
+import { navSectionOf } from "@/lib/nav-sections";
 import { fetchAdminBatchHealth } from "@/lib/admin";
 import { useMyChangeSummary } from "@/hooks/use-my-change-summary";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -66,34 +62,17 @@ import { cn } from "@/lib/utils";
  */
 const navGroups = [
   {
-    label: "순위",
+    /*
+     * 2026-10-10 사용자 결정 A — 12칸 → 7칸. 「종목 찾기」는 AI 점수 순위·스크리너·종목 모음·오늘의 변화,
+     * 「뉴스」·「실적」은 국내/해외(+서프라이즈)를 한 칸에 묶고, 화면 위 탭 줄(`SectionTabs`)이 그 안을
+     * 오간다. 주소는 그대로다(각자 색인됨). 묶음 정의는 `lib/nav-sections.ts` 한 곳.
+     */
+    label: "시장",
     items: [
       { href: "/market", label: "실시간 차트", icon: LineChart, rail: "실시간 차트" },
-      // 「추천」은 투자 권유로 읽힌다 — 「점수 순위」(2026-10-10, BUSINESS_REVIEW §5 D8).
-      { href: "/analysis", label: "AI 점수 순위", icon: Trophy, rail: "AI 점수" },
-      { href: "/screener", label: "종목 스크리너", icon: SlidersHorizontal, rail: "스크리너" },
-      // 그날 전 종목의 급등락·공시·실적·점수 변화 (2026-09-23 사용자 결정 — 새 메뉴).
-      { href: "/changes", label: "오늘의 변화", icon: Activity, rail: "변화" },
-      // 색인 대상 종목을 섹터별 링크로 — 종목 페이지가 고아가 되지 않게 하는 입구(2026-10-09).
-      { href: "/stocks", label: "종목 모음", icon: LayoutList, rail: "종목 모음" },
-    ],
-  },
-  {
-    label: "뉴스",
-    items: [
-      // 주식만이 아니라 부동산·금리·예적금·대출 기사도 모은다(2026-10-09 요청 4).
-      { href: "/news/domestic", label: "실시간 국내 뉴스", icon: Newspaper, rail: "국내 뉴스" },
-      { href: "/news/us", label: "실시간 해외 뉴스", icon: Globe, rail: "해외 뉴스" },
-    ],
-  },
-  {
-    // 뉴스 그룹과 같은 결로 국내·해외를 가른다. 두 시장은 지표(연결/개별 vs
-    // 장전/장후)와 데이터 성질이 달라, 한 목록에 섞으면 한쪽이 항상 이상해 보인다 —
-    // 국내는 예정일이 없고 해외는 발표 시각이 있다.
-    label: "실적",
-    items: [
-      { href: "/earnings/domestic", label: "국내 실적 일정", icon: CalendarClock, rail: "국내 실적" },
-      { href: "/earnings/us", label: "해외 실적 일정", icon: CalendarRange, rail: "해외 실적" },
+      { href: "/analysis", label: "종목 찾기", icon: ScanSearch, rail: "종목 찾기", section: "find" },
+      { href: "/news/domestic", label: "뉴스", icon: Newspaper, rail: "뉴스", section: "news" },
+      { href: "/earnings/domestic", label: "실적", icon: CalendarClock, rail: "실적", section: "earnings" },
     ],
   },
   {
@@ -182,6 +161,12 @@ const allNavHrefs = navGroups.flatMap((group) => group.items.map((item) => item.
  * longest-match makes the child win and leaves only one item highlighted.
  */
 function activeNavHref(pathname: string): string {
+  // 묶인 화면(종목 찾기·뉴스·실적)은 그 묶음의 사이드바 칸이 켜진다.
+  const sectionId = navSectionOf(pathname)?.section.id;
+  if (sectionId) {
+    const item = navGroups.flatMap((g) => g.items).find((i) => "section" in i && i.section === sectionId);
+    if (item) return item.href;
+  }
   let best = "";
   for (const href of allNavHrefs) {
     if (pathname !== href && !pathname.startsWith(`${href}/`)) continue;
@@ -342,7 +327,8 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
                       <span className="hidden group-data-[sidebar-state=open]/sidebar:inline">
                         {item.label}
                       </span>
-                      {item.href === "/changes" && myChanges > 0 && (
+                      {/* 「오늘의 변화」가 「종목 찾기」 안으로 들어갔다(2026-10-10) — 배지도 그 칸에. */}
+                      {item.href === "/analysis" && myChanges > 0 && (
                         <span
                           aria-label={`오늘 변화가 있는 내 종목 ${myChanges}개`}
                           className={cn(

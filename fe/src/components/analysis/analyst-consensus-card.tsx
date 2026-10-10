@@ -124,6 +124,10 @@ function AnalystConsensusCard({
       </div>
 
       {verdict && <p className="text-cell leading-relaxed text-[var(--text-secondary)]">{verdict}</p>}
+      {/* 2026-10-10 사업화 검토 N5 — 「매수 · +88%」가 이 서비스의 권유처럼 읽히지 않게 누구의 말인지 적는다. */}
+      <p className="text-micro text-[var(--text-muted)]">
+        증권사 의견을 모은 것이며 Quant Port의 판단이나 투자 권유가 아닙니다.
+      </p>
 
       {analyst.rating != null && <RatingScale rating={analyst.rating} />}
 

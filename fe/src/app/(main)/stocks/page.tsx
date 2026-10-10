@@ -3,7 +3,8 @@ import { PageScrollShell } from "@/components/layout/page-content-shell";
 import { resolvePageMetadata } from "@/lib/page-meta.server";
 import { breadcrumbJsonLd } from "@/lib/seo";
 import { JsonLd } from "@/components/seo/json-ld";
-import { groupBySector } from "@/lib/stock-seo";
+import { groupBySector, sectorPath, stylePath } from "@/lib/stock-seo";
+import { STOCK_STYLES } from "@/lib/stock-style";
 import { fetchIndexableStocks } from "@/lib/stock-seo.server";
 
 /*
@@ -49,6 +50,19 @@ export default async function StocksHubPage() {
               </a>
             ))}
           </nav>
+          <nav className="flex flex-wrap items-center gap-1.5 pt-1" aria-label="스타일">
+            <span className="text-micro text-[var(--text-muted)]">스타일로 보기</span>
+            {STOCK_STYLES.map((st) => (
+              <Link
+                key={st.slug}
+                href={stylePath(st.slug)}
+                prefetch={false}
+                className="rounded-full border border-[var(--border)] px-2.5 py-0.5 text-cell text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+              >
+                {st.label}
+              </Link>
+            ))}
+          </nav>
         </header>
 
         {stocks.length === 0 && (
@@ -65,6 +79,15 @@ export default async function StocksHubPage() {
                 <div key={g.sector} className="space-y-1.5">
                   <h3 className="text-cell font-semibold text-[var(--text-secondary)]">
                     {g.sector} <span className="font-normal text-[var(--text-muted)]">({g.stocks.length})</span>
+                    {g.sector !== "기타" && (
+                      <Link
+                        href={sectorPath(m.assetType, g.sector)}
+                        prefetch={false}
+                        className="ml-2 text-micro font-normal text-[var(--brand)] hover:underline"
+                      >
+                        점수 순위 →
+                      </Link>
+                    )}
                   </h3>
                   <ul className="flex flex-wrap gap-1.5">
                     {g.stocks.map((s) => (

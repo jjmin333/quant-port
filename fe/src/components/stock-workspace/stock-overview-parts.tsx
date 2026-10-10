@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 
   · 「왜 움직였나」 한 줄 — 토스 AI 시그널 자리. 규칙 기반(`/qa`의 최근 변화), 원인이 없으면 없다고 말한다.
   · 다음 실적 — D-n과 지난 4번의 서프라이즈 막대.
-  · 관심 등록 안내 — 검색으로 들어온 사람을 붙잡는 단 하나의 자리. 약속은 지금 있는 것(사이드바 「변화」 배지)만.
+  · 관심 등록 안내 — 검색으로 들어온 사람을 붙잡는 단 하나의 자리. 약속은 지금 있는 것(사이드바 「종목 찾기」 배지)만.
 
 셋 다 자료가 없으면 아무것도 그리지 않는다.
 */
@@ -158,7 +158,7 @@ export function WatchPrompt({ symbol, name }: { symbol: string; name: string }) 
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-dashed border-[var(--brand)]/50 px-3 py-2 text-cell">
       <p className="min-w-0 flex-1 text-[var(--text-secondary)]">
         <b className="text-[var(--text-primary)]">{name}</b>을(를) 관심 종목에 담으면 점수가 바뀌거나 실적 발표가 다가올 때
-        사이드바 「변화」에 표시합니다.
+        「종목 찾기 › 오늘의 변화」에 표시합니다.
         {error && <span className="ml-1 text-[var(--danger)]">담지 못했습니다. 다시 눌러 주세요.</span>}
       </p>
       <button

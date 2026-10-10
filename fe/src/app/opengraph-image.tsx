@@ -16,7 +16,7 @@ import { SITE_NAME } from "@/lib/seo";
  */
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
-export const alt = `${SITE_NAME} — 흩어진 투자 기록을 한곳에`;
+export const alt = `${SITE_NAME} — 이 종목, 같은 업종 안에서 몇 등일까`;
 
 /** 빌드 때 한 번만 그리고 정적 파일로 굳힌다(런타임에 node_modules를 읽지 않는다). */
 export const dynamic = "force-static";
@@ -74,11 +74,11 @@ export default async function OpengraphImage() {
         <div style={{ display: "flex", flexDirection: "column" }}>
           <div style={{ fontSize: 40, opacity: 0.82, letterSpacing: -0.5 }}>{SITE_NAME}</div>
           <div style={{ fontSize: 76, lineHeight: 1.25, letterSpacing: -2 }}>
-            흩어진 투자 기록을
+            이 종목, 같은 업종 안에서
           </div>
-          <div style={{ fontSize: 76, lineHeight: 1.25, letterSpacing: -2 }}>한곳에</div>
+          <div style={{ fontSize: 76, lineHeight: 1.25, letterSpacing: -2 }}>몇 등일까</div>
           <div style={{ marginTop: 26, fontSize: 32, opacity: 0.8, letterSpacing: -0.5 }}>
-            보유 · 관심 · 목표가 · 투자 메모
+            국내·미국 전 종목 AI 점수 · 바뀐 이유 · 과거 성적
           </div>
         </div>
       </div>
