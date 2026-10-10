@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    watchdog.ps1 을 작업 스케줄러에 등록한다 (부팅 시 + 5분 주기).
+    watchdog.ps1 을 작업 스케줄러에 등록한다 (부팅 시 + 10분 주기).
 
 .DESCRIPTION
     트리거를 둘 두는 이유가 다르다.
@@ -8,12 +8,27 @@
       * **로그온 시** — 2026-09-08 사고의 그 자리. 부팅 직후 Docker Desktop 을
         올리는 것이 96분 중단을 0으로 만드는 유일한 조치다. 지연 1분을 주는 것은
         부팅 직후의 디스크 경합을 피하기 위해서다.
-      * **5분 주기** — 부팅과 무관한 사고(엔진 죽음, 컨테이너 크래시 루프)를 잡는다.
+      * **10분 주기** — 부팅과 무관한 사고(엔진 죽음, 컨테이너 크래시 루프)를 잡는다.
 
     로그온 트리거를 쓰는 이유: Docker Desktop 은 사용자 세션에 붙는 GUI 앱이라
     「사용자가 로그인하지 않아도 실행」으로는 뜨지 않는다. 그래서 이 태스크도
     로그온한 사용자로 돈다. **자동 로그인이 아니면 부팅 후 로그인 전까지는 여전히
     스택이 없다** — 무인 운영이 필요하면 자동 로그인을 켜거나 OCI 로 옮겨야 한다.
+
+    **2026-09-15 — 주기를 5분에서 10분으로 늘리고 우선순위를 최저로 내렸다.**
+    사용자가 게임·무거운 작업 중에 주기적인 끊김을 느낀다고 알려 왔다. 실측하니
+    한 회차가 1.1초였는데, 그 대부분이 점검이 아니라 **점검을 준비하는 값**이었다 —
+    powershell.exe 콜드 스타트와 WSL2 VM 을 깨우는 `docker ps`. 그래서 조치가 셋이다:
+
+      1. 평소 회차에서 그 둘을 뺀다 — `watchdog-hidden.vbs` 가 `/health` 만
+         찌르고 끝낸다(약 50ms). 무거운 점검은 30분에 한 번.
+      2. 주기 10분 — 남은 값마저 절반으로 줄인다. 최악 복구 지연은 5분에서
+         10분이 되는데, 이 워치독이 메우려던 구멍이 **96분**이었으므로 거래가 맞다.
+      3. 우선순위 10(최저) — 게임이 코어를 다 쥐고 있으면 뒤로 물러선다.
+         대가: 그럴 때 복구가 굼떠진다. 복구보다 사람이 쓰는 기계가 먼저다.
+
+    일부러 내려 둘 때는 `watchdog-pause.ps1` 을 쓴다(만료가 있어 깨우는 것을
+    잊어도 된다).
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File deploy\scripts\install-watchdog.ps1
@@ -22,7 +37,7 @@
 
 param(
     [string]$TaskName = "quant-port watchdog",
-    [int]$IntervalMinutes = 5,
+    [int]$IntervalMinutes = 10,
     [switch]$Remove
 )
 
@@ -63,15 +78,19 @@ $action = New-ScheduledTaskAction `
 $logonTrigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $logonTrigger.Delay = "PT1M"
 
-# 주기 회차: 지금부터 5분 간격으로 무기한.
+# 주기 회차: 지금부터 $IntervalMinutes 간격으로 무기한.
 $repeatTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
     -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes)
 
+# Priority 10 = IDLE_PRIORITY_CLASS (0 이 가장 높고 10 이 가장 낮다). 기본값 7은
+# BELOW_NORMAL 이라 게임과 여전히 CPU 를 다툰다. 자식 프로세스가 물려받으므로
+# 이 한 줄이 wscript · powershell · docker 전부에 걸린다.
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
     -StartWhenAvailable `
     -MultipleInstances IgnoreNew `
+    -Priority 10 `
     -ExecutionTimeLimit (New-TimeSpan -Minutes 15)
 
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
@@ -100,3 +119,5 @@ Write-Host "지금 한 번 돌려보기:"
 Write-Host "  Start-ScheduledTask -TaskName '$TaskName'"
 Write-Host "고치지 않고 상태만 보기:"
 Write-Host "  powershell -ExecutionPolicy Bypass -File deploy\scripts\watchdog.ps1 -CheckOnly"
+Write-Host "게임·무거운 작업 동안 재우기 (만료 자동):"
+Write-Host "  powershell -ExecutionPolicy Bypass -File deploy\scripts\watchdog-pause.ps1 -Hours 4"

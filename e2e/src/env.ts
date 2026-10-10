@@ -46,3 +46,10 @@ export const hasAdminCredentials = ADMIN_EMAIL !== "" && ADMIN_PASSWORD !== "";
  */
 export const TEST_EMAIL_PREFIX = "qa-e2e-";
 export const TEST_EMAIL_DOMAIN = "quant-port.test";
+
+/**
+ * 2026-09-27부터 가입은 아이디라(요청 3) 새 테스트 계정에는 도메인이 없다 — 이 접두사가
+ * 회수·통계 제외의 표식이다(`scripts/cleanup.sql`, BE `growth/activity.go`의 realUser).
+ * `_`는 SQL LIKE에서 한 글자 와일드카드라 쓰지 않았다.
+ */
+export const TEST_LOGIN_PREFIX = "qae2e";

@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>부동산·금리 AI 브리핑 · 자산 개선 · 자산 태그 — 제안 v1</title>
+<style>
+:root{
+  --radius:.625rem;
+  --background:oklch(.97 0 0); --foreground:oklch(.145 0 0);
+  --card:oklch(1 0 0); --muted:oklch(.97 0 0);
+  --muted-foreground:oklch(.52 0 0); --border:oklch(.87 0 0);
+  --brand:#2563EB; --brand-muted:rgba(37,99,235,.1);
+  --profit:#DC2626; --loss:#2563EB;
+  --score-high:#15803D; --score-mid:#C2410C; --score-low:#B91C1C;
+  --amber:#B45309; --amber-bg:rgba(245,158,11,.15);
+  --text-muted:oklch(.545 0 0);
+}
+[data-theme="dark"]{
+  --background:oklch(.145 0 0); --foreground:oklch(.985 0 0);
+  --card:oklch(.205 0 0); --muted:oklch(.269 0 0);
+  --muted-foreground:oklch(.708 0 0); --border:oklch(1 0 0/16%);
+  --brand:#60A5FA; --brand-muted:rgba(96,165,250,.15);
+  --profit:#F87171; --loss:#60A5FA;
+  --score-high:#4ADE80; --score-mid:#FB923C; --score-low:#F87171;
+  --amber:#FBBF24; --amber-bg:rgba(251,191,36,.15);
+  --text-muted:oklch(.6 0 0);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--background);color:var(--foreground);
+  font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  font-size:12px;line-height:1.55;padding:22px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:20px;font-weight:700}
+h2{font-size:16px;font-weight:700;margin:34px 0 10px;padding-top:14px;border-top:2px solid var(--border)}
+h3{font-size:13px;font-weight:600;margin:14px 0 6px}
+.sub,.muted{color:var(--muted-foreground)}
+.up{color:var(--profit)} .down{color:var(--loss)} .n{font-variant-numeric:tabular-nums}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:14px;margin-bottom:16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--background);z-index:20}
+button.tgl{font:inherit;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--foreground);border-radius:8px;padding:5px 12px}
+.lead{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+.lead li{margin-left:18px;margin-bottom:3px}
+.tag{font-size:11px;font-weight:700;background:var(--brand-muted);color:var(--brand);border-radius:6px;padding:2px 7px;white-space:nowrap}
+.tag.rec{background:rgba(21,128,61,.12);color:var(--score-high)}
+.tag.q{background:var(--amber-bg);color:var(--amber)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.pad{padding:12px 14px}
+.cols{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 440px;min-width:300px}
+.lbl{font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;display:block}
+.note{color:var(--muted-foreground);font-size:11px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;border:1px solid var(--border);border-radius:999px;padding:1px 7px;color:var(--muted-foreground);background:var(--card);white-space:nowrap}
+.chip.b{border-color:transparent;background:var(--brand-muted);color:var(--brand);font-weight:600}
+table.t{width:100%;border-collapse:collapse;font-size:11.5px}
+table.t th,table.t td{border:1px solid var(--border);padding:6px 8px;text-align:left;vertical-align:top}
+table.t th{background:var(--muted);font-weight:600}
+code{font-family:ui-monospace,Consolas,monospace;font-size:11px;background:var(--muted);border-radius:4px;padding:0 4px}
+.qbox{border:1px dashed var(--amber);background:var(--amber-bg);border-radius:10px;padding:10px 12px;margin-top:10px}
+.qbox b{color:var(--amber)}
+/* 인라인 태그 렌더 */
+.mention{display:inline-flex;align-items:baseline;gap:4px;border-radius:6px;padding:0 5px;background:var(--brand-muted);color:var(--brand);font-weight:600;white-space:nowrap}
+.mention .px{font-weight:500;font-size:11px}
+.val{display:inline-flex;align-items:baseline;gap:3px;border-bottom:1.5px dotted var(--brand);font-weight:700;white-space:nowrap}
+.val small{font-weight:500;color:var(--muted-foreground);font-size:10.5px}
+.embed{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--card);margin:8px 0}
+.body{font-size:13.5px;line-height:1.75}
+.ed{border:1px solid var(--border);border-radius:10px;background:var(--card)}
+.ed .bar{display:flex;gap:6px;padding:6px 8px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.ed .bar span{font-size:11px;border:1px solid var(--border);border-radius:6px;padding:2px 8px}
+.ed .bar span.on{border-color:var(--brand);color:var(--brand);font-weight:600}
+.ed .txt{padding:10px 12px;font-size:13px;min-height:90px;position:relative;font-family:inherit}
+.pop{position:absolute;left:84px;top:34px;width:240px;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);font-size:12px;overflow:hidden}
+.pop div{padding:5px 9px;display:flex;justify-content:space-between;gap:8px}
+.pop div.sel{background:var(--brand-muted)}
+.caret{display:inline-block;width:1px;height:14px;background:var(--foreground);vertical-align:middle;animation:b 1s steps(1) infinite}
+@keyframes b{50%{opacity:0}}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);overflow-x:auto}
+.tabs span{padding:7px 10px;font-size:12px;white-space:nowrap;color:var(--muted-foreground)}
+.tabs span.on{color:var(--foreground);font-weight:700;border-bottom:2px solid var(--foreground)}
+.tabs span.new{color:var(--brand);font-weight:700}
+.li{display:flex;gap:8px;align-items:center;padding:8px 12px;border-top:1px solid var(--border)}
+.li:first-child{border-top:0}
+.cond{display:flex;align-items:center;gap:6px;padding:4px 0}
+.cond .name{width:5.2rem;color:var(--muted-foreground);display:flex;align-items:center;gap:3px}
+.box{width:58px;border:1px solid var(--border);border-radius:6px;padding:1px 6px;font-size:12px;display:flex;justify-content:space-between;align-items:center;color:var(--muted-foreground);background:var(--card)}
+.box.on{border-color:var(--brand);color:var(--brand);font-weight:700}
+.spin{font-size:8px;line-height:7px;color:var(--muted-foreground);display:flex;flex-direction:column}
+.hint{font-size:10.5px;color:var(--muted-foreground);white-space:nowrap}
+.ref{font-size:10.5px;border-radius:999px;padding:0 7px;background:var(--brand-muted);color:var(--brand);font-weight:600;white-space:nowrap}
+.i{display:inline-flex;width:13px;height:13px;border-radius:50%;border:1px solid var(--border);font-size:9px;align-items:center;justify-content:center}
+.tip{background:var(--foreground);color:var(--background);border-radius:8px;padding:8px 10px;font-size:11px;max-width:280px;margin:4px 0 6px 5.6rem}
+.btn{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--brand);color:var(--brand);border-radius:8px;padding:4px 10px;font-weight:600;font-size:12px;background:var(--card)}
+.mood{font-size:10.5px;font-weight:700;border-radius:6px;padding:1px 7px}
+.mood.up{background:rgba(220,38,38,.1)}
+.src{font-size:10px;color:var(--muted-foreground);border:1px solid var(--border);border-radius:5px;padding:0 5px;font-weight:500}
+.mini{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.mini .card{font-size:11px}
+.mini h4{font-size:11.5px;font-weight:700;margin-bottom:4px}
+.row{display:flex;justify-content:space-between;gap:6px}
+.ai{font-size:10.5px;color:var(--muted-foreground);margin-top:4px}
+.hero{font-size:13px;line-height:1.7}
+.pts li{margin-left:16px;font-size:12px;margin-bottom:2px}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;font-size:11px}
+.seg span{padding:2px 9px}.seg span.on{background:var(--foreground);color:var(--background);font-weight:600}
+.modal{border:1px solid var(--border);border-radius:12px;background:var(--card);box-shadow:0 10px 30px rgba(0,0,0,.15);max-width:360px;padding:14px}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
+.kv div{background:var(--muted);border-radius:6px;padding:5px 7px}
+.kv small{display:block;color:var(--muted-foreground);font-size:10px}
+.yes{color:var(--score-high);font-weight:700}.no{color:var(--muted-foreground)}.mid{color:var(--amber);font-weight:700}
+@media (max-width:700px){.mini{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="topbar">
+  <div>
+    <h1>부동산·금리 AI 브리핑 · 자산 화면 개선 · 자산 데이터 태그 — 제안 v1</h1>
+    <div class="sub">2026-10-03 · <span class="tag q">결정</span> 표시가 고를 곳 · 숫자는 10-03 실제 저장값(<code>/home/assets</code>, <code>/real-estate</code>)</div>
+  </div>
+  <button class="tgl" onclick="const h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark'">라이트/다크</button>
+</div>
+
+<div class="lead">
+  <b>조사하며 확인한 사실</b>
+  <ul style="margin-top:6px">
+    <li>AI 글은 <b>이미 배치가 쓰고 있다</b>(<code>asset_ai</code> 10:20, 전용 키 + <code>llm_feat_asset</code>): 금리 한 문장 + 관점 3개, 전국·시도 해설(160자), 시군구·단지 한 줄, 우대조건 구조화.</li>
+    <li>그런데 <b>홈에는 금리 한 문장만</b> 작은 글씨로 나오고, 관점 3개(<code>points</code>)와 <b>전국 아파트 AI 해설은 홈 응답에 아예 없다</b> — 부동산 화면 안쪽에서만 보인다.</li>
+    <li>부동산·금융 화면은 10-01~02 벤치마킹으로 뼈대(지역표·단지 랭킹·세후 이자 순위·우대조건 AI 칩·공매 카드)는 갖췄다. 남은 차이는 <b>「내 것」 기능(관심·비교·내 조건)</b>과 차트 품질.</li>
+    <li>글 태그(<code>@</code>/<code>#</code>)는 종목만 안다 — 해석기(<code>mention_parse.go</code>)·저장(<code>content_mentions</code>)·모달 모두 종목 전용.</li>
+  </ul>
+</div>
+
+<!-- ───────────── ① 홈 ───────────── -->
+<h2>① 홈 — 아파트·금리도 「AI 요약이 주인공」인 카드로</h2>
+<span class="lbl">현재 — 홈 아래 작은 카드 4장, 숫자 표가 주인공 · AI는 금리 카드 맨 아래 한 줄(관점 3개는 버림) · 아파트 카드엔 AI 없음</span>
+<div class="mini">
+  <div class="card pad"><h4>금리</h4>
+    <div class="row"><span class="muted">기준금리</span><b class="n">3.00%</b></div>
+    <div class="row"><span class="muted">국고채 3년</span><b class="n">3.94% <small class="down">-7bp</small></b></div>
+    <div class="row"><span class="muted">주담대 평균</span><b class="n">4.66% <small class="up">+18bp</small></b></div>
+    <div class="ai">✦ 한국 시장금리는 3개월 전 대비 전반적으로 상승한 흐름…</div></div>
+  <div class="card pad"><h4>아파트 시장</h4>
+    <div class="row"><span class="muted">전국 매매지수</span><b class="n">101.0</b></div>
+    <div class="row"><span class="muted">1주 · 4주</span><b class="n up">+0.06% · +0.31%</b></div>
+    <div class="muted" style="margin-top:4px">4주 많이 오른 지역<br>영통구 +2.56% · 권선구 +1.89%</div></div>
+  <div class="card pad"><h4>정기예금 금리 TOP</h4><div class="muted">1 ○○저축 3.80% …</div></div>
+  <div class="card pad"><h4>공매 마감 임박</h4><div class="muted">○○동 아파트 최저가 68% …</div></div>
+</div>
+
+<div class="cols" style="margin-top:16px">
+  <div class="col">
+    <span class="lbl"><span class="tag">제안 A</span> 기존 AI 글을 꺼내 쓰기 — 금리·아파트 카드 맨 위를 AI 문단으로, 숫자는 아래 · <b>LLM 추가 0</b></span>
+    <div class="cols" style="gap:8px">
+      <div class="card pad" style="flex:1 1 200px;min-width:200px"><h4 style="font-size:12px">금리 <span class="src">AI 요약</span></h4>
+        <p class="hero" style="font-size:12px">한국 시장금리는 3개월 전 대비 전반적으로 상승한 흐름입니다.</p>
+        <ul class="pts" style="margin:4px 0"><li>예금 3.39% — 3개월 전보다 소폭 하락</li><li>주담대 4.66% · 신용 6.33% — 이자 부담 증가</li><li>국고채 3년 3.94% · 10년 4.37%</li></ul>
+        <div class="muted" style="border-top:1px solid var(--border);padding-top:4px">기준 3.00 · 3년 3.94 <span class="down">-7bp</span> · 주담대 4.66 <span class="up">+18bp</span></div></div>
+      <div class="card pad" style="flex:1 1 200px;min-width:200px"><h4 style="font-size:12px">아파트 시장 <span class="src">AI 요약</span></h4>
+        <p class="hero" style="font-size:12px">전국 매매지수는 4주간 0.3% 오르며 완만한 오름세. 상승 지역 151곳으로 확산, 영통·서대문이 주도하고 강남·서초는 하락. 거래량은 20% 감소.</p>
+        <div><span class="chip b">#완만한상승</span> <span class="chip b">#지역별차별화</span></div>
+        <div class="muted" style="border-top:1px solid var(--border);padding-top:4px;margin-top:4px">전국 101.0 <span class="up">4주 +0.31%</span> · 서울 <span class="up">+0.58%</span></div></div>
+    </div>
+    <p class="note">비용: BE <code>/home/assets</code>에 전국 해설 1건 추가(이미 저장된 행 읽기) · FE 카드 2장 재배치. 높이 +60px 정도. 문장이 짧아 「브리핑」 느낌은 약함.</p>
+  </div>
+  <div class="col">
+    <span class="lbl"><span class="tag rec">제안 B · 추천</span> 「부동산·금리 브리핑」 한 장 — 오늘의 시장 브리핑과 같은 모양(제목·분위기·문단·지켜볼 것), 탭 2개</span>
+    <div class="card pad">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap"><b style="font-size:13px">✦ 부동산·금리 브리핑</b><span class="seg"><span class="on">부동산</span><span>금리</span></span><span class="muted" style="margin-left:auto">09-28 주간 · AI 요약</span></div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span class="mood up">완만한 상승</span><b style="font-size:14px">수도권이 끌고, 강남·서초는 쉬어 가는 장</b></div>
+      <p class="hero" style="margin-top:6px">전국 아파트 매매지수는 4주간 <b class="up">+0.31%</b>, 시군구 254곳 중 151곳이 올라 오름세가 넓게 퍼졌습니다. 경기(+0.74%)·서울(+0.58%)이 끌고 수원 영통·권선, 서대문이 가장 빠릅니다. 반면 강남(-1.67%)·서초(-1.26%)는 내렸고, 거래량은 18% 줄어 가격만 오르는 모양입니다.</p>
+      <p class="hero" style="margin-top:4px">주담대 평균이 3개월 새 <b class="up">+0.18%p</b>(4.66%) 오른 점은 매수 여력에 부담입니다.</p>
+      <b style="font-size:11.5px;display:block;margin-top:8px">지켜볼 것</b>
+      <ul class="pts"><li>거래량 감소 속 상승 — 다음 주 거래 회복 여부</li><li>강남·서초 하락이 인근(송파·용산)으로 번지는지</li><li>전세지수 4주 +0.38% — 매매보다 빠른 전세 오름</li></ul>
+      <div style="margin-top:6px"><span class="chip">경기 +0.74%</span> <span class="chip">서울 +0.58%</span> <span class="chip">영통구 +2.56%</span> <span class="chip">강남구 -1.67%</span> <span class="muted">← 누르면 그 지역 화면</span></div>
+    </div>
+    <p class="note">자리: 홈 「오늘의 시장 브리핑」 아래 전폭. 기존 4장 중 금리·아파트 카드는 이 카드로 흡수, 예금 TOP·공매는 그대로(2장).<br>
+    비용: <code>asset_ai</code>에 새 단계 <b>하루 최대 2콜</b>(부동산 1 · 금리 1, 입력 해시 같으면 0 — 부동산 지수는 주 1회라 대부분 0) · 지금 하루 250콜 한도 중 평소 사용 수십. 실패·한도면 제안 A 모양(기존 해설)으로 폴백. 새 표 없음(<code>asset_ai_notes</code> kind 추가).</p>
+  </div>
+</div>
+<div class="qbox"><b>결정 1 — 홈 카드</b> · <b>B(추천)</b> 브리핑 한 장(하루 최대 +2콜) · <b>A</b> 기존 AI 글 재배치(LLM 0)</div>
+
+<!-- ───────────── ② 벤치마킹 ───────────── -->
+<h2>② 다른 서비스와 비교 — 남은 차이와 개선 후보</h2>
+<h3>부동산 (호갱노노 · 아실 · 네이버부동산)</h3>
+<table class="t">
+  <tr><th>기능</th><th>호갱노노</th><th>아실</th><th>네이버</th><th>우리 지금</th><th>후보</th></tr>
+  <tr><td>지역 흐름 · 지수 · 랭킹</td><td class="yes">○</td><td class="yes">○</td><td class="mid">△</td><td class="yes">○ 시도·시군구·점수·AI</td><td>—</td></tr>
+  <tr><td>단지 실거래 차트</td><td class="yes">○ 시간축 · 평형 탭</td><td class="yes">○</td><td class="yes">○</td><td class="mid">△ x축이 시간 비례 아님 · 84.39/84.6/84.89㎡가 따로</td><td><b>R1</b></td></tr>
+  <tr><td>단지 비교(여러 단지 겹쳐보기)</td><td class="yes">○</td><td class="yes">○ 핵심 기능</td><td class="no">✕</td><td class="no">✕</td><td><b>R2</b></td></tr>
+  <tr><td>관심 단지 · 새 거래 표시</td><td class="yes">○</td><td class="yes">○</td><td class="yes">○</td><td class="no">✕ (내 보유 등록만)</td><td><b>R3</b></td></tr>
+  <tr><td>고점 대비 하락 · 신고가 랭킹</td><td class="mid">△</td><td class="yes">○</td><td class="no">✕</td><td class="mid">△ 값(pk)은 있는데 정렬 없음</td><td><b>R4</b></td></tr>
+  <tr><td>공매</td><td class="no">✕</td><td class="no">✕</td><td class="mid">△</td><td class="mid">△ 같은 건물 호실 20여 건이 목록 도배</td><td><b>R4</b></td></tr>
+  <tr><td>지도</td><td class="yes">○</td><td class="yes">○</td><td class="yes">○</td><td class="no">✕</td><td class="muted">좌표 API 활용신청(사용자 몫) 뒤</td></tr>
+  <tr><td>매물 · 호가 · 입주물량 · 학군</td><td class="yes">○</td><td class="yes">○</td><td class="yes">○</td><td class="no">✕</td><td class="muted">공식 공개 API 없음 · 제외</td></tr>
+</table>
+<h3>금융상품 (뱅크샐러드 · 토스 · 네이버페이 금리비교) · 금리</h3>
+<table class="t">
+  <tr><th>기능</th><th>뱅크샐러드</th><th>토스</th><th>네이버페이</th><th>우리 지금</th><th>후보</th></tr>
+  <tr><td>세후 이자 순위 · 금액·기간 입력</td><td class="yes">○</td><td class="yes">○</td><td class="yes">○</td><td class="yes">○</td><td>—</td></tr>
+  <tr><td>「내가 채울 수 있는 우대조건」 체크 → 내 금리로 재정렬</td><td class="yes">○</td><td class="mid">△</td><td class="mid">△</td><td class="mid">△ AI 칩·난이도만, 체크 없음</td><td><b>F1</b></td></tr>
+  <tr><td>가입 방법·대상 칩(비대면 · 누구나 · 청년)</td><td class="yes">○</td><td class="yes">○</td><td class="yes">○</td><td class="mid">△ 원문만, 필터 없음</td><td><b>F2</b></td></tr>
+  <tr><td>대출 갈아타기 계산(내 대출 vs 상품)</td><td class="yes">○</td><td class="yes">○</td><td class="yes">○</td><td class="no">✕ (부채 금리는 이미 입력받음)</td><td><b>F3</b></td></tr>
+  <tr><td>금리: 장단기 차 · 예대금리차 · 내 금리 vs 시장 평균</td><td class="no">✕</td><td class="no">✕</td><td class="no">✕</td><td class="mid">△ 표·곡선·5년 추이만</td><td><b>F4</b></td></tr>
+</table>
+<p class="note">○/△ 표기는 각 서비스의 공개 화면 기준 일반적인 기능 유무(10-01 조사 §13 + 이번 확인)입니다.</p>
+<h3>후보 상세 (모두 이미 적재된 데이터로 가능)</h3>
+<table class="t">
+  <tr><th style="width:44px"></th><th>바뀌는 것 (현재 → 제안)</th><th style="width:250px">비용</th></tr>
+  <tr><td><b>R1</b></td><td>단지 실거래: 점이 거래 순서로 늘어섬 → <b>날짜 비례 x축 + 3개월 이동평균선</b>, 평형 칩 84.39/84.6/84.89 → <b>「84㎡(34평)」 하나</b>로 묶음</td><td>FE만 · 시험(묶기 규칙)</td></tr>
+  <tr><td><b>R2</b></td><td>단지 화면에 「비교에 담기」 → 최대 4단지 ㎡당가 추이 겹친 선 + 요약표(추정가·전세가율·고점 대비·점수)</td><td>FE + 기존 단지 API 재사용 · 주소 <code>?compare=</code></td></tr>
+  <tr><td><b>R3</b></td><td>단지·지역 ★관심 → 내 포트폴리오 「관심 부동산」 + 홈 「관심 단지 새 거래」 줄(신고가 표시)</td><td>새 표 1개 · BE API 3 · 알림 푸시 없음(화면 표시만)</td></tr>
+  <tr><td><b>R4</b></td><td>단지 랭킹에 「고점 대비 많이 내린」·「신고가」 정렬 · 공매 목록을 같은 건물로 묶어 「○○빌딩 외 19건」 한 장</td><td>BE 정렬 키 2 · 공매 묶기(시험)</td></tr>
+  <tr><td><b>F1</b></td><td>예·적금 목록 위에 「내가 채울 수 있는 조건」 칩(급여이체 · 카드실적 · 비대면 · 마케팅 동의…) → AI가 정리한 조건 가산폭으로 <b>내 예상 금리</b>를 계산해 그 순으로</td><td>FE만(우대조건 AI 정리 재사용) · 시험</td></tr>
+  <tr><td><b>F2</b></td><td>가입 방법(비대면/영업점)·대상(누구나/서민/청년/사업자) 칩 필터</td><td>원문에서 규칙으로 뽑기(순수 함수 + 시험) · LLM 0</td></tr>
+  <tr><td><b>F3</b></td><td>대출 비교 맨 위 「내 대출과 비교」: 등록한 부채(금리·잔액) 기준 월 이자 차이 열</td><td>FE만(부채 재사용) · 비로그인은 숨김</td></tr>
+  <tr><td><b>F4</b></td><td>금리 화면: 장단기 차(10년−3년)·예대금리차(주담대−예금) 추이 + 「내 예금·대출 금리 vs 시장 평균」 줄 + ① 금리 브리핑 문단</td><td>FE + BE 계열 2개 계산(이미 적재된 값)</td></tr>
+</table>
+<div class="qbox"><b>결정 2·3 — 이번에 할 개선</b> · 부동산 R1~R4 · 금융 F1~F4 중 여러 개. 추천: <b>R1·R2·R4 + F1·F2·F4</b> (R3·F3은 로그인 기능이라 다음 묶음도 괜찮음)</div>
+
+<!-- ───────────── ③ 태그 ───────────── -->
+<h2>③ 커뮤니티 · 투자 리포트에 부동산 · 금융상품 · 금리 태그</h2>
+<p class="sub">지금 문법(<code>@종목</code> · <code>@종목:지표</code> · <code>#종목</code> 카드)을 그대로 넓힌다. 종목과 이름이 겹치지 않게 <b>종류 이름을 대괄호 앞에</b> 붙인다 — 손으로 칠 일은 거의 없고 자동완성이 넣는다.</p>
+<div class="cols">
+  <div class="col">
+    <span class="lbl"><span class="tag rec">제안 A · 추천</span> 인라인 태그 확장</span>
+    <table class="t">
+      <tr><th>쓰는 법</th><th>보이는 모양</th></tr>
+      <tr><td><code>@아파트[송파구 헬리오시티]</code></td><td><span class="mention">🏢 헬리오시티 <span class="px">추정 29.5억</span></span></td></tr>
+      <tr><td><code>@아파트[송파구 헬리오시티]:전세가율</code></td><td><span class="val">52% <small>→ 지금 54%</small></span></td></tr>
+      <tr><td><code>@지역[송파구]:4주</code></td><td><span class="val">+0.42% <small>→ 지금 +0.18%</small></span></td></tr>
+      <tr><td><code>@상품[○○은행 정기예금]:최고금리</code></td><td><span class="val">3.80%</span></td></tr>
+      <tr><td><code>@금리[국고채3년]</code></td><td><span class="mention">국고채 3년 <span class="px">3.94% <span class="down">-7bp</span></span></span></td></tr>
+      <tr><td><code>#아파트[…]</code> · <code>#상품[…]</code></td><td>그 줄에 카드(종목 카드와 같은 자리)</td></tr>
+    </table>
+    <div class="ed" style="margin-top:10px">
+      <div class="bar"><span class="on">전체</span><span>종목</span><span>부동산</span><span>금융상품</span><span>금리</span></div>
+      <div class="txt">요즘 @헬리<span class="caret"></span>
+        <div class="pop"><div class="sel"><span>🏢 헬리오시티</span><span class="muted">송파구 · 아파트</span></div><div><span>🏢 헬리오스카이</span><span class="muted">중구 · 아파트</span></div><div><span>헬릭스미스</span><span class="muted">종목</span></div></div>
+      </div>
+    </div>
+    <p class="note">지표 이름: 단지 = 추정가·평당가·전세가율·최근거래·고점대비·점수 · 지역 = 1주·4주·12주·거래량·점수 · 상품 = 기본금리·최고금리·점수 · 금리 = 값. 값은 종목과 같은 규칙(<b>쓴 순간 값 + 달라졌으면 지금 값</b>). 단지 값 예시 숫자는 그림용.</p>
+  </div>
+  <div class="col">
+    <span class="lbl">칩·카드를 누르면 — 자산 미리보기 모달(종목 미리보기와 같은 틀)</span>
+    <div class="modal">
+      <div style="display:flex;justify-content:space-between"><b style="font-size:14px">🏢 헬리오시티</b><span class="muted">✕</span></div>
+      <div class="muted">서울 송파구 가락동 · 2018년</div>
+      <div class="kv">
+        <div><small>추정가(84㎡)</small><b class="n">29.5억</b></div>
+        <div><small>최근 실거래</small><b class="n">29.0억</b> <small>09-21 · 12층</small></div>
+        <div><small>전세가율</small><b class="n">54%</b></div>
+        <div><small>12개월 고점 대비</small><b class="n down">-3.1%</b></div>
+      </div>
+      <div><span class="chip b">점수 81 A</span> <span class="muted">시도 안 백분위 — 추천 아님</span></div>
+      <p class="ai" style="font-size:11.5px">✦ 최근 3개월 ㎡가가 그 전보다 4% 높고 거래도 활발합니다. 전세가율 54%로 갭은 중간 수준.</p>
+      <div style="margin-top:6px;font-size:11px;color:var(--muted-foreground)">글에 쓴 순간(09-28) 추정 28.9억 → 지금 29.5억</div>
+      <span class="btn" style="margin-top:8px">실거래 전체 보기 →</span>
+    </div>
+    <p class="note">상품 모달: 기본·최고 금리·기간·우대조건 칩·난이도 · 금리 모달: 현재·1주·3개월 전 + 1년 미니 선 · 지역 모달: 지수 1·4·12주·거래량·AI 해설.</p>
+  </div>
+</div>
+<div class="cols" style="margin-top:12px">
+  <div class="col">
+    <span class="lbl">제안 B — 붙이기 전용 (인라인 없음)</span>
+    <div class="card pad">글쓰기 화면에 「🏢 부동산·상품 붙이기」 버튼 → 고른 것이 <b>글 맨 아래 카드</b>로(지금 「종목 붙이기」처럼). 본문 속 값·칩 없음.</div>
+    <p class="note">더 단순(해석기 손대지 않음)하지만 본문에 「이 단지 전세가율 52%」를 값으로 박을 수 없다 — 09-28에 고른 차별점(<i>말 대신 값</i>)과 어긋난다.</p>
+  </div>
+</div>
+<div class="qbox"><b>결정 4 — 태그 방식</b> · <b>A(추천)</b> 인라인 확장(@/# + 지표 + 모달) · <b>B</b> 붙이기 카드만<br>
+<b>결정 5 — 태그 대상</b> · 단지·지역 · 예·적금·대출 상품 · 금리 계열 · 공매 물건(낙찰되면 사라져 쓴 순간 값만 남음) — 추천: 앞의 셋</div>
+<p class="note">비용(A): BE 해석기에 종류 접두 + 종류별 이름 조회(단지는 「시군구 + 단지명」으로 유일) · <code>content_mentions</code>에 <code>kind</code> 열 추가(기존 행 = 종목) · 미리보기 API 1개(저장값만, LLM 0) · FE 자동완성 종류 탭 + 모달 1개. 종목 태그 동작은 그대로(기존 시험 유지 + 회귀 시험 추가).</p>
+
+</div>
+</body>
+</html>

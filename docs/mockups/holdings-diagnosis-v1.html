@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>보유 이유 점검 — 배치 선택용 목업 v1</title>
+<style>
+:root {
+  --radius:.625rem;
+  --background:oklch(.97 0 0); --foreground:oklch(.145 0 0);
+  --card:oklch(1 0 0); --muted:oklch(.97 0 0);
+  --muted-foreground:oklch(.52 0 0); --accent:oklch(.93 0 0);
+  --border:oklch(.87 0 0);
+  --brand:#2563EB; --brand-muted:rgba(37,99,235,.1);
+  --profit:#DC2626; --loss:#2563EB;
+  --score-high:#15803D; --score-mid:#C2410C; --score-low:#B91C1C;
+  --surface-elevated:var(--accent); --text-muted:oklch(.545 0 0);
+}
+[data-theme="dark"]{
+  --background:oklch(.145 0 0); --foreground:oklch(.985 0 0);
+  --card:oklch(.205 0 0); --muted:oklch(.269 0 0);
+  --muted-foreground:oklch(.708 0 0); --accent:oklch(.269 0 0);
+  --border:oklch(1 0 0/16%);
+  --brand:#60A5FA; --brand-muted:rgba(96,165,250,.15);
+  --profit:#F87171; --loss:#60A5FA;
+  --score-high:#4ADE80; --score-mid:#FB923C; --score-low:#F87171;
+  --text-muted:oklch(.6 0 0);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--background);color:var(--foreground);
+  font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  font-size:12px;line-height:1.5;padding:24px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1400px;margin:0 auto}
+h1{font-size:20px;font-weight:700;letter-spacing:-.01em}
+h2{font-size:15px;font-weight:600} h3{font-size:13px;font-weight:600}
+.sub{color:var(--muted-foreground);font-size:12px}
+.up{color:var(--profit)} .down{color:var(--loss)} .n{font-variant-numeric:tabular-nums}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding-bottom:16px;margin-bottom:20px;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:var(--background);z-index:5}
+button.tgl{font:inherit;cursor:pointer;border:1px solid var(--border);background:var(--card);
+  color:var(--foreground);border-radius:8px;padding:5px 12px}
+.lead{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:22px}
+.lead p{margin-bottom:8px}.lead p:last-child{margin-bottom:0}
+.note{color:var(--muted-foreground);font-size:11px;margin-top:8px}
+.opt{margin-bottom:34px}
+.opt-head{display:flex;align-items:baseline;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.tag{font-size:11px;font-weight:700;background:var(--brand-muted);color:var(--brand);border-radius:6px;padding:2px 7px}
+.tag.rec{background:rgba(21,128,61,.12);color:var(--score-high)}
+.tag.warn{background:rgba(194,65,12,.12);color:var(--score-mid)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;background:var(--surface-elevated);border-radius:4px;padding:1px 4px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.body{padding:12px 14px}
+.hd{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-bottom:10px}
+.hd .t{font-size:13px;font-weight:700}
+.hd .s{font-size:11px;color:var(--text-muted)}
+.seg{display:inline-flex;gap:2px;background:var(--muted);border-radius:8px;padding:2px;margin-left:auto}
+.seg button{font:inherit;font-size:11px;cursor:pointer;border:0;background:transparent;color:var(--muted-foreground);border-radius:6px;padding:2px 8px}
+.seg button.on{background:var(--card);color:var(--foreground);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+
+.v{font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 8px;white-space:nowrap;line-height:1.35}
+.v.w{background:rgba(185,28,28,.12);color:var(--score-low)}
+.v.s{background:var(--muted);color:var(--muted-foreground)}
+.v.g{background:rgba(21,128,61,.12);color:var(--score-high)}
+.v.u{background:transparent;color:var(--muted-foreground);border:1px dashed var(--border)}
+
+.rows{display:flex;flex-direction:column}
+.row{display:grid;grid-template-columns:1fr auto auto auto auto;align-items:center;gap:10px;
+  padding:8px 0;border-bottom:1px solid var(--border)}
+.row:last-child{border-bottom:0}
+.row .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .nm small{font-weight:400;color:var(--text-muted);margin-left:5px}
+.row .dl{font-variant-numeric:tabular-nums;font-weight:700;min-width:46px;text-align:right}
+.row .ev{font-size:11px;color:var(--text-muted);min-width:44px;text-align:right}
+.row .ret{font-variant-numeric:tabular-nums;font-size:11px;min-width:58px;text-align:right}
+
+.dblock{padding:10px 0;border-bottom:1px solid var(--border)}
+.dblock:last-child{border-bottom:0}
+.dhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.dhead .nm{font-weight:700;font-size:12.5px}
+.dhead .meta{font-size:11px;color:var(--text-muted);margin-left:auto;font-variant-numeric:tabular-nums}
+.sig{display:grid;grid-template-columns:76px 14px 1fr;gap:8px;align-items:baseline;
+  font-size:11.5px;padding:3px 0}
+.sig .lb{color:var(--text-muted)}
+.sig .ar{text-align:center;font-weight:700}
+.sig .ar.p{color:var(--score-high)} .sig .ar.m{color:var(--score-low)} .sig .ar.z{color:var(--muted-foreground)}
+.sig .tx{font-variant-numeric:tabular-nums}
+.sig.off .tx{color:var(--muted-foreground)}
+.strongdot{font-size:9.5px;font-weight:700;color:var(--brand);margin-left:4px}
+.footnote{font-size:10.5px;color:var(--muted-foreground);border-top:1px solid var(--border);padding-top:8px;margin-top:8px}
+
+.page{display:grid;grid-template-columns:1fr 264px;gap:12px;background:var(--muted);
+  border:1px solid var(--border);border-radius:12px;padding:12px}
+.slot{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 11px;
+  font-size:11px;color:var(--muted-foreground);margin-bottom:8px}
+.slot:last-child{margin-bottom:0}
+.slot.here{border-color:var(--brand);border-width:2px;color:var(--brand);font-weight:700;background:var(--brand-muted)}
+.slot.tall{padding-top:22px;padding-bottom:22px}
+.cols{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 380px;min-width:320px}
+.phone{width:375px;border:1px solid var(--border);border-radius:14px;padding:10px;background:var(--muted);flex:0 0 375px}
+.phone .plabel{font-size:10.5px;color:var(--muted-foreground);margin-bottom:6px;text-align:center}
+.phone .row{grid-template-columns:1fr auto auto}
+.phone .row .ret,.phone .row .ev{display:none}
+.phone .sig{grid-template-columns:62px 12px 1fr;gap:6px;font-size:11px}
+table.cmp{width:100%;border-collapse:collapse;font-size:11.5px}
+table.cmp th,table.cmp td{border:1px solid var(--border);padding:6px 8px;text-align:left;vertical-align:top}
+table.cmp th{background:var(--muted);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div>
+    <h1>보유 이유 점검 — 배치 선택용 목업 v1</h1>
+    <div class="sub">V2 요구 6 · 아래 숫자는 전부 <b>2026-09-18 실제 API 응답</b>입니다</div>
+  </div>
+  <button class="tgl" id="themeBtn">다크 모드</button>
+</div>
+
+<div class="lead">
+  <p><b>무엇이 생기나요.</b> 보유 종목마다 「살 때의 이유가 지금도 유효한가」를 <b>강화 / 유지 / 약화 / 판단 보류</b> 넷 중 하나로 답합니다. 근거는 AI 점수 추세 · 실적 서프라이즈 · 내부자 거래 셋이며, <b>못 쓴 근거도 함께 보여 줍니다.</b></p>
+  <p><b>기존 화면은 그대로입니다.</b> 보유 요약 · 배분 · 기여도 · AI 점수 카드 · 평가금액 추이 · 목록 어느 것도 바뀌지 않고, 카드 하나가 추가됩니다.</p>
+  <p><b>수익률은 판정에 쓰지 않습니다.</b> 「올랐으니 이유가 강화됐다」는 결과를 근거로 되돌리는 말이라서입니다. 실측이 그 차이를 보여 줍니다 — 삼성전자는 <span class="up n">+37.6%</span>인데 <b>약화</b>, 엔비디아는 <span class="up n">+21.8%</span>인데 <b>유지</b>입니다.</p>
+  <div class="note">읽는 순서: ① 카드 두 버전(간단·상세)을 보시고 ② 모바일 폭을 확인하신 뒤 ③ 배치 A/B/C 중에 골라 주시면 됩니다.</div>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><h2>카드 본체</h2><span class="tag">간단 / 상세 전환</span>
+    <span class="sub">기본값은 <b>간단</b>입니다. AI 핵심 요약과 같은 방식으로 전환합니다.</span></div>
+
+  <div class="cols">
+    <div class="col">
+      <div class="card">
+        <div class="body">
+          <div class="hd">
+            <span class="t">보유 이유 점검</span>
+            <span class="s">5종목 · 09-17 종가 기준</span>
+            <span class="seg"><button class="on">간단</button><button>상세</button></span>
+          </div>
+          <div class="rows">
+            <div class="row"><span class="nm">카카오 <small>035720</small></span><span class="v w">약화</span><span class="dl down n">-46</span><span class="ev">근거 1</span><span class="ret down n">-17.7%</span></div>
+            <div class="row"><span class="nm">삼성전자 <small>005930</small></span><span class="v w">약화</span><span class="dl down n">-13</span><span class="ev">근거 2</span><span class="ret up n">+37.6%</span></div>
+            <div class="row"><span class="nm">엔비디아 <small>NVDA</small></span><span class="v s">유지</span><span class="dl n">-3</span><span class="ev">근거 2</span><span class="ret up n">+21.8%</span></div>
+            <div class="row"><span class="nm">애플 <small>AAPL</small></span><span class="v g">강화</span><span class="dl up n">+22</span><span class="ev">근거 2</span><span class="ret up n">+8.3%</span></div>
+            <div class="row"><span class="nm">SK하이닉스 <small>000660</small></span><span class="v g">강화</span><span class="dl up n">+31</span><span class="ev">근거 2</span><span class="ret up n">+96.9%</span></div>
+          </div>
+          <div class="footnote">약화가 먼저 옵니다 — 확인이 필요한 것이 위에 있어야 합니다. 가운데 숫자는 AI 점수 변화입니다.</div>
+        </div>
+      </div>
+      <div class="note">한 줄에 <b>이름 · 판정 · 점수 변화 · 근거 수 · 수익률</b>. 수익률을 끝에 둔 이유는 판정의 근거가 아니라 <b>대조용</b>이기 때문입니다.</div>
+    </div>
+
+    <div class="col">
+      <div class="card">
+        <div class="body">
+          <div class="hd">
+            <span class="t">보유 이유 점검</span>
+            <span class="s">5종목 · 09-17 종가 기준</span>
+            <span class="seg"><button>간단</button><button class="on">상세</button></span>
+          </div>
+
+          <div class="dblock">
+            <div class="dhead"><span class="nm">카카오</span><span class="v w">약화</span><span class="meta">매수 08-11 · 38일 · <span class="down">-17.7%</span></span></div>
+            <div class="sig"><span class="lb">AI 점수</span><span class="ar m">▼</span><span class="tx">08-11 <b>75 → 29</b> (-46)<span class="strongdot">단독 판정</span></span></div>
+            <div class="sig off"><span class="lb">실적</span><span class="ar z">-</span><span class="tx">보유 기간 중 발표 없음</span></div>
+            <div class="sig off"><span class="lb">내부자</span><span class="ar z">-</span><span class="tx">보유 기간 중 거래 없음</span></div>
+          </div>
+
+          <div class="dblock">
+            <div class="dhead"><span class="nm">삼성전자</span><span class="v w">약화</span><span class="meta">매수 03-03 · 199일 · <span class="up">+37.6%</span></span></div>
+            <div class="sig"><span class="lb">AI 점수</span><span class="ar m">▼</span><span class="tx">08-07 <b>59 → 46</b> (-13)<span class="strongdot">단독 판정</span></span></div>
+            <div class="sig off"><span class="lb">실적</span><span class="ar z">-</span><span class="tx">비교할 컨센서스가 없음</span></div>
+            <div class="sig"><span class="lb">내부자</span><span class="ar z">=</span><span class="tx">111건 · 순매수 25,668주 · 하루 거래량의 0.05%</span></div>
+          </div>
+
+          <div class="dblock">
+            <div class="dhead"><span class="nm">엔비디아</span><span class="v s">유지</span><span class="meta">매수 03-03 · 199일 · <span class="up">+21.8%</span></span></div>
+            <div class="sig"><span class="lb">AI 점수</span><span class="ar z">=</span><span class="tx">08-07 74 → 71 (-3)</span></div>
+            <div class="sig off"><span class="lb">실적</span><span class="ar z">-</span><span class="tx">비교할 컨센서스가 없음</span></div>
+            <div class="sig"><span class="lb">내부자</span><span class="ar m">▼</span><span class="tx">42건 · 순매도 5,634,565주 · 하루 거래량의 3.8%</span></div>
+          </div>
+
+          <div class="dblock">
+            <div class="dhead"><span class="nm">애플</span><span class="v g">강화</span><span class="meta">매수 08-20 · 29일 · <span class="up">+8.3%</span></span></div>
+            <div class="sig"><span class="lb">AI 점수</span><span class="ar p">▲</span><span class="tx">08-21 <b>46 → 68</b> (+22)<span class="strongdot">단독 판정</span></span></div>
+            <div class="sig off"><span class="lb">실적</span><span class="ar z">-</span><span class="tx">비교할 컨센서스가 없음</span></div>
+            <div class="sig"><span class="lb">내부자</span><span class="ar z">=</span><span class="tx">3건 · 순매도 4,316주 · 하루 거래량의 0.01%</span></div>
+          </div>
+
+          <div class="dblock">
+            <div class="dhead"><span class="nm">SK하이닉스</span><span class="v g">강화</span><span class="meta">매수 03-03 · 199일 · <span class="up">+96.9%</span></span></div>
+            <div class="sig"><span class="lb">AI 점수</span><span class="ar p">▲</span><span class="tx">08-07 <b>46 → 77</b> (+31)<span class="strongdot">단독 판정</span></span></div>
+            <div class="sig off"><span class="lb">실적</span><span class="ar z">-</span><span class="tx">비교할 컨센서스가 없음</span></div>
+            <div class="sig"><span class="lb">내부자</span><span class="ar z">=</span><span class="tx">37건 · 순매수 17,059주 · 하루 거래량의 0.20%</span></div>
+          </div>
+
+          <div class="footnote">AI 점수는 최근 회차만 보관하므로(08-07부터) 3종목은 매수 시점 점수와 비교할 수 없습니다. 대신 보관 기간 안의 추세로 판단했습니다.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note" style="margin-top:12px">
+    기호 셋을 구분합니다 — <b>▲ ▼</b> 방향이 있음, <b>=</b> 재 봤으나 방향이 없음, <b>-</b> 잴 수 없었음.
+    「단독 판정」은 그 신호 하나만으로 방향을 말할 만큼 컸다는 뜻입니다(점수 10점 이상 변동).
+  </div>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><h2>모바일 375px</h2><span class="tag rec">가독성 확인</span></div>
+  <div class="cols">
+    <div class="phone">
+      <div class="plabel">간단 — 기본값</div>
+      <div class="card"><div class="body">
+        <div class="hd"><span class="t">보유 이유 점검</span>
+          <span class="seg"><button class="on">간단</button><button>상세</button></span></div>
+        <div class="sub" style="margin:-4px 0 8px;font-size:11px">약화 2 · 유지 1 · 강화 2 · 09-17 종가</div>
+        <div class="rows">
+          <div class="row"><span class="nm">카카오</span><span class="v w">약화</span><span class="dl down n">-46</span></div>
+          <div class="row"><span class="nm">삼성전자</span><span class="v w">약화</span><span class="dl down n">-13</span></div>
+          <div class="row"><span class="nm">엔비디아</span><span class="v s">유지</span><span class="dl n">-3</span></div>
+          <div class="row"><span class="nm">애플</span><span class="v g">강화</span><span class="dl up n">+22</span></div>
+          <div class="row"><span class="nm">SK하이닉스</span><span class="v g">강화</span><span class="dl up n">+31</span></div>
+        </div>
+      </div></div>
+      <div class="note">좁은 폭에서는 <b>근거 수와 수익률을 접습니다</b> — 이름 · 판정 · 점수 변화만 남습니다.</div>
+    </div>
+
+    <div class="phone">
+      <div class="plabel">상세 — 눌러서 펼침</div>
+      <div class="card"><div class="body">
+        <div class="hd"><span class="t">보유 이유 점검</span>
+          <span class="seg"><button>간단</button><button class="on">상세</button></span></div>
+        <div class="dblock">
+          <div class="dhead"><span class="nm">카카오</span><span class="v w">약화</span></div>
+          <div class="sub" style="font-size:10.5px;margin-bottom:4px">매수 08-11 · 38일 · <span class="down">-17.7%</span></div>
+          <div class="sig"><span class="lb">AI 점수</span><span class="ar m">▼</span><span class="tx"><b>75 → 29</b> (-46)</span></div>
+          <div class="sig off"><span class="lb">실적</span><span class="ar z">-</span><span class="tx">발표 없음</span></div>
+          <div class="sig off"><span class="lb">내부자</span><span class="ar z">-</span><span class="tx">거래 없음</span></div>
+        </div>
+        <div class="dblock">
+          <div class="dhead"><span class="nm">삼성전자</span><span class="v w">약화</span></div>
+          <div class="sub" style="font-size:10.5px;margin-bottom:4px">매수 03-03 · 199일 · <span class="up">+37.6%</span></div>
+          <div class="sig"><span class="lb">AI 점수</span><span class="ar m">▼</span><span class="tx"><b>59 → 46</b> (-13)</span></div>
+          <div class="sig off"><span class="lb">실적</span><span class="ar z">-</span><span class="tx">컨센서스 없음</span></div>
+          <div class="sig"><span class="lb">내부자</span><span class="ar z">=</span><span class="tx">111건 · 순매수 25,668주<br><span class="sub" style="font-size:10px">하루 거래량의 0.05%</span></span></div>
+        </div>
+      </div></div>
+      <div class="note">상세에서도 신호는 <b>세 줄 고정</b>이라 종목당 높이가 일정합니다.</div>
+    </div>
+  </div>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><h2>어디에 놓을까요</h2><span class="sub">파란 칸이 새 카드입니다. 나머지는 지금 있는 그대로입니다.</span></div>
+  <div class="cols">
+
+    <div class="col">
+      <h3 style="margin-bottom:6px">A · 보유 요약 바로 아래 <span class="tag rec">권장</span></h3>
+      <div class="page">
+        <div>
+          <div class="slot">보유 요약</div>
+          <div class="slot here">보유 이유 점검 (간단)</div>
+          <div class="slot">배분 · 기여도</div>
+          <div class="slot">AI 점수</div>
+          <div class="slot tall">평가금액 추이</div>
+          <div class="slot">보유 목록</div>
+        </div>
+        <div>
+          <div class="slot">종목 추가</div>
+          <div class="slot tall">사이드 레일</div>
+        </div>
+      </div>
+      <div class="note">「얼마 벌었나」 다음에 「왜 들고 있나」가 옵니다. 모바일에서도 두 번째 카드라 스크롤 없이 닿습니다. 다만 배분·기여도가 한 칸씩 내려갑니다.</div>
+    </div>
+
+    <div class="col">
+      <h3 style="margin-bottom:6px">B · AI 점수 카드 아래</h3>
+      <div class="page">
+        <div>
+          <div class="slot">보유 요약</div>
+          <div class="slot">배분 · 기여도</div>
+          <div class="slot">AI 점수</div>
+          <div class="slot here">보유 이유 점검 (간단)</div>
+          <div class="slot tall">평가금액 추이</div>
+          <div class="slot">보유 목록</div>
+        </div>
+        <div>
+          <div class="slot">종목 추가</div>
+          <div class="slot tall">사이드 레일</div>
+        </div>
+      </div>
+      <div class="note">AI 점수 카드 바로 아래라 「점수 → 그래서 어떻다」로 읽힙니다. 기존 순서를 하나도 안 건드립니다. 대신 모바일에서 네 번째 카드라 한참 내려가야 보입니다.</div>
+    </div>
+
+    <div class="col">
+      <h3 style="margin-bottom:6px">C · 레일에 요약 · 종목 모달에 상세</h3>
+      <div class="page">
+        <div>
+          <div class="slot">보유 요약</div>
+          <div class="slot">배분 · 기여도</div>
+          <div class="slot">AI 점수</div>
+          <div class="slot tall">평가금액 추이</div>
+          <div class="slot">보유 목록</div>
+        </div>
+        <div>
+          <div class="slot">종목 추가</div>
+          <div class="slot here">점검 요약<br><span style="font-weight:400">약화 2 · 유지 1 · 강화 2</span></div>
+          <div class="slot tall">사이드 레일</div>
+        </div>
+      </div>
+      <div class="note">메인 열을 전혀 안 늘립니다. 그런데 레일은 <b>모바일에서 맨 아래로 내려가므로</b>, 이 기능이 모바일에서 사실상 안 보이게 됩니다.</div>
+    </div>
+  </div>
+
+  <table class="cmp" style="margin-top:14px">
+    <tr><th style="width:96px">기준</th><th>A · 요약 아래</th><th>B · 점수 아래</th><th>C · 레일</th></tr>
+    <tr><td>모바일 도달</td><td>2번째 카드</td><td>4번째 카드</td><td>맨 아래</td></tr>
+    <tr><td>기존 순서</td><td>배분·기여도가 한 칸 내려감</td><td>변화 없음</td><td>변화 없음</td></tr>
+    <tr><td>읽는 흐름</td><td>얼마 벌었나 → 왜 들고 있나</td><td>점수 → 그래서 어떻다</td><td>곁눈질</td></tr>
+    <tr><td>상세 보기</td><td>같은 카드에서 전환</td><td>같은 카드에서 전환</td><td>종목 모달로 이동</td></tr>
+  </table>
+</div>
+
+<div class="lead">
+  <p><b>정해 주실 것은 두 가지입니다.</b></p>
+  <p>① 배치 <b>A · B · C</b> 중 하나.</p>
+  <p>② 관심종목에도 같은 점검을 붙일지 여부 — 관심종목은 매수 이력이 없어 「보유 기간」이 없으므로, 근거는 <b>AI 점수 추세 하나</b>로 줄어듭니다. 지금은 <b>붙이지 않는 쪽</b>을 권합니다.</p>
+</div>
+
+</div>
+<script>
+document.getElementById("themeBtn").addEventListener("click", function () {
+  var el = document.documentElement;
+  el.dataset.theme = el.dataset.theme === "dark" ? "light" : "dark";
+});
+</script>
+</body>
+</html>

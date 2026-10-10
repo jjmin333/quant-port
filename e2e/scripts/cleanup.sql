@@ -19,25 +19,27 @@
 --    WHERE email LIKE 'qa-%@quant-port.test';
 
 SET @qa_pattern = 'qa-%@quant-port.test';
+-- 2026-09-27부터 가입은 아이디라 새 테스트 계정은 예약 접두사로 고른다(env.ts TEST_LOGIN_PREFIX).
+SET @qa_login_pattern = 'qae2e%';
 
 -- 자식 행부터. FK가 없는 표도 있어 순서를 손으로 지킨다.
-DELETE t FROM holding_trades      t JOIN users u ON u.id = t.user_id WHERE u.email LIKE @qa_pattern;
-DELETE t FROM user_holdings       t JOIN users u ON u.id = t.user_id WHERE u.email LIKE @qa_pattern;
-DELETE t FROM user_cash_balances  t JOIN users u ON u.id = t.user_id WHERE u.email LIKE @qa_pattern;
-DELETE t FROM watchlist_items     t JOIN users u ON u.id = t.user_id WHERE u.email LIKE @qa_pattern;
-DELETE t FROM journal_notes       t JOIN users u ON u.id = t.user_id WHERE u.email LIKE @qa_pattern;
-DELETE t FROM user_price_targets  t JOIN users u ON u.id = t.user_id WHERE u.email LIKE @qa_pattern;
-DELETE t FROM stamps              t JOIN users u ON u.id = t.user_id WHERE u.email LIKE @qa_pattern;
-DELETE t FROM user_refresh_tokens t JOIN users u ON u.id = t.user_id WHERE u.email LIKE @qa_pattern;
+DELETE t FROM holding_trades      t JOIN users u ON u.id = t.user_id WHERE (u.email LIKE @qa_pattern OR u.email LIKE @qa_login_pattern);
+DELETE t FROM user_holdings       t JOIN users u ON u.id = t.user_id WHERE (u.email LIKE @qa_pattern OR u.email LIKE @qa_login_pattern);
+DELETE t FROM user_cash_balances  t JOIN users u ON u.id = t.user_id WHERE (u.email LIKE @qa_pattern OR u.email LIKE @qa_login_pattern);
+DELETE t FROM watchlist_items     t JOIN users u ON u.id = t.user_id WHERE (u.email LIKE @qa_pattern OR u.email LIKE @qa_login_pattern);
+DELETE t FROM journal_notes       t JOIN users u ON u.id = t.user_id WHERE (u.email LIKE @qa_pattern OR u.email LIKE @qa_login_pattern);
+DELETE t FROM user_price_targets  t JOIN users u ON u.id = t.user_id WHERE (u.email LIKE @qa_pattern OR u.email LIKE @qa_login_pattern);
+DELETE t FROM stamps              t JOIN users u ON u.id = t.user_id WHERE (u.email LIKE @qa_pattern OR u.email LIKE @qa_login_pattern);
+DELETE t FROM user_refresh_tokens t JOIN users u ON u.id = t.user_id WHERE (u.email LIKE @qa_pattern OR u.email LIKE @qa_login_pattern);
 
 -- 리서치 콜과 그 부속. 콜은 제품에서는 지울 수 없지만(적중률이 광고가 되지
 -- 않으려면 그래야 한다) 테스트가 만든 행까지 영구 보존할 이유는 없다.
-DELETE r FROM research_reactions r JOIN research_calls c ON c.id = r.call_id JOIN users u ON u.id = c.user_id WHERE u.email LIKE @qa_pattern;
-DELETE r FROM research_ratings   r JOIN research_calls c ON c.id = r.call_id JOIN users u ON u.id = c.user_id WHERE u.email LIKE @qa_pattern;
-DELETE r FROM research_comments  r JOIN research_calls c ON c.id = r.call_id JOIN users u ON u.id = c.user_id WHERE u.email LIKE @qa_pattern;
-DELETE r FROM research_reports   r JOIN research_calls c ON c.id = r.call_id JOIN users u ON u.id = c.user_id WHERE u.email LIKE @qa_pattern;
-DELETE r FROM research_revisions r JOIN research_calls c ON c.id = r.call_id JOIN users u ON u.id = c.user_id WHERE u.email LIKE @qa_pattern;
-DELETE r FROM research_views     r JOIN research_calls c ON c.id = r.call_id JOIN users u ON u.id = c.user_id WHERE u.email LIKE @qa_pattern;
-DELETE c FROM research_calls     c JOIN users u ON u.id = c.user_id WHERE u.email LIKE @qa_pattern;
+DELETE r FROM research_reactions r JOIN research_calls c ON c.id = r.call_id JOIN users u ON u.id = c.user_id WHERE (u.email LIKE @qa_pattern OR u.email LIKE @qa_login_pattern);
+DELETE r FROM research_ratings   r JOIN research_calls c ON c.id = r.call_id JOIN users u ON u.id = c.user_id WHERE (u.email LIKE @qa_pattern OR u.email LIKE @qa_login_pattern);
+DELETE r FROM research_comments  r JOIN research_calls c ON c.id = r.call_id JOIN users u ON u.id = c.user_id WHERE (u.email LIKE @qa_pattern OR u.email LIKE @qa_login_pattern);
+DELETE r FROM research_reports   r JOIN research_calls c ON c.id = r.call_id JOIN users u ON u.id = c.user_id WHERE (u.email LIKE @qa_pattern OR u.email LIKE @qa_login_pattern);
+DELETE r FROM research_revisions r JOIN research_calls c ON c.id = r.call_id JOIN users u ON u.id = c.user_id WHERE (u.email LIKE @qa_pattern OR u.email LIKE @qa_login_pattern);
+DELETE r FROM research_views     r JOIN research_calls c ON c.id = r.call_id JOIN users u ON u.id = c.user_id WHERE (u.email LIKE @qa_pattern OR u.email LIKE @qa_login_pattern);
+DELETE c FROM research_calls     c JOIN users u ON u.id = c.user_id WHERE (u.email LIKE @qa_pattern OR u.email LIKE @qa_login_pattern);
 
-DELETE FROM users WHERE email LIKE @qa_pattern;
+DELETE FROM users WHERE email LIKE @qa_pattern OR email LIKE @qa_login_pattern;

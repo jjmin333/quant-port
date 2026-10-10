@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
 # 배치 VM 의 워커 컨테이너 8개를 한 번에 다룬다.
-#   worker-close-domestic / -overseas · scores · index · fetch · research · earnings · filings
+#   worker-market · worker-stock · worker-asset · worker-content (2026-10-01, 예전 9개를 성격별로 묶음)
 #
 #   ./deploy/scripts/batch-stack.sh deploy   # 빌드 + 기동  ← 평소 배포
 #   ./deploy/scripts/batch-stack.sh ps
-#   ./deploy/scripts/batch-stack.sh logs worker-fetch
+#   ./deploy/scripts/batch-stack.sh logs worker-market
 #   ./deploy/scripts/batch-stack.sh doctor
 #
 # 전제 두 가지 (deploy/.env.batch 에 설정):
@@ -27,14 +27,10 @@ ENV_FILE="$(cd "$SCRIPT_DIR/../.." && pwd)/deploy/.env.batch"
 COMPOSE_FILES=("deploy/compose/docker-compose.batch.yml")
 PROFILES=()
 SERVICES=(
-  worker-close-domestic
-  worker-close-overseas
-  worker-scores
-  worker-index
-  worker-fetch
-  worker-research
-  worker-earnings
-  worker-filings
+  worker-market
+  worker-stock
+  worker-asset
+  worker-content
 )
 
 batch_health() {
@@ -62,7 +58,7 @@ batch_health() {
     # ("mysql: schema verified") 를 오류로 잡았다 — 8개 전부 오탐이었다.
     if grep -qE 'bootstrap:' <<<"$logs"; then
       c_red "✗ $svc 기동 실패 (logs $svc 확인)"; ok=0
-    elif grep -qE "^worker-[a-z-]+: running|${svc}: running" <<<"$logs"; then
+    elif grep -qE "worker[a-z-]*: running|server role" <<<"$logs"; then
       c_grn "✓ $svc"
     else
       # 떠 있는데 준비 배너가 없다 — 아직 기동 중이거나(스키마 대기 최대 3분)

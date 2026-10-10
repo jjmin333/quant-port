@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>리포트 성과 집계 — 범위·배치 선택용 목업 v1</title>
+<style>
+:root{
+  --radius:.625rem;
+  --background:oklch(.97 0 0); --foreground:oklch(.145 0 0);
+  --card:oklch(1 0 0); --muted:oklch(.97 0 0);
+  --muted-foreground:oklch(.52 0 0); --accent:oklch(.93 0 0);
+  --border:oklch(.87 0 0);
+  --brand:#2563EB; --brand-muted:rgba(37,99,235,.1);
+  --profit:#DC2626; --loss:#2563EB;
+  --score-high:#15803D; --score-mid:#C2410C; --score-low:#B91C1C;
+  --surface-elevated:var(--accent); --text-muted:oklch(.545 0 0);
+}
+[data-theme="dark"]{
+  --background:oklch(.145 0 0); --foreground:oklch(.985 0 0);
+  --card:oklch(.205 0 0); --muted:oklch(.269 0 0);
+  --muted-foreground:oklch(.708 0 0); --accent:oklch(.269 0 0);
+  --border:oklch(1 0 0/16%);
+  --brand:#60A5FA; --brand-muted:rgba(96,165,250,.15);
+  --profit:#F87171; --loss:#60A5FA;
+  --score-high:#4ADE80; --score-mid:#FB923C; --score-low:#F87171;
+  --text-muted:oklch(.6 0 0);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--background);color:var(--foreground);
+  font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  font-size:12px;line-height:1.5;padding:22px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:20px;font-weight:700;letter-spacing:-.01em}
+h2{font-size:15px;font-weight:600} h3{font-size:13px;font-weight:600}
+.sub{color:var(--muted-foreground);font-size:12px}
+.up{color:var(--profit)} .down{color:var(--loss)} .n{font-variant-numeric:tabular-nums}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding-bottom:16px;margin-bottom:20px;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:var(--background);z-index:20}
+button.tgl{font:inherit;cursor:pointer;border:1px solid var(--border);background:var(--card);
+  color:var(--foreground);border-radius:8px;padding:5px 12px}
+.lead{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:22px}
+.lead p{margin-bottom:8px}.lead p:last-child{margin-bottom:0}
+.note{color:var(--muted-foreground);font-size:11px;margin-top:8px}
+.opt{margin-bottom:34px}
+.opt-head{display:flex;align-items:baseline;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.tag{font-size:11px;font-weight:700;background:var(--brand-muted);color:var(--brand);border-radius:6px;padding:2px 7px}
+.tag.rec{background:rgba(21,128,61,.12);color:var(--score-high)}
+.tag.warn{background:rgba(194,65,12,.12);color:var(--score-mid)}
+.tag.bad{background:rgba(185,28,28,.12);color:var(--score-low)}
+.tag.now{background:var(--muted);color:var(--muted-foreground)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;background:var(--surface-elevated);border-radius:4px;padding:1px 4px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.body{padding:12px 14px}
+.hd{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-bottom:10px}
+.hd .t{font-size:13px;font-weight:700}
+.hd .s{font-size:11px;color:var(--text-muted)}
+.seg{display:inline-flex;gap:2px;background:var(--muted);border-radius:8px;padding:2px;margin-left:auto}
+.seg button{font:inherit;font-size:11px;cursor:pointer;border:0;background:transparent;color:var(--muted-foreground);border-radius:6px;padding:2px 8px}
+.seg button.on{background:var(--card);color:var(--foreground);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.cols{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 400px;min-width:330px}
+
+table.t{width:100%;border-collapse:collapse;font-size:11.5px}
+table.t th,table.t td{border:1px solid var(--border);padding:6px 8px;text-align:right;vertical-align:top}
+table.t th:first-child,table.t td:first-child{text-align:left}
+table.t th{background:var(--muted);font-weight:600}
+table.t td.y{color:var(--score-high);font-weight:700}
+table.t td.n{color:var(--score-low);font-weight:700}
+table.t tr.rec td{background:rgba(21,128,61,.06)}
+table.t td small{color:var(--text-muted);font-weight:400}
+
+.kpi{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.kpi div{flex:1 1 104px;border:1px solid var(--border);border-radius:8px;padding:6px 9px;background:var(--card)}
+.kpi .k{font-size:10px;color:var(--text-muted);display:block}
+.kpi .v{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
+.kpi .d{font-size:10px;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.kpi div.dim .v{color:var(--text-muted)}
+
+/* 낙폭 막대 */
+.dd{display:grid;grid-template-columns:76px 1fr 60px;align-items:center;gap:8px;padding:4px 0;
+  border-bottom:1px solid var(--border);font-size:11.5px}
+.dd:last-child{border-bottom:0}
+.dd .nm{font-weight:600}
+.dd .track{position:relative;height:16px;background:var(--muted);border-radius:4px;overflow:hidden}
+.dd .track i{position:absolute;top:0;bottom:0;border-radius:4px}
+.dd .track i.low{background:rgba(37,99,235,.45);left:0}
+.dd .track i.now{background:rgba(220,38,38,.55);left:0}
+.dd .v{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+
+.slot{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 11px;
+  font-size:11px;color:var(--muted-foreground);margin-bottom:8px}
+.slot:last-child{margin-bottom:0}
+.slot.here{border-color:var(--brand);border-width:2px;color:var(--brand);font-weight:700;background:var(--brand-muted)}
+.slot.tall{padding-top:22px;padding-bottom:22px}
+.pane{display:grid;grid-template-columns:1fr 250px;gap:10px;background:var(--muted);border:1px solid var(--border);border-radius:10px;padding:10px}
+.phone{width:375px;border:1px solid var(--border);border-radius:14px;padding:10px;background:var(--muted);flex:0 0 375px}
+.phone .plabel{font-size:10.5px;color:var(--muted-foreground);margin-bottom:6px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div>
+    <h1>리포트 성과 집계 — 범위·배치 선택용 목업 v1</h1>
+    <div class="sub">V2 요구 7 · 숫자는 전부 <b>2026-09-19 실제 DB 측정값</b>입니다</div>
+  </div>
+  <button class="tgl" id="themeBtn">다크 모드</button>
+</div>
+
+<div class="lead">
+  <p><b>먼저 확인하실 것이 있습니다.</b> 요구 7이 말한 지표 중 <b>절반은 이미 구현돼 있습니다</b> — 방향 정확도(적중률)·초과수익(알파)·보정도(Brier)는 <code>ResearchSummary</code>가 이미 계산해 레일의 「내 성적표」로 나가고 있습니다. 빠진 것은 <b>MDD · 목표가 정확도 · 집계 축(종목·태그·기간)</b>입니다.</p>
+  <p><b>그런데 집계할 데이터가 아직 익지 않았습니다.</b> 리포트 1,647건 중 판정된 것은 <b>1건</b>입니다. 나머지 1,561건은 전부 <b>90일 지평</b>이고 최초 발행이 8월 10일이라, <b>첫 만기가 11월 8일</b>입니다. 배치가 고장 난 것이 아니라 시간이 아직 안 된 것입니다.</p>
+  <p><b>목표가 정확도는 지금 만들 수 없습니다.</b> 진행 중 1,561건 가운데 목표가가 적힌 것이 <b>0건</b>입니다. 판정된 1건에만 목표가가 있습니다.</p>
+  <div class="note">그래서 아래는 「무엇을 지금 만들고 무엇을 11월까지 비워 둘까」를 정하시는 목업입니다.</div>
+</div>
+
+<!-- ══════════ 현재 데이터 ══════════ -->
+<div class="opt">
+  <div class="opt-head"><h2>지금 있는 것</h2><span class="tag warn">실측</span></div>
+  <div class="cols">
+    <div class="col">
+      <table class="t">
+        <tr><th>상태</th><th>건수</th><th>수익률 확정</th><th>알파 확정</th><th>목표가 있음</th></tr>
+        <tr><td>진행 중 <small>open</small></td><td class="n">1,561</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+        <tr><td>철회 <small>retracted</small></td><td class="n">85</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+        <tr class="rec"><td>목표 도달 <small>target_hit</small></td><td class="n">1</td><td class="n">1</td><td class="n n">0</td><td class="n">1</td></tr>
+      </table>
+      <div class="note">판정된 1건(SK하이닉스)은 수익률 <b class="up">+26.9%</b>인데 <b>알파가 비어 있습니다</b> — 확정 시점에 벤치마크 대비가 안 채워졌습니다. 이것도 이번에 같이 볼 자리입니다.</div>
+    </div>
+    <div class="col">
+      <table class="t">
+        <tr><th>축</th><th>실제 값</th></tr>
+        <tr><td>종목</td><td class="n">9개 <small>(TSLA 1,274 · NVDA 113 · 나머지 7개)</small></td></tr>
+        <tr><td>작성자</td><td class="n">1,306명 <small>(1인 1건꼴)</small></td></tr>
+        <tr><td>기간</td><td class="n">2개월 <small>(08-09 ~ 09-08)</small></td></tr>
+        <tr><td>태그</td><td class="n">85건 <small>(전체의 5%)</small></td></tr>
+      </table>
+      <div class="note">집계 축 셋 중 <b>태그는 5%</b>, 기간은 <b>두 달</b>뿐입니다. 종목 축은 쓸 만하지만 한 종목(TSLA)이 77%를 차지합니다.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ MDD ══════════ -->
+<div class="opt">
+  <div class="opt-head"><h2>지금 당장 값어치 있는 것 — 낙폭</h2><span class="tag rec">권장 범위</span>
+    <span class="sub">판정을 기다릴 필요가 없습니다</span></div>
+
+  <div class="cols">
+    <div class="col" style="flex:1 1 560px">
+      <div class="card"><div class="body">
+        <div class="hd"><span class="t">진행 중 리포트의 낙폭</span><span class="s">1,561건 · 09-18 종가 기준</span>
+          <span class="seg"><button class="on">진입 대비</button><button>고점 대비</button></span></div>
+
+        <div class="dd"><span class="nm">TSLA <small class="sub">1,189건</small></span>
+          <span class="track"><i class="low" style="width:26%"></i><i class="now" style="width:13%"></i></span>
+          <span class="v down">−2.63%</span></div>
+        <div class="dd"><span class="nm">NVDA <small class="sub">113건</small></span>
+          <span class="track"><i class="low" style="width:55%"></i><i class="now" style="width:1%"></i></span>
+          <span class="v down">−5.54%</span></div>
+        <div class="dd"><span class="nm">AAPL <small class="sub">85건</small></span>
+          <span class="track"><i class="low" style="width:4%"></i><i class="now" style="width:71%"></i></span>
+          <span class="v down">−0.43%</span></div>
+        <div class="dd"><span class="nm">GOOGL <small class="sub">85건</small></span>
+          <span class="track"><i class="low" style="width:36%"></i><i class="now" style="width:18%"></i></span>
+          <span class="v down">−3.55%</span></div>
+        <div class="dd"><span class="nm">MSFT <small class="sub">85건</small></span>
+          <span class="track"><i class="low" style="width:2%"></i><i class="now" style="width:7%"></i></span>
+          <span class="v down">−0.17%</span></div>
+        <div class="dd"><span class="nm">BABA <small class="sub">1건</small></span>
+          <span class="track"><i class="low" style="width:100%"></i></span>
+          <span class="v down">−13.40%</span></div>
+
+        <div class="note" style="border-top:1px solid var(--border);padding-top:7px">
+          파란 막대가 <b>진입 후 가장 나빴던 지점</b>, 빨간 막대가 <b>지금</b>입니다.
+        </div>
+      </div></div>
+      <div class="note"><b>엔비디아 113건이 이 기능의 존재 이유입니다.</b> 현재 수익률 <b>+0.06%</b>로 제자리처럼 보이지만, 평균 <b class="down">−5.54%</b>까지 내려갔다 왔습니다. 끝 숫자만 보면 「아무 일 없었다」인데 따라 산 사람에게는 아무 일 없지 않았습니다.</div>
+    </div>
+
+    <div class="col">
+      <h3 style="margin-bottom:6px">두 정의가 다른 답을 합니다</h3>
+      <table class="t">
+        <tr><th>종목</th><th>진입 대비 최저</th><th>고점 대비 최저</th></tr>
+        <tr><td>AAPL</td><td class="n">−0.43%</td><td class="n n">−7.40%</td></tr>
+        <tr><td>MSFT</td><td class="n">−0.17%</td><td class="n n">−4.27%</td></tr>
+        <tr><td>TSLA</td><td class="n">−2.63%</td><td class="n n">−6.27%</td></tr>
+        <tr><td>NVDA</td><td class="n n">−5.54%</td><td class="n n">−7.93%</td></tr>
+        <tr><td>BABA</td><td class="n n">−13.40%</td><td class="n n">−17.82%</td></tr>
+      </table>
+      <div class="note"><b>진입 대비</b>는 「따라 샀다면 얼마나 물려 있었나」이고, <b>고점 대비</b>(고전적 MDD)는 「가장 좋았을 때에서 얼마나 되밀렸나」입니다. 애플은 진입 대비로는 거의 안 물렸는데 고점 대비로는 7.4%를 뱉었습니다 — 같은 종목의 다른 이야기라 <b>둘 다 두되 진입 대비를 앞에</b> 두는 쪽을 권합니다.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 화면 ══════════ -->
+<div class="opt">
+  <div class="opt-head"><h2>성과 화면</h2><span class="tag">권장안 — 확정과 진행 중을 나눕니다</span></div>
+  <div class="cols">
+    <div class="col">
+      <div class="card"><div class="body">
+        <div class="hd"><span class="t">리포트 성과</span><span class="s">전체 1,647건</span>
+          <span class="seg"><button class="on">종목</button><button>기간</button><button>태그</button></span></div>
+
+        <div class="kpi">
+          <div class="dim"><span class="k">방향 정확도</span><span class="v">—</span><span class="d">판정 1건 · 최소 10건</span></div>
+          <div class="dim"><span class="k">평균 초과수익</span><span class="v">—</span><span class="d">알파 확정 0건</span></div>
+          <div><span class="k">평균 낙폭</span><span class="v down">−2.7%</span><span class="d">진행 1,561건</span></div>
+          <div><span class="k">최악 낙폭</span><span class="v down">−13.4%</span><span class="d">BABA</span></div>
+        </div>
+        <div class="note" style="margin-top:0;color:var(--score-mid)">
+          판정된 리포트가 1건이라 정확도·초과수익은 아직 말할 수 없습니다. <b>첫 만기는 11월 8일</b>입니다.
+        </div>
+
+        <table class="t" style="margin-top:10px">
+          <tr><th>종목</th><th>건수</th><th>현재</th><th>평균 낙폭</th><th>지금 플러스</th></tr>
+          <tr><td>TSLA</td><td class="n">1,189</td><td class="n up">+1.35%</td><td class="n down">−2.63%</td><td class="n">100%</td></tr>
+          <tr><td>NVDA</td><td class="n">113</td><td class="n">+0.06%</td><td class="n down">−5.54%</td><td class="n">49.6%</td></tr>
+          <tr><td>AAPL</td><td class="n">85</td><td class="n up">+7.09%</td><td class="n down">−0.43%</td><td class="n">100%</td></tr>
+          <tr><td>GOOGL</td><td class="n">85</td><td class="n up">+1.80%</td><td class="n down">−3.55%</td><td class="n">100%</td></tr>
+          <tr><td>MSFT</td><td class="n">85</td><td class="n up">+0.72%</td><td class="n down">−0.17%</td><td class="n">63.5%</td></tr>
+          <tr><td>005930</td><td class="n">2</td><td class="n up">+1.36%</td><td class="n down">−3.31%</td><td class="n">100%</td></tr>
+          <tr><td>BABA</td><td class="n">1</td><td class="n down">−8.58%</td><td class="n down">−13.40%</td><td class="n">0%</td></tr>
+        </table>
+        <div class="note">「지금 플러스」는 <b>적중률이 아닙니다</b> — 아직 판정 전이라 결과가 아니라 <b>중간 경과</b>입니다. 두 낱말을 섞으면 11월에 숫자가 바뀔 때 사용자가 배신당했다고 느낍니다.</div>
+      </div></div>
+    </div>
+
+    <div class="col">
+      <h3 style="margin-bottom:6px">「—」로 두는 것과 그 이유</h3>
+      <table class="t">
+        <tr><th>지표</th><th>지금</th><th style="width:250px">언제 채워지나</th></tr>
+        <tr><td>방향 정확도</td><td class="n">—</td><td style="text-align:left">11-08부터 만기 도래. 최소 10건을 넘겨야 표시합니다(기존 <code>researchMinSample</code> 규칙 그대로).</td></tr>
+        <tr><td>초과수익(알파)</td><td class="n">—</td><td style="text-align:left">같은 시점. <b>다만 판정된 1건의 알파가 비어 있어</b> 확정 경로를 한 번 봐야 합니다.</td></tr>
+        <tr><td>목표가 오차</td><td class="n">—</td><td style="text-align:left"><b>진행 중 1,561건에 목표가가 0건</b>입니다. 리포트 작성 화면에서 목표가를 받기 전에는 영영 안 채워집니다.</td></tr>
+        <tr><td>MDD</td><td class="y">지금</td><td style="text-align:left">종가만 있으면 되므로 판정을 기다리지 않습니다.</td></tr>
+        <tr><td>태그 축</td><td class="n">5%</td><td style="text-align:left">85/1,647건에만 태그가 있습니다. 축을 만들되 <b>커버리지를 적습니다</b>(스크리너와 같은 규칙).</td></tr>
+      </table>
+      <div class="note">빈칸을 0으로 채우지 않습니다. 「정확도 0%」와 「아직 판정 안 됨」은 정반대의 뜻입니다 (요구 8).</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 배치 ══════════ -->
+<div class="opt">
+  <div class="opt-head"><h2>어디에 놓을까요</h2><span class="sub">레일에는 이미 성적표·만기임박·방향구성 위젯이 있습니다.</span></div>
+  <div class="cols">
+    <div class="col">
+      <h3 style="margin-bottom:6px">A · <code>/reports</code> 목록 위 접힌 줄 <span class="tag rec">권장</span></h3>
+      <div class="pane">
+        <div>
+          <div class="slot here">리포트 성과 · 평균 낙폭 −2.7% ›</div>
+          <div class="slot tall">리포트 목록 — 기존</div>
+        </div>
+        <div>
+          <div class="slot">내 성적표 — 기존</div>
+          <div class="slot">만기 임박 — 기존</div>
+          <div class="slot tall">나머지 레일</div>
+        </div>
+      </div>
+      <div class="note">백테스트를 랭킹 툴바에 단 것과 같은 방식입니다. 한 줄이 요약을 들고, 누르면 펼쳐져 종목·기간·태그 축이 나옵니다. <b>레일은 「내 것」, 이 줄은 「전체」</b>라 역할이 안 겹칩니다.</div>
+    </div>
+    <div class="col">
+      <h3 style="margin-bottom:6px">B · 레일에 카드 하나 더</h3>
+      <div class="pane">
+        <div><div class="slot tall">리포트 목록 — 기존</div></div>
+        <div>
+          <div class="slot">내 성적표 — 기존</div>
+          <div class="slot here">전체 성과</div>
+          <div class="slot tall">나머지 레일</div>
+        </div>
+      </div>
+      <div class="note">가장 작은 변경입니다. 다만 레일 폭에서는 <b>표를 못 그립니다</b> — 종목·기간·태그 축이 들어갈 자리가 없어 요약 숫자 몇 개로 줄어듭니다. 레일은 이미 위젯 7개라 여덟 번째이기도 합니다.</div>
+    </div>
+    <div class="col">
+      <h3 style="margin-bottom:6px">C · 새 화면 <code>/reports/performance</code></h3>
+      <div class="pane">
+        <div>
+          <div class="slot here">축 전환 · KPI · 표</div>
+          <div class="slot tall here">종목별 · 기간별 · 태그별</div>
+        </div>
+        <div><div class="slot tall">필터</div></div>
+      </div>
+      <div class="note">가장 넉넉하지만, <b>오늘 그 화면의 대부분이 「—」</b>입니다. 판정 1건으로 독립 화면을 세우면 첫인상이 「고장 났나」가 됩니다. 11월 이후 데이터가 차면 A에서 옮기는 편이 낫습니다.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 모바일 ══════════ -->
+<div class="opt">
+  <div class="opt-head"><h2>모바일 375px</h2></div>
+  <div class="cols">
+    <div class="phone">
+      <div class="plabel">접힌 줄 → 펼침</div>
+      <div class="card"><div class="body">
+        <div class="hd"><span class="t">리포트 성과</span><span class="s">1,647건</span></div>
+        <div class="kpi">
+          <div class="dim"><span class="k">방향 정확도</span><span class="v">—</span></div>
+          <div><span class="k">평균 낙폭</span><span class="v down">−2.7%</span></div>
+        </div>
+        <div class="note" style="margin-top:0;color:var(--score-mid)">판정 1건 · 첫 만기 11-08</div>
+        <table class="t" style="margin-top:8px">
+          <tr><th>종목</th><th>건수</th><th>낙폭</th></tr>
+          <tr><td>TSLA</td><td class="n">1,189</td><td class="n down">−2.63%</td></tr>
+          <tr><td>NVDA</td><td class="n">113</td><td class="n down">−5.54%</td></tr>
+          <tr><td>AAPL</td><td class="n">85</td><td class="n down">−0.43%</td></tr>
+          <tr><td>GOOGL</td><td class="n">85</td><td class="n down">−3.55%</td></tr>
+        </table>
+      </div></div>
+      <div class="note">좁은 폭에서는 <b>KPI 2칸 · 표 3열</b>입니다. 「현재」와 「지금 플러스」를 접습니다.</div>
+    </div>
+    <div class="col" style="flex:1 1 320px">
+      <h3 style="margin-bottom:6px">덧붙여 여쭐 것</h3>
+      <p class="sub" style="margin-bottom:8px"><b>리포트 작성 화면에서 목표가를 받을까요?</b> 지금은 선택이라 진행 중 1,561건에 하나도 없습니다. 목표가 오차·도달률은 <b>이것 없이는 영영 안 채워집니다.</b> 다만 작성 부담이 늘고, 요구 7의 범위를 넘습니다 — <b>이번에는 안 건드리는 쪽</b>을 권하고 별도로 여쭙겠습니다.</p>
+      <p class="sub"><b>판정된 1건의 알파가 비어 있습니다.</b> 확정 경로에서 벤치마크 대비가 안 채워진 것으로 보여, 이번에 원인만 확인하고 고칠지 말씀드리겠습니다.</p>
+    </div>
+  </div>
+</div>
+
+<div class="lead">
+  <p><b>정해 주실 것은 두 가지입니다.</b></p>
+  <p>① <b>범위</b> — (가) 확정 + 진행 중을 나눠 집계하고 MDD를 지금 넣습니다 <b>(권장)</b> · (나) 확정만 집계합니다(오늘 화면은 거의 「—」) · (다) Phase 7을 11월로 미루고 8·9를 먼저 합니다.</p>
+  <p>② <b>배치</b> — A 목록 위 접힌 줄 <b>(권장)</b> · B 레일 카드 · C 새 화면.</p>
+</div>
+
+</div>
+<script>
+document.getElementById("themeBtn").addEventListener("click", function () {
+  var el = document.documentElement;
+  el.dataset.theme = el.dataset.theme === "dark" ? "light" : "dark";
+});
+</script>
+</body>
+</html>

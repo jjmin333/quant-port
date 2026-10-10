@@ -33,7 +33,7 @@ test.describe("세션 수명주기", () => {
 
     await page.goto("/login");
     await waitForHydration(page);
-    await page.getByLabel("이메일").fill(user.email);
+    await page.getByLabel("아이디").fill(user.email);
     await page.getByLabel("비밀번호").fill(user.password);
     await page.getByRole("button", { name: "로그인" }).click();
 
@@ -93,7 +93,7 @@ test.describe("세션 수명주기", () => {
   test("틀린 비밀번호는 화면에 오류를 남기고 세션을 만들지 않는다", async ({ page, user, anon }) => {
     await page.goto("/login");
     await waitForHydration(page);
-    await page.getByLabel("이메일").fill(user.email);
+    await page.getByLabel("아이디").fill(user.email);
     await page.getByLabel("비밀번호").fill(`${user.password}-wrong`);
     await page.getByRole("button", { name: "로그인" }).click();
 

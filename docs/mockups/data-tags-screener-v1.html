@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>데이터 태그 · 종목 커뮤니티 탭 · 스크리너 가이드 — 제안 v1</title>
+<style>
+:root{
+  --radius:.625rem;
+  --background:oklch(.97 0 0); --foreground:oklch(.145 0 0);
+  --card:oklch(1 0 0); --muted:oklch(.97 0 0);
+  --muted-foreground:oklch(.52 0 0); --border:oklch(.87 0 0);
+  --brand:#2563EB; --brand-muted:rgba(37,99,235,.1);
+  --profit:#DC2626; --loss:#2563EB;
+  --score-high:#15803D; --score-mid:#C2410C; --score-low:#B91C1C;
+  --amber:#B45309; --amber-bg:rgba(245,158,11,.15);
+  --text-muted:oklch(.545 0 0);
+}
+[data-theme="dark"]{
+  --background:oklch(.145 0 0); --foreground:oklch(.985 0 0);
+  --card:oklch(.205 0 0); --muted:oklch(.269 0 0);
+  --muted-foreground:oklch(.708 0 0); --border:oklch(1 0 0/16%);
+  --brand:#60A5FA; --brand-muted:rgba(96,165,250,.15);
+  --profit:#F87171; --loss:#60A5FA;
+  --score-high:#4ADE80; --score-mid:#FB923C; --score-low:#F87171;
+  --amber:#FBBF24; --amber-bg:rgba(251,191,36,.15);
+  --text-muted:oklch(.6 0 0);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--background);color:var(--foreground);
+  font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  font-size:12px;line-height:1.55;padding:22px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:20px;font-weight:700}
+h2{font-size:16px;font-weight:700;margin:34px 0 10px;padding-top:14px;border-top:2px solid var(--border)}
+h3{font-size:13px;font-weight:600;margin:14px 0 6px}
+.sub,.muted{color:var(--muted-foreground)}
+.up{color:var(--profit)} .down{color:var(--loss)} .n{font-variant-numeric:tabular-nums}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:14px;margin-bottom:16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--background);z-index:20}
+button.tgl{font:inherit;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--foreground);border-radius:8px;padding:5px 12px}
+.lead{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+.lead li{margin-left:18px;margin-bottom:3px}
+.tag{font-size:11px;font-weight:700;background:var(--brand-muted);color:var(--brand);border-radius:6px;padding:2px 7px;white-space:nowrap}
+.tag.rec{background:rgba(21,128,61,.12);color:var(--score-high)}
+.tag.q{background:var(--amber-bg);color:var(--amber)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.pad{padding:12px 14px}
+.cols{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 440px;min-width:300px}
+.lbl{font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;display:block}
+.note{color:var(--muted-foreground);font-size:11px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;border:1px solid var(--border);border-radius:999px;padding:1px 7px;color:var(--muted-foreground);background:var(--card);white-space:nowrap}
+.chip.b{border-color:transparent;background:var(--brand-muted);color:var(--brand);font-weight:600}
+table.t{width:100%;border-collapse:collapse;font-size:11.5px}
+table.t th,table.t td{border:1px solid var(--border);padding:6px 8px;text-align:left;vertical-align:top}
+table.t th{background:var(--muted);font-weight:600}
+code{font-family:ui-monospace,Consolas,monospace;font-size:11px;background:var(--muted);border-radius:4px;padding:0 4px}
+.qbox{border:1px dashed var(--amber);background:var(--amber-bg);border-radius:10px;padding:10px 12px;margin-top:10px}
+.qbox b{color:var(--amber)}
+/* 인라인 태그 렌더 */
+.mention{display:inline-flex;align-items:baseline;gap:4px;border-radius:6px;padding:0 5px;background:var(--brand-muted);color:var(--brand);font-weight:600;white-space:nowrap}
+.mention .px{font-weight:500;font-size:11px}
+.val{display:inline-flex;align-items:baseline;gap:3px;border-bottom:1.5px dotted var(--brand);font-weight:700;white-space:nowrap}
+.val small{font-weight:500;color:var(--muted-foreground);font-size:10.5px}
+.embed{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--card);margin:8px 0}
+.body{font-size:13.5px;line-height:1.75}
+.ed{border:1px solid var(--border);border-radius:10px;background:var(--card)}
+.ed .bar{display:flex;gap:6px;padding:6px 8px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.ed .bar span{font-size:11px;border:1px solid var(--border);border-radius:6px;padding:2px 8px}
+.ed .bar span.on{border-color:var(--brand);color:var(--brand);font-weight:600}
+.ed .txt{padding:10px 12px;font-size:13px;min-height:90px;position:relative;font-family:inherit}
+.pop{position:absolute;left:84px;top:34px;width:240px;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);font-size:12px;overflow:hidden}
+.pop div{padding:5px 9px;display:flex;justify-content:space-between;gap:8px}
+.pop div.sel{background:var(--brand-muted)}
+.caret{display:inline-block;width:1px;height:14px;background:var(--foreground);vertical-align:middle;animation:b 1s steps(1) infinite}
+@keyframes b{50%{opacity:0}}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);overflow-x:auto}
+.tabs span{padding:7px 10px;font-size:12px;white-space:nowrap;color:var(--muted-foreground)}
+.tabs span.on{color:var(--foreground);font-weight:700;border-bottom:2px solid var(--foreground)}
+.tabs span.new{color:var(--brand);font-weight:700}
+.li{display:flex;gap:8px;align-items:center;padding:8px 12px;border-top:1px solid var(--border)}
+.li:first-child{border-top:0}
+.cond{display:flex;align-items:center;gap:6px;padding:4px 0}
+.cond .name{width:5.2rem;color:var(--muted-foreground);display:flex;align-items:center;gap:3px}
+.box{width:58px;border:1px solid var(--border);border-radius:6px;padding:1px 6px;font-size:12px;display:flex;justify-content:space-between;align-items:center;color:var(--muted-foreground);background:var(--card)}
+.box.on{border-color:var(--brand);color:var(--brand);font-weight:700}
+.spin{font-size:8px;line-height:7px;color:var(--muted-foreground);display:flex;flex-direction:column}
+.hint{font-size:10.5px;color:var(--muted-foreground);white-space:nowrap}
+.ref{font-size:10.5px;border-radius:999px;padding:0 7px;background:var(--brand-muted);color:var(--brand);font-weight:600;white-space:nowrap}
+.i{display:inline-flex;width:13px;height:13px;border-radius:50%;border:1px solid var(--border);font-size:9px;align-items:center;justify-content:center}
+.tip{background:var(--foreground);color:var(--background);border-radius:8px;padding:8px 10px;font-size:11px;max-width:280px;margin:4px 0 6px 5.6rem}
+.btn{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--brand);color:var(--brand);border-radius:8px;padding:4px 10px;font-weight:600;font-size:12px;background:var(--card)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="topbar">
+  <div>
+    <h1>데이터 태그 · 종목 커뮤니티 탭 · 스크리너 가이드 — 제안 v1</h1>
+    <div class="sub">2026-09-28 · 요청 2·3·5 · <span class="tag q">결정</span> 표시가 고를 곳 · 숫자는 09-25 실제 저장값(삼성전자·SK하이닉스·기가비스, 국내 분포)</div>
+  </div>
+  <button class="tgl" onclick="const h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark'">라이트/다크</button>
+</div>
+
+<div class="lead">
+  <b>이미 고친 것(이번 세션, 배포 중)</b>
+  <ul style="margin-top:6px">
+    <li><b>요청 1</b> — 관리자 아이디 <code>jjmin321@naver.com</code> → <code>jjmin321</code>(권한 role=admin 유지) · 로그인 화면 「이메일로 가입하셨다면…」 문구 삭제.</li>
+    <li><b>요청 2 버그</b> — 「커뮤니티에 공유」 무반응: 모달이 닫히며 부르는 <code>history.back()</code>이 글쓰기 화면으로 가는 이동을 밀어냈다(이미 <code>lib/modal-history</code>에 기록된 경합인데 이 버튼만 <code>leaveModal</code>을 안 씀). 기사 모달 안 관련 종목 카드도 같은 원인이라 같이 고침. 국내 뉴스(리더)·해외 헤드라인 모달엔 버튼이 아예 없어서 셋 다 붙임.</li>
+    <li><b>요청 4</b> — 오늘의 변화: 09-25는 <b>추석 휴장으로 DART 공시가 0건</b>이라 「공시」 칩이 빈 목록이었고, 칩 여러 개는 OR(합집합)이었다. → 여러 개 고르면 <b>모두 가진 종목만(AND)</b>, 칩마다 종목 수 표시, 0이면 흐리게 막음. (09-23 실측: 공시 72 · 뉴스 사건 351 → 둘 다 24종목)</li>
+  </ul>
+</div>
+
+<!-- ───────────────────────── 요청 2 ───────────────────────── -->
+<h2>② 글 안에 우리 데이터를 넣는 태그 — 커뮤니티 글 · 투자 리포트 본문</h2>
+<p class="sub">차별점: 다른 커뮤니티는 「삼성전자 점수 좋던데」라고 <i>말만</i> 한다. 여기선 그 문장 자리에 <b>쓴 순간의 값이 박히고, 읽는 사람은 지금 값과 나란히 본다.</b> 값은 스크리너가 쓰는 지표 26개 한 벌(같은 이름·같은 뜻)을 그대로 쓴다.</p>
+
+<h3>문법 (제안 A — 추천)</h3>
+<table class="t">
+  <tr><th style="width:170px">쓰는 법</th><th>보이는 모양</th><th>뜻</th></tr>
+  <tr><td><code>@삼성전자</code> · <code>@AAPL</code></td><td><span class="mention">삼성전자 <span class="px up">286,500 +3.2%</span></span></td><td>종목 칩 — 누르면 종목 화면, 가격은 지금 값</td></tr>
+  <tr><td><code>@삼성전자:점수</code></td><td><span class="val">70점 <small>→ 지금 72</small></span></td><td>그 지표 값. <b>쓴 순간 값</b>이 본문에 박히고, 달라졌으면 지금 값이 옆에</td></tr>
+  <tr><td><code>@기가비스:PER</code> · <code>:추세</code> · <code>:ROE</code> · <code>:부채비율</code> · <code>:목표가</code>…</td><td><span class="val">101배</span> · <span class="val">98점</span> · <span class="val">7.4%</span></td><td>지표 이름은 스크리너와 같다(한글·영문 둘 다). 모르는 이름이면 편집기가 빨간 밑줄 + 후보</td></tr>
+  <tr><td><code>#SK하이닉스</code></td><td>(아래 본문 예시의 카드)</td><td>그 줄에 <b>종목 카드</b>(가격·점수 5축·AI 한 줄·30일 선·실적 D-n)를 끼운다</td></tr>
+  <tr><td><code>@[TIGER 미국S&amp;P500]</code></td><td><span class="mention">TIGER 미국S&amp;P500</span></td><td>이름에 띄어쓰기가 있으면 대괄호 — 자동완성이 알아서 넣는다</td></tr>
+</table>
+
+<div class="cols" style="margin-top:14px">
+  <div class="col">
+    <span class="lbl">현재 — 글 본문은 평문 + 맨 아래 「붙인 종목」 카드(최대 3)</span>
+    <div class="card pad body">
+      반도체 둘 다 들고 있는데, 삼성전자 점수가 70이고 추세는 99라 아직 괜찮아 보임. 하이닉스는 PER 30이라 좀 부담.<br><br>
+      <div class="embed"><b>삼성전자</b> <span class="n">286,500</span> · 점수 70 <span class="muted">(카드는 본문과 떨어져 맨 아래)</span></div>
+    </div>
+    <p class="note">숫자는 글쓴이가 손으로 옮겨 적은 것 — 틀려도 모르고, 한 달 뒤 읽으면 지금 값인지 그때 값인지 모른다.</p>
+  </div>
+  <div class="col">
+    <span class="lbl">제안 — 같은 글을 태그로</span>
+    <div class="card pad body">
+      반도체 둘 다 들고 있는데, <span class="mention">삼성전자 <span class="px up">286,500 +3.2%</span></span> 점수가 <span class="val">70점 <small>→ 지금 72</small></span>이고 추세는 <span class="val">99점</span>이라 아직 괜찮아 보임. 하이닉스는 PER <span class="val">30.9배</span>라 좀 부담.
+      <div class="embed">
+        <div style="display:flex;justify-content:space-between"><b>SK하이닉스</b><span class="n">1,863,000 <span class="up">+1.1%</span></span></div>
+        <div class="muted" style="font-size:11px">점수 68 B+ · 추세 79 · 수익성 80 · 성장 88 · 가치 11 · 심리 52 · 실적 D-24</div>
+        <div style="font-size:11px;margin-top:3px">AI: HBM 수요로 이익 추정 상향이 이어지나 밸류에이션 부담이 가장 큰 약점…</div>
+      </div>
+      <span class="muted" style="font-size:11px">↑ 본문에 <code>#SK하이닉스</code>를 쓴 그 자리</span>
+    </div>
+    <p class="note">값은 서버가 올리는 순간 잰다(손으로 못 고친다). 점수 옆 「→ 지금」은 값이 달라졌을 때만.</p>
+  </div>
+</div>
+
+<h3>편집기 — 처음 쓰는 사람도 태그를 알 수 있게</h3>
+<div class="cols">
+  <div class="col">
+    <span class="lbl">① <code>@</code> 치면 종목 검색 → 고르고 <code>:</code> 치면 지표 목록(값 미리보기 포함)</span>
+    <div class="ed">
+      <div class="bar"><span class="on">쓰기</span><span>미리보기</span><span style="margin-left:auto">＋ 데이터 넣기</span><span>? 태그 도움말</span></div>
+      <div class="txt">기가비스는 추세가 @기가비스:<span class="caret"></span>
+        <div class="pop">
+          <div class="sel"><span>추세</span><b class="n">98점</b></div>
+          <div><span>종합 점수</span><b class="n">78점</b></div>
+          <div><span>PER</span><b class="n">101배</b></div>
+          <div><span>ROE</span><b class="n">7.4%</b></div>
+          <div><span>부채비율</span><b class="n">13.4%</b></div>
+          <div class="muted" style="font-size:10.5px">↑↓ 고르기 · Enter 넣기 · 26개 전부 보기</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <span class="lbl">② 「＋ 데이터 넣기」 — 타이핑 없이 버튼으로 (모바일 기본 경로)</span>
+    <div class="ed">
+      <div class="bar"><span>쓰기</span><span>미리보기</span><span class="on" style="margin-left:auto">＋ 데이터 넣기</span><span>? 태그 도움말</span></div>
+      <div class="pad" style="font-size:12px">
+        <div style="margin-bottom:6px"><b>1.</b> 종목 <span class="chip b">기가비스 ✕</span></div>
+        <div style="margin-bottom:6px"><b>2.</b> 넣을 것 &nbsp;<span class="chip">종목 칩</span> <span class="chip">카드</span> <span class="chip b">값: 추세 98점</span> <span class="chip">값: PER 101배</span> …</div>
+        <div><b>3.</b> 커서 자리에 <code>@기가비스:추세</code> 가 들어감 <span class="btn" style="margin-left:6px">넣기</span></div>
+      </div>
+    </div>
+    <p class="note">「? 태그 도움말」은 위 문법표 + 지표 26개 이름 목록. 처음 글쓰기에서 한 번 자동으로 펼침.</p>
+  </div>
+</div>
+
+<div class="qbox">
+  <b>결정 1 — <code>#</code>의 뜻</b><br>
+  <b>A(추천)</b> <code>@</code>=본문 속 칩·값, <code>#</code>=그 자리에 종목 카드 · <b>B</b> <code>@</code>와 <code>#</code> 둘 다 종목 칩(같은 뜻), 카드는 지금처럼 맨 아래 「붙이기」만 · <b>C</b> <code>#</code>=주제 해시태그(<code>#반도체</code> → 그 주제 글 모아보기), 종목은 <code>@</code>만
+</div>
+<div class="qbox">
+  <b>결정 2 — 값을 언제 기준으로</b><br>
+  <b>가(추천)</b> 쓴 순간 값 고정 + 달라졌으면 「→ 지금」 병기 · <b>나</b> 항상 지금 값(문장이 틀려질 수 있음: 「점수 70이라 샀다」가 「82라 샀다」로 보임) · <b>다</b> 쓴 순간 값만
+</div>
+<p class="note">비용: 새 표 1개(<code>content_mentions</code> — 글/리포트 id·종목·그때 지표 26개 JSON). 글 1개당 태그 종목 최대 10. 읽기는 DB만(LLM 0). 태그된 종목은 ③ 종목 커뮤니티 탭에도 잡힌다. 리포트는 본문(마크다운)에 같은 문법, 수정 시 새로 넣은 태그만 그 시점 값으로 잰다(원래 값은 보존).</p>
+
+<!-- ───────────────────────── 요청 3 ───────────────────────── -->
+<h2>③ 종목 화면에 「커뮤니티」 탭</h2>
+<div class="cols">
+  <div class="col">
+    <span class="lbl">현재 — 개요 맨 아래 「삼성전자 이야기」 카드(최근 3개), 리포트는 따로 없음</span>
+    <div class="card"><div class="tabs"><span class="on">개요</span><span>AI 분석</span><span>기업 정보</span><span>밸류에이션</span><span>재무제표</span><span>실적</span><span>내부자 거래</span><span>뉴스</span></div>
+      <div class="pad muted">… 개요 끝 · 「삼성전자 이야기」 3줄 · 「커뮤니티에서 더 보기」 →</div></div>
+  </div>
+  <div class="col">
+    <span class="lbl">제안 — 「뉴스」 옆에 「커뮤니티」 탭. 커뮤니티 글 + 투자 리포트를 한 목록</span>
+    <div class="card"><div class="tabs"><span>개요</span><span>AI 분석</span><span>…</span><span>뉴스</span><span class="on new">커뮤니티 12</span></div>
+      <div class="pad" style="display:flex;gap:6px;align-items:center;border-bottom:1px solid var(--border)">
+        <span class="chip b">전체</span><span class="chip">커뮤니티 9</span><span class="chip">리포트 3</span>
+        <span style="margin-left:auto" class="btn">✎ 이 종목으로 글쓰기</span>
+      </div>
+      <div class="li"><span class="tag">리포트</span><span style="flex:1"><b>HBM 점유율이 가격을 정당화한다</b><br><span class="muted" style="font-size:11px">매수 · 목표 320,000 · 진행 중 +4.2% · 작성자 성적표 있음</span></span><span class="muted">2일 전</span></div>
+      <div class="li"><span class="tag" style="background:var(--muted);color:var(--foreground)">글</span><span style="flex:1"><b>반도체 둘 다 들고 있는데</b><br><span class="muted" style="font-size:11px">본문 태그 · ♥ 4 · 💬 2</span></span><span class="muted">3시간 전</span></div>
+      <div class="li"><span class="tag" style="background:var(--muted);color:var(--foreground)">글</span><span style="flex:1"><b>추석 끝나고 외국인 돌아올까</b><br><span class="muted" style="font-size:11px">붙인 종목 · 🏷 주주 · ♥ 11</span></span><span class="muted">어제</span></div>
+    </div>
+    <p class="note">잡히는 글 = 종목을 <b>붙인 글 + 본문에 태그한 글</b>(②가 들어가면). 리포트 = 그 종목 리포트 + 본문 태그. 공개 목록만(비로그인도 읽기). 개요 끝 카드는 유지(탭으로 가는 링크로 바꿈).</p>
+  </div>
+</div>
+<div class="qbox"><b>결정 3</b> — <b>가(추천)</b> 한 목록 + 「전체/커뮤니티/리포트」 칩 · <b>나</b> 탭 안에 두 구역(위 리포트 최대 3, 아래 커뮤니티 글) · 개요 끝 카드는 <b>유지 / 삭제</b>?</div>
+
+<!-- ───────────────────────── 요청 5 ───────────────────────── -->
+<h2>⑤ 스크리너 — 숫자 칸 정리 · 값 가이드 · 「이 종목보다 나은 종목」</h2>
+<div class="cols">
+  <div class="col">
+    <span class="lbl">현재 — 숫자 칸에 브라우저 기본 ▲▼, 값이 무슨 뜻·어느 정도가 보통인지 없음</span>
+    <div class="card pad">
+      <div class="cond"><span class="name">종합 점수</span><span class="box on">70<span class="spin">▲<br>▼</span></span><span class="box">이하<span class="spin">▲<br>▼</span></span></div>
+      <div class="cond"><span class="name">추세</span><span class="box">이상<span class="spin">▲<br>▼</span></span><span class="box">이하<span class="spin">▲<br>▼</span></span></div>
+      <div class="cond"><span class="name">PER</span><span class="box">이하<span class="spin">▲<br>▼</span></span><span class="box">이상<span class="spin">▲<br>▼</span></span></div>
+      <div class="cond"><span class="name">ROE</span><span class="box">이상<span class="spin">▲<br>▼</span></span><span class="box">이하<span class="spin">▲<br>▼</span></span></div>
+    </div>
+  </div>
+  <div class="col">
+    <span class="lbl">제안 — ▲▼ 제거 · ⓘ 설명 · 「보통」 범위(국내 분포 가운데 50%) · 기준 종목 값</span>
+    <div class="card pad">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+        <span class="muted">기준 종목</span><span class="chip b">기가비스 ✕</span>
+        <span class="btn">이 종목 이상으로 채우기</span>
+      </div>
+      <div class="cond"><span class="name">종합 점수 <span class="i">i</span></span><span class="box on">78</span><span class="box">이하</span><span class="hint">보통 40~61</span><span class="ref">기가비스 78</span></div>
+      <div class="cond"><span class="name">추세 <span class="i">i</span></span><span class="box on">98</span><span class="box">이하</span><span class="hint">보통 25~75</span><span class="ref">기가비스 98</span></div>
+      <div class="cond"><span class="name">PER <span class="i">i</span></span><span class="box on">101</span><span class="box">이상</span><span class="hint">보통 6.5~27.9</span><span class="ref">기가비스 101</span></div>
+      <div class="tip">PER(주가수익비율) — 주가 ÷ 주당순이익. 낮을수록 이익에 비해 싸다. 적자 기업은 값이 없다. 그래서 기본 칸이 「이하」.</div>
+      <div class="cond"><span class="name">ROE <span class="i">i</span></span><span class="box">이상</span><span class="box">이하</span><span class="hint">보통 −6~8.4</span><span class="ref">기가비스 7.4 ↵</span></div>
+    </div>
+    <p class="note">「기가비스 7.4 ↵」를 누르면 그 칸만 채움. 「이 종목 이상으로 채우기」는 아래 결정 4의 묶음을 한 번에 — 좋은 방향(점수·ROE는 이상, PER·부채비율은 이하)으로 자동. 결과 맨 위에 기준 종목 자신이 나온다.</p>
+  </div>
+</div>
+<div class="cols" style="margin-top:10px">
+  <div class="col">
+    <span class="lbl">입구 — 종목 화면 AI 점수 카드에 버튼 하나 (검색·클릭 어디서 왔든 같은 화면)</span>
+    <div class="card pad"><b>기가비스</b> 78 A · 추세 98 · 수익성 91 · 성장 97 · 가치 7 · 심리 53<br>
+      <span class="btn" style="margin-top:8px">⇄ 이 종목보다 나은 종목 찾기</span> <span class="muted">→ <code>/screener?like=420770</code></span></div>
+  </div>
+</div>
+<div class="qbox"><b>결정 4 — 「채우기」가 넣는 지표 묶음</b><br>
+  <b>가(추천)</b> 점수 6개(종합+5축) + PER·ROE·부채비율 · <b>나</b> 점수 6개만 · <b>다</b> 측정된 26개 전부(보통 결과가 기준 종목 하나뿐) — 어느 쪽이든 칸마다 ✕로 뺄 수 있음</div>
+<p class="note">비용: 새 API 1개(<code>GET /stocks/{symbol}/screen-values</code> — 점수 테이블 한 행, 캐시 가능 · ②의 태그 값도 이걸 씀) · 조건 목록 응답에 분포(25·50·75%) 3개 숫자 추가(하루 1번 계산, 이미 있는 15분 캐시).</p>
+
+</div>
+</body>
+</html>

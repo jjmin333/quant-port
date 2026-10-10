@@ -57,7 +57,7 @@
                    1~5s TTL              write-through            apibudget 게이트
 ```
 
-정책은 `docs/AGENT_STATE.md`대로 **MySQL = source of truth, Redis = hot cache**이며, 조회 경로에서 외부 HTTP를 부르지 않는 것이 원칙이다. 다만 이 원칙이 **완전히 지켜지지는 않는다** — P1-1 참조.
+정책은 `docs/PRINCIPLES.md`대로 **MySQL = source of truth, Redis = hot cache**이며, 조회 경로에서 외부 HTTP를 부르지 않는 것이 원칙이다. 다만 이 원칙이 **완전히 지켜지지는 않는다** — P1-1 참조.
 
 ### 1.3 상시 폴러 (API 프로세스 안)
 
@@ -93,7 +93,7 @@ fast tick은 활성 심볼 40개 상한(`marketFastSymbolCap`)·동시 4개(`mar
 | fred | 446 | 5,000/일 | |
 | goldprice | 128 | 900/월 | 여유 적음 |
 
-**좋은 소식**: 이 비용은 전부 배치·폴러가 만들며 **방문자 수에 비례하지 않는다.** LLM 지출 규칙(`AGENT_STATE.md`)이 실제로 지켜지고 있다. 출시 후 트래픽이 늘어도 외부 API 청구서는 그대로다.
+**좋은 소식**: 이 비용은 전부 배치·폴러가 만들며 **방문자 수에 비례하지 않는다.** LLM 지출 규칙(`PRINCIPLES.md`)이 실제로 지켜지고 있다. 출시 후 트래픽이 늘어도 외부 API 청구서는 그대로다.
 
 **나쁜 소식**: 반대로 사용자가 0명이어도 이 비용이 그대로 나간다. 월 9만 건의 naver 호출은 출시 전에 한 번 재검토할 가치가 있다.
 
@@ -310,7 +310,7 @@ fast tick은 활성 심볼 40개 상한(`marketFastSymbolCap`)·동시 4개(`mar
 #### P0-3. Redis가 `maxmemory 0` + `noeviction`
 
 - **현상**: 현재 사용량 **427 MB**, 키 23,719개(만료 설정 21,515개 → **약 2,200개는 TTL 없음**). `maxmemory_policy: noeviction`.
-- **왜 위험한가**: 클라우드 인스턴스는 로컬의 15.5 GiB가 아니다. 상한이 없으면 Redis가 계속 자라 호스트를 OOM으로 몰거나, 메모리가 차는 순간 **쓰기가 전부 에러**가 된다. `AGENT_STATE.md`는 "기동 시 Redis 필수"라고 못박고 있어 파급이 크다.
+- **왜 위험한가**: 클라우드 인스턴스는 로컬의 15.5 GiB가 아니다. 상한이 없으면 Redis가 계속 자라 호스트를 OOM으로 몰거나, 메모리가 차는 순간 **쓰기가 전부 에러**가 된다. `PRINCIPLES.md`는 "기동 시 Redis 필수"라고 못박고 있어 파급이 크다.
 - **완료 — 08-19**: compose의 redis에 `--maxmemory ${REDIS_MAXMEMORY:-1gb} --maxmemory-policy volatile-lru`. 적용 확인(`CONFIG GET` → `1073741824` / `volatile-lru`), 재기동 후 키 22,384개 보존 확인.
 
   **TTL 없는 키의 정체를 먼저 확인했고, 그 결과가 정책을 결정했다.** 전수 조사하니 `md:rev:<symbol>` **2,204개뿐**이었다(각 56 B, 합계 약 123 KB). 이건 `quotes_cache.go:69`의 `bumpRev`가 `INCR`로 올리는 **캐시 무효화 리비전 카운터**다 — 사라지면 값이 1부터 다시 세어져 낡은 캐시가 새 것으로 보인다. `allkeys-lru`는 이걸 버릴 수 있고 `volatile-lru`는 정확히 이것만 보호하므로, 후자가 이 코드베이스에 맞는 선택이다. 나머지 키는 전부 TTL이 있어 축출 대상으로 충분하다.
@@ -424,7 +424,7 @@ fast tick은 활성 심볼 40개 상한(`marketFastSymbolCap`)·동시 4개(`mar
   ```
   `/quotes`의 `applyLivePrices`(`quotes_stocks.go:145`)도 같은 구조다.
 - **관측 결과**: `/rankings` US 900~1,110 ms vs KR 150 ms. `/quotes` 콜드 4~5초(최대 20초).
-- **특히 문제**: `directTossPrice`는 **사용자 요청 경로에서 외부 HTTP를 부른다.** `AGENT_STATE.md`의 "조회 경로에서 외부 HTTP 금지" 원칙과 충돌하며, P0-2의 30초 스톨과 직결된다.
+- **특히 문제**: `directTossPrice`는 **사용자 요청 경로에서 외부 HTTP를 부른다.** `PRINCIPLES.md`의 "조회 경로에서 외부 HTTP 금지" 원칙과 충돌하며, P0-2의 30초 스톨과 직결된다.
 - **`/rankings` 병렬화 완료 — 08-19. 우선순위를 재조정했다.**
 
   처음엔 `/quotes` 목록(콜드 29~46초)이 최악이라 봤지만, **`/quotes`는 사이드바 네비게이션에 없는 고아 라우트**였다. 실제로 쓰이는 것은 `/rankings`다 — 「실시간 차트」(`/market`)가 열자마자 `count=100`으로 부른다.
@@ -668,7 +668,7 @@ docker exec quant-port-redis redis-cli INFO memory
 
 ## 부록 B. 참고 문서
 
-- `docs/AGENT_STATE.md` — 저장 정책, 읽기 체인, 개발 원칙, TODO
+- `docs/PRINCIPLES.md` — 저장 정책, 읽기 체인, 개발 원칙 (TODO는 `docs/AGENT_STATE.md` BACKLOG)
 - `docs/MARKET_INDICES_BATCH.md` — 지수 배치 설계
 - `be/docs/api-quotas.md` — 외부 API 한도
 - `migrations/050_perf_indexes.sql` — 인덱스 튜닝 근거와 실측치가 주석에 있다. **이 문서를 새 인덱스를 넣을 때의 서식 표준으로 삼을 것.**

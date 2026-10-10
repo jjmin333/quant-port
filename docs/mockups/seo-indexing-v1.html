@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>검색 색인 개선 — 종목 허브 · 종목명 링크 · 종목 페이지 본문 — 제안 v1</title>
+<style>
+:root{
+  --radius:.625rem;
+  --background:oklch(.97 0 0); --foreground:oklch(.145 0 0);
+  --card:oklch(1 0 0); --muted:oklch(.97 0 0);
+  --muted-foreground:oklch(.52 0 0); --border:oklch(.87 0 0);
+  --brand:#2563EB; --brand-muted:rgba(37,99,235,.1);
+  --profit:#DC2626; --loss:#2563EB;
+  --score-high:#15803D; --score-mid:#C2410C;
+  --amber:#B45309; --amber-bg:rgba(245,158,11,.15);
+  --text-muted:oklch(.545 0 0);
+}
+[data-theme="dark"]{
+  --background:oklch(.145 0 0); --foreground:oklch(.985 0 0);
+  --card:oklch(.205 0 0); --muted:oklch(.269 0 0);
+  --muted-foreground:oklch(.708 0 0); --border:oklch(1 0 0/16%);
+  --brand:#60A5FA; --brand-muted:rgba(96,165,250,.15);
+  --profit:#F87171; --loss:#60A5FA;
+  --score-high:#4ADE80; --score-mid:#FB923C;
+  --amber:#FBBF24; --amber-bg:rgba(251,191,36,.15);
+  --text-muted:oklch(.6 0 0);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--background);color:var(--foreground);
+  font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  font-size:12px;line-height:1.55;padding:22px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:20px;font-weight:700}
+h2{font-size:16px;font-weight:700;margin:34px 0 10px;padding-top:14px;border-top:2px solid var(--border)}
+h3{font-size:13px;font-weight:600;margin:14px 0 6px}
+.sub,.muted{color:var(--muted-foreground)}
+.up{color:var(--profit)} .down{color:var(--loss)} .n{font-variant-numeric:tabular-nums}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:14px;margin-bottom:16px;border-bottom:1px solid var(--border)}
+button.tgl{font:inherit;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--foreground);border-radius:8px;padding:5px 12px}
+.lead{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+.lead li{margin-left:18px;margin-bottom:3px}
+.tag{font-size:11px;font-weight:700;background:var(--brand-muted);color:var(--brand);border-radius:6px;padding:2px 7px;white-space:nowrap}
+.tag.rec{background:rgba(21,128,61,.12);color:var(--score-high)}
+.tag.q{background:var(--amber-bg);color:var(--amber)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.pad{padding:12px 14px}
+.cols{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 440px;min-width:300px}
+.lbl{font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;display:block}
+.note{color:var(--muted-foreground);font-size:11px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;gap:3px;font-size:11px;border:1px solid var(--border);border-radius:999px;padding:1px 8px;color:var(--foreground);background:var(--card);white-space:nowrap;text-decoration:none}
+a.lk{color:var(--brand);text-decoration:none} a.lk:hover{text-decoration:underline}
+table.t{width:100%;border-collapse:collapse;font-size:11.5px}
+table.t th,table.t td{border:1px solid var(--border);padding:6px 8px;text-align:left;vertical-align:top}
+table.t th{background:var(--muted);font-weight:600}
+code{font-family:ui-monospace,Consolas,monospace;font-size:11px;background:var(--muted);border-radius:4px;padding:0 4px}
+.qbox{border:1px dashed var(--amber);background:var(--amber-bg);border-radius:10px;padding:10px 12px;margin-top:10px}
+.qbox b{color:var(--amber)}
+.phone{width:375px;border:1px solid var(--border);border-radius:18px;overflow:hidden;background:var(--background)}
+.row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--border);font-size:12px}
+.row .nm{flex:1;min-width:0;font-weight:600}
+.row.sel{background:var(--brand-muted)}
+.bar{height:6px;border-radius:3px;background:var(--brand)}
+.empty{display:flex;align-items:center;justify-content:center;height:150px;color:var(--muted-foreground);font-size:13px;background:var(--muted)}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 12px}
+.metric{display:flex;flex-direction:column;gap:1px}
+.metric b{font-size:13px}
+.metric span{font-size:10.5px;color:var(--text-muted)}
+details summary{cursor:pointer;list-style:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div>
+    <h1>검색 색인 개선 — 제안 v1</h1>
+    <div class="sub">2026-10-09 · Search Console 색인 46 / 미색인 1,040 · 모든 숫자는 운영 DB·서버 HTML에서 잰 값</div>
+  </div>
+  <button class="tgl" onclick="const h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark'">라이트/다크</button>
+</div>
+
+<!-- ───────────────────────── 0 ───────────────────────── -->
+<div class="lead">
+  <h3 style="margin-top:0">질문에 대한 답: 화면은 상위 100개인데 왜 1,000종목인가</h3>
+  <ul>
+    <li><b>화면 목록과는 별개 목록입니다.</b> 실시간 차트(<code>/market</code>)의 상위 100은 지금 순간의 거래대금·거래량 순위이고, 크롤러가 읽는 <b>사이트맵과 색인 허용 목록</b>은 BE가 따로 뽑습니다(<code>be/internal/repository/seo_stocks.go</code>).</li>
+    <li>뽑는 기준: 점수가 있는 종목 약 1.6만 개 중 <b>최근 20거래일 평균 거래대금</b>(종가×거래량, 미국은 원/달러로 환산) 상위 <b>1,000개</b>입니다(09-24 결정). 시가총액은 ADR 오류 때문에 기준에서 뺐습니다.</li>
+    <li>종목 페이지(<code>/stocks/&lt;종목&gt;</code>)는 1.6만 개 <b>모두</b> 열리지만, 이 1,000개에만 <code>index</code>와 canonical을 주고 나머지는 <code>noindex</code>로 둡니다.</li>
+  </ul>
+  <div class="qbox">
+    <b>점검 중 발견: 1,000개 중 국내는 34개뿐입니다(해외 966).</b>
+    원화로 환산하면 미국 대형주 거래대금이 국내보다 한두 자릿수 크기 때문에 국내 종목이 밀려납니다. 삼성전자·SK하이닉스·NAVER는 들어가지만 <b>셀트리온·카카오·삼성바이오로직스·POSCO홀딩스·신한지주·LG는 noindex</b>입니다(운영 사이트맵 실측). 한국어 검색 수요(「○○ 주가」)의 대부분이 국내 종목이라 비용이 큽니다.<br/>
+    <b>제안</b>: 시장별 몫을 따로 둡니다. <b>국내 500 + 해외 500</b>, 각 시장 안에서 거래대금 순입니다. 총량 1,000은 그대로라 크롤 부담은 같습니다.
+  </div>
+</div>
+
+<div class="lead">
+  <h3 style="margin-top:0">진단: 구글이 1,000개를 색인하지 않는 이유</h3>
+  <ul>
+    <li><b>고아 페이지</b>: 서버 HTML 기준으로 홈·실시간 차트·스크리너·변화·뉴스·실적 어디에도 <code>&lt;a href="/stocks/…"&gt;</code>가 <b>0개</b>입니다. 행 클릭은 JavaScript로 패널을 여는 방식이라 크롤러가 따라갈 수 없습니다. 구글은 사이트맵에만 있고 링크가 없는 주소를 「발견됨 – 현재 색인되지 않음」으로 미룹니다.</li>
+    <li><b>얇은 본문</b>: 종목 페이지에서 서버가 그리는 글은 요약 한 줄, 평균 209자입니다. 1,000개 페이지가 거의 같은 틀로 보여 「크롤링됨 – 현재 색인되지 않음」이 되기 쉽습니다.</li>
+    <li>그래서 <b>1.5만 개 전체를 색인으로 여는 것은 지금은 역효과</b>입니다. 링크와 본문을 먼저 보강하고, 색인 비율이 오르면 범위를 넓힙니다(예: 2,000 → 3,000).</li>
+  </ul>
+  <h3>이미 배포함(화면 변화 없음)</h3>
+  <ul>
+    <li>옛 주소 6개(<code>/wealth</code>·<code>/wealth/*</code>·<code>/finance/calculator</code>)가 <b>200 + 빈 화면 + index</b>로 응답하던 것을 <b>308 리다이렉트</b>로 바꿨습니다.</li>
+    <li>사이트맵에 색인 대상인데 빠져 있던 5개 화면을 추가했습니다: <code>/screener</code> · <code>/changes</code> · <code>/finance/rates</code> · <code>/real-estate</code> · <code>/real-estate/auctions</code> (1,016 → 1,021).</li>
+  </ul>
+</div>
+
+<!-- ───────────────────────── A ───────────────────────── -->
+<h2>A. 종목 허브 <code>/stocks</code> <span class="tag">새 화면</span> <span class="tag rec">효과 가장 큼</span></h2>
+<p class="sub">색인 대상 1,000종목을 시장 → 섹터별로 묶어 <b>서버가 링크로</b> 그립니다. 모든 화면 하단(푸터)과 사이드바 「주식」 묶음에서 연결합니다. 비용: BE <code>/seo/stocks</code> 응답에 이름·시장·섹터·점수를 추가(쿼리 1개, 1시간 캐시), 새 페이지 1개.</p>
+<div class="cols">
+  <div class="col">
+    <span class="lbl">현재</span>
+    <div class="card"><div class="empty"><code>/stocks</code> → 404 (페이지 없음)</div></div>
+    <p class="note">종목 페이지 1,000개로 가는 경로는 사이트맵뿐입니다.</p>
+  </div>
+  <div class="col">
+    <span class="lbl">제안 — 데스크톱</span>
+    <div class="card pad">
+      <div style="font-size:16px;font-weight:700">종목 모음</div>
+      <div class="note" style="margin:2px 0 10px">최근 20거래일 거래대금 상위 · 매일 갱신 · 국내 500 · 미국 500</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <a class="chip" style="background:var(--brand-muted);color:var(--brand);border-color:transparent;font-weight:600" href="#">국내</a>
+        <a class="chip" href="#">미국</a>
+        <span class="note" style="margin:0 0 0 auto">← 같은 페이지 안 앵커(#kr, #us). 둘 다 서버 HTML에 있음</span>
+      </div>
+      <h3 style="margin-top:4px">국내 · IT <span class="muted" style="font-weight:400">(84)</span></h3>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">
+        <a class="chip" href="#">삼성전자 <span class="muted">B</span></a>
+        <a class="chip" href="#">SK하이닉스 <span class="muted">B</span></a>
+        <a class="chip" href="#">삼성전기 <span class="muted">B+</span></a>
+        <a class="chip" href="#">LG전자 <span class="muted">B</span></a>
+        <a class="chip" href="#">삼성에스디에스</a>
+        <a class="chip" href="#">두산</a>
+        <span class="muted">… 78개 더 (전부 펼쳐 둠)</span>
+      </div>
+      <h3>국내 · 2차전지 <span class="muted" style="font-weight:400">(41)</span></h3>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">
+        <a class="chip" href="#">LG에너지솔루션</a><a class="chip" href="#">삼성SDI</a><span class="muted">…</span>
+      </div>
+      <h3>미국 · IT <span class="muted" style="font-weight:400">(132)</span></h3>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">
+        <a class="chip" href="#">애플</a><a class="chip" href="#">마이크로소프트</a><a class="chip" href="#">알파벳 A</a><a class="chip" href="#">TSMC(ADR)</a><span class="muted">…</span>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="cols" style="margin-top:12px">
+  <div class="col">
+    <span class="lbl">제안 — 푸터 (모든 화면, 서버 렌더)</span>
+    <div class="card pad" style="font-size:11px;color:var(--muted-foreground)">
+      <a class="lk" href="#">종목 모음</a> · <a class="lk" href="#">실시간 차트</a> · <a class="lk" href="#">스크리너</a> · <a class="lk" href="#">리포트</a> · 이용약관 · 개인정보처리방침
+    </div>
+    <p class="note">현재 약관 2페이지도 고아입니다(보고서 경고 2건). 푸터 하나로 함께 해결됩니다.</p>
+  </div>
+  <div class="col">
+    <span class="lbl">제안 — 375px</span>
+    <div class="phone">
+      <div class="pad"><b style="font-size:15px">종목 모음</b>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px">
+          <a class="chip" href="#">삼성전자</a><a class="chip" href="#">SK하이닉스</a><a class="chip" href="#">삼성전기</a><a class="chip" href="#">LG전자</a><span class="muted">…</span>
+        </div>
+      </div>
+    </div>
+    <p class="note">칩이 줄바꿈되므로 가로 넘침은 없습니다.</p>
+  </div>
+</div>
+
+<!-- ───────────────────────── B ───────────────────────── -->
+<h2>B. 목록의 종목명을 링크로 + 뒤로 가기로 이전 종목 복원 <span class="tag">동작 변경</span></h2>
+<p class="sub">대상: 실시간 차트 목록, 스크리너 결과, 오늘의 변화, 뉴스의 종목 칩. 겉모양은 그대로 두고 <b>행 안의 종목명을 진짜 <code>&lt;a href="/stocks/…"&gt;</code></b>로 바꿉니다.</p>
+<table class="t">
+  <tr><th style="width:22%">동작</th><th>현재</th><th>제안</th></tr>
+  <tr><td>행/이름 일반 클릭</td><td>옆 패널에 종목이 열림(주소 <code>?symbol=</code>)</td><td><b>같음</b> — 링크의 기본 이동을 막고 패널을 엽니다</td></tr>
+  <tr><td>뒤로 가기(데스크톱)</td><td>주소를 <code>replace</code>로 바꿔서 <b>이전 화면으로 나감</b></td><td>선택할 때마다 <code>push</code> → 뒤로 가면 <b>직전에 보던 종목이 다시 패널에</b> 열림</td></tr>
+  <tr><td>뒤로 가기(모바일)</td><td>상세 → 목록(첫 선택만 push, 이후 replace)</td><td>같음 — 모바일은 상세가 화면 전체라 「목록으로」가 맞습니다. <span class="tag q">데스크톱만 바꿈</span></td></tr>
+  <tr><td>Ctrl/⌘·가운데 클릭, 길게 눌러 새 탭</td><td>안 됨(링크가 아님)</td><td>종목 페이지가 <b>새 탭</b>으로 열림 (덤으로 생기는 기능)</td></tr>
+  <tr><td>크롤러</td><td>링크 0개</td><td>실시간 차트 100 + 스크리너·변화 상위 + 뉴스 칩 → <b>매일 바뀌는 수백 개 링크</b></td></tr>
+</table>
+<div class="cols" style="margin-top:12px">
+  <div class="col">
+    <span class="lbl">겉모양 (현재 = 제안, 차이는 마우스를 올렸을 때 이름 밑줄뿐)</span>
+    <div class="card">
+      <div class="row"><span class="muted n">1</span><span class="nm">SK하이닉스</span><span class="n">1,691,000원</span><span class="n down">-1.40%</span></div>
+      <div class="row sel"><span class="muted n">2</span><span class="nm"><a class="lk" style="color:inherit;text-decoration:underline" href="#">삼성전자</a></span><span class="n">263,500원</span><span class="n down">-2.04%</span></div>
+      <div class="row"><span class="muted n">3</span><span class="nm">삼성전기</span><span class="n">1,554,000원</span><span class="n down">-3.30%</span></div>
+    </div>
+  </div>
+  <div class="col">
+    <span class="lbl">뒤로 가기 예시 (데스크톱)</span>
+    <div class="card pad n" style="line-height:1.9">
+      /market → 삼성전자 클릭 → SK하이닉스 클릭 → 삼성전기 클릭<br/>
+      <b>현재</b>: ← 한 번 = 이전 화면(홈)으로 나감<br/>
+      <b>제안</b>: ← 삼성전기→<b>SK하이닉스</b> · ← <b>삼성전자</b> · ← 홈
+    </div>
+    <p class="note">목록 필터(국내/해외·기간)를 바꾸는 것은 지금처럼 replace로 둡니다. 필터를 바꿀 때마다 기록이 쌓이면 뒤로 가기가 오히려 불편해집니다.</p>
+  </div>
+</div>
+
+<!-- ───────────────────────── C ───────────────────────── -->
+<h2>C. 종목 페이지 — 서버가 그리는 본문 확장 <span class="tag">화면 추가</span></h2>
+<p class="sub">이미 있는 API 두 개(<code>/stocks/{s}/qa</code>: 같은 섹터 종목·최근 변화, <code>/stocks/{s}/fundamentals</code>: 지표)를 서버에서 1시간 캐시로 받아 그립니다. 숨긴 글자는 구글이 속임수로 보기 때문에 <b>사용자에게도 보여야</b> 합니다. 예시 값은 운영 데이터(삼성전자, 10-08 기준)입니다.</p>
+<div class="cols">
+  <div class="col">
+    <span class="lbl">현재 — 위쪽 한 줄 (서버 본문 전부, 평균 209자)</span>
+    <div class="card">
+      <p style="padding:4px 12px;font-size:10.5px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid var(--border)">삼성전자(005930)는 코스피 IT 종목입니다. 10/8 종가 262,500원(-2.42%). AI 점수 56점(B) — 수익성·성장 강점, 가치 약점. 최근 변화: 실적 · 삼성전자, 3분기 영업익 107조..사상 첫 분기 영업이익 100조 돌파</p>
+      <div class="empty" style="height:90px">(아래는 클라이언트가 그리는 종목 작업 공간)</div>
+    </div>
+  </div>
+  <div class="col">
+    <span class="lbl">제안 C1 — 접힌 요약 바 (기본 접힘, 높이 +0) <span class="tag rec">추천</span></span>
+    <div class="card">
+      <details style="border-bottom:1px solid var(--border)">
+        <summary style="padding:5px 12px;font-size:10.5px;color:var(--text-muted);display:flex;gap:6px">
+          <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">삼성전자(005930)는 코스피 IT 종목입니다. 10/8 종가 262,500원(-2.42%). AI 점수 56점(B) …</span><span style="color:var(--brand)">요약 펼치기 ▾</span>
+        </summary>
+        <div class="pad" style="padding-top:4px">
+          <div class="grid3 n" style="margin-bottom:10px">
+            <div class="metric"><b>56 · B</b><span>AI 점수</span></div>
+            <div class="metric"><b>39.9배</b><span>PER</span></div>
+            <div class="metric"><b>3.53배</b><span>PBR</span></div>
+            <div class="metric"><b>10.8%</b><span>ROE</span></div>
+            <div class="metric"><b>13.1%</b><span>영업이익률</span></div>
+            <div class="metric"><b>+10.9%</b><span>매출 성장(전년)</span></div>
+          </div>
+          <span class="lbl">최근 변화</span>
+          <ul style="margin:0 0 10px 16px;font-size:11.5px">
+            <li>10/8 실적 · 3분기 영업익 107조..사상 첫 분기 영업이익 100조 돌파</li>
+            <li>10/8 공시 · 연결재무제표기준영업(잠정)실적(공정공시)</li>
+            <li>10/8 주주환원 · 자사주 5380만 주 매입 완료… 수급 공백 우려</li>
+          </ul>
+          <span class="lbl">같은 섹터(IT) 종목</span>
+          <div style="display:flex;flex-wrap:wrap;gap:5px">
+            <a class="chip" href="#">SK하이닉스 <span class="muted">B</span></a><a class="chip" href="#">삼성전기 <span class="muted">B+</span></a><a class="chip" href="#">LG전자 <span class="muted">B</span></a><a class="chip" href="#">두산 <span class="muted">C+</span></a><a class="chip" href="#">삼성에스디에스</a>
+          </div>
+        </div>
+      </details>
+      <div class="empty" style="height:60px">(종목 작업 공간 — 그대로)</div>
+    </div>
+    <p class="note">접혀 있어도 내용은 서버 HTML에 있어 구글이 읽습니다(접힌 <code>&lt;details&gt;</code>는 색인됨). 서버 본문은 약 209자에서 약 700~900자로 늘고, 종목 간 링크 5~8개가 생깁니다. 작업 공간 탭과 정보가 겹쳐서, 펼친 채로 두면 화면에 같은 내용이 두 번 보입니다.</p>
+  </div>
+</div>
+<div class="cols" style="margin-top:12px">
+  <div class="col">
+    <span class="lbl">제안 C2 — 항상 펼친 요약 카드 (높이 약 +150px)</span>
+    <div class="card pad">
+      <div class="grid3 n" style="grid-template-columns:repeat(6,minmax(0,1fr))">
+        <div class="metric"><b>56 · B</b><span>AI 점수</span></div><div class="metric"><b>39.9배</b><span>PER</span></div><div class="metric"><b>3.53배</b><span>PBR</span></div><div class="metric"><b>10.8%</b><span>ROE</span></div><div class="metric"><b>13.1%</b><span>영업이익률</span></div><div class="metric"><b>+10.9%</b><span>매출 성장</span></div>
+      </div>
+      <div class="note">최근 변화 3줄 · 같은 섹터 칩 한 줄 …</div>
+    </div>
+    <p class="note">구글이 접힌 내용보다 보이는 내용을 조금 더 무겁게 볼 수 있다는 장점이 있지만, 차트와 작업 공간이 그만큼 아래로 밀립니다.</p>
+  </div>
+  <div class="col">
+    <span class="lbl">noindex 종목(1.5만 개)은?</span>
+    <div class="card pad">같은 요약 바를 그대로 그립니다(화면이 종목마다 달라지지 않도록, 09-24 원칙). 색인 여부만 다릅니다. 같은 섹터 칩은 <b>색인 대상 종목으로만</b> 걸어서 링크가 noindex 페이지로 새지 않게 합니다.</div>
+  </div>
+</div>
+
+<!-- ───────────────────────── D ───────────────────────── -->
+<h2>D. 리포트 작성자 페이지 공개 <span class="tag">설정만</span></h2>
+<p class="sub"><code>robots.txt</code>의 <code>/reports/authors/</code> 차단을 풀고, 작성자 페이지에 <code>index</code>를 줍니다. 화면 변화는 없습니다. 지금은 공개 리포트가 3건이라 효과는 작지만, 리포트가 늘면 리포트끼리 이어 주는 허브가 됩니다. 작성자 페이지에는 아이디·닉네임만 나옵니다(개인정보 없음). <span class="tag q">확인 필요: 작성자 페이지가 공개 목록인 것이 괜찮은지</span></p>
+
+<!-- ───────────────────────── 결정 ───────────────────────── -->
+<h2>결정할 것</h2>
+<table class="t">
+  <tr><th style="width:6%">#</th><th style="width:30%">항목</th><th>추천</th></tr>
+  <tr><td>0</td><td>색인 목록의 시장 몫</td><td><b>국내 500 + 해외 500</b> (지금은 국내 34 + 해외 966)</td></tr>
+  <tr><td>A</td><td>종목 허브 <code>/stocks</code> + 푸터</td><td>진행</td></tr>
+  <tr><td>B</td><td>종목명 링크 + 데스크톱 뒤로 가기 push</td><td>진행 (모바일 뒤로 가기는 그대로)</td></tr>
+  <tr><td>C</td><td>종목 페이지 본문</td><td><b>C1 접힌 요약 바</b></td></tr>
+  <tr><td>D</td><td>작성자 페이지 공개</td><td>진행</td></tr>
+</table>
+<p class="note">배포 후 2~4주 동안 Search Console의 「페이지 → 색인이 생성되지 않은 이유」를 봅니다. 「발견됨 – 현재 색인되지 않음」이 줄면 링크가 효과를 낸 것이고, 「크롤링됨 – 현재 색인되지 않음」이 줄면 본문이 효과를 낸 것입니다. 사유별 숫자를 매일 자동으로 받으려면 worker-growth에 GSC 서비스 계정 JSON이 필요합니다(<code>docs/GROWTH.md</code>, PENDING 항목).</p>
+
+</div>
+</body>
+</html>

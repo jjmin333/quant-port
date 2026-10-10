@@ -42,6 +42,8 @@ $ConfigFile  = Join-Path $DeployRoot "watchdog.config.json"
 
 # 사용자가 일부러 스택을 내렸다는 표시. 이게 있으면 워치독은 아무것도 되살리지
 # 않는다 — 없으면 `stop.ps1`로 내린 스택을 5분 뒤에 도로 올려 놓는 물건이 된다.
+# 2026-09-15부터 **만료 시각을 갖는다** — `Test-WatchdogPaused` 머리글 참조.
+# 파일은 `watchdog-pause.ps1` 이 만든다.
 $PauseFile   = Join-Path $DeployRoot "watchdog.paused"
 
 $ComposeProject = "quant-port"
@@ -312,6 +314,53 @@ function Clear-OrphanedDockerSocket {
 }
 
 <#
+    사용자가 일부러 재워 뒀는가 — **그리고 그 재움이 아직 유효한가.**
+
+    2026-09-15에 만료를 붙였다. 종전에는 `watchdog.paused` 를 손으로 만들고 손으로
+    지워야 했는데, **지우는 것을 잊으면 워치독이 조용히 꺼진 채로 남는다** — 다음
+    사고 때 아무도 깨워 주지 않는다는 뜻이다. 재움은 「게임 한 판」처럼 끝이 있는
+    일이므로 끝을 파일에 적게 했다.
+
+    시각을 `yyyyMMddHHmmss` 라는 **정렬 가능한 숫자 문자열**로 적는 이유가 있다.
+    같은 파일을 VBS 런처가 먼저 읽는데(빠른 경로), VBScript 의 `CDate` 는 로캘에
+    끌려다녀 ISO 8601 을 믿을 수 없다. 자리수가 고정되면 두 언어 모두 문자열
+    비교만으로 시각을 비교할 수 있다.
+
+    `until=` 이 없거나 `forever` 면 무기한 — 예전 동작 그대로다.
+#>
+function Test-WatchdogPaused {
+    if (-not (Test-Path $PauseFile)) { return $false }
+
+    $until = "forever"
+    try {
+        foreach ($line in (Get-Content $PauseFile -Encoding UTF8)) {
+            $m = [regex]::Match($line, '^\s*until\s*=\s*(\S+)')
+            if ($m.Success) { $until = $m.Groups[1].Value }
+        }
+    } catch {
+        # 못 읽으면 재운 것으로 본다. 이쪽으로 틀리면 복구가 늦어질 뿐이지만,
+        # 반대로 틀리면 사용자가 방금 내린 스택을 도로 올려 놓는다.
+        Write-WatchdogLog "WARN" "watchdog.paused 를 읽지 못했다 — 재운 것으로 본다"
+        return $true
+    }
+
+    if ($until -eq "forever") {
+        Write-WatchdogLog "INFO" "watchdog.paused 있음(무기한) — 점검을 건너뛴다"
+        return $true
+    }
+
+    # 둘 다 yyyyMMddHHmmss 이므로 문자열 비교가 곧 시각 비교다.
+    if ($until -gt (Get-Date).ToString("yyyyMMddHHmmss")) {
+        Write-WatchdogLog "INFO" "watchdog.paused 있음($until 까지) — 점검을 건너뛴다"
+        return $true
+    }
+
+    Write-WatchdogLog "INFO" "watchdog.paused 만료($until) — 표시를 지우고 평소대로 돈다"
+    Remove-Item $PauseFile -Force -ErrorAction SilentlyContinue
+    return $false
+}
+
+<#
     멈춰 있는 컨테이너를 이름으로 되살린다.
 
     `docker compose up -d` 를 쓰지 않는 이유가 둘 있다.
@@ -344,12 +393,45 @@ function Restart-StoppedContainers {
     return $names.Count
 }
 
+<#
+    api 컨테이너가 **어떤 네트워크에도 붙지 않은 채** 도는 경우를 고친다(2026-09-25 · 09-28 두 번).
+
+    compose 재생성이 중간에 끊기면 옛 컨테이너가 `<id>_quant-port-api` 이름으로 남고, 위의
+    Restart-StoppedContainers 가 그것을 start 하면 네트워크 없이 떠서 MySQL 에 "network is
+    unreachable" 로 재시작만 반복한다. 09-28 23:25 에 그렇게 떠서 **2시간 20분** 동안 10분마다
+    「복구 실패」만 적혔다 — start·restart 로는 안 붙는다.
+
+    처방은 restart.ps1 과 같다: **빌드 없이** api 만 한 번 재생성. 지금 이미지 그대로라 배포가
+    아니다(워치독은 배포하지 않는다는 원칙 그대로). api 가 네트워크 0개일 때만 한다.
+#>
+function Repair-DetachedApi {
+    $ids = docker ps -a --filter "label=com.docker.compose.project=$ComposeProject" `
+        --filter "label=com.docker.compose.service=api" --format "{{.ID}}" 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $ids) { return $false }
+    $detached = $false
+    foreach ($id in @($ids -split "`n" | Where-Object { $_.Trim() -ne "" })) {
+        $nets = docker inspect $id.Trim() --format "{{len .NetworkSettings.Networks}}" 2>$null
+        if ("$nets".Trim() -eq "0") { $detached = $true }
+    }
+    if (-not $detached) { return $false }
+
+    Write-WatchdogLog "WARN" "api 컨테이너가 네트워크 없이 떠 있다 — 빌드 없이 한 번 재생성한다"
+    Push-Location $ProjectRoot
+    try {
+        docker compose up -d --no-deps --no-build --force-recreate api 2>$null | Out-Null
+        $ok = ($LASTEXITCODE -eq 0)
+    } finally {
+        Pop-Location
+    }
+    if (-not $ok) { Write-WatchdogLog "WARN" "api 재생성 실패" }
+    return $ok
+}
+
 # ---- 본문 ------------------------------------------------------------------
 
 $prevStatus = Get-WatchdogState
 
-if (Test-Path $PauseFile) {
-    Write-WatchdogLog "INFO" "watchdog.paused 있음 — 점검을 건너뛴다"
+if (Test-WatchdogPaused) {
     Set-WatchdogState "paused"
     exit 0
 }
@@ -461,6 +543,7 @@ if (-not (Test-DockerEngine)) {
 Start-Sleep -Seconds 10
 $started = Restart-StoppedContainers
 if ($started -gt 0) { $repaired += "컨테이너 ${started}개 기동" }
+if (Repair-DetachedApi) { $repaired += "네트워크 없는 api 재생성" }
 
 # 헬스가 돌아오기를 기다린다 — 컨테이너 기동 직후는 아직 아니다.
 $ok = $false

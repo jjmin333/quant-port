@@ -2,7 +2,7 @@ import type { APIRequestContext, Browser, Page } from "@playwright/test";
 import { request as playwrightRequest } from "@playwright/test";
 
 import { Api } from "./api-client";
-import { PASSWORD, uniqueDisplayName, uniqueEmail } from "./data";
+import { PASSWORD, uniqueDisplayName, uniqueLoginId } from "./data";
 import { API_URL, FE_URL, apiPath } from "./env";
 import type {
   AuthSession,
@@ -37,12 +37,14 @@ export class TestUser {
   ) {}
 
   static async create(tag: string): Promise<TestUser> {
-    const email = uniqueEmail(tag);
+    // 필드 이름은 `email`로 남겨 둔다 — 서버의 칸 이름(`users.email`)이고, 응답의
+    // `session.user.email`도 그대로다. 값은 이제 아이디다(2026-09-27).
+    const email = uniqueLoginId(tag);
     const displayName = uniqueDisplayName(tag);
     const ctx = await newApiContext();
     const api = new Api(ctx, `anon:${tag}`);
     const session = await api.post<AuthSession>("/auth/signup", {
-      email,
+      loginId: email,
       password: PASSWORD,
       displayName,
     });
@@ -85,7 +87,7 @@ export class TestUser {
     await this.tryEach("re-auth", async () => {
       const probe = await this.api.send("GET", "/auth/me");
       if (probe.ok()) return;
-      await this.api.post("/auth/login", { email: this.email, password: this.password });
+      await this.api.post("/auth/login", { loginId: this.email, password: this.password });
     });
 
     await this.tryEach("stamps", async () => {

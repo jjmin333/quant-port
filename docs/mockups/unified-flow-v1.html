@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>통합 흐름 — 범위 선택용 목업 v1</title>
+<style>
+:root{
+  --radius:.625rem;
+  --background:oklch(.97 0 0); --foreground:oklch(.145 0 0);
+  --card:oklch(1 0 0); --muted:oklch(.97 0 0);
+  --muted-foreground:oklch(.52 0 0); --accent:oklch(.93 0 0);
+  --border:oklch(.87 0 0);
+  --brand:#2563EB; --brand-muted:rgba(37,99,235,.1);
+  --profit:#DC2626; --loss:#2563EB;
+  --score-high:#15803D; --score-mid:#C2410C; --score-low:#B91C1C;
+  --surface-elevated:var(--accent); --text-muted:oklch(.545 0 0);
+}
+[data-theme="dark"]{
+  --background:oklch(.145 0 0); --foreground:oklch(.985 0 0);
+  --card:oklch(.205 0 0); --muted:oklch(.269 0 0);
+  --muted-foreground:oklch(.708 0 0); --accent:oklch(.269 0 0);
+  --border:oklch(1 0 0/16%);
+  --brand:#60A5FA; --brand-muted:rgba(96,165,250,.15);
+  --profit:#F87171; --loss:#60A5FA;
+  --score-high:#4ADE80; --score-mid:#FB923C; --score-low:#F87171;
+  --text-muted:oklch(.6 0 0);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--background);color:var(--foreground);
+  font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  font-size:12px;line-height:1.5;padding:22px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:20px;font-weight:700;letter-spacing:-.01em}
+h2{font-size:15px;font-weight:600} h3{font-size:13px;font-weight:600}
+.sub{color:var(--muted-foreground);font-size:12px}
+.up{color:var(--profit)} .down{color:var(--loss)} .n{font-variant-numeric:tabular-nums}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding-bottom:16px;margin-bottom:20px;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:var(--background);z-index:20}
+button.tgl{font:inherit;cursor:pointer;border:1px solid var(--border);background:var(--card);
+  color:var(--foreground);border-radius:8px;padding:5px 12px}
+.lead{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:22px}
+.lead p{margin-bottom:8px}.lead p:last-child{margin-bottom:0}
+.note{color:var(--muted-foreground);font-size:11px;margin-top:8px}
+.opt{margin-bottom:34px}
+.opt-head{display:flex;align-items:baseline;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.tag{font-size:11px;font-weight:700;background:var(--brand-muted);color:var(--brand);border-radius:6px;padding:2px 7px}
+.tag.rec{background:rgba(21,128,61,.12);color:var(--score-high)}
+.tag.warn{background:rgba(194,65,12,.12);color:var(--score-mid)}
+.tag.bad{background:rgba(185,28,28,.12);color:var(--score-low)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;background:var(--surface-elevated);border-radius:4px;padding:1px 4px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.body{padding:12px 14px}
+.cols{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 400px;min-width:330px}
+
+table.t{width:100%;border-collapse:collapse;font-size:11.5px}
+table.t th,table.t td{border:1px solid var(--border);padding:6px 8px;text-align:left;vertical-align:top}
+table.t th{background:var(--muted);font-weight:600}
+table.t td.y{color:var(--score-high);font-weight:700;text-align:center}
+table.t td.n{color:var(--score-low);font-weight:700;text-align:center}
+
+/* 흐름 다이어그램 */
+.flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin:6px 0 4px}
+.step{flex:1 1 130px;min-width:120px;border:1px solid var(--border);background:var(--card);
+  padding:8px 10px;position:relative}
+.step:not(:last-child){border-right:0}
+.step:first-child{border-radius:8px 0 0 8px}
+.step:last-child{border-radius:0 8px 8px 0}
+.step .k{font-size:10px;color:var(--text-muted);display:block}
+.step .v{font-size:12px;font-weight:700;display:block;margin-top:1px}
+.step .w{font-size:10px;color:var(--text-muted);display:block;margin-top:3px}
+.step.ok{background:rgba(21,128,61,.05)}
+.step.gap{background:rgba(185,28,28,.07)}
+.step.gap .v{color:var(--score-low)}
+.arrows{display:flex;gap:0;margin-bottom:10px}
+.arrows div{flex:1 1 130px;min-width:120px;text-align:center;font-size:10px;color:var(--text-muted)}
+.arrows div.bad{color:var(--score-low);font-weight:700}
+
+/* 내 기록 줄 */
+.rec{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:6px 9px;
+  border:1px solid var(--border);border-radius:8px;background:var(--card)}
+.chip{font-size:10.5px;border-radius:999px;padding:2px 8px;border:1px solid var(--border);
+  color:var(--text-muted);white-space:nowrap}
+.chip.on{background:var(--brand-muted);border-color:var(--brand);color:var(--brand);font-weight:700}
+.chip.warn{background:rgba(185,28,28,.1);border-color:var(--score-low);color:var(--score-low);font-weight:700}
+.chip.dim{border-style:dashed}
+
+.before,.after{border:1px solid var(--border);border-radius:8px;padding:9px 11px;background:var(--card)}
+.before{border-style:dashed}
+.lbl{font-size:10px;font-weight:700;border-radius:4px;padding:1px 6px;margin-bottom:6px;display:inline-block}
+.lbl.b{background:var(--muted);color:var(--muted-foreground)}
+.lbl.a{background:var(--brand-muted);color:var(--brand)}
+.phone{width:375px;border:1px solid var(--border);border-radius:14px;padding:10px;background:var(--muted);flex:0 0 375px}
+.phone .plabel{font-size:10.5px;color:var(--muted-foreground);margin-bottom:6px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div>
+    <h1>통합 흐름 — 범위 선택용 목업 v1</h1>
+    <div class="sub">V2 요구 9 · 아래는 전부 <b>2026-09-19 코드 실측</b>입니다</div>
+  </div>
+  <button class="tgl" id="themeBtn">다크 모드</button>
+</div>
+
+<div class="lead">
+  <p><b>다섯 단계의 화면은 이미 전부 있습니다.</b> Phase 1~6·8로 만든 것들이 각자 제자리에 있고, 앞뒤로 잇는 부품(<code>analysisSymbolHref</code>)도 이미 있습니다. <b>문제는 그 부품이 거의 안 쓰인다는 것</b>입니다 — 관심종목·스탬프·리포트 세 곳뿐이고 목표가·보유·스크리너는 안 씁니다.</p>
+  <p><b>가장 큰 구멍은 종목 화면입니다.</b> 종목 화면이 사용자에 대해 아는 것은 <code>quote.isHeld</code> <b>한 비트뿐</b>입니다. 내가 그 종목을 관심에 담았는지, 스탬프를 찍었는지, 목표가를 적었는지, 리포트를 썼는지, 보유 이유 점검이 뭐라 했는지 — <b>아무것도 모릅니다.</b> 이미 보유 중인데도 「보유종목 등록」 버튼을 똑같이 내밉니다.</p>
+</div>
+
+<!-- ══════════ 흐름 실측 ══════════ -->
+<div class="opt">
+  <div class="opt-head"><h2>지금 흐름이 어디서 끊기나</h2><span class="tag warn">코드 실측</span></div>
+  <div class="flow">
+    <div class="step ok"><span class="k">1</span><span class="v">발견</span><span class="w">랭킹 · 스크리너</span></div>
+    <div class="step ok"><span class="k">2</span><span class="v">근거</span><span class="w">점수 근거 · 타임라인 · 시나리오</span></div>
+    <div class="step ok"><span class="k">3</span><span class="v">판단</span><span class="w">스탬프 · 목표가</span></div>
+    <div class="step ok"><span class="k">4</span><span class="v">반영</span><span class="w">보유 등록</span></div>
+    <div class="step ok"><span class="k">5</span><span class="v">추적</span><span class="w">보유 이유 점검</span></div>
+  </div>
+  <div class="arrows">
+    <div>→ 목록 클릭 ✓</div><div>→ 헤더 액션바 ✓</div><div>→ 보유 등록 ✓</div><div>→ /holdings ✓</div><div class="bad">↺ 되돌아갈 길 없음</div>
+  </div>
+
+  <div class="cols">
+    <div class="col">
+      <table class="t">
+        <tr><th style="width:230px">연결</th><th style="width:60px">상태</th><th>실측</th></tr>
+        <tr><td>1 발견 → 2 근거</td><td class="y">✓</td><td>랭킹·스크리너 모두 워크스페이스를 엽니다</td></tr>
+        <tr><td>2 근거 → 3 판단</td><td class="y">✓</td><td>헤더 액션바(스탬프·보유·목표가)가 언제나 있습니다</td></tr>
+        <tr><td>4 반영 → 5 추적</td><td class="y">✓</td><td>보유 화면 상단의 보유 이유 점검</td></tr>
+        <tr><td><b>5 추적 → 2 근거</b></td><td class="n">✗</td><td><b>보유 이유 점검 카드가 클릭 불가</b>입니다. 「카카오 약화 −46」을 보고도 그 근거로 갈 수 없습니다(보유 <b>목록</b>은 됩니다 — 카드만 빠졌습니다).</td></tr>
+        <tr><td>목표가 → 2 근거</td><td class="n">✗</td><td><code>analysisSymbolHref</code> 사용 <b>0건</b></td></tr>
+        <tr><td><b>2 근거에서 내 기록 보기</b></td><td class="n">✗</td><td><b>보유 여부 한 비트만</b> 압니다</td></tr>
+      </table>
+    </div>
+    <div class="col">
+      <h3 style="margin-bottom:6px">연결 부품은 이미 있습니다</h3>
+      <table class="t">
+        <tr><th>화면</th><th style="text-align:center"><code>analysisSymbolHref</code></th></tr>
+        <tr><td>메모장</td><td class="y">씀</td></tr>
+        <tr><td>관심종목</td><td class="y">씀</td></tr>
+        <tr><td>스탬프</td><td class="y">씀</td></tr>
+        <tr><td>리포트</td><td class="y">씀</td></tr>
+        <tr><td>목표가</td><td class="n">안 씀</td></tr>
+        <tr><td>보유</td><td class="n">안 씀</td></tr>
+      </table>
+      <div class="note">새 규약을 만들 필요가 없습니다. <b>이미 있는 것을 빠진 자리에 채우는 일</b>입니다.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 내 기록 줄 ══════════ -->
+<div class="opt">
+  <div class="opt-head"><h2>핵심 제안 — 종목 화면의 「내 기록」 한 줄</h2><span class="tag rec">권장</span></div>
+  <div class="cols">
+    <div class="col">
+      <div class="before">
+        <span class="lbl b">지금</span>
+        <div class="rec">
+          <b style="font-size:13px">카카오</b><span class="sub">035720 · KOSDAQ</span>
+          <span class="chip on">보유</span>
+          <span style="margin-left:auto" class="sub">스탬프 · 보유 등록 · 목표가</span>
+        </div>
+        <div class="note">아는 것은 <b>「보유」 한 비트</b>뿐입니다. 이미 보유 중인데 「보유종목 등록」을 똑같이 내밉니다.</div>
+      </div>
+
+      <div class="after" style="margin-top:10px">
+        <span class="lbl a">바뀐 뒤</span>
+        <div class="rec">
+          <b style="font-size:13px">카카오</b><span class="sub">035720 · KOSDAQ</span>
+          <span style="margin-left:auto" class="sub">스탬프 · 보유 <b>수정</b> · 목표가</span>
+        </div>
+        <div class="rec" style="margin-top:6px">
+          <span class="sub" style="font-size:10.5px">내 기록</span>
+          <span class="chip on">보유 20주 · <span class="down">−17.7%</span></span>
+          <span class="chip warn">점검 약화 ›</span>
+          <span class="chip on">목표 45,000원 ›</span>
+          <span class="chip on">스탬프 2 ›</span>
+          <span class="chip dim">관심 미등록</span>
+          <span class="chip dim">리포트 없음</span>
+        </div>
+        <div class="note">칩 하나하나가 <b>그 기록으로 가는 문</b>입니다. 없는 것은 점선으로 두되 <b>지우지 않습니다</b> — 「아직 안 했다」도 흐름의 한 칸입니다.</div>
+      </div>
+    </div>
+
+    <div class="col">
+      <h3 style="margin-bottom:6px">필요한 것</h3>
+      <table class="t">
+        <tr><th style="width:120px">항목</th><th>내용</th></tr>
+        <tr><td>새 API</td><td><code>GET /user/symbols/{symbol}/context</code> 하나. 보유·관심·스탬프 수·목표가·리포트 수·점검 판정을 <b>한 번에</b> 돌려줍니다 — 여섯 번 부르면 종목을 열 때마다 요청이 여섯 개입니다.</td></tr>
+        <tr><td>새 표</td><td><b>없음</b> — 전부 기존 표에서 셉니다</td></tr>
+        <tr><td>비로그인</td><td>줄 자체를 <b>안 그립니다.</b> 「로그인하면 보입니다」를 여섯 칩으로 늘어놓을 이유가 없습니다</td></tr>
+        <tr><td>모바일</td><td>칩이 가로 스크롤됩니다. <b>있는 것을 앞에</b> 두어 스크롤 없이 먼저 보이게 합니다</td></tr>
+      </table>
+      <div class="note" style="color:var(--score-mid)">⚠️ 2026-09-03에 헤더 액션을 여섯에서 셋으로 <b>줄이신 적이 있습니다.</b> 이 줄은 <b>행동 버튼이 아니라 상태 표시</b>라 성격이 다르지만, 같은 헤더 영역이라 먼저 말씀드립니다.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 모바일 ══════════ -->
+<div class="opt">
+  <div class="opt-head"><h2>모바일 375px</h2></div>
+  <div class="cols">
+    <div class="phone">
+      <div class="plabel">칩이 한 줄로 흐릅니다</div>
+      <div class="card"><div class="body">
+        <div style="display:flex;align-items:baseline;gap:6px">
+          <b style="font-size:14px">카카오</b><span class="sub">035720</span>
+        </div>
+        <div style="font-size:16px;font-weight:700;margin:2px 0 8px">33,500원 <span class="down" style="font-size:11px">−1.2%</span></div>
+        <div style="display:flex;gap:5px;overflow-x:auto;padding-bottom:2px">
+          <span class="chip warn" style="flex:0 0 auto">점검 약화 ›</span>
+          <span class="chip on" style="flex:0 0 auto">보유 20주 ›</span>
+          <span class="chip on" style="flex:0 0 auto">목표 45,000 ›</span>
+          <span class="chip on" style="flex:0 0 auto">스탬프 2 ›</span>
+          <span class="chip dim" style="flex:0 0 auto">관심 미등록</span>
+        </div>
+        <div class="note">「점검 약화」가 맨 앞입니다 — <b>확인이 필요한 것이 먼저</b>입니다</div>
+      </div></div>
+      <div class="note">좁은 폭에서 칩을 줄바꿈하면 헤더가 세 줄이 됩니다. <b>한 줄 가로 스크롤</b>로 두고 순서로 우선순위를 냅니다.</div>
+    </div>
+    <div class="col" style="flex:1 1 320px">
+      <h3 style="margin-bottom:6px">범위 선택</h3>
+      <table class="t">
+        <tr><th style="width:150px">범위</th><th>내용</th></tr>
+        <tr><td><b>가 · 내 기록 줄 + 빠진 링크</b> <span class="tag rec">권장</span></td>
+            <td>새 API 하나 + 종목 화면 한 줄 + 보유 이유 점검 카드 클릭 + 목표가 화면 링크. <b>요구 9가 말한 「하나의 흐름」이 실제로 닫힙니다.</b></td></tr>
+        <tr><td>나 · 빠진 링크만</td>
+            <td>보유 이유 점검 카드 클릭 + 목표가 링크. 30분이면 끝나지만 <b>종목 화면은 여전히 한 비트만</b> 압니다.</td></tr>
+        <tr><td>다 · 별도 흐름 화면</td>
+            <td>「내 투자 흐름」 전용 화면. 화면이 하나 더 늘고, <b>정작 흐름이 필요한 자리(종목 화면)는 그대로</b>입니다.</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="lead">
+  <p><b>정해 주실 것은 범위 하나입니다</b> — 가(권장) · 나 · 다.</p>
+  <p class="sub">어느 쪽이든 <b>빠진 링크 둘</b>(보유 이유 점검 카드 클릭 · 목표가 → 종목)은 넣겠습니다. 그 둘은 제가 앞 단계에서 빠뜨린 것입니다.</p>
+</div>
+
+</div>
+<script>
+document.getElementById("themeBtn").addEventListener("click", function () {
+  var el = document.documentElement;
+  el.dataset.theme = el.dataset.theme === "dark" ? "light" : "dark";
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI 추천 랭킹 페이지 — 백테스트 배치 샘플 v2</title>
+<style>
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.97 0 0); --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0); --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.52 0 0); --accent: oklch(0.93 0 0);
+  --border: oklch(0.87 0 0);
+  --brand: #2563EB; --brand-muted: rgba(37,99,235,.1);
+  --profit: #DC2626; --loss: #2563EB;
+  --score-high: #15803D; --score-mid: #C2410C; --score-low: #B91C1C;
+  --surface-elevated: var(--accent); --text-primary: var(--foreground);
+  --text-muted: oklch(0.545 0 0);
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0); --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0); --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0); --accent: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 16%);
+  --brand: #60A5FA; --brand-muted: rgba(96,165,250,.15);
+  --profit: #F87171; --loss: #60A5FA;
+  --score-high: #4ADE80; --score-mid: #FB923C; --score-low: #F87171;
+  --text-muted: oklch(0.6 0 0);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--background); color: var(--foreground);
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 12px; line-height: 1.5; padding: 24px; -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1400px; margin: 0 auto; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
+h2 { font-size: 15px; font-weight: 600; }
+h3 { font-size: 13px; font-weight: 600; }
+.sub { color: var(--muted-foreground); font-size: 12px; }
+.up { color: var(--profit); } .down { color: var(--loss); }
+.n { font-variant-numeric: tabular-nums; }
+
+.topbar { display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding-bottom:16px; margin-bottom:20px; border-bottom:1px solid var(--border);
+  position:sticky; top:0; background:var(--background); z-index:5; }
+button.tgl { font:inherit; cursor:pointer; border:1px solid var(--border);
+  background:var(--card); color:var(--foreground); border-radius:8px; padding:5px 12px; }
+
+.lead { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:22px; }
+.lead p { margin-bottom:8px; } .lead p:last-child { margin-bottom:0; }
+.note { color:var(--muted-foreground); font-size:11px; margin-top:8px; }
+.opt { margin-bottom:30px; }
+.opt-head { display:flex; align-items:baseline; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+.tag { font-size:11px; font-weight:700; background:var(--brand-muted); color:var(--brand); border-radius:6px; padding:2px 7px; }
+.tag.rec { background:rgba(21,128,61,.12); color:var(--score-high); }
+.tag.no { background:rgba(185,28,28,.1); color:var(--score-low); }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; background:var(--surface-elevated); border-radius:4px; padding:1px 4px; }
+
+/* ---- 앱 껍데기 재현 ---- */
+.app { border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--card); }
+.app-head { display:flex; align-items:center; gap:10px; padding:8px 12px; border-bottom:1px solid var(--border); background:var(--card); }
+.logo { font-weight:700; font-size:12px; color:var(--brand); }
+.searchbar { flex:1; max-width:420px; height:26px; border:1px solid var(--border); border-radius:8px;
+  background:var(--background); display:flex; align-items:center; padding:0 10px; font-size:11px; color:var(--text-muted); }
+.cols { display:flex; min-height:430px; }
+.listcol { width:320px; flex:none; border-right:1px solid var(--border); display:flex; flex-direction:column; }
+.detailcol { flex:1; min-width:0; display:flex; }
+
+.toolbar { padding:8px 10px; border-bottom:1px solid var(--border); }
+.tabs { display:flex; gap:12px; font-size:12px; margin-bottom:8px; }
+.tabs b { border-bottom:2px solid var(--foreground); padding-bottom:3px; }
+.tabs span { color:var(--muted-foreground); }
+.chips { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:6px; }
+.chip { font-size:11px; border:1px solid var(--border); border-radius:999px; padding:2px 8px; color:var(--muted-foreground); background:var(--card); }
+.chip.on { background:var(--brand-muted); border-color:transparent; color:var(--brand); font-weight:600; }
+.asof { font-size:10px; color:var(--text-muted); }
+
+.row { display:flex; align-items:center; gap:8px; padding:6px 10px; border-bottom:1px solid var(--border); font-size:11.5px; }
+.row .rk { width:14px; color:var(--text-muted); text-align:right; }
+.row .av { width:18px; height:18px; border-radius:50%; background:var(--surface-elevated); flex:none; }
+.row .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.row .sc { width:22px; text-align:right; font-weight:700; }
+
+.emptydetail { flex:1; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:13px; }
+
+/* ---- 백테스트 패널 ---- */
+.bt { flex:1; min-width:0; display:flex; flex-direction:column; padding:14px 16px; gap:10px; }
+.bt-head { display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 10px; }
+.bt-head .t { font-size:14px; font-weight:700; }
+.bt-head .s { font-size:11px; color:var(--text-muted); }
+.seg { display:inline-flex; gap:2px; background:var(--muted); border-radius:8px; padding:2px; margin-left:auto; }
+.seg button { font:inherit; font-size:11px; cursor:pointer; border:0; background:transparent; color:var(--muted-foreground); border-radius:6px; padding:2px 8px; }
+.seg button.on { background:var(--card); color:var(--foreground); box-shadow:0 1px 2px rgba(0,0,0,.08); }
+
+.kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(104px,1fr)); gap:2px 14px; }
+.kpi .lab { font-size:10px; color:var(--text-muted); }
+.kpi .val { font-size:18px; font-weight:700; font-variant-numeric:tabular-nums; line-height:1.15; }
+.kpi .val.sm { font-size:14px; }
+
+table.bench { width:100%; border-collapse:collapse; font-size:11.5px; }
+table.bench th, table.bench td { text-align:right; padding:4px 8px 4px 0; border-bottom:1px solid var(--border); white-space:nowrap; }
+table.bench th:first-child, table.bench td:first-child { text-align:left; }
+table.bench th { color:var(--muted-foreground); font-weight:600; font-size:10px; }
+table.bench tr.pri td { font-weight:600; }
+.sw { display:inline-block; width:10px; height:2px; vertical-align:middle; margin-right:5px; }
+
+.warn { display:flex; gap:8px; border-left:3px solid var(--score-mid); background:rgba(194,65,12,.06);
+  border-radius:0 8px 8px 0; padding:7px 10px; font-size:11px; }
+.warn b { color:var(--score-mid); }
+.legend { display:flex; flex-wrap:wrap; gap:10px; font-size:10px; color:var(--text-muted); }
+
+.phone { width:375px; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--card); }
+.collapsed { display:flex; align-items:center; gap:6px; padding:7px 10px; border-bottom:1px solid var(--border); font-size:11px; background:var(--card); }
+.chev { margin-left:auto; color:var(--text-muted); }
+
+.grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(360px,1fr)); gap:16px; align-items:start; }
+.grid2 > figure { margin:0; min-width:0; }
+.grid2 figcaption { font-size:11px; font-weight:700; margin-bottom:6px; }
+.now figcaption { color:var(--muted-foreground); } .next figcaption { color:var(--brand); }
+.decide { border:1px dashed var(--border); border-radius:10px; padding:12px 14px; background:var(--card); }
+.decide ul { margin:8px 0 0 18px; } .decide li { margin-bottom:6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div>
+    <h1>AI 추천 랭킹 페이지 — 백테스트 배치 샘플 v2</h1>
+    <p class="sub">2026-09-18 · 레이아웃은 <b>실제 <code>analysis-client.tsx</code></b>, 숫자·곡선은 <b>실제 백테스트 결과</b></p>
+  </div>
+  <button class="tgl" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme==='dark'?'light':'dark'">라이트 / 다크</button>
+</div>
+
+<div class="lead">
+  <p><b>지난번 제안을 한 군데 고쳤습니다.</b> 「사이드 레일 카드」라고 말씀드렸는데, <code>/analysis</code>에는 <b>사이드 레일이 없습니다.</b> 실제 구조는 두 칼럼입니다 — 왼쪽 랭킹 목록(20rem), 오른쪽은 종목을 고르면 종목 워크스페이스, <b>안 고르면 「종목을 선택하면 상세가 표시됩니다」 한 줄뿐인 빈 화면</b>입니다.</p>
+  <p><b>그 빈 화면이 제자리입니다.</b> 종목을 고르기 <i>전</i>은 정확히 「이 랭킹 자체를 믿을까」를 묻는 순간이고, 고르는 순간 워크스페이스가 그 자리를 가져갑니다. <b>기존 화면에서 아무것도 밀어내지 않습니다</b> — 지금 그 자리에 있는 것은 회색 안내문 한 줄입니다.</p>
+  <p><b>벤치마크도 넓혔습니다.</b> 국내는 KOSPI·KOSDAQ, 해외는 S&P 500·나스닥 100·필라델피아 반도체(나스닥 종합·다우존스도 선택 가능). 하나로만 재면 절반이 안 보입니다 — 국내 종합은 KOSPI 대비 <b class="down">−8.89%p</b>지만 KOSDAQ 대비로는 <b class="down">−4.52%p</b>입니다.</p>
+</div>
+
+<!-- ===================== 현재 ===================== -->
+<section class="opt">
+  <div class="opt-head"><span class="tag no">현재</span><h2>종목을 고르기 전 — 오른쪽이 비어 있습니다</h2></div>
+  <div class="app">
+    <div class="app-head"><span class="logo">◆ QUANT PORT</span><span class="searchbar">종목명 · 심볼 검색…</span></div>
+    <div class="cols">
+      <div class="listcol">
+        <div class="toolbar">
+          <div class="tabs"><b>국내</b><span>해외</span></div>
+          <div class="chips"><span class="chip on">종합</span><span class="chip">추세</span><span class="chip">수익성</span><span class="chip">성장</span><span class="chip">가치</span><span class="chip">심리·수급</span></div>
+          <div class="chips"><span class="chip on">실시간</span><span class="chip">1일</span><span class="chip">1주</span><span class="chip">1개월</span></div>
+          <div class="asof">2026-09-17 기준 · 종합 점수 순</div>
+        </div>
+        <div class="row"><span class="rk">1</span><span class="av"></span><span class="nm">리튬포어스</span><span class="sc">88</span></div>
+        <div class="row"><span class="rk">2</span><span class="av"></span><span class="nm">동아엘텍</span><span class="sc">88</span></div>
+        <div class="row"><span class="rk">3</span><span class="av"></span><span class="nm">파미셀</span><span class="sc">82</span></div>
+        <div class="row"><span class="rk">4</span><span class="av"></span><span class="nm">SK디스커버리우</span><span class="sc">82</span></div>
+        <div class="row"><span class="rk">5</span><span class="av"></span><span class="nm">체리부로</span><span class="sc">82</span></div>
+        <div class="row"><span class="rk">6</span><span class="av"></span><span class="nm">PN풍년</span><span class="sc">81</span></div>
+      </div>
+      <div class="detailcol"><div class="emptydetail">종목을 선택하면 상세가 표시됩니다.</div></div>
+    </div>
+  </div>
+  <p class="note">데스크톱에서 이 화면을 연 사람이 가장 먼저 보는 것이 <b>이 빈 칸</b>입니다.</p>
+</section>
+
+<!-- ===================== 제안 ===================== -->
+<section class="opt">
+  <div class="opt-head"><span class="tag rec">제안 · 권장</span><h2>그 빈 칸에 「이 랭킹의 성적」</h2></div>
+  <div class="app">
+    <div class="app-head"><span class="logo">◆ QUANT PORT</span><span class="searchbar">종목명 · 심볼 검색…</span></div>
+    <div class="cols">
+      <div class="listcol">
+        <div class="toolbar">
+          <div class="tabs"><b>국내</b><span>해외</span></div>
+          <div class="chips"><span class="chip on">종합</span><span class="chip">추세</span><span class="chip">수익성</span><span class="chip">성장</span><span class="chip">가치</span><span class="chip">심리·수급</span></div>
+          <div class="chips"><span class="chip on">실시간</span><span class="chip">1일</span><span class="chip">1주</span><span class="chip">1개월</span></div>
+          <div class="asof">2026-09-17 기준 · 종합 점수 순</div>
+        </div>
+        <div class="row"><span class="rk">1</span><span class="av"></span><span class="nm">리튬포어스</span><span class="sc">88</span></div>
+        <div class="row"><span class="rk">2</span><span class="av"></span><span class="nm">동아엘텍</span><span class="sc">88</span></div>
+        <div class="row"><span class="rk">3</span><span class="av"></span><span class="nm">파미셀</span><span class="sc">82</span></div>
+        <div class="row"><span class="rk">4</span><span class="av"></span><span class="nm">SK디스커버리우</span><span class="sc">82</span></div>
+        <div class="row"><span class="rk">5</span><span class="av"></span><span class="nm">체리부로</span><span class="sc">82</span></div>
+        <div class="row"><span class="rk">6</span><span class="av"></span><span class="nm">PN풍년</span><span class="sc">81</span></div>
+      </div>
+
+      <div class="detailcol">
+        <div class="bt">
+          <div class="bt-head">
+            <span class="t">이 랭킹의 성적</span>
+            <span class="s">국내 · 종합 · 상위 20 · 주간 리밸런싱 · 2026-08-07 ~ 09-17</span>
+            <span class="seg"><button class="on">간단</button><button>상세</button></span>
+          </div>
+
+          <svg viewBox="0 0 700 150" width="100%" height="150" style="display:block" preserveAspectRatio="none">
+            <line x1="0" y1="0" x2="700" y2="0" stroke="var(--border)" stroke-width="1" id="base100" />
+            <polyline id="c-kosdaq" fill="none" stroke="var(--text-muted)" stroke-width="1.2" stroke-dasharray="2 3" vector-effect="non-scaling-stroke" />
+            <polyline id="c-kospi"  fill="none" stroke="var(--text-muted)" stroke-width="1.4" stroke-dasharray="5 3" vector-effect="non-scaling-stroke" />
+            <polyline id="c-port"   fill="none" stroke="var(--loss)" stroke-width="2.2" vector-effect="non-scaling-stroke" />
+          </svg>
+          <div class="legend">
+            <span><i class="sw" style="background:var(--loss)"></i>AI 종합 상위 20</span>
+            <span><i class="sw" style="background:var(--text-muted)"></i>KOSPI</span>
+            <span><i class="sw" style="background:var(--text-muted);opacity:.6"></i>KOSDAQ</span>
+            <span style="margin-left:auto">2026-08-07 = 100</span>
+          </div>
+
+          <div class="kpis">
+            <div class="kpi"><div class="lab">누적 수익률</div><div class="val down">−1.59%</div></div>
+            <div class="kpi"><div class="lab">KOSPI 대비</div><div class="val down">−8.89%p</div></div>
+            <div class="kpi"><div class="lab">KOSDAQ 대비</div><div class="val down">−4.52%p</div></div>
+            <div class="kpi"><div class="lab">MDD</div><div class="val sm">−9.67%</div></div>
+            <div class="kpi"><div class="lab">승률</div><div class="val sm">42.9%</div></div>
+          </div>
+
+          <table class="bench">
+            <tr><th>비교 지수</th><th>누적</th><th>초과</th><th>MDD</th><th>잰 날</th></tr>
+            <tr class="pri"><td><i class="sw" style="background:var(--text-muted)"></i>KOSPI <span style="color:var(--text-muted);font-size:10px">기준</span></td><td class="up n">+7.30%</td><td class="down n">−8.89%p</td><td class="n">−7.26%</td><td class="n">28일</td></tr>
+            <tr><td><i class="sw" style="background:var(--text-muted);opacity:.6"></i>KOSDAQ</td><td class="up n">+2.93%</td><td class="down n">−4.52%p</td><td class="n">−8.61%</td><td class="n">28일</td></tr>
+          </table>
+
+          <div class="warn"><div><b>표본 28거래일</b> — 통계적 유의성을 말할 수 없습니다. 연 환산 수익률과 Sharpe는 40거래일부터 계산합니다. 미래를 보지 않도록 <b>랭킹이 나온 다음 날부터</b> 수익을 셉니다.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note"><b>손잡이는 목록 툴바를 그대로 따릅니다</b> — 「해외 · 성장」을 고르면 이 패널도 같이 바뀝니다. 「상세」를 누르면 리밸런싱 주기(매일/매주/매월) · 상위 N(10~200) · 거래비용(bp) 손잡이와 축 6개 비교, 회전율·종가 결측 수가 폅니다.</p>
+  <p class="note"><b>비용</b> — 패널 하나당 요청 1회(0.24초 · 2.9KB). 축 6개 비교는 <b>상세를 펼 때만</b> 부릅니다.</p>
+</section>
+
+<!-- ===================== 모바일 ===================== -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">모바일</span><h2>좁은 화면에서는 목록 위 한 줄, 눌러야 펴집니다</h2></div>
+  <p class="sub">모바일은 목록만 보이고 상세는 오버레이라(<code>isCompact</code>) 빈 칸이 없습니다. 그래서 목록 맨 위에 <b>접힌 한 줄</b>로 서고, 펼치면 위와 같은 내용이 세로로 옵니다.</p>
+  <div class="grid2" style="margin-top:12px">
+    <figure class="now">
+      <figcaption>접힘 (기본)</figcaption>
+      <div class="phone">
+        <div class="toolbar">
+          <div class="tabs"><b>국내</b><span>해외</span></div>
+          <div class="chips"><span class="chip on">종합</span><span class="chip">추세</span><span class="chip">수익성</span><span class="chip">성장</span><span class="chip">가치</span><span class="chip">심리·수급</span></div>
+          <div class="chips"><span class="chip on">실시간</span><span class="chip">1일</span><span class="chip">1주</span><span class="chip">1개월</span></div>
+        </div>
+        <button class="collapsed" style="width:100%;border-left:0;border-right:0;border-top:0;text-align:left;font-family:inherit;cursor:pointer">
+          <span style="color:var(--text-muted)">이 랭킹의 성적</span>
+          <span class="down" style="font-weight:700">−1.59%</span>
+          <span style="color:var(--text-muted)">· KOSPI 대비</span>
+          <span class="down" style="font-weight:700">−8.89%p</span>
+          <span class="chev">›</span>
+        </button>
+        <div class="row"><span class="rk">1</span><span class="av"></span><span class="nm">리튬포어스</span><span class="sc">88</span></div>
+        <div class="row"><span class="rk">2</span><span class="av"></span><span class="nm">동아엘텍</span><span class="sc">88</span></div>
+        <div class="row"><span class="rk">3</span><span class="av"></span><span class="nm">파미셀</span><span class="sc">82</span></div>
+        <div class="row"><span class="rk">4</span><span class="av"></span><span class="nm">SK디스커버리우</span><span class="sc">82</span></div>
+      </div>
+      <p class="note">높이 <b>+30px</b>. 목록 첫 줄은 그대로 화면 안에 있습니다.</p>
+    </figure>
+    <figure class="next">
+      <figcaption>펼침</figcaption>
+      <div class="phone">
+        <div class="bt" style="padding:12px">
+          <div class="bt-head">
+            <span class="t" style="font-size:12px">이 랭킹의 성적</span>
+            <span class="seg"><button class="on">간단</button><button>상세</button></span>
+          </div>
+          <div class="s" style="font-size:10px;color:var(--text-muted)">국내 · 종합 · 상위 20 · 주간 · 28거래일</div>
+          <svg viewBox="0 0 340 92" width="100%" height="92" style="display:block" preserveAspectRatio="none">
+            <polyline id="m-kosdaq" fill="none" stroke="var(--text-muted)" stroke-width="1.2" stroke-dasharray="2 3" vector-effect="non-scaling-stroke" />
+            <polyline id="m-kospi"  fill="none" stroke="var(--text-muted)" stroke-width="1.4" stroke-dasharray="5 3" vector-effect="non-scaling-stroke" />
+            <polyline id="m-port"   fill="none" stroke="var(--loss)" stroke-width="2.2" vector-effect="non-scaling-stroke" />
+          </svg>
+          <div class="legend"><span><i class="sw" style="background:var(--loss)"></i>AI 상위 20</span><span><i class="sw" style="background:var(--text-muted)"></i>KOSPI</span><span><i class="sw" style="background:var(--text-muted);opacity:.6"></i>KOSDAQ</span></div>
+          <table class="bench">
+            <tr><th>비교 지수</th><th>누적</th><th>초과</th></tr>
+            <tr class="pri"><td>AI 종합 상위 20</td><td class="down n">−1.59%</td><td class="n">—</td></tr>
+            <tr><td>KOSPI</td><td class="up n">+7.30%</td><td class="down n">−8.89%p</td></tr>
+            <tr><td>KOSDAQ</td><td class="up n">+2.93%</td><td class="down n">−4.52%p</td></tr>
+          </table>
+          <div class="warn"><div><b>표본 28거래일</b> — 통계적 유의성 없음</div></div>
+        </div>
+      </div>
+    </figure>
+  </div>
+</section>
+
+<div class="decide">
+  <h3>결정해 주실 것</h3>
+  <ul>
+    <li><b>이 배치로 갈까요</b> — 빈 오른쪽 칸(데스크톱) + 목록 위 접힌 줄(모바일). 기존 화면에서 밀려나는 것이 없습니다.</li>
+    <li><b>28거래일 결과를 사용자에게 보여 줄까</b> — 지금 종합 점수는 KOSPI에 8.9%p 뒤집니다. ⓐ「유의성 없음」을 달아 그대로 · ⓑ 40거래일까지 관리자만 · ⓒ 이기는 축(성장·심리·수급)만.<br><span style="color:var(--text-muted)">ⓒ는 권하지 않습니다 — 그러면 이 기능이 검증이 아니라 광고가 됩니다.</span></li>
+    <li><b>종목 하나의 벤치마크도 넓힐까</b> — 지금 리포트·스탬프는 <code>benchmarkForStock</code>으로 KOSPI/KOSDAQ/S&amp;P 500만 씁니다. NASDAQ 상장이면 나스닥 종합, 반도체면 SOX처럼 넓힐 수 있는데, <b>리포트는 발행 시점에 벤치마크를 동결</b>하므로 바꾸면 <b>앞으로 발행되는 것만</b> 달라지고 과거와 비교 기준이 갈립니다. 별도 결정으로 두었습니다.</li>
+  </ul>
+</div>
+
+</div>
+<script>
+const P=[100,102.7,103.75,104.41,101.63,101.59,98.11,96.17,97.34,94.32,95.19,99.43,99.4,99.18,99.7,99.97,99.24,97.68,97.66,99.19,98.93,98.74,99.25,99.59,99.07,98.24,98.93,98.91,98.41];
+const K=[100,100.65,101.39,105.12,108.86,111.49,109.76,103.39,109.49,110.45,107,107.73,108.78,110.44,108.47,108.97,109.22,104.86,105.12,106.85,111.77,111.12,112.67,112.39,110.4,106.8,105.89,107.34,107.3];
+const Q=[100,106.97,107.39,107.52,107.83,108.24,104.43,103.21,105.27,100.39,101.82,103.55,103.51,104.86,104.96,104.44,102.81,100.65,98.92,101.84,102.93,101.64,103.95,104.77,102.73,101,101.7,102.15,102.93];
+const lo=Math.min(...P,...K,...Q)-1, hi=Math.max(...P,...K,...Q)+1;
+function draw(id,data,w,h){
+  const el=document.getElementById(id); if(!el) return;
+  el.setAttribute('points', data.map((v,i)=>{
+    const x=(i/(data.length-1))*(w-4)+2;
+    const y=h-3-((v-lo)/(hi-lo))*(h-6);
+    return x.toFixed(1)+','+y.toFixed(1);
+  }).join(' '));
+}
+draw('c-port',P,700,150); draw('c-kospi',K,700,150); draw('c-kosdaq',Q,700,150);
+draw('m-port',P,340,92);  draw('m-kospi',K,340,92);  draw('m-kosdaq',Q,340,92);
+const base=document.getElementById('base100');
+if(base){ const y=150-3-((100-lo)/(hi-lo))*(150-6); base.setAttribute('y1',y); base.setAttribute('y2',y); }
+</script>
+</body>
+</html>

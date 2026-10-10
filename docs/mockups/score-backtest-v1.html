@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI 랭킹 백테스트 — 배치 선택용 목업 v1</title>
+<style>
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.97 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.93 0 0);
+  --border: oklch(0.87 0 0);
+  --brand: #2563EB;
+  --brand-muted: rgba(37, 99, 235, 0.1);
+  --profit: #DC2626;
+  --loss: #2563EB;
+  --score-high: #15803D;
+  --score-mid: #C2410C;
+  --score-low: #B91C1C;
+  --surface-elevated: var(--accent);
+  --text-primary: var(--foreground);
+  --text-muted: oklch(0.545 0 0);
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 16%);
+  --brand: #60A5FA;
+  --brand-muted: rgba(96, 165, 250, 0.15);
+  --profit: #F87171;
+  --loss: #60A5FA;
+  --score-high: #4ADE80;
+  --score-mid: #FB923C;
+  --score-low: #F87171;
+  --text-muted: oklch(0.6 0 0);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--background); color: var(--foreground);
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 12px; line-height: 1.5; padding: 24px; -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1240px; margin: 0 auto; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 15px; font-weight: 600; }
+h3 { font-size: 13px; font-weight: 600; }
+.sub { color: var(--muted-foreground); font-size: 12px; }
+.num { font-variant-numeric: tabular-nums; }
+.up { color: var(--profit); } .down { color: var(--loss); }
+
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-bottom: 16px; margin-bottom: 20px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--background); z-index: 5; }
+button.tgl { font: inherit; cursor: pointer; border: 1px solid var(--border);
+  background: var(--card); color: var(--foreground); border-radius: 8px; padding: 5px 12px; }
+button.tgl:hover { background: var(--accent); }
+
+.lead { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 24px; }
+.lead p { margin-bottom: 8px; } .lead p:last-child { margin-bottom: 0; }
+table.res { border-collapse: collapse; margin: 10px 0 4px; font-size: 11.5px; width: 100%; }
+table.res th, table.res td { text-align: right; padding: 4px 10px 4px 0; border-bottom: 1px solid var(--border); white-space: nowrap; }
+table.res th:first-child, table.res td:first-child { text-align: left; }
+table.res th { color: var(--muted-foreground); font-weight: 600; }
+
+.opt { margin-bottom: 32px; }
+.opt-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.tag { font-size: 11px; font-weight: 700; background: var(--brand-muted); color: var(--brand); border-radius: 6px; padding: 2px 7px; }
+.tag.rec { background: rgba(21,128,61,.12); color: var(--score-high); }
+.note { color: var(--muted-foreground); font-size: 11px; margin-top: 8px; }
+
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.card-body { padding: 10px 12px; }
+.ttl { font-size: 12px; font-weight: 600; }
+.right { margin-left: auto; font-size: 10px; color: var(--text-muted); }
+
+.seg { display: inline-flex; gap: 2px; background: var(--muted); border-radius: 8px; padding: 2px; }
+.seg button { font: inherit; font-size: 11px; cursor: pointer; border: 0; background: transparent;
+  color: var(--muted-foreground); border-radius: 6px; padding: 2px 8px; }
+.seg button.on { background: var(--card); color: var(--foreground); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px,1fr)); gap: 2px 10px; }
+.kpi { padding: 4px 0; }
+.kpi .lab { font-size: 10px; color: var(--text-muted); }
+.kpi .val { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.kpi .val.sm { font-size: 13px; }
+
+.warn { display: flex; gap: 8px; align-items: flex-start; border-left: 3px solid var(--score-mid);
+  background: rgba(194,65,12,.06); border-radius: 0 8px 8px 0; padding: 7px 10px; font-size: 11px; margin-top: 10px; }
+.warn b { color: var(--score-mid); }
+
+.legend { display: flex; gap: 12px; font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+.legend i { display: inline-block; width: 10px; height: 2px; vertical-align: middle; margin-right: 4px; }
+
+.rail { width: 300px; max-width: 100%; }
+.phone { width: 375px; max-width: 100%; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: start; }
+.grid2 > figure { margin: 0; min-width: 0; }
+.grid2 figcaption { font-size: 11px; font-weight: 700; margin-bottom: 6px; }
+.now figcaption { color: var(--muted-foreground); } .next figcaption { color: var(--brand); }
+
+.decide { border: 1px dashed var(--border); border-radius: 10px; padding: 12px 14px; margin-top: 8px; background: var(--card); }
+.decide ul { margin: 8px 0 0 18px; } .decide li { margin-bottom: 6px; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; background: var(--surface-elevated); border-radius: 4px; padding: 1px 4px; }
+.axisrow { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 11.5px; border-bottom: 1px solid var(--border); }
+.axisrow:last-child { border-bottom: 0; }
+.axisrow .nm { width: 54px; flex: none; }
+.axisrow .bar { flex: 1; min-width: 0; height: 14px; position: relative;
+  background: linear-gradient(to right, transparent calc(50% - .5px), var(--border) calc(50% - .5px), var(--border) calc(50% + .5px), transparent calc(50% + .5px)); }
+.axisrow .bar span { position: absolute; top: 4px; height: 6px; border-radius: 2px; }
+.axisrow .v { width: 56px; flex: none; text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div>
+    <h1>AI 랭킹 백테스트 — 배치 선택용 목업 v1</h1>
+    <p class="sub">2026-09-18 · 숫자·곡선 전부 <b>방금 돌린 실제 백테스트 결과</b> (국내 2026-08-07 ~ 09-17, 28거래일)</p>
+  </div>
+  <button class="tgl" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme==='dark'?'light':'dark'">라이트 / 다크</button>
+</div>
+
+<div class="lead">
+  <p><b>백엔드는 배포돼 있습니다.</b> <code>GET /stocks/scores/backtest</code> — 실측 0.24초 · 2.9KB · 읽기 2회(얇은 랭킹 이력 + 종가). 새 표 <code>score_ranking_history</code>는 하루 2,400행 · <b>연 35MB</b>이고, 기존 30거래일치를 <b>16초 만에 백필</b>해 오늘 바로 27거래일을 확보했습니다.</p>
+  <p><b>그런데 결과가 편치 않습니다.</b> 이 화면을 어디에 둘지 정하기 전에 먼저 보셔야 할 숫자입니다 — 국내 · 상위 20 · 주간 리밸런싱:</p>
+  <table class="res">
+    <tr><th>랭킹 축</th><th>누적</th><th>KOSPI</th><th>초과</th><th>MDD</th><th>승률</th><th>회전율</th></tr>
+    <tr><td><b>종합</b></td><td class="down">−1.59%</td><td class="up">+7.30%</td><td class="down"><b>−8.89%p</b></td><td>−9.67%</td><td>42.9%</td><td>74%</td></tr>
+    <tr><td>성장</td><td class="up">+14.07%</td><td class="up">+7.30%</td><td class="up"><b>+6.77%p</b></td><td>−3.50%</td><td>71.4%</td><td>28%</td></tr>
+    <tr><td>추세</td><td class="up">+5.04%</td><td class="up">+7.30%</td><td class="down">−2.26%p</td><td>−6.93%</td><td>53.6%</td><td>85%</td></tr>
+    <tr><td>가치</td><td class="down">−1.99%</td><td class="up">+7.30%</td><td class="down">−9.29%p</td><td>−8.90%</td><td>53.6%</td><td>74%</td></tr>
+  </table>
+  <p><b>28거래일은 아무것도 증명하지 않습니다</b> — 우연히 한 종목이 급등하면 뒤집힙니다. 그래서 응답은 연 환산과 Sharpe를 <b>비워 둡니다</b>(40거래일부터). 다만 이 표가 가리키는 방향은 무시하기 어렵습니다: <b>종합 점수가 다섯 축 중 가장 나쁩니다.</b> 가중 평균이 서로 다른 신호를 상쇄하고 있을 가능성이 있고, 이것이 이 기능을 만든 이유이기도 합니다.</p>
+</div>
+
+<!-- ============================== 배치 A ============================== -->
+<section class="opt">
+  <div class="opt-head"><span class="tag rec">배치 A · 권장</span><h2>AI 추천 랭킹(<code>/analysis</code>) 사이드 레일 카드</h2></div>
+  <p class="sub">지금 보고 있는 <b>그 랭킹</b>(시장 · 축 · 상위 N)을 그대로 검증합니다. 목록 위 툴바에서 「해외 · 성장」을 고르면 이 카드도 같이 바뀝니다 — 사용자가 설정을 두 번 하지 않습니다.</p>
+
+  <div class="grid2" style="margin-top:12px">
+    <figure class="now">
+      <figcaption>현재 — 레일에 없는 것</figcaption>
+      <div class="rail card">
+        <div class="card-head"><span class="ttl">AI 추천 랭킹</span><span class="right">2026-09-17 기준</span></div>
+        <div class="card-body">
+          <p style="font-size:11.5px">1. 삼성전자 48 · 2. SK하이닉스 79 · 3. …</p>
+          <p class="note" style="margin-top:6px">「이 목록을 믿고 사면 어떻게 되나」에 답하는 화면이 <b>앱 어디에도 없습니다.</b> 점수는 매일 나오는데 그 점수가 맞았는지는 아무도 모릅니다.</p>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="next">
+      <figcaption>제안 — 「이 랭킹의 성적」 카드 (간단)</figcaption>
+      <div class="rail card">
+        <div class="card-head">
+          <span class="ttl">이 랭킹의 성적</span>
+          <span class="seg" style="margin-left:auto"><button class="on">간단</button><button>상세</button></span>
+        </div>
+        <div class="card-body">
+          <svg viewBox="0 0 276 74" width="100%" height="74" style="display:block">
+            <polyline id="spark-b" fill="none" stroke="var(--text-muted)" stroke-width="1.2" stroke-dasharray="3 2" />
+            <polyline id="spark-p" fill="none" stroke="var(--loss)" stroke-width="1.8" />
+          </svg>
+          <div class="legend"><span><i style="background:var(--loss)"></i>종합 상위 20</span><span><i style="background:var(--text-muted)"></i>KOSPI</span></div>
+
+          <div class="kpis" style="margin-top:8px">
+            <div class="kpi"><div class="lab">누적</div><div class="val down">−1.59%</div></div>
+            <div class="kpi"><div class="lab">KOSPI 대비</div><div class="val down">−8.89%p</div></div>
+            <div class="kpi"><div class="lab">MDD</div><div class="val sm">−9.67%</div></div>
+          </div>
+
+          <div class="warn">
+            <div><b>표본 28거래일</b> — 통계적 유의성을 말할 수 없습니다. 연 환산·Sharpe는 40거래일부터 나옵니다.</div>
+          </div>
+        </div>
+      </div>
+
+      <p class="note" style="margin-top:14px"><b>같은 카드, 상세</b> — 축을 나란히 세워 「어느 축이 실제로 맞았나」를 한 번에:</p>
+      <div class="rail card" style="margin-top:6px">
+        <div class="card-head">
+          <span class="ttl">이 랭킹의 성적</span>
+          <span class="seg" style="margin-left:auto"><button>간단</button><button class="on">상세</button></span>
+        </div>
+        <div class="card-body">
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">KOSPI 대비 초과수익 (상위 20 · 주간)</div>
+          <div class="axisrow"><span class="nm">심리·수급</span><span class="bar"><span style="background:var(--profit);left:50%;width:33%"></span></span><span class="v up">+9.35%p</span></div>
+          <div class="axisrow"><span class="nm">성장</span><span class="bar"><span style="background:var(--profit);left:50%;width:24%"></span></span><span class="v up">+6.77%p</span></div>
+          <div class="axisrow"><span class="nm">추세</span><span class="bar"><span style="background:var(--loss);right:50%;width:8%"></span></span><span class="v down">−2.26%p</span></div>
+          <div class="axisrow"><span class="nm">수익성</span><span class="bar"><span style="background:var(--loss);right:50%;width:18%"></span></span><span class="v down">−5.15%p</span></div>
+          <div class="axisrow"><span class="nm"><b>종합</b></span><span class="bar"><span style="background:var(--loss);right:50%;width:31%"></span></span><span class="v down"><b>−8.89%p</b></span></div>
+          <div class="axisrow"><span class="nm">가치</span><span class="bar"><span style="background:var(--loss);right:50%;width:33%"></span></span><span class="v down">−9.29%p</span></div>
+          <p class="note" style="margin-top:8px"><b>심리·수급은 표본이 11거래일뿐입니다</b> — 이 축은 AI 요약이 있는 종목(전체의 4%)에만 붙어서 상위 20이 자주 비어 있습니다. 축마다 표본이 다르다는 사실을 행마다 적어야 합니다.<br>상세에는 리밸런싱 주기(매일/매주/매월)·상위 N(10~200)·거래비용(bp) 손잡이와 승률·변동성·회전율·종가 결측 수가 함께 섭니다.</p>
+        </div>
+      </div>
+      <p class="note"><b>비용</b> — 카드 하나당 요청 1회(0.24초 · 2.9KB). 상세의 축 비교는 6회이므로 <b>상세를 펼 때만</b> 부릅니다.</p>
+    </figure>
+  </div>
+</section>
+
+<!-- ============================== 배치 B ============================== -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">배치 B</span><h2>랭킹 목록 위 전폭 패널</h2></div>
+  <p class="sub">같은 내용을 레일이 아니라 목록 <b>바로 위</b>에 둡니다. 눈에 확실히 띄지만, 종목을 보러 온 사람이 매번 이 층을 지나야 합니다.</p>
+  <div class="card" style="margin-top:12px">
+    <div class="card-head"><span class="ttl">국내 · 종합 · 상위 20 · 주간 리밸런싱</span><span class="right">2026-08-07 ~ 09-17 · 28거래일</span></div>
+    <div class="card-body" style="display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:center">
+      <svg viewBox="0 0 560 96" width="100%" height="96" style="display:block">
+        <polyline id="spark-b2" fill="none" stroke="var(--text-muted)" stroke-width="1.2" stroke-dasharray="3 2" />
+        <polyline id="spark-p2" fill="none" stroke="var(--loss)" stroke-width="2" />
+      </svg>
+      <div>
+        <div class="kpis">
+          <div class="kpi"><div class="lab">누적</div><div class="val down">−1.59%</div></div>
+          <div class="kpi"><div class="lab">KOSPI</div><div class="val up">+7.30%</div></div>
+          <div class="kpi"><div class="lab">초과</div><div class="val down">−8.89%p</div></div>
+          <div class="kpi"><div class="lab">MDD</div><div class="val sm">−9.67%</div></div>
+          <div class="kpi"><div class="lab">승률</div><div class="val sm">42.9%</div></div>
+          <div class="kpi"><div class="lab">회전율</div><div class="val sm">74%</div></div>
+        </div>
+        <div class="warn"><div><b>표본 28거래일</b> · 유의성 없음</div></div>
+      </div>
+    </div>
+  </div>
+  <p class="note">모바일에서는 두 칸이 세로로 접혀 <b>약 220px</b>를 먹습니다 — 랭킹 첫 줄이 스크롤 아래로 내려갑니다.</p>
+</section>
+
+<!-- ============================== 배치 C ============================== -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">배치 C</span><h2>관리자 전용 (<code>/admin/score</code>)으로 먼저</h2></div>
+  <p class="sub">사용자에게는 아직 보여 주지 않고, 40거래일이 쌓일 때까지 관리자 화면에서만 봅니다.</p>
+  <div class="card" style="margin-top:12px">
+    <div class="card-head"><span class="ttl">랭킹 검증</span><span class="right">이력 27거래일 · 2026-08-07 ~ 09-17</span></div>
+    <div class="card-body">
+      <table class="res">
+        <tr><th>시장 · 축</th><th>누적</th><th>벤치마크</th><th>초과</th><th>MDD</th><th>회전율</th></tr>
+        <tr><td>국내 · 종합</td><td class="down">−1.59%</td><td class="up">+7.30%</td><td class="down">−8.89%p</td><td>−9.67%</td><td>74%</td></tr>
+        <tr><td>국내 · 성장</td><td class="up">+14.07%</td><td class="up">+7.30%</td><td class="up">+6.77%p</td><td>−3.50%</td><td>28%</td></tr>
+        <tr><td>해외 · 종합</td><td class="up">+4.09%</td><td class="down">−2.65%</td><td class="up">+6.74%p</td><td>−8.52%</td><td>53%</td></tr>
+        <tr><td>해외 · 성장</td><td class="down">−8.07%</td><td class="down">−2.65%</td><td class="down">−5.42%p</td><td>−14.59%</td><td>25%</td></tr>
+      </table>
+      <p class="note">가중치를 바꾼 뒤 「가중치 바꿔 보기」 → 백필 → 이 표로 이어지면, 점수 설계를 <b>측정하면서</b> 고칠 수 있습니다.</p>
+    </div>
+  </div>
+</section>
+
+<div class="decide">
+  <h3>결정해 주실 것</h3>
+  <ul>
+    <li><b>어디에 둘까</b> — A(레일 카드, 권장) · B(목록 위 전폭) · C(관리자 먼저) · A+C</li>
+    <li><b>28거래일 결과를 사용자에게 보여 줄까</b> — 지금 종합 점수는 KOSPI에 8.9%p 뒤집니다. 「유의성 없음」을 붙여 그대로 보여 주는 쪽과, 40거래일까지 관리자만 보는 쪽 중 어느 쪽이 이 제품답습니까?</li>
+    <li><b>종합 점수 가중치를 손볼까</b> — 성장 축 단독(+6.77%p)이 종합(−8.89%p)을 크게 앞섭니다. 표본이 짧아 단정할 수 없지만, 「가중치 바꿔 보기」와 이 백테스트를 붙이면 측정하면서 조정할 수 있습니다. (별도 작업)</li>
+  </ul>
+</div>
+
+</div>
+<script>
+const P=[100,102.7,103.75,104.41,101.63,101.59,98.11,96.17,97.34,94.32,95.19,99.43,99.4,99.18,99.7,99.97,99.24,97.68,97.66,99.19,98.93,98.74,99.25,99.59,99.07,98.24,98.93,98.91,98.41];
+const B=[100,100.65,101.39,105.12,108.86,111.49,109.76,103.39,109.49,110.45,107,107.73,108.78,110.44,108.47,108.97,109.22,104.86,105.12,106.85,111.77,111.12,112.67,112.39,110.4,106.8,105.89,107.34,107.3];
+function draw(id, data, w, h, lo, hi) {
+  const el = document.getElementById(id); if (!el) return;
+  const pts = data.map((v,i) => {
+    const x = (i/(data.length-1))*(w-4)+2;
+    const y = h-2 - ((v-lo)/(hi-lo))*(h-4);
+    return x.toFixed(1)+','+y.toFixed(1);
+  });
+  el.setAttribute('points', pts.join(' '));
+}
+const lo = Math.min(...P, ...B) - 1, hi = Math.max(...P, ...B) + 1;
+draw('spark-p', P, 276, 74, lo, hi); draw('spark-b', B, 276, 74, lo, hi);
+draw('spark-p2', P, 560, 96, lo, hi); draw('spark-b2', B, 560, 96, lo, hi);
+</script>
+</body>
+</html>
