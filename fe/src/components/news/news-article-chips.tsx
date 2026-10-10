@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ASSET_FEATURES_HIDDEN } from "@/lib/hidden-features";
 import { NewsSymbolChips } from "@/components/news/news-symbol-chips";
 import { useQuickLook } from "@/components/providers/quick-look-provider";
 import {
@@ -41,9 +42,13 @@ function articleSymbolList(article: NewsArticle) {
     .filter(Boolean);
 }
 
-/** 기사에 붙일 수 있는 지수·종목 칩 총 개수(시세 있는 지수만). */
+/** 기사에 붙일 수 있는 자산·지수·종목 칩 총 개수(시세 있는 지수만). */
 export function articleChipTotalCount(article: NewsArticle, indices: MarketIndex[]) {
-  return articleIndexRows(article, indices).length + articleSymbolList(article).length;
+  return (
+    (article.assetTags?.length ?? 0) +
+    articleIndexRows(article, indices).length +
+    articleSymbolList(article).length
+  );
 }
 
 export function NewsArticleChips({
@@ -70,13 +75,25 @@ export function NewsArticleChips({
   /* 지수 칩도 종목 칩과 같은 규칙 — 평범한 클릭은 창을 연다(news-symbol-chips 참조). */
   const quickLook = useQuickLook();
 
+  /*
+    자산 칩(지역·금리, 2026-10-09 요청 4)이 맨 앞 — 부동산·금리 기사에는 종목이 없어 이것이 그 기사의
+    「누를 거리」다. 누르면 글 태그와 같은 자산 미리보기 모달.
+  */
+  // 부동산·금리 자산 칩은 비노출 기능(lib/hidden-features) 동안 뺀다 — 미리보기가 닫힌 화면으로 이어진다.
+  const allAssets = ASSET_FEATURES_HIDDEN ? [] : (article.assetTags ?? []);
+  const assets = allAssets.slice(0, max);
   const allIndexRows = articleIndexRows(article, indices);
   const allSymbols = articleSymbolList(article);
-  const indexRows = allIndexRows.slice(0, max);
-  const symbolMax = Math.max(0, max - indexRows.length);
+  const indexRows = allIndexRows.slice(0, Math.max(0, max - assets.length));
+  const symbolMax = Math.max(0, max - assets.length - indexRows.length);
   const symbols = allSymbols.slice(0, symbolMax);
   const hiddenCount = overflowHint
-    ? allIndexRows.length + allSymbols.length - indexRows.length - symbols.length
+    ? allAssets.length +
+      allIndexRows.length +
+      allSymbols.length -
+      assets.length -
+      indexRows.length -
+      symbols.length
     : 0;
 
   /*
@@ -85,12 +102,33 @@ export function NewsArticleChips({
     열한 개 걸려 있다는 사실을 말하지만, 아무것도 안 그리면 그 기사만 유독 종목이
     없는 기사처럼 보인다.
   */
-  if (indexRows.length === 0 && symbols.length === 0 && hiddenCount === 0) {
+  if (assets.length === 0 && indexRows.length === 0 && symbols.length === 0 && hiddenCount === 0) {
     return null;
   }
 
   return (
     <div className={cn("flex min-w-0 flex-wrap items-center gap-1", className)}>
+      {assets.map((a) => (
+        <button
+          key={`${a.kind}:${a.key}`}
+          type="button"
+          data-meta-chip=""
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            quickLook?.openAsset({ kind: a.kind, key: a.key, name: a.name });
+          }}
+          disabled={!quickLook}
+          className={cn(
+            "inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border border-[var(--brand)]/30 bg-[var(--brand)]/10 px-1.5 py-px text-micro font-semibold text-[var(--brand)] hover:border-[var(--brand)]",
+            chipClassName,
+          )}
+          title={`${a.name} 자세히`}
+        >
+          <span aria-hidden>{a.kind === "rate" ? "％" : a.kind === "apt" ? "🏢" : a.kind === "sido" ? "🗺️" : "📍"}</span>
+          <span className="truncate">{a.name}</span>
+        </button>
+      ))}
       {indexRows.map(({ id, index }) => (
         <Link
           key={id}

@@ -21,6 +21,7 @@
 import { getApiBaseUrl, mergeFetchInit, parseJson } from "@/lib/api-client";
 import type { ApiResponse } from "@/lib/api-types";
 import { cachedGet } from "@/lib/fetch-cache";
+import { fetchWithTimeout } from "@/lib/fetch-timeout";
 import { isLiveSession } from "@/lib/market-session";
 
 export type MarketClock = {
@@ -44,7 +45,16 @@ export async function fetchMarketClocks(): Promise<MarketClocks> {
   return cachedGet(
     CACHE_KEY,
     async () => {
-      const res = await fetch(
+      /*
+        **상한을 건다** (2026-09-22 전수 점검에서 남은 두 곳 중 하나).
+
+        09-20이 `lib/fetch-timeout.ts`로 앱 전체에 상한을 걸었는데 이 호출과
+        `news-briefing-api`가 빠져 있었다. 여기는 빠지면 특히 아픈 자리다 —
+        `cachedGet`이 **모두가 함께 기다리는 promise 하나**를 들고 있어서, 이
+        요청이 안 끝나면 시장 세션을 묻는 카드가 전부 같이 멈춘다. 09-20이
+        `inflightRefresh`에서 고친 것과 같은 모양이다.
+      */
+      const res = await fetchWithTimeout(
         `${getApiBaseUrl()}/api/v1/market/clocks`,
         mergeFetchInit({ cache: "no-store" }),
       );

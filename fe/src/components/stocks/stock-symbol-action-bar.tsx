@@ -5,6 +5,7 @@ import { Briefcase, ChevronsRight, MoreHorizontal, Target } from "lucide-react";
 import { AddHoldingDialog } from "@/components/holdings/add-holding-dialog";
 import { StampButton } from "@/components/stamps/stamp-button";
 import { TargetPriceDialog } from "@/components/targets/target-price-dialog";
+import { PREDICTION_FEATURES_HIDDEN } from "@/lib/hidden-features";
 import { Button } from "@/components/ui/button";
 import type { StockInfo } from "@/lib/quotes-types";
 import { cn } from "@/lib/utils";
@@ -150,7 +151,13 @@ export function StockSymbolActionBar({
   */
   if (!stock?.symbol) return null;
 
-  const stampButton = (iconOnly: boolean) => (
+  /*
+    목표가 예측(스탬프·목표가) 비노출(2026-10-10, lib/hidden-features) — 남는 버튼이 「보유종목 등록」
+    하나라 모바일에서도 접지 않고 그대로 보인다.
+  */
+  const collapsible = collapseOnMobile && !PREDICTION_FEATURES_HIDDEN;
+
+  const stampButton = (iconOnly: boolean) => PREDICTION_FEATURES_HIDDEN ? null : (
     <StampButton
       symbol={stock.symbol}
       interval={chartInterval}
@@ -169,7 +176,7 @@ export function StockSymbolActionBar({
   */
   return (
     <div className={cn("flex min-w-0 items-center gap-1.5", className)}>
-      {collapseOnMobile && !expanded && (
+      {collapsible && !expanded && (
         <Button
           variant="outline"
           size="sm"
@@ -188,7 +195,7 @@ export function StockSymbolActionBar({
         종목명이 살아남는다(목업 A안). 무엇인지는 `aria-label`과 길게 누르기 툴팁이
         말해 주고, 데스크톱에서는 아래 줄이 글자를 그대로 단다.
       */}
-      {collapseOnMobile && expanded && (
+      {collapsible && expanded && (
         <div className="flex shrink-0 items-center gap-1 sm:hidden">
           {stampButton(true)}
           <Button
@@ -228,7 +235,7 @@ export function StockSymbolActionBar({
       <div
         className={cn(
           "flex min-w-0 flex-wrap items-center gap-1.5",
-          collapseOnMobile && "hidden sm:flex",
+          collapsible && "hidden sm:flex",
         )}
       >
         {stampButton(false)}
@@ -249,16 +256,18 @@ export function StockSymbolActionBar({
           <Briefcase />
           보유종목 등록
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={openTarget}
-          title={gate.authed ? "이 종목의 목표가 설정" : "로그인하면 이 종목의 목표가를 설정할 수 있습니다"}
-          className={HEADER_ACTION_CLASS}
-        >
-          <Target />
-          목표가 설정
-        </Button>
+        {!PREDICTION_FEATURES_HIDDEN && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openTarget}
+            title={gate.authed ? "이 종목의 목표가 설정" : "로그인하면 이 종목의 목표가를 설정할 수 있습니다"}
+            className={HEADER_ACTION_CLASS}
+          >
+            <Target />
+            목표가 설정
+          </Button>
+        )}
       </div>
 
       <AddHoldingDialog

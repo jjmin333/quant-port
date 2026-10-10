@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMySymbols } from "@/hooks/use-news-symbols";
+import { useVisibleInterval } from "@/hooks/use-visible-interval";
+import { SCREEN_SLOW_REFRESH_MS } from "@/lib/screen-refresh";
 import { fetchQuotesBatchClient } from "@/lib/market-api";
 import type { QuoteSummary } from "@/lib/quotes-types";
 import {
@@ -21,11 +23,25 @@ import type {
  *
  * **히트맵·상세·집계를 따로 받는다.** 단위를 넘길 때 필요한 것은 날짜별 건수(≤31행)
  * 뿐이고, 상세는 고른 구간만, 집계는 숫자 몇 개다. 하나로 합치면 달을 한 번 넘길
- * 때마다 시즌 달의 3,000행이 따라온다(AGENT_STATE 응답 속도 원칙 #4).
+ * 때마다 시즌 달의 3,000행이 따라온다(PRINCIPLES 응답 속도 원칙 #4).
  *
  * 세 훅이 모두 **키드 상태**를 쓴다 — 이펙트에서 동기로 `null`을 넣으면 캐스케이드
  * 렌더가 되므로(react-hooks/set-state-in-effect), 키가 안 맞으면 아직 안 온 것으로
  * 읽는다. 이 앱의 기존 패턴이다(use-news-symbols.ts).
+ *
+ * # 30분마다 스스로 다시 받는다 (2026-09-16 사용자 요청)
+ *
+ * 실적 화면을 열어 둔 채로는 마운트 시각의 일정이 그대로 서 있었다. 발표가 하루
+ * 종일 들어오는 화면인데(국내 배치 18:30, 해외는 5분마다 당일 창) 그 사실이 화면에
+ * 닿지 않았다.
+ *
+ * **느린 쪽을 쓴다** (`SCREEN_SLOW_REFRESH_MS`). 이 목록을 만드는 것은 하루 한두 번
+ * 도는 적재 배치이고, 시즌의 한 달 창은 300행 상한까지 차는 큰 응답이라 5분마다
+ * 왕복시키면 1 ECPU짜리 DB에 그대로 얹힌다.
+ *
+ * **키가 바뀐 회차와 갱신 회차가 같은 길을 쓴다** — 키드 상태라 갱신은 같은 키로
+ * 덮어쓰는 일이고, 그래서 화면이 「불러오는 중」으로 떨어지지 않는다. 갱신이 실패하면
+ * 직전 값이 그대로 남는다(`load`의 catch가 키가 없는 회차에서만 비운다).
  */
 
 /**
@@ -59,6 +75,16 @@ export function useEarningsSummary(
     };
   }, [key, from, to, market]);
 
+  /*
+    갱신은 **같은 키로 덮어쓴다** — 실패하면 손대지 않는다(직전 히트맵이 남는다).
+    첫 적재의 실패만 위 이펙트에서 빈 배열이 되고, 화면은 그것을 「없음」으로 읽는다.
+  */
+  useVisibleInterval(() => {
+    fetchEarningsSummary(from, to, market)
+      .then((days) => setState({ key, days: days ?? [] }))
+      .catch(() => {});
+  }, SCREEN_SLOW_REFRESH_MS);
+
   const days = state?.key === key ? state.days : null;
   return { days, loading: days === null };
 }
@@ -84,10 +110,22 @@ export function useEarningsEvents(
   const key = `${from}|${to}|${market}|${symbolsKey}|${limit}`;
   const [state, setState] = useState<{ key: string; events: EarningsEvent[] } | null>(null);
 
+  const fetchRows = useCallback(
+    () =>
+      fetchEarningsCalendar(
+        from,
+        to,
+        market,
+        symbolsKey ? symbolsKey.split(",") : undefined,
+        limit,
+      ),
+    [from, to, market, symbolsKey, limit],
+  );
+
   useEffect(() => {
     if (!enabled || !from || !to) return;
     let alive = true;
-    fetchEarningsCalendar(from, to, market, symbolsKey ? symbolsKey.split(",") : undefined, limit)
+    fetchRows()
       .then((events) => {
         if (alive) setState({ key, events: events ?? [] });
       })
@@ -98,7 +136,18 @@ export function useEarningsEvents(
     return () => {
       alive = false;
     };
-  }, [key, from, to, market, symbolsKey, limit, enabled]);
+  }, [key, from, to, enabled, fetchRows]);
+
+  // 갱신은 같은 키로 덮어쓰고, 실패하면 직전 목록을 남긴다(위 훅 머리글).
+  useVisibleInterval(
+    () => {
+      fetchRows()
+        .then((events) => setState({ key, events: events ?? [] }))
+        .catch(() => {});
+    },
+    SCREEN_SLOW_REFRESH_MS,
+    enabled && Boolean(from) && Boolean(to),
+  );
 
   if (!enabled) return { events: EMPTY_EVENTS, loading: false };
   const events = state?.key === key ? state.events : null;
@@ -128,6 +177,17 @@ export function useEarningsStats(
       alive = false;
     };
   }, [key, from, to, market]);
+
+  // 갱신은 같은 키로 덮어쓰고, 실패하면 직전 집계를 남긴다(위 훅 머리글).
+  useVisibleInterval(
+    () => {
+      fetchEarningsStats(from, to, market)
+        .then((stats) => setState({ key, stats }))
+        .catch(() => {});
+    },
+    SCREEN_SLOW_REFRESH_MS,
+    Boolean(from) && Boolean(to),
+  );
 
   return { stats: state?.key === key ? state.stats : null };
 }

@@ -35,4 +35,8 @@ export type FinancialHistoryData = {
   symbol: string;
   assetType: string;
   periods: FinancialHistoryPeriod[]; // oldest first
+  /** 공시 통화가 상장 통화와 다를 때만(예: TSM → "TWD"). 금액은 이 통화다(2026-09-28). */
+  currency?: string;
+  /** 기간마다 통화가 섞였을 수 있다(달러 환산치 + 현지 통화). */
+  currencyMixed?: boolean;
 };

@@ -7,14 +7,15 @@ import type { HoldingMetrics, HoldingsTotals } from "@/lib/holdings-calc";
 import { cn } from "@/lib/utils";
 
 /**
- * 구성 도넛 — 종목별 / 통화별.
+ * 구성 도넛 — 종목별 / 섹터별 / 통화별 / 자산별.
  *
  * 숫자 목록("비중 상위 5")만으로는 한 종목에 몰려 있는지가 안 보인다. 원은 그걸 즉시
  * 말한다. 종목이 여섯을 넘으면 상위 6개만 색을 주고 나머지는 "기타"로 묶는다 —
  * 스무 조각짜리 도넛은 색을 구분할 수 없어 정보가 아니라 무늬가 된다.
  *
- * 섹터별 구성은 아직 못 한다(종목 섹터 컬럼이 없다). 없는 축을 빈 원으로 그리는 대신
- * 탭 자체를 두지 않았다.
+ * 섹터는 서버가 준다(`stock_sectors` — DART KSIC · SEC SIC를 공통 11섹터로, 2026-09-23).
+ * 모르는 종목(ETF · 비금융 지주 · 아직 안 받은 종목)은 「미분류」 조각으로 **그대로 보인다** —
+ * 빼고 그리면 나머지 섹터의 비중이 실제보다 커 보인다.
  *
  * recharts를 쓰지 않고 SVG로 직접 그린 이유: 조각 6개짜리 도넛에 차트 라이브러리를
  * 얹으면 번들만 커지고, `stroke-dasharray` 여섯 줄이면 끝나는 일이다.
@@ -33,6 +34,12 @@ const SLICE_COLORS = [
   "var(--chart-5)",
 ];
 const REST_COLOR = "var(--muted-foreground)";
+/**
+ * 「미분류」는 기타와 다른 뜻이다(묶인 것이 아니라 모르는 것). 같은 회색 두 조각이
+ * 붙지 않도록 같은 색을 **흐리게** 쓴다 — 도넛과 범례가 같은 불투명도를 쓴다.
+ */
+const UNKNOWN_OPACITY = 0.4;
+const UNKNOWN_KEY = "__unknown";
 const NAMED_SLICES = SLICE_COLORS.length;
 
 const R = 42;
@@ -46,9 +53,10 @@ type Slice = {
   color: string;
   /** 도넛에서 이 조각이 시작하는 지점(원둘레 단위). 렌더 중에 누적하지 않고 미리 계산한다. */
   offset: number;
+  opacity?: number;
 };
 
-type Mode = "symbol" | "currency" | "asset";
+type Mode = "symbol" | "sector" | "currency" | "asset";
 
 export function HoldingsAllocationCard({
   metrics,
@@ -113,6 +121,58 @@ export function HoldingsAllocationCard({
     const stockDenom = totals.canTotal ? totals.marketValueKRW : 0;
     if (stockDenom <= 0) return [];
 
+    if (mode === "sector") {
+      /*
+       * 비중의 분모는 다른 탭과 같은 **총 자산**이다. 탭마다 분모가 다르면 「IT 40%」와
+       * 「삼성전자 25%」를 나란히 읽을 수 없다. 그래서 현금은 조각 없이 합계에서만 빠진다.
+       */
+      const bySector = new Map<string, { label: string; value: number }>();
+      let unknownValue = 0;
+      for (const m of metrics) {
+        const v = m.marketValueKRW ?? 0;
+        if (v <= 0) continue;
+        const key = m.row.sector;
+        if (!key) {
+          unknownValue += v;
+          continue;
+        }
+        const cur = bySector.get(key) ?? { label: m.row.sectorLabel || key, value: 0 };
+        cur.value += v;
+        bySector.set(key, cur);
+      }
+      const ranked = [...bySector.entries()].sort((a, b) => b[1].value - a[1].value);
+      const named = ranked.slice(0, NAMED_SLICES);
+      const rest = ranked.slice(NAMED_SLICES);
+      const out: Array<Omit<Slice, "offset">> = named.map(([key, v], i) => ({
+        key,
+        label: v.label,
+        valueKRW: v.value,
+        pct: (v.value / denom) * 100,
+        color: SLICE_COLORS[i]!,
+      }));
+      if (rest.length > 0) {
+        const restValue = rest.reduce((sum, [, v]) => sum + v.value, 0);
+        out.push({
+          key: "__rest",
+          label: `기타 ${rest.length}섹터`,
+          valueKRW: restValue,
+          pct: (restValue / denom) * 100,
+          color: REST_COLOR,
+        });
+      }
+      if (unknownValue > 0) {
+        out.push({
+          key: UNKNOWN_KEY,
+          label: "미분류",
+          valueKRW: unknownValue,
+          pct: (unknownValue / denom) * 100,
+          color: REST_COLOR,
+          opacity: UNKNOWN_OPACITY,
+        });
+      }
+      return withOffsets(out);
+    }
+
     const priced = metrics
       .filter((m) => m.marketValueKRW != null && m.marketValueKRW > 0)
       .sort((a, b) => (b.marketValueKRW ?? 0) - (a.marketValueKRW ?? 0));
@@ -149,6 +209,10 @@ export function HoldingsAllocationCard({
       const krw = slices.find((s) => s.key === "krw");
       return { caption: "원화 비중", value: `${Math.round(krw?.pct ?? 0)}%` };
     }
+    if (mode === "sector") {
+      const n = slices.filter((s) => s.key !== UNKNOWN_KEY && s.key !== "__rest").length;
+      return { caption: "섹터", value: String(n) };
+    }
     return { caption: "종목", value: String(metrics.filter((m) => m.hasQuote).length) };
   }, [slices, mode, metrics]);
 
@@ -178,6 +242,7 @@ export function HoldingsAllocationCard({
           {(
             [
               ["symbol", "종목"],
+              ["sector", "섹터"],
               ["currency", "통화"],
               ["asset", "자산"],
             ] as const
@@ -210,6 +275,7 @@ export function HoldingsAllocationCard({
                 cy="50"
                 r={R}
                 stroke={s.color}
+                strokeOpacity={s.opacity}
                 strokeDasharray={`${((s.pct / 100) * CIRCUMFERENCE).toFixed(2)} ${CIRCUMFERENCE.toFixed(2)}`}
                 strokeDashoffset={(-s.offset).toFixed(2)}
               />
@@ -239,7 +305,7 @@ export function HoldingsAllocationCard({
             <li key={s.key} className="flex min-w-0 items-center gap-2 py-0.5 text-cell">
               <span
                 className="size-2 shrink-0 rounded-[2px]"
-                style={{ backgroundColor: s.color }}
+                style={{ backgroundColor: s.color, opacity: s.opacity }}
                 aria-hidden
               />
               <span className="min-w-0 flex-1 truncate">{s.label}</span>
@@ -255,6 +321,8 @@ export function HoldingsAllocationCard({
             <Row label="가장 큰 종목" value={`${slices[0]?.label ?? "—"} ${slices[0]?.pct.toFixed(1) ?? "—"}%`} />
             <Row label="상위 3종목 합" value={`${top3.toFixed(1)}%`} />
           </>
+        ) : mode === "sector" ? (
+          <SectorFooter slices={slices} />
         ) : mode === "asset" ? (
           <>
             <Row
@@ -290,5 +358,19 @@ function Row({ label, value }: { label: string; value: string }) {
       <span className="shrink-0 text-cell text-muted-foreground">{label}</span>
       <b className="min-w-0 truncate font-num text-cell tabular-nums">{value}</b>
     </div>
+  );
+}
+
+function SectorFooter({ slices }: { slices: Slice[] }) {
+  const top = slices.find((s) => s.key !== UNKNOWN_KEY && s.key !== "__rest");
+  const unknown = slices.find((s) => s.key === UNKNOWN_KEY);
+  return (
+    <>
+      <Row label="가장 큰 섹터" value={top ? `${top.label} ${top.pct.toFixed(1)}%` : "—"} />
+      {unknown && (
+        // 미분류가 왜 있는지 한 줄로 — 빈칸을 고장으로 읽지 않게.
+        <Row label="미분류 (ETF·지주 등)" value={`${unknown.pct.toFixed(1)}%`} />
+      )}
+    </>
   );
 }

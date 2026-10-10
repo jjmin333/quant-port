@@ -127,6 +127,31 @@ export function formatBriefingTimestamp(iso: string): string {
 }
 
 /** 승계 배지의 「AI 17:00」 — 문장이 쓰인 시각만 뽑는다. */
+/**
+ * 승계 배지의 시각 — 물려받은 문장이 **다른 날** 것이면 날을 붙인다.
+ *
+ * 「AI 21:00」은 새벽 1시에 보면 오늘 21시(아직 오지 않은 시각)로 읽힌다. 503이 몰리는
+ * 22:00~03:00에 자정을 넘긴 승계가 흔하다. 하루 전이면 「어제 21:00」, 그보다 오래면
+ * 「9/24 21:00」. 날은 서울 달력으로 센다.
+ */
+export function formatCarryClock(carriedFrom: string, generatedAt?: string): string {
+  const clock = formatBriefingClock(carriedFrom);
+  if (!clock) return "";
+  const from = new Date(carriedFrom);
+  const at = generatedAt ? new Date(generatedAt) : new Date();
+  if (Number.isNaN(at.getTime())) return clock;
+  const day = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const fromDay = day(from);
+  const atDay = day(at);
+  if (fromDay === atDay) return clock;
+  const diffDays = Math.round(
+    (Date.parse(`${atDay}T00:00:00+09:00`) - Date.parse(`${fromDay}T00:00:00+09:00`)) / 86_400_000,
+  );
+  if (diffDays === 1) return `어제 ${clock}`;
+  const [, m, d] = fromDay.split("-");
+  return `${Number(m)}/${Number(d)} ${clock}`;
+}
+
 export function formatBriefingClock(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) {

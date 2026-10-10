@@ -1,13 +1,16 @@
 import { Suspense } from "react";
 import { AuthRequiredShell } from "@/components/auth/auth-required-shell";
 import { StampsClient } from "@/components/stamps/stamps-client";
-import { pageMetadata } from "@/lib/seo";
+import { resolvePageMetadata } from "@/lib/page-meta.server";
 
-export const metadata = pageMetadata({
-  title: "스탬프",
-  description: "봉인해 둔 예측과 채점 결과입니다.",
-  noindex: true,
-});
+/*
+ * 제목·설명은 `lib/page-meta-routes`의 기본값이고, 관리자가 `/admin/seo`에서
+ * 덮어쓸 수 있다 (2026-09-15 사용자 요청 2). `const metadata`가 아니라 함수인
+ * 이유는 그 덮어쓰기를 **렌더 시점에** 읽어야 하기 때문이다.
+ */
+export function generateMetadata() {
+  return resolvePageMetadata("/stamps");
+}
 
 /**
  * 스탬프만 `AuthRequiredShell` 밖에 있어서, 로그인하지 않으면 목록이 401을 받고

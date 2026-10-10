@@ -4,6 +4,7 @@ import { useState } from "react";
 import { MajorEarningsCard } from "@/components/earnings/major-earnings-card";
 import { MiniToggle } from "@/components/ui/mini-toggle";
 import { useEarningsHighlights } from "@/hooks/use-earnings-highlights";
+import { SCREEN_SLOW_REFRESH_MS } from "@/lib/screen-refresh";
 import type { EarningsMarket } from "@/lib/earnings-types";
 
 /**
@@ -28,12 +29,16 @@ export function DashboardEventsCard({ onPick }: { onPick: (symbol: string) => vo
    * 있는 쪽을 먼저 보여주고, 추정치는 눌러서 보게 둔다.
    */
   const [market, setMarket] = useState<EarningsMarket>("us");
-  const highlights = useEarningsHighlights(market);
+  /*
+    홈은 **열어 둔 채 하루가 지나는** 화면이다 (2026-09-16 사용자 요청). 일정은 하루
+    단위로 움직이므로 느린 주기를 준다 — 실적 레일(`earnings-side-rail`)은 화면을
+    오갈 때마다 다시 받으므로 그대로 한 번만 받는다.
+  */
+  const highlights = useEarningsHighlights(market, SCREEN_SLOW_REFRESH_MS);
 
   return (
     <MajorEarningsCard
       variant="home"
-      market={market}
       events={highlights?.big ?? null}
       onPick={(event) => onPick(event.symbol)}
       href={market === "us" ? "/earnings/us" : "/earnings/domestic"}

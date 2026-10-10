@@ -38,8 +38,13 @@ export function fetchEarningsBatchClient(
   );
 }
 
-/** 실적 일정은 날짜 단위로 움직인다 — 화면을 오갈 때마다 다시 물어볼 값이 아니다. */
-const EARNINGS_TTL = 5 * 60_000;
+/**
+ * 실적 일정은 날짜 단위로 움직인다 — 화면을 오갈 때마다 다시 물어볼 값이 아니다.
+ *
+ * 홈의 갱신 주기가 이 값보다 **길어야** 실제로 왕복이 일어난다(`lib/screen-refresh`).
+ * 그 관계를 시험이 지키므로 `export`한다.
+ */
+export const EARNINGS_TTL = 5 * 60_000;
 
 function marketParam(market: EarningsMarketFilter): string {
   return market === "all" ? "" : `&market=${market}`;

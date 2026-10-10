@@ -13,6 +13,8 @@ import {
   type ResearchSummary,
 } from "@/lib/research-types";
 import { useUrlFlagState, useUrlParamState } from "@/hooks/use-url-param-state";
+import { useVisibleInterval } from "@/hooks/use-visible-interval";
+import { SCREEN_REFRESH_MS } from "@/lib/screen-refresh";
 
 export type ResearchScope = "feed" | "mine";
 export type ResearchSort = "recent" | "views" | "likes";
@@ -90,6 +92,18 @@ export function useResearchCalls(
     load(startedWithServerData.current);
     startedWithServerData.current = false;
   }, [load]);
+
+  /*
+   * **5분마다 다시 받는다** (2026-09-16 사용자 요청, `lib/screen-refresh`).
+   *
+   * 리포트는 사람이 아무 때나 쓰고, 조회수·좋아요는 남이 누르는 값이다 — 배치 주기가
+   * 아니라 **사람의 주기**라 빠른 쪽을 쓴다. 피드를 열어 둔 채로는 새 글이 한 편도
+   * 오지 않았고, 내가 방금 올린 글을 보러 온 사람에게도 어제 목록이 서 있었다.
+   *
+   * `background: true` — 목록을 비우지 않고 조용히 덮는다. 정렬·필터는 주소가 들고
+   * 있으므로(`useUrlParamState`) 갱신이 그것들을 건드리지 않는다.
+   */
+  useVisibleInterval(() => void load(true), SCREEN_REFRESH_MS);
 
   const retract = useCallback(async (id: number) => {
     const updated = await retractResearchClient(id);

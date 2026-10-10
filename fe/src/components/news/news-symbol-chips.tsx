@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useQuickLook } from "@/components/providers/quick-look-provider";
-import { analysisSymbolHref } from "@/lib/analysis-tabs";
 import type { QuoteSummary } from "@/lib/quotes-types";
 import { formatPercent } from "@/lib/format";
 import { trendTextClass } from "@/lib/trend-colors";
@@ -60,7 +59,9 @@ export function NewsSymbolChips({
         return (
           <Link
             key={symbol}
-            href={analysisSymbolHref(symbol)}
+            // 종목 페이지 — 크롤러가 따라가는 주소(2026-10-09 검색 색인 개선 B). 예전 `/analysis?symbol=`은
+            // canonical이 `/analysis`라 종목 페이지로 가는 링크가 되지 못했다.
+            href={`/stocks/${encodeURIComponent(symbol)}`}
             data-meta-chip=""
             // 행 전체가 기사 모달을 여는 버튼이라, 칩 클릭이 위로 새어 나가면
             // 종목 창과 기사 모달이 같이 열린다.

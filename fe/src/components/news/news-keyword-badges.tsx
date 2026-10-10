@@ -25,7 +25,7 @@ export function NewsKeywordBadges({ keywords, className, max = 4 }: NewsKeywordB
             자리에 두 번째 키워드도, 시각도 들어가지 못한다. 데스크톱에서는 그
             상한이 문제가 된 적이 없으므로 `sm` 위로는 그대로 둔다.
           */
-          className="inline-flex max-w-[7rem] truncate rounded-full border border-violet-500/25 bg-violet-500/10 px-2 py-0.5 text-micro font-medium text-violet-300 sm:max-w-[9rem]"
+          className="inline-flex max-w-[7rem] truncate rounded-full border border-violet-500/25 bg-violet-500/10 px-2 py-0.5 text-micro font-medium text-violet-700 dark:text-violet-300 sm:max-w-[9rem]"
           title={kw}
         >
           {kw}

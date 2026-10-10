@@ -1,20 +1,27 @@
 import type { MetadataRoute } from "next";
+import { connection } from "next/server";
 import { SITE_URL } from "@/lib/seo";
 import { fetchResearchCallsServer } from "@/lib/research-api.server";
+import { fetchCommunitySitemapServer } from "@/lib/community-api.server";
+import { isHiddenRoute } from "@/lib/hidden-features";
+import { fetchChangesServer } from "@/components/changes/changes-seo-list";
+import { fetchIndexableStockSymbols } from "@/lib/stock-seo.server";
 
-/**
- * 사이트맵도 리포트 목록과 같은 주기로 다시 굽는다. 크롤러가 몇 번을 오든 BE
- * 호출은 주기당 한 번이라, 작은 인프라에서도 부담이 되지 않는다.
+/*
+ * **빌드 때 미리 굽지 않는다** (2026-10-09). 예전 `revalidate = 600`은 `next build`가 사이트맵을
+ * 미리 렌더했는데, 빌드 컨테이너에서는 BE에 닿지 않아 종목·리포트가 빈 채로 구워졌다 — 실측:
+ * 배포 직후 사이트맵이 정적 주소 21개뿐이었고, 그 판이 첫 재검증(10분)까지, nginx·Cloudflare
+ * 캐시(1시간)를 타면 더 오래 나갔다. 배포가 잦아 구글이 그 판을 받을 확률이 작지 않다.
+ * 이제 요청 때 그리고, BE 호출은 각 fetch의 `revalidate`(리포트 1분 · 종목 1시간)로 접힌다.
  */
-export const revalidate = 600;
 
 /**
  * `/sitemap.xml` — **정적 공개 URL만** 싣는다.
  *
- * 동적 주소를 뺀 이유가 둘로 갈린다.
- * - `/stocks/<종목>`: 수천 개인데 전부 클라이언트에서 데이터를 받아 그린다.
- *   크롤러가 받는 HTML에는 종목 내용이 없어서, 사이트맵으로 불러 봐야 빈 문서
- *   수천 장을 색인시키는 꼴이 된다. 그래서 `noindex`이기도 하다.
+ * 동적 주소는 서버가 실제 글자를 들고 있는 것만 싣는다.
+ * - `/stocks/<종목>`: **시장별(국내·미국) 최근 20거래일 거래대금 상위 500씩만** 싣는다(2026-09-24 사용자
+ *   결정, 10-09 시장별 몫). 그 종목들만 서버가 요약 한 줄을 그린 채 색인 대상이고, 나머지 1만 5천 개는
+ *   여전히 `noindex`다(`app/(main)/stocks/[symbol]/page.tsx`). 목록은 BE가 한 시간 접어 둔다.
  * `/reports/<id>`는 **싣는다.** 공개 발행물이고, 이 앱에서 서버가 실제 글자를
  * 들고 있는 유일한 콘텐츠다. 목록을 부르느라 BE를 때리는 것이 걱정이었는데
  * `revalidate`로 접으니 주기당 한 번이라 문제가 되지 않는다. **공개·비철회·비숨김만**
@@ -32,7 +39,17 @@ const ROUTES: { path: string; changeFrequency: MetadataRoute.Sitemap[number]["ch
   { path: "/earnings/us", changeFrequency: "daily", priority: 0.8 },
   { path: "/market", changeFrequency: "hourly", priority: 0.8 },
   { path: "/analysis", changeFrequency: "daily", priority: 0.7 },
+  // 색인·canonical을 내보내면서 사이트맵에서 빠져 있던 공개 화면(2026-10-09 색인 점검).
+  { path: "/stocks", changeFrequency: "daily", priority: 0.8 },
+  { path: "/screener", changeFrequency: "daily", priority: 0.7 },
+  { path: "/changes", changeFrequency: "daily", priority: 0.7 },
+  { path: "/finance/rates", changeFrequency: "daily", priority: 0.6 },
+  { path: "/real-estate", changeFrequency: "weekly", priority: 0.6 },
+  { path: "/real-estate/auctions", changeFrequency: "daily", priority: 0.5 },
+  { path: "/community", changeFrequency: "hourly", priority: 0.7 },
   { path: "/reports", changeFrequency: "daily", priority: 0.7 },
+  { path: "/finance/savings", changeFrequency: "daily", priority: 0.6 },
+  { path: "/finance/loans", changeFrequency: "daily", priority: 0.6 },
   /*
    * 약관·개인정보처리방침은 검색 유입을 노리는 글이 아니다. 그래도 싣는 이유는
    * **투자 정보가 YMYL**이라, 운영 주체와 약관이 보이는 사이트인지가 품질 평가에
@@ -43,6 +60,7 @@ const ROUTES: { path: string; changeFrequency: MetadataRoute.Sitemap[number]["ch
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  await connection();
   const staticUrls = ROUTES.map(({ path, changeFrequency, priority }) => ({
     url: `${SITE_URL}${path}`,
     changeFrequency,
@@ -61,5 +79,41 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.6,
     }));
 
-  return [...staticUrls, ...reportUrls];
+  // 공개 리포트가 있는 작성자 — 작성자 페이지는 그때만 색인한다(2026-10-09).
+  const authorUrls = [...new Set(reports
+    .filter((call) => call.visibility === "public" && !call.retractedAt && !call.hiddenAt)
+    .map((call) => call.userId))]
+    .map((userId) => ({
+      url: `${SITE_URL}/reports/authors/${userId}`,
+      changeFrequency: "weekly" as const,
+      priority: 0.4,
+    }));
+
+  // 실패하면 빈 목록 — 종목 주소만 빠지고 나머지는 그대로 나간다.
+  const stockUrls = (await fetchIndexableStockSymbols()).map((symbol) => ({
+    url: `${SITE_URL}/stocks/${encodeURIComponent(symbol)}`,
+    changeFrequency: "daily" as const,
+    priority: 0.5,
+  }));
+
+  // 커뮤니티 글 — 공개 글만(서버가 visible만 준다), 최근 1,000개. 검색 색인 허용(2026-09-27 결정).
+  const communityUrls = (await fetchCommunitySitemapServer()).map((row) => ({
+    url: `${SITE_URL}/community/${row.id}`,
+    lastModified: new Date(row.updatedAt),
+    changeFrequency: "weekly" as const,
+    priority: 0.5,
+  }));
+
+  // 날짜별 「변화」 보관 주소(2026-10-10) — 서버가 보관 중인 날짜만. 지난 날은 바뀌지 않는다.
+  const changeDates = (await fetchChangesServer("domestic"))?.dates ?? [];
+  const changeUrls = changeDates.map((d) => ({
+    url: `${SITE_URL}/changes/${d}`,
+    lastModified: new Date(`${d}T09:00:00+09:00`),
+    changeFrequency: "monthly" as const,
+    priority: 0.4,
+  }));
+
+  // 노출을 끈 기능(lib/hidden-features, 2026-10-10)의 주소는 싣지 않는다 — 열면 홈으로 간다.
+  return [...staticUrls, ...reportUrls, ...authorUrls, ...communityUrls, ...changeUrls, ...stockUrls]
+    .filter((entry) => !isHiddenRoute(new URL(entry.url).pathname));
 }

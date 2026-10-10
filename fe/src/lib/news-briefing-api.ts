@@ -1,5 +1,6 @@
 import { getApiBaseUrl, mergeFetchInit, parseJson } from "@/lib/api-client";
 import type { ApiResponse } from "@/lib/api-types";
+import { fetchWithTimeout } from "@/lib/fetch-timeout";
 
 /**
  * 「AI 시장 브리핑」은 **읽기 전용**이다.
@@ -66,7 +67,12 @@ export type NewsMarketBriefing = {
 export async function fetchNewsBriefing(
   market: "domestic" | "us",
 ): Promise<NewsMarketBriefing | null> {
-  const res = await fetch(
+  /*
+    **상한을 건다** (2026-09-22 전수 점검). 09-20이 `lib/fetch-timeout.ts`로 앱
+    전체에 상한을 걸 때 이 호출이 빠져 있었다. 브리핑 카드는 뉴스 화면 맨 위에
+    서므로, 이 요청이 안 끝나면 화면에서 제일 먼저 보이는 칸이 영원히 스켈레톤이다.
+  */
+  const res = await fetchWithTimeout(
     `${getApiBaseUrl()}/api/v1/news/${market}/briefing`,
     mergeFetchInit({ cache: "no-store" }),
   );

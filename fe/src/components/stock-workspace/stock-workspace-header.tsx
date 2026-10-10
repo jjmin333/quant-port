@@ -23,6 +23,8 @@ type StockWorkspaceHeaderProps = {
   showLiveQuote?: boolean;
   /** Chart interval on screen — frozen into a stamp when one is taken. */
   chartInterval?: string;
+  /** 제목 수준. 다른 화면 안에 끼워지면 2 — 그 화면의 h1이 따로 있다. */
+  headingLevel?: 1 | 2;
 };
 
 export function StockWorkspaceHeader({
@@ -34,7 +36,9 @@ export function StockWorkspaceHeader({
   compact = false,
   showLiveQuote = true,
   chartInterval,
+  headingLevel = 1,
 }: StockWorkspaceHeaderProps) {
+  const TitleTag = headingLevel === 1 ? "h1" : "h2";
   /*
     **종목을 못 받아도 헤더는 선다** (2026-09-03).
 
@@ -86,6 +90,14 @@ export function StockWorkspaceHeader({
   const live = isLiveSession(quote?.marketSession);
   const sessionLabel = marketSessionLabel(quote?.marketSession);
   const hasQuote = Boolean(showLiveQuote && quote && quote.currentPrice > 0);
+  /*
+    머리 가격이 **정규장 종가가 아닐 때** 그렇다고 적는다 (2026-10-10, BUSINESS_REVIEW §5 D3).
+    국내는 NXT 시간외까지 반영한 최종가가 머리에 서고, 왼쪽 시세 칸·요약 바는 정규장 종가를
+    말한다 — 삼성전자 263,500(머리) vs 262,500(정규장)이 설명 없이 나란히 있었다.
+  */
+  const afterHours = Boolean(
+    hasQuote && quote?.regularClose && quote.regularClose > 0 && quote.regularClose !== quote.currentPrice,
+  );
 
   return (
     <header
@@ -109,6 +121,18 @@ export function StockWorkspaceHeader({
         현재가 줄의 들여쓰기를 함께 잡고 있었다. 데스크톱에는 그대로 둔다 — 거기엔
         제스처가 없다.
       */}
+      {/*
+        **제목은 하나다** (2026-09-26 외부 방문자 점검). 아래 모바일 줄과 데스크톱 줄이
+        각자 <h1>이었다 — 하나는 언제나 숨지만 문서에는 둘 다 있어, 크롤러는 종목
+        페이지마다 H1 두 개를 봤다(성장 감시: 1,000/1,000). 게다가 서버 HTML에서는
+        이름이 아직 없어 둘 다 「005930」이었다. 보이는 두 줄은 문단으로 두고, 이름과
+        코드를 함께 적은 제목 하나를 화면 밖에 둔다 — 서버가 아는 이름이 있으면
+        (`initialName`) 첫 HTML부터 「삼성전자 (005930)」다.
+      */}
+      {/* 다른 화면 안에 끼워진 워크스페이스(AI 랭킹·실시간 차트·스크리너)에서는 그 화면의 h1 아래 h2다. */}
+      <TitleTag className="sr-only">
+        {stock.name && stock.name !== stock.symbol ? `${stock.name} (${stock.symbol})` : stock.symbol}
+      </TitleTag>
       <div className="sm:hidden">
         <div className="flex items-center gap-2">
           <StockAvatar
@@ -120,9 +144,9 @@ export function StockWorkspaceHeader({
           />
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-1">
-              <h1 className="truncate text-sm font-semibold text-[var(--text-primary)]">
+              <p className="truncate text-sm font-semibold text-[var(--text-primary)]">
                 {loading ? "…" : stock.name}
-              </h1>
+              </p>
               {/* 펼친 줄에서는 종목코드가 아랫줄로 내려가지 않으므로 여기 붙는다. */}
               {actionsOpen && (
                 <span className="shrink-0 font-num text-micro text-[var(--text-muted)]">
@@ -236,6 +260,7 @@ export function StockWorkspaceHeader({
             <span className="ml-auto min-w-0 max-w-full truncate text-micro text-[var(--text-muted)]">
               {stock.market}
               {hasQuote && updatedLabel ? ` · ${updatedLabel}` : sessionLabel ? ` · ${sessionLabel}` : ""}
+              {afterHours ? " · 시간외 포함" : ""}
             </span>
           </div>
         )}
@@ -277,14 +302,14 @@ export function StockWorkspaceHeader({
           />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-              <h1
+              <p
                 className={cn(
                   "truncate font-semibold text-[var(--text-primary)]",
                   compact ? "text-sm" : "text-base sm:text-lg",
                 )}
               >
                 {loading ? "…" : stock.name}
-              </h1>
+              </p>
               <span className="font-num text-micro text-[var(--text-muted)]">{stock.symbol}</span>
               <Badge variant="default" className="shrink-0 px-1 py-0 text-micro">
                 {stock.market}
@@ -317,6 +342,10 @@ export function StockWorkspaceHeader({
               */
               <p className="mt-0.5 truncate text-micro text-[var(--text-muted)]">
                 {updatedLabel} 기준
+                {afterHours && (stock.currency === "KRW" ? " · 시간외(NXT) 포함 최종가" : " · 시간외 포함 최종가")}
+                {afterHours && quote?.regularClose
+                  ? ` · 정규장 ${stock.currency === "KRW" ? `${quote.regularClose.toLocaleString("ko-KR")}원` : `$${quote.regularClose.toLocaleString("en-US")}`}`
+                  : ""}
                 <span className="hidden sm:inline"> · {QUOTE_CHANGE_BASIS_LABEL}</span>
               </p>
             )}

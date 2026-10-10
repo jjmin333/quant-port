@@ -1,4 +1,5 @@
 import type { ApiError, ApiResponse } from "@/lib/api-types";
+import { fetchWithTimeout, SSR_TIMEOUT_MS } from "@/lib/fetch-timeout";
 import { apiCredentials, sessionFetch } from "@/lib/session-fetch";
 
 const DEFAULT_API_URL = "http://localhost:8080";
@@ -90,10 +91,19 @@ export async function serverApiRequest<T>(
   fallbackMessage = "API request failed",
 ): Promise<T> {
   const cookieHeader = await getServerCookieHeader();
-  const res = await fetch(`${getApiBaseUrl()}${path}`, mergeFetchInit({
-    ...init,
-    headers: { ...cookieHeader, ...(init.headers ?? {}) },
-  }));
+  /*
+    SSR의 상한은 브라우저보다 짧다(3초). 여기서 기다리는 시간은 **TTFB에 그대로
+    더해지고**, 선반입이 실패해도 클라이언트가 어차피 다시 받는다 — 페이지를
+    붙잡을 이유가 없다. 근거는 `lib/fetch-timeout.ts` 머리글.
+  */
+  const res = await fetchWithTimeout(
+    `${getApiBaseUrl()}${path}`,
+    mergeFetchInit({
+      ...init,
+      headers: { ...cookieHeader, ...(init.headers ?? {}) },
+    }),
+    SSR_TIMEOUT_MS,
+  );
   await ensureOk(res, fallbackMessage);
   const body = await parseJson<ApiResponse<T>>(res);
   return body.data;

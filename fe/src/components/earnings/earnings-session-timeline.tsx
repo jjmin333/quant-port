@@ -4,7 +4,6 @@ import { useMemo } from "react";
 import { StockAvatar } from "@/components/stocks/stock-avatar";
 import { SurpriseValue, eventName } from "@/components/earnings/earnings-shared";
 import type { EarningsEvent, EarningsSession } from "@/lib/earnings-types";
-import { cn } from "@/lib/utils";
 
 /**
  * 해외 전용 — 하루를 장전 · 장중 · 장후로 나눠 본다 (W4).
@@ -104,10 +103,6 @@ export function EarningsSessionTimeline({
           </div>
         );
       })}
-      <p className={cn("mt-1 border-t pt-1.5 text-micro leading-relaxed text-muted-foreground")}>
-        미국 실적은 <b>장 밖에서</b> 나옵니다 — 장후 발표는 다음 거래일에, 장전 발표는 그날
-        장에 반영됩니다. 발표 시각을 주지 않은 건은 <b>미공개</b>로 따로 둡니다.
-      </p>
     </div>
   );
 }

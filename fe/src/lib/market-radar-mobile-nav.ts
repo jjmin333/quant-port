@@ -16,12 +16,18 @@ export function compactShowsDetail(
   return isCompact && symbolParam.trim().length > 0 && !listPinned;
 }
 
-/** 종목 선택 시 주소를 push할지 replace할지. */
+/**
+ * 종목 선택 시 주소를 push할지 replace할지.
+ *
+ * 데스크톱은 **언제나 push**다 (2026-10-09 사용자 결정) — 목록을 훑으며 종목을 바꿔 보다가 뒤로
+ * 가기를 누르면 직전에 보던 종목이 패널에 다시 떠야 한다. 예전 replace는 뒤로 가기 한 번에 이
+ * 화면을 떠났다. 모바일은 상세가 화면 전체라 「뒤로 = 목록」이 맞아 그대로 둔다.
+ */
 export function symbolSelectNavMode(
   isCompact: boolean,
   currentSymbolParam: string,
 ): SymbolSelectNavMode {
-  if (!isCompact) return "replace";
+  if (!isCompact) return "push";
   return currentSymbolParam.trim().length > 0 ? "replace" : "push";
 }
 

@@ -13,7 +13,7 @@ import { QuoteCell } from "@/components/ui/quote-cell";
 import { SectionCard, SectionEmpty, SectionSkeleton } from "@/components/ui/section-card";
 import { useLiveQuotes } from "@/hooks/use-live-quotes";
 import { earningsDaysFromToday, formatEarningsDateLabel } from "@/lib/earnings-date";
-import type { EarningsDateStatus, EarningsEvent, EarningsMarket } from "@/lib/earnings-types";
+import type { EarningsDateStatus, EarningsEvent } from "@/lib/earnings-types";
 import { formatFinancialAmount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -57,7 +57,6 @@ export type MajorEarningsVariant = "home" | "rail";
 type MajorEarningsCardProps = {
   /** 아직 받는 중이면 `null`, 받았는데 없으면 `[]`. 둘을 같은 화면으로 그리면 안 된다. */
   events: EarningsEvent[] | null;
-  market: EarningsMarket;
   variant: MajorEarningsVariant;
   /** 줄을 눌렀을 때. 홈은 종목 퀵룩을, 실적 화면은 발표 상세를 연다. */
   onPick: (event: EarningsEvent) => void;
@@ -78,7 +77,6 @@ function dateStatusLabel(status: EarningsDateStatus): string {
 
 export function MajorEarningsCard({
   events,
-  market,
   variant,
   onPick,
   action,
@@ -195,22 +193,7 @@ export function MajorEarningsCard({
         </ul>
       )}
 
-      <p className="mt-1.5 border-t pt-1.5 text-micro leading-relaxed text-muted-foreground">
-        {home ? (
-          "시가총액 상위에서 고른 뒤, 예정일이 빠른 순으로 늘어놓았습니다."
-        ) : (
-          <>
-            시가총액 순입니다. 표는 날짜순이라 <b>무엇이 큰 발표인지</b>는 말하지 못합니다.
-          </>
-        )}
-        {market === "domestic" && (
-          <>
-            {" "}
-            국내는 예정 일정을 제공하는 소스가 없어, 앞으로의 일정은{" "}
-            <b>작년 발표일로 추정</b>한 값입니다.
-          </>
-        )}
-      </p>
+      {/* 정렬·추정 풀이 문단은 걷었다(2026-10-09 요청 9) — 추정일은 줄의 「추정」 배지가 말한다. */}
     </SectionCard>
   );
 }

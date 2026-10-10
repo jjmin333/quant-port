@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { PREDICTION_FEATURES_HIDDEN } from "@/lib/hidden-features";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Heart, NotepadText, Stamp } from "lucide-react";
@@ -85,7 +86,7 @@ export function StockMiniCard({
       quote && quote.currentPrice > 0
         ? `${name} ${formatPrice(quote.currentPrice, quote.currency)}`
         : name;
-    return [
+    const all: GatedAction[] = [
       {
         key: "watchlist",
         label: added ? "관심 추가됨" : "관심 추가",
@@ -112,6 +113,8 @@ export function StockMiniCard({
         bullets: [priceLine, "오늘 날짜"],
       },
     ];
+    // 목표가 예측(스탬프) 비노출 — lib/hidden-features (2026-10-10).
+    return PREDICTION_FEATURES_HIDDEN ? all.filter((a) => a.key !== "stamp") : all;
   }, [name, quote, added]);
 
   const handleAction = (key: string) => {

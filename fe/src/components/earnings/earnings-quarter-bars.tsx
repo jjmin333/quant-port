@@ -130,10 +130,6 @@ export function EarningsQuarterBars({
           </div>
         )}
       </div>
-      <p className="mt-1.5 text-micro leading-relaxed text-muted-foreground">
-        굵은 막대가 <b>발표치</b>, 뒤 넓은 막대가 <b>컨센서스</b>입니다. 발표가 기대를 밑돈
-        분기는 막대 색이 파랑입니다.
-      </p>
     </div>
   );
 }

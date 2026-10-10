@@ -258,7 +258,4 @@ export function getMockNews(filter: NewsListFilter): NewsArticle[] {
   return items;
 }
 
-export const NEWS_MARKET_LABELS: Record<NewsMarket, string> = {
-  domestic: "국내 주식",
-  us: "해외 주식",
-};
+

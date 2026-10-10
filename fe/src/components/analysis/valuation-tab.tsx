@@ -63,5 +63,6 @@ export function ValuationTab({
     갱신 주기는 카드의 `FY…` 표기와 커버리지 등급 배지가 이미 말하고 있고, 그 한
     줄은 모든 종목·모든 방문에 똑같이 붙어 아무도 읽지 않는 자리를 차지하고 있었다.
   */
+  // 애널리스트 의견은 개요 탭으로 옮겼다(2026-10-07 요청 9 — `AnalystConsensusSection`).
   return <FundamentalsIndicatorsPanel stock={stock} data={liveFundamentals} panel={panel} />;
 }

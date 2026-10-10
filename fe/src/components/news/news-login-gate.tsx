@@ -181,7 +181,7 @@ export function NewsGatedActionBar({
             )}
             <div className="mt-2.5 flex gap-1.5">
               <Link
-                href="/signup"
+                href={loginHref.replace("/login?", "/signup?")}
                 className={cn(buttonVariants({ variant: "outline", size: "sm" }), "flex-1 border-[var(--border)] text-center text-[var(--text-secondary)] hover:text-[var(--text-primary)]")}
               >
                 회원가입

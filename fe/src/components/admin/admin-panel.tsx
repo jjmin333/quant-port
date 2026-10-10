@@ -50,6 +50,7 @@ export function AdminPanel() {
   const [marketDataDraft, setMarketDataDraft] = useState<AdminMarketDataSettings | null>(null);
   const [busy, setBusy] = useState(false);
   const [newKeyword, setNewKeyword] = useState("");
+  const [newTopic, setNewTopic] = useState<NewsPollKeyword["topic"]>("");
   const [error, setError] = useState<string | null>(null);
 
   const loadAll = useCallback(async () => {
@@ -90,7 +91,7 @@ export function AdminPanel() {
     setBusy(true);
     setError(null);
     try {
-      await createAdminNewsKeyword({ market, keyword, enabled: true });
+      await createAdminNewsKeyword({ market, keyword, enabled: true, topic: market === "domestic" ? newTopic : "" });
       setNewKeyword("");
       await loadAll();
     } catch (e) {
@@ -107,6 +108,23 @@ export function AdminPanel() {
         keyword: item.keyword,
         enabled: !item.enabled,
         sortOrder: item.sortOrder,
+      });
+      await loadAll();
+    } catch (e) {
+      setError(toUserMessage(e, "수정 실패"));
+      setBusy(false);
+    }
+  };
+
+  const handleTopic = async (item: NewsPollKeyword, topic: NewsPollKeyword["topic"]) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await updateAdminNewsKeyword(item.id, {
+        keyword: item.keyword,
+        enabled: item.enabled,
+        sortOrder: item.sortOrder,
+        topic,
       });
       await loadAll();
     } catch (e) {
@@ -415,11 +433,25 @@ export function AdminPanel() {
 
             <p className="mb-3 text-cell text-[var(--text-muted)]">
               {market === "domestic"
-                ? "국내: 네이버·카카오 키워드 검색에 사용됩니다."
+                ? "국내: 「종목 뉴스」는 네이버·카카오 종목 뉴스 큐에, 부동산·금리·예·적금·대출은 2분마다 2개씩 도는 주제 수집에 쓰입니다(제목에 주제어가 있는 기사만 남김)."
                 : "해외: Google News RSS 토픽 검색에 사용됩니다. (Finnhub 종목 검색과 별도)"}
             </p>
 
             <div className="mb-4 flex gap-2">
+              {market === "domestic" && (
+                <select
+                  value={newTopic}
+                  onChange={(e) => setNewTopic(e.target.value as NewsPollKeyword["topic"])}
+                  aria-label="키워드 종류"
+                  className="rounded-lg border border-[var(--border)] bg-[var(--background)] px-2 py-2 text-sm"
+                >
+                  {KEYWORD_TOPICS.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              )}
               <input
                 value={newKeyword}
                 onChange={(e) => setNewKeyword(e.target.value)}
@@ -443,6 +475,7 @@ export function AdminPanel() {
                 <thead>
                   <tr className="border-b border-[var(--border)] text-[var(--text-muted)]">
                     <th className="px-2 py-2 font-medium">키워드</th>
+                    {market === "domestic" && <th className="px-2 py-2 font-medium">종류</th>}
                     <th className="px-2 py-2 font-medium">순서</th>
                     <th className="px-2 py-2 font-medium">상태</th>
                     <th className="px-2 py-2 font-medium">작업</th>
@@ -451,7 +484,7 @@ export function AdminPanel() {
                 <tbody>
                   {keywords.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-2 py-6 text-center text-[var(--text-muted)]">
+                      <td colSpan={5} className="px-2 py-6 text-center text-[var(--text-muted)]">
                         등록된 키워드가 없습니다.
                       </td>
                     </tr>
@@ -459,6 +492,23 @@ export function AdminPanel() {
                     keywords.map((item) => (
                       <tr key={item.id} className="border-b border-[var(--border)]/60">
                         <td className="px-2 py-2 text-[var(--text-primary)]">{item.keyword}</td>
+                        {market === "domestic" && (
+                          <td className="px-2 py-2">
+                            <select
+                              value={item.topic ?? ""}
+                              disabled={busy}
+                              onChange={(e) => void handleTopic(item, e.target.value as NewsPollKeyword["topic"])}
+                              aria-label={`${item.keyword} 종류`}
+                              className="rounded-md border border-[var(--border)] bg-[var(--background)] px-1.5 py-0.5 text-cell"
+                            >
+                              {KEYWORD_TOPICS.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.label}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                        )}
                         <td className="px-2 py-2 text-[var(--text-secondary)]">{item.sortOrder}</td>
                         <td className="px-2 py-2">
                           <button
@@ -541,3 +591,12 @@ function PollSettingField({
     </label>
   );
 }
+
+// 국내 키워드 종류 — "" 는 종목 뉴스 큐, 나머지는 뉴스 카테고리 주제 차선(be news_topics.go).
+const KEYWORD_TOPICS: { id: NewsPollKeyword["topic"]; label: string }[] = [
+  { id: "", label: "종목 뉴스" },
+  { id: "real_estate", label: "부동산" },
+  { id: "rates", label: "금리" },
+  { id: "deposit", label: "예·적금" },
+  { id: "loan", label: "대출" },
+];

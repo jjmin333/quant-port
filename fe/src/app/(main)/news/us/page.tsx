@@ -1,15 +1,22 @@
 import { NewsClient } from "@/components/news/news-client";
 import { fetchNewsListServer } from "@/lib/news-api.server";
-import { breadcrumbJsonLd, pageMetadata } from "@/lib/seo";
+import { resolvePageMetadata } from "@/lib/page-meta.server";
+import { breadcrumbJsonLd } from "@/lib/seo";
 import { JsonLd } from "@/components/seo/json-ld";
+import { PageHeading } from "@/components/layout/page-heading";
 import { hasNewsFilterParams, type NewsSearchParams } from "@/lib/news-ssr";
+import { pageRoute } from "@/lib/page-meta-routes";
 
-export const metadata = pageMetadata({
-  title: "해외 주식 뉴스",
-  description:
-    "미국 증시 뉴스를 종목별로 묶어 한국어로 보여줍니다. 기사에 언급된 종목과 키워드가 함께 붙어, 내가 보는 종목의 소식만 골라 읽을 수 있습니다.",
-  path: "/news/us",
-});
+const LABEL = pageRoute("/news/us")?.label ?? "실시간 해외 뉴스";
+
+/*
+ * 제목·설명은 `lib/page-meta-routes`의 기본값이고, 관리자가 `/admin/seo`에서
+ * 덮어쓸 수 있다 (2026-09-15 사용자 요청 2). `const metadata`가 아니라 함수인
+ * 이유는 그 덮어쓰기를 **렌더 시점에** 읽어야 하기 때문이다.
+ */
+export function generateMetadata() {
+  return resolvePageMetadata("/news/us");
+}
 
 export default async function UsNewsPage({
   searchParams,
@@ -21,7 +28,8 @@ export default async function UsNewsPage({
 
   return (
     <>
-      <JsonLd data={breadcrumbJsonLd([{ name: "해외 주식 뉴스", path: "/news/us" }])} />
+      <JsonLd data={breadcrumbJsonLd([{ name: LABEL, path: "/news/us" }])} />
+      <PageHeading>{LABEL}</PageHeading>
       <NewsClient market="us" initialArticles={initialArticles} />
     </>
   );

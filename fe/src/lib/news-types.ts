@@ -59,7 +59,30 @@ export type NewsArticle = {
   /** Open via Reader API instead of iframe */
   readerMode?: boolean;
   highlighted?: boolean;
+  /** 국내 카테고리(2026-10-09). 없으면 주식. */
+  topic?: NewsTopic;
+  /** 제목에서 뽑은 자산 칩(지역·금리) — 누르면 자산 미리보기 모달. */
+  assetTags?: NewsAssetTag[];
 };
+
+export type NewsTopic = "stock" | "real_estate" | "rates" | "deposit" | "loan";
+
+export type NewsAssetTag = { kind: "region" | "sido" | "rate" | "apt" | "product"; key: string; name: string };
+
+/** 국내 뉴스 카테고리 칩(2026-10-09 결정 A — 6칩). `""`은 전체. 해외에는 칩이 없다. */
+export const NEWS_TOPIC_CHIPS: { id: "" | NewsTopic; label: string }[] = [
+  { id: "", label: "전체" },
+  { id: "stock", label: "주식" },
+  { id: "real_estate", label: "부동산" },
+  { id: "rates", label: "금리" },
+  { id: "deposit", label: "예·적금" },
+  { id: "loan", label: "대출" },
+];
+
+export function newsTopicLabel(topic?: NewsTopic): string | null {
+  if (!topic || topic === "stock") return null;
+  return NEWS_TOPIC_CHIPS.find((c) => c.id === topic)?.label ?? null;
+}
 
 export type NewsListFilter = {
   market: NewsMarket;
@@ -67,6 +90,8 @@ export type NewsListFilter = {
   sort: NewsSort;
   query?: string;
   symbol?: string;
+  /** 국내만. 비우면 전체. */
+  topic?: NewsTopic | "";
 };
 
 export type NewsReaderContent = {

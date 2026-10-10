@@ -1,9 +1,12 @@
 import { apiRequest } from "@/lib/api-client";
+import type { PageMetaInput, PageMetaOverride } from "@/lib/page-meta-types";
 
 export type NewsPollKeyword = {
   id: number;
   market: "domestic" | "us";
   keyword: string;
+  /** "" = 종목 뉴스 큐의 일반 키워드 · 그 밖은 국내 뉴스 주제 차선 검색어(2026-10-09). */
+  topic: "" | "real_estate" | "rates" | "deposit" | "loan";
   enabled: boolean;
   sortOrder: number;
   createdAt: string;
@@ -71,6 +74,7 @@ export async function fetchAdminNewsKeywords(market: "domestic" | "us"): Promise
 export async function createAdminNewsKeyword(input: {
   market: "domestic" | "us";
   keyword: string;
+  topic?: NewsPollKeyword["topic"];
   enabled?: boolean;
   sortOrder?: number;
 }): Promise<NewsPollKeyword> {
@@ -82,7 +86,7 @@ export async function createAdminNewsKeyword(input: {
 
 export async function updateAdminNewsKeyword(
   id: number,
-  input: { keyword: string; enabled: boolean; sortOrder: number },
+  input: { keyword: string; enabled: boolean; sortOrder: number; topic?: NewsPollKeyword["topic"] },
 ): Promise<NewsPollKeyword> {
   return adminFetch<NewsPollKeyword>(`/api/v1/admin/news-keywords/${id}`, {
     method: "PUT",
@@ -656,6 +660,30 @@ export function fetchAdminScoreStatus(): Promise<ScoreStatus> {
   return adminFetch<ScoreStatus>("/api/v1/admin/score/status");
 }
 
+/** Mirrors be/internal/service/score_weight_suggestion.go. */
+export type WeightSuggestionAxis = {
+  axis: keyof ScoreWeights;
+  days: number;
+  meanIC?: number;
+  tStat?: number;
+  significant: boolean;
+  current: number;
+  suggested: number;
+};
+
+export type WeightSuggestion = {
+  market: "domestic" | "us";
+  ready: boolean;
+  reason?: string;
+  minDays: number;
+  axes: WeightSuggestionAxis[];
+};
+
+/** 성적표 기반 가중치 제안 — 저장하지 않는다. 적용은 편집기에 채운 뒤 사람이 저장한다. */
+export function fetchAdminWeightSuggestion(market: "domestic" | "us"): Promise<WeightSuggestion> {
+  return adminFetch<WeightSuggestion>(`/api/v1/admin/score/weight-suggestion?market=${market}`);
+}
+
 // ---- 배치 관리 (/admin/batch) ----------------------------------------------
 
 /** Mirrors be/internal/model/batch_job.go. */
@@ -758,6 +786,8 @@ export type BatchJobsResponse = {
   jobs: BatchJobStatus[];
   history: BatchJobRun[];
   health?: BatchHealthView;
+  /** 커버리지를 서버가 아직 한 번도 세지 못했다 — 잡 행의 `coverage`가 비어 있다. */
+  coveragePending?: boolean;
 };
 
 export function fetchAdminBatchJobs(): Promise<BatchJobsResponse> {
@@ -782,6 +812,17 @@ export function runAdminBatchJob(input: {
   if (input.limit) params.set("limit", String(input.limit));
   return adminFetch<{ job: string; started: boolean }>(
     `/api/v1/admin/batch/run?${params.toString()}`,
+    { method: "POST" },
+  );
+}
+
+export type BatchOverdueItem = { jobId: string; label: string; reason?: string; llm?: boolean };
+export type BatchOverduePlan = { run: BatchOverdueItem[]; skip: BatchOverdueItem[] };
+
+/** 제때 돌지 않은 배치 일괄 실행. dryRun이면 계획만 받는다(제외·순서 보류는 서버가 정한다). */
+export function runAdminOverdueBatches(dryRun: boolean): Promise<BatchOverduePlan> {
+  return adminFetch<BatchOverduePlan>(
+    `/api/v1/admin/batch/run-overdue${dryRun ? "?dryRun=1" : ""}`,
     { method: "POST" },
   );
 }
@@ -876,4 +917,103 @@ export function updateAdminStockAlias(id: number, input: StockAliasInput): Promi
 
 export async function deleteAdminStockAlias(id: number): Promise<void> {
   await adminFetch<{ id: number }>(`/api/v1/admin/aliases/${id}`, { method: "DELETE" });
+}
+
+/* ---------------------------------------------------------------------------
+   화면 메타 (`/admin/seo`) — 2026-09-15 사용자 요청 2
+
+   브라우저 탭 이름과 검색 결과에 나가는 글을 배포 없이 고친다. 표에 무엇이 들어
+   있고 왜 「덮어쓰기」인지는 BE `migrations/074_page_meta.sql` 머리글에 있다.
+
+   화면이 알아야 하는 것은 하나다 — **빈 칸은 코드 기본값**이고, 전부 비우면 그 행이
+   지워진다. 그래서 저장과 되돌리기가 같은 입구다.
+--------------------------------------------------------------------------- */
+
+export function fetchAdminPageMeta(): Promise<{ items: PageMetaOverride[] }> {
+  return adminFetch<{ items: PageMetaOverride[] }>("/api/v1/admin/page-meta");
+}
+
+export function saveAdminPageMeta(input: PageMetaInput): Promise<{ items: PageMetaOverride[] }> {
+  return adminFetch<{ items: PageMetaOverride[] }>("/api/v1/admin/page-meta", {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function resetAdminPageMeta(path: string): Promise<{ items: PageMetaOverride[] }> {
+  return adminFetch<{ items: PageMetaOverride[] }>(
+    `/api/v1/admin/page-meta?path=${encodeURIComponent(path)}`,
+    { method: "DELETE" },
+  );
+}
+
+/**
+ * 가중치를 **저장하기 전에** 결과를 본다 (2026-09-17 사용자 결정 D).
+ *
+ * 눌러 저장한 뒤 배치로 확인하면 17,906종목이 한 번 더 계산되고, 되돌리려면 또 한 번이다.
+ * 이 입구는 저장된 한 행을 다른 가중치로 다시 합산할 뿐이라 쓰기도 배치도 없다.
+ *
+ * 축 값과 달리 가중치는 분모에도 들어가 선형이 아니므로, 서버가 축을 정해진 순서로
+ * 하나씩 바꾸며 증분을 적는다(`order`). 합은 정확하고 각 항은 그 순서에서의 몫이다.
+ */
+export type ScoreWeightChange = {
+  symbol: string;
+  tradeDate: string;
+  fromWeights: ScoreWeights;
+  toWeights: ScoreWeights;
+  fromScore: number;
+  toScore: number;
+  delta: number;
+  exactDelta: number;
+  order: string[];
+  drivers: {
+    kind: string;
+    axis?: string;
+    label: string;
+    detail: string;
+    effect: number;
+    from?: number;
+    to?: number;
+  }[];
+  roundingResidual: number;
+};
+
+export function fetchAdminScoreWeightPreview(
+  symbol: string,
+  weights: ScoreWeights,
+): Promise<ScoreWeightChange | null> {
+  const params = new URLSearchParams({ symbol });
+  for (const [axis, value] of Object.entries(weights)) {
+    params.set(axis, String(value));
+  }
+  return adminFetch<ScoreWeightChange | null>(
+    `/api/v1/admin/score/explain-weights?${params.toString()}`,
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   검색 유입 보고서 (`/admin/growth`) — 2026-09-25
+
+   보고서는 worker-growth가 매일 07:30에 만든다(docs/GROWTH.md). 이 화면은 읽기만
+   한다 — 다시 만들기는 배치 콘솔의 「검색 유입 감시」가 한 곳이다.
+--------------------------------------------------------------------------- */
+
+export type GrowthReportKind = "daily" | "weekly";
+
+export type GrowthReportSummary = {
+  id: number;
+  kind: GrowthReportKind;
+  periodStart: string;
+  periodEnd: string;
+  createdAt: string;
+};
+
+export type GrowthReport = GrowthReportSummary & { markdown: string };
+
+export function fetchAdminGrowthReports(kind: GrowthReportKind, limit = 60): Promise<GrowthReportSummary[]> {
+  return adminFetch<GrowthReportSummary[]>(`/api/v1/admin/growth/reports?kind=${kind}&limit=${limit}`);
+}
+
+export function fetchAdminGrowthReport(id: number): Promise<GrowthReport> {
+  return adminFetch<GrowthReport>(`/api/v1/admin/growth/reports/${id}`);
 }

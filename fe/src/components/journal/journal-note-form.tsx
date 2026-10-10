@@ -1,11 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { LoginRequiredNote } from "@/components/auth/login-required-note";
 import { StockAvatar } from "@/components/stocks/stock-avatar";
 import { StockCatalogSearchField } from "@/components/market/stock-catalog-search-field";
-import { JOURNAL_TAG_PRESETS, JOURNAL_TAG_TONE } from "@/lib/journal-types";
+import { JOURNAL_TAG_TONE, JOURNAL_TOPIC_PRESETS } from "@/lib/journal-types";
+import { TopicPicker } from "@/components/common/topic-ui";
+import { ASSET_FEATURES_HIDDEN } from "@/lib/hidden-features";
+import { searchAssetMentions, type AssetSuggestion } from "@/lib/mentions";
+import { isContentTopic, type ContentTopic } from "@/lib/topics";
 import type { JournalNote, JournalNoteInput } from "@/lib/journal-types";
 import type { StockInfo } from "@/lib/quotes-types";
 import { cn } from "@/lib/utils";
@@ -50,6 +54,9 @@ export function JournalNoteForm({
   compact?: boolean;
 }) {
   const [title, setTitle] = useState(initial?.title ?? "");
+  // 주제(2026-10-09 요청 9) — 부동산·금융상품 메모는 종목 대신 단지·지역·상품 이름을 태그로 붙인다.
+  const [topic, setTopic] = useState<ContentTopic>(isContentTopic(initial?.topic) ? initial.topic : "stock");
+  const presets = JOURNAL_TOPIC_PRESETS[topic];
   const [body, setBody] = useState(initial?.body ?? "");
   const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
   const [tagDraft, setTagDraft] = useState("");
@@ -108,8 +115,9 @@ export function JournalNoteForm({
       await onSubmit({
         title,
         body,
-        symbol: stock?.symbol,
-        symbolName: stock?.name,
+        topic,
+        symbol: topic === "stock" ? stock?.symbol : undefined,
+        symbolName: topic === "stock" ? stock?.name : undefined,
         tags,
         pinned: initial?.pinned,
       });
@@ -137,7 +145,12 @@ export function JournalNoteForm({
         className="h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] px-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none"
       />
 
-      {stock ? (
+      {/* 부동산·금융상품 비노출 동안 새 메모는 주식 주제만(lib/hidden-features). */}
+      {!ASSET_FEATURES_HIDDEN && <TopicPicker value={topic} onChange={setTopic} />}
+
+      {topic !== "stock" ? (
+        <AssetTagSearch topic={topic} onPick={(name) => toggleTag(name)} />
+      ) : (stock ? (
         <div className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2">
           <StockAvatar symbol={stock.symbol} name={stock.name} size="xs" />
           <span className="text-sm text-[var(--text-primary)]">{stock.name}</span>
@@ -156,7 +169,7 @@ export function JournalNoteForm({
           placeholder="종목 연동 (선택) — 종목명·티커 검색"
           onSelect={handleSelect}
         />
-      )}
+      ))}
 
       {/*
         「저장하면 지금 주가가 함께 기록됩니다」 안내는 뺐다(사용자 요청).
@@ -173,7 +186,7 @@ export function JournalNoteForm({
 
       <div className="space-y-1.5">
         <div className="flex flex-wrap items-center gap-1.5">
-          {JOURNAL_TAG_PRESETS.map((tag) => (
+          {presets.map((tag) => (
             <button
               key={tag}
               type="button"
@@ -205,10 +218,10 @@ export function JournalNoteForm({
           />
         </div>
         {/* 직접 입력한 태그는 프리셋 줄에 안 뜨므로 여기서 지울 수 있어야 한다. */}
-        {tags.filter((t) => !JOURNAL_TAG_PRESETS.includes(t as (typeof JOURNAL_TAG_PRESETS)[number])).length > 0 && (
+        {tags.filter((t) => !presets.includes(t)).length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5">
             {tags
-              .filter((t) => !JOURNAL_TAG_PRESETS.includes(t as (typeof JOURNAL_TAG_PRESETS)[number]))
+              .filter((t) => !presets.includes(t))
               .map((tag) => (
                 <button
                   key={tag}
@@ -253,6 +266,62 @@ export function JournalNoteForm({
         )}
       </div>
       <LoginRequiredNote gate={gate} />
+    </div>
+  );
+}
+
+const TOPIC_ASSET_KINDS: Record<Exclude<ContentTopic, "stock">, string[]> = {
+  real_estate: ["apt", "region"],
+  finance: ["product", "rate"],
+};
+
+/** 단지·지역·상품·금리 이름을 찾아 태그로 붙인다 — 글 태그 도우미와 같은 서버 색인(/mentions/assets). */
+function AssetTagSearch({ topic, onPick }: { topic: Exclude<ContentTopic, "stock">; onPick: (name: string) => void }) {
+  const [q, setQ] = useState("");
+  const [items, setItems] = useState<AssetSuggestion[]>([]);
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) return;
+    let alive = true;
+    const t = setTimeout(() => {
+      searchAssetMentions(term)
+        .then((r) => alive && setItems(r.items.filter((it) => TOPIC_ASSET_KINDS[topic].includes(it.kind)).slice(0, 6)))
+        .catch(() => alive && setItems([]));
+    }, 250);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [q, topic]);
+  const shown = q.trim().length >= 2 ? items : [];
+  return (
+    <div className="space-y-1">
+      <input
+        type="text"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder={topic === "real_estate" ? "단지·지역 태그 (선택) — 이름으로 검색" : "상품·금리 태그 (선택) — 이름으로 검색"}
+        className="h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] px-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none"
+      />
+      {shown.length > 0 && (
+        <ul className="divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+          {shown.map((it) => (
+            <li key={`${it.kind}:${it.key}`}>
+              <button
+                type="button"
+                onClick={() => {
+                  onPick(it.name);
+                  setQ("");
+                }}
+                className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left text-cell hover:bg-[var(--surface-elevated)]"
+              >
+                <span className="font-medium text-[var(--text-primary)]">{it.name}</span>
+                {it.sub && <span className="truncate text-micro text-[var(--text-muted)]">{it.sub}</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -20,6 +20,7 @@ export function SectionCard({
   hrefLabel = "더보기",
   action,
   children,
+  footer,
   className,
   bodyClassName,
 }: {
@@ -29,6 +30,8 @@ export function SectionCard({
   /** 헤더 우측 컨트롤(탭·토글 등). `href`와 함께 쓰면 링크 오른쪽에 둔다. */
   action?: React.ReactNode;
   children: React.ReactNode;
+  /** 카드 바닥의 한 줄 — 기준시각·「낡은 값」 배지 자리. 없으면 그리지 않는다. */
+  footer?: React.ReactNode;
   className?: string;
   bodyClassName?: string;
 }) {
@@ -59,6 +62,22 @@ export function SectionCard({
         )}
       </CardHeader>
       <div className={cn("min-w-0", bodyClassName)}>{children}</div>
+      {/*
+        **기준시각은 바닥에 적는다** (2026-09-20 점검 요청 7).
+
+        제목 옆이 아닌 이유는 그 자리를 이미 한 번 비워 봤기 때문이다 — 2026-09-05에
+        「실시간 AI 추천 랭킹 TOP」 옆의 배치일을 **뺐다.** 홈의 좁은 4열 칸에서
+        제목이 두 줄로 접혀 카드가 12px 높아졌고, 그 12px이 옆 카드와 높이를 맞추려던
+        작업의 마지막 걸림돌이었다(`dashboard-overview.tsx`의 그 주석).
+
+        바닥은 그 값을 치르지 않는다. 헤더의 제목·토글·더보기와 폭을 다투지 않고,
+        한 줄 높이는 카드마다 **똑같이** 늘어나므로 행 안에서 어긋나지 않는다.
+      */}
+      {footer && (
+        <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-1.5 text-micro text-muted-foreground">
+          {footer}
+        </div>
+      )}
     </Card>
   );
 }

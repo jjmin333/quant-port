@@ -1,6 +1,7 @@
 "use client";
 
 import { SectionCard, SectionEmpty, SectionSkeleton } from "@/components/ui/section-card";
+import { HelpHint } from "@/components/ui/help-hint";
 import { MajorEarningsCard } from "@/components/earnings/major-earnings-card";
 import { useEarningsHighlights } from "@/hooks/use-earnings-highlights";
 import { StockAvatar } from "@/components/stocks/stock-avatar";
@@ -55,12 +56,18 @@ export function EarningsSideRail({
       */}
       <MajorEarningsCard
         variant="rail"
-        market={market}
         events={highlights?.big ?? null}
         onPick={onPickEvent}
       />
 
-      <SectionCard title="기대와 주가가 엇갈린 발표">
+      <SectionCard
+        title={
+          <span className="flex items-center gap-1">
+            기대와 주가가 엇갈린 발표
+            <HelpHint>증권사 예측 대비 발표가 벌어진 방향과 그 뒤 주가가 간 방향이 서로 반대인 발표입니다.</HelpHint>
+          </span>
+        }
+      >
         {highlights === null ? (
           <SectionSkeleton rows={4} />
         ) : highlights.divergent.length === 0 ? (
@@ -72,13 +79,16 @@ export function EarningsSideRail({
             ))}
           </ul>
         )}
-        <p className="mt-1.5 border-t pt-1.5 text-micro leading-relaxed text-muted-foreground">
-          <b>증권사 예측</b>과 <b>실제 발표</b>가 벌어진 방향과, 그 뒤 <b>주가</b>가 간 방향이
-          서로 반대인 경우입니다 — 숫자와 시장이 다르게 읽었다는 뜻입니다.
-        </p>
       </SectionCard>
 
-      <SectionCard title="꾸준히 기대를 넘는 기업">
+      <SectionCard
+        title={
+          <span className="flex items-center gap-1">
+            꾸준히 기대를 넘는 기업
+            <span className="font-normal text-muted-foreground">최근 4분기</span>
+          </span>
+        }
+      >
         {highlights === null ? (
           <SectionSkeleton rows={4} />
         ) : highlights.consistent.length === 0 ? (
@@ -90,13 +100,16 @@ export function EarningsSideRail({
             ))}
           </ul>
         )}
-        <p className="mt-1.5 border-t pt-1.5 text-micro leading-relaxed text-muted-foreground">
-          최근 <b>4분기</b> 기준. 한 번은 우연이지만 <b>4분기 중 4번</b>은 그 회사의
-          가이던스가 보수적이라는 뜻입니다. 같은 성적이면 규모가 큰 순입니다.
-        </p>
       </SectionCard>
 
-      <SectionCard title="내 종목 최근 발표">
+      <SectionCard
+        title={
+          <span className="flex items-center gap-1">
+            내 종목 최근 발표
+            <span className="font-normal text-muted-foreground">지난 2주 · 앞으로 한 달</span>
+          </span>
+        }
+      >
         {mySymbols.length === 0 ? (
           <SectionEmpty text="관심·보유 종목이 없습니다" />
         ) : myEvents === null ? (
@@ -134,10 +147,6 @@ export function EarningsSideRail({
             ))}
           </ul>
         )}
-        <p className="mt-1.5 border-t pt-1.5 text-micro leading-relaxed text-muted-foreground">
-          관심·보유 종목의 <b>지난 2주 발표와 앞으로 한 달 일정</b>입니다. 지난 것은
-          서프라이즈를, 앞으로의 것은 예정·추정을 보여줍니다.
-        </p>
       </SectionCard>
     </div>
   );

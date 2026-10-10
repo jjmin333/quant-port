@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toUserMessage } from "@/lib/error-message";
 import { buttonVariants } from "@/components/ui/button";
+import { NewsCommunityShareLink } from "@/components/news/news-community-share-link";
 
 type NewsReaderModalProps = {
   article: NewsArticle | null;
@@ -154,7 +155,7 @@ function NewsReaderModalFrame({
               >
                 {article.publisher.name}
               </span>
-              <span className="rounded-md bg-violet-500/15 px-2 py-0.5 text-cell font-semibold text-violet-300">
+              <span className="rounded-md bg-violet-500/15 px-2 py-0.5 text-cell font-semibold text-violet-700 dark:text-violet-300">
                 Reader
               </span>
               {isUs && (
@@ -242,6 +243,8 @@ function NewsReaderModalFrame({
 
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border)] px-4 py-3 sm:px-5">
           <span className="text-cell text-[var(--text-muted)]">{footerLabel}</span>
+          <span className="flex items-center gap-2">
+          <NewsCommunityShareLink article={article} onClose={onClose} />
           {hasUrl && (
             <a
               href={link}
@@ -253,6 +256,7 @@ function NewsReaderModalFrame({
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           )}
+          </span>
         </footer>
       </div>
     </div>

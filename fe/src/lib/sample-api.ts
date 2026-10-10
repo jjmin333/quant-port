@@ -49,6 +49,8 @@ export type SampleHoldingRow = {
   currency: string;
   price: number;
   changeRate: number;
+  sector?: string;
+  sectorLabel?: string;
 };
 
 export type SampleTargetRow = {

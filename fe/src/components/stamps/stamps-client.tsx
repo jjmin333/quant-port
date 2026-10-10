@@ -103,7 +103,7 @@ export function StampsClient() {
     꺼짐이 무한히 반복된다. 안내 카드는 그 위에 `!sample`을 얹은 `isEmpty`로 선다.
   */
   const hasNothingYet = !loading && !error && totalCount === 0;
-  useAutoSample(hasNothingYet);
+  useAutoSample(loading ? null : hasNothingYet);
   const isEmpty = !sample && hasNothingYet;
 
   // Deep link from the stamp button ("내 스탬프 보기").

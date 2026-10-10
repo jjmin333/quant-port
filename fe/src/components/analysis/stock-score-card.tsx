@@ -1,6 +1,11 @@
 "use client";
 
+import Link from "next/link";
+import { ArrowLeftRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { ScoreChangeLine } from "@/components/analysis/score-change-line";
+import { ScoreRadar } from "@/components/analysis/score-radar";
+import { peerGroupLabel, type ScoreChangeSummary } from "@/lib/score-explain-api";
 import {
   SCORE_AXIS_LABELS,
   SCORE_AXIS_ORDER,
@@ -62,13 +67,29 @@ function AxisBar({ axis, value }: { axis: ScoreAxisId; value: number | undefined
  * 좁은 화면에서는 머리줄이 두 줄로 접힌다(`flex-wrap`) — 잘라 내지 않는다. 점수
  * 옆의 「/ 100」처럼 없어도 읽히는 것만 좁은 폭에서 감춘다.
  */
+/** 국내 우선주 — 6자리 코드의 끝자리가 0이 아니다(서버 랭킹 우주 규칙과 같다). */
+function isDomesticPreferred(symbol: string): boolean {
+  return /^[0-9][0-9A-Z]{5}$/.test(symbol) && !symbol.endsWith("0");
+}
+
 export function StockScoreCard({
   score,
   loading,
+  change = null,
+  onOpenExplain,
   className,
 }: {
   score: StockScoreData | null;
   loading?: boolean;
+  /**
+   * 전일 대비 변화와 그 최대 원인 (`/stocks/scores/changes`, 종목당 약 260B).
+   *
+   * 설명 전체(`/score/explain`, 15KB)를 받지 않는다 — 이 카드가 쓰는 것은 두 값뿐이고
+   * 나머지는 AI 분석 탭의 패널이 자기가 열릴 때 받는다.
+   */
+  change?: ScoreChangeSummary | null;
+  /** 있으면 변화 줄이 버튼이 되어 AI 분석 탭(점수 근거)으로 보낸다. */
+  onOpenExplain?: () => void;
   className?: string;
 }) {
   if (loading) {
@@ -81,6 +102,18 @@ export function StockScoreCard({
   if (!score || score.score == null) return null;
 
   const tone = scoreTone(score.score);
+  /*
+    「N개 중 M위」 (2026-10-10, A안) — 배치가 inputs에 남긴다(그 전 회차에는 없어 「상위 N%」로 돌아간다).
+    그룹 이름도 붙인다: 종합 점수의 비교 집단은 섹터가 아니라 시장 × 시가총액 3분위다.
+  */
+  const peerRank = typeof score.inputs?.peerRank === "number" ? score.inputs.peerRank : null;
+  const peerSize = typeof score.inputs?.peerSize === "number" ? score.inputs.peerSize : null;
+  const groupName = peerGroupLabel(score.peerGroup) ?? "동종";
+  // 가장 강한 축·가장 약한 축 — 레이더가 모양을 말하고, 막대 둘이 「무엇이 끌어올리고 끌어내리나」를 말한다.
+  const ranked = SCORE_AXIS_ORDER.filter((a) => typeof score.breakdown?.[a] === "number").sort(
+    (a, b) => (score.breakdown[b] ?? 0) - (score.breakdown[a] ?? 0),
+  );
+  const extremes = ranked.length >= 2 ? [ranked[0], ranked[ranked.length - 1]] : ranked;
   const coveragePct = Math.round((score.coverage ?? 0) * 100);
   const thin = coveragePct < 60;
 
@@ -129,15 +162,39 @@ export function StockScoreCard({
         */}
         {typeof score.peerPct === "number" && (
           <p className="ml-auto min-w-0 shrink truncate text-right text-micro leading-tight text-[var(--text-muted)]">
-            동종 상위 {score.peerPct}%
+            {peerRank && peerSize ? (
+              <>
+                <b className="font-semibold text-[var(--text-primary)]">
+                  {groupName} {peerSize.toLocaleString("ko-KR")}개 중 {peerRank.toLocaleString("ko-KR")}위
+                </b>{" "}
+                (상위 {score.peerPct}%)
+              </>
+            ) : (
+              <>동종 상위 {score.peerPct}%</>
+            )}
           </p>
         )}
       </div>
 
-      <div className="space-y-1 px-3 py-2">
-        {SCORE_AXIS_ORDER.map((axis) => (
-          <AxisBar key={axis} axis={axis} value={score.breakdown?.[axis]} />
-        ))}
+      <div className="flex items-center gap-3 px-3 py-2">
+        <ScoreRadar breakdown={score.breakdown} className="h-40 w-48 shrink-0 sm:h-44 sm:w-52" />
+        <div className="min-w-0 flex-1 space-y-1.5">
+          {extremes.map((axis, i) => (
+            <div key={axis}>
+              <p className="mb-0.5 text-micro text-[var(--text-muted)]">{i === 0 ? "가장 강한 축" : "가장 약한 축"}</p>
+              <AxisBar axis={axis} value={score.breakdown?.[axis]} />
+            </div>
+          ))}
+          <Link
+            href={`/analysis?backtest=1&market=${/^[0-9]/.test(score.symbol) ? "domestic" : "overseas"}`}
+            className="inline-block pt-0.5 text-micro text-[var(--brand)] hover:underline"
+          >
+            이 점수의 과거 성적 보기 →
+          </Link>
+        </div>
+      </div>
+
+      <div className="space-y-1 px-3 pb-2">
 
         {/*
           산출 방식 설명("각 지표를 동종 그룹 내 순위 백분위로 환산해 가중 합산합니다…")은
@@ -152,7 +209,29 @@ export function StockScoreCard({
             사용 가능한 데이터가 {coveragePct}%로 제한적이라 점수를 중립(50) 쪽으로 보정했습니다.
           </p>
         )}
+        {isDomesticPreferred(score.symbol) && (
+          // 2026-09-24 사용자 결정 — 우선주는 랭킹 우주에서 빠진다. 점수는 보이되 이유를 적는다.
+          <p className="!mt-2 text-micro leading-relaxed text-[var(--text-muted)]">
+            우선주는 보통주의 재무로 평가돼 가격만 싸 보일 수 있어 AI 랭킹·스크리너 비교에서는 제외됩니다.
+          </p>
+        )}
       </div>
+
+      {/*
+        변화 한 줄 (2026-09-17 사용자 결정 A). 본문 div **밖**이라 위에 구분선이 서고,
+        축 막대와 섞이지 않는다. 비교할 회차가 없으면 `ScoreChangeLine`이 스스로
+        아무것도 그리지 않는다 — 없는 값을 0으로 때우지 않는다.
+      */}
+      <ScoreChangeLine change={change} onOpen={onOpenExplain} />
+
+      {/* 스크리너 입구 (2026-09-28 요청 5) — 이 종목 값으로 조건을 채워 같거나 나은 종목을 찾는다. */}
+      <Link
+        href={`/screener?like=${encodeURIComponent(score.symbol)}`}
+        className="flex items-center justify-center gap-1 border-t border-[var(--border)] px-3 py-1.5 text-cell font-medium text-[var(--brand)] hover:bg-[var(--brand)]/5"
+      >
+        <ArrowLeftRight className="h-3.5 w-3.5" />
+        해당 종목과 유사한 다른 종목 찾기
+      </Link>
     </Card>
   );
 }

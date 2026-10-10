@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Gauge, Loader2, Play, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
+import { FlaskConical, Gauge, Loader2, Play, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/header";
 import { PageScrollShell } from "@/components/layout/page-content-shell";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -11,6 +11,8 @@ import {
   deleteAdminScoreSymbolWeights,
   fetchAdminScoreSettings,
   fetchAdminScoreStatus,
+  fetchAdminScoreWeightPreview,
+  type ScoreWeightChange,
   recomputeAdminScores,
   updateAdminScoreSettings,
   upsertAdminScoreSymbolWeights,
@@ -24,6 +26,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toUserMessage } from "@/lib/error-message";
 import { buttonVariants } from "@/components/ui/button";
+import { AdminWeightSuggestion } from "@/components/admin/admin-weight-suggestion";
 
 const AXIS_ORDER: (keyof ScoreWeights)[] = [
   "technical",
@@ -46,7 +49,7 @@ const AXIS_HINTS: Record<keyof ScoreWeights, string> = {
   quality: "ROE·영업이익률·순이익률·부채비율·유동비율",
   growth: "매출 YoY·EPS YoY",
   valuation: "PER·PBR·PSR (낮을수록 높은 점수)",
-  sentiment: "뉴스 감성·내부자 거래 — 배치 계산 불가, 조회 시 보정",
+  sentiment: "뉴스 감성(로컬 모델)·내부자 거래·국내 수급(외국인·기관 순매수)",
 };
 
 const DEFAULT_WEIGHTS: ScoreWeights = {
@@ -191,10 +194,36 @@ export function AdminScorePanel() {
   const [dist, setDist] = useState<ScoreDistribution | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  /*
+    가중치 바꿔 보기 (2026-09-17 사용자 결정 D). **저장하지 않는다** — 저장된 한 행을
+    지금 편집 중인 가중치로 다시 합산해 볼 뿐이라 배치도 쓰기도 없다.
+  */
+  const [previewSymbol, setPreviewSymbol] = useState("005930");
+  const [preview, setPreview] = useState<ScoreWeightChange | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
   const [newSymbol, setNewSymbol] = useState("");
   const [newWeights, setNewWeights] = useState<ScoreWeights>(DEFAULT_WEIGHTS);
   const [newNote, setNewNote] = useState("");
   const [addingBusy, setAddingBusy] = useState(false);
+
+  async function handlePreview() {
+    const symbol = previewSymbol.trim().toUpperCase();
+    if (!symbol) return;
+    setPreviewBusy(true);
+    setPreviewError(null);
+    try {
+      const res = await fetchAdminScoreWeightPreview(symbol, weights);
+      setPreview(res);
+      if (!res) setPreviewError("이 종목은 아직 점수가 산출되지 않았습니다.");
+    } catch (e) {
+      setPreview(null);
+      setPreviewError(toUserMessage(e, "미리보기를 불러오지 못했습니다"));
+    } finally {
+      setPreviewBusy(false);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -424,6 +453,124 @@ export function AdminScorePanel() {
                 </label>
               </div>
             </>
+          )}
+        </section>
+
+        <AdminWeightSuggestion
+          onApply={(next) => {
+            setWeights(next);
+            setNotice("제안을 편집기에 채웠습니다 — 저장해야 반영됩니다.");
+          }}
+        />
+
+        <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 sm:p-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-section font-semibold">
+              <FlaskConical className="h-4 w-4 text-[var(--brand)]" />
+              가중치 바꿔 보기
+            </h2>
+            <div className="flex items-center gap-2">
+              <input
+                value={previewSymbol}
+                onChange={(e) => setPreviewSymbol(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void handlePreview();
+                }}
+                placeholder="종목 코드"
+                className="h-7 w-28 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-cell"
+              />
+              <button
+                type="button"
+                onClick={() => void handlePreview()}
+                disabled={previewBusy}
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "sm" }),
+                  "border-[var(--border)] hover:bg-[var(--surface-elevated)] disabled:opacity-50",
+                )}
+              >
+                {previewBusy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <FlaskConical className="h-3.5 w-3.5" />
+                )}
+                미리보기
+              </button>
+            </div>
+          </div>
+          <p className="mb-2 text-cell text-[var(--text-muted)]">
+            위에서 편집 중인 가중치를 저장하지 않은 채, 저장된 최신 점수 행에만 적용해
+            결과를 봅니다. 배치를 돌리지 않으므로 다른 종목과 화면에는 영향이 없습니다.
+          </p>
+
+          {previewError && (
+            <p className="text-cell text-[var(--text-muted)]">{previewError}</p>
+          )}
+
+          {preview && (
+            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)]/40 p-2.5">
+              <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-cell">
+                <b>{preview.symbol}</b>
+                <span className="tabular-nums text-[var(--text-muted)]">
+                  {preview.tradeDate} 회차
+                </span>
+                <span className="ml-auto font-num text-base font-bold tabular-nums">
+                  {preview.fromScore} → {preview.toScore}
+                  <span
+                    className={cn(
+                      "ml-1.5",
+                      preview.delta > 0
+                        ? "text-[var(--profit)]"
+                        : preview.delta < 0
+                          ? "text-[var(--loss)]"
+                          : "text-[var(--text-muted)]",
+                    )}
+                  >
+                    ({preview.delta > 0 ? "+" : ""}
+                    {preview.delta})
+                  </span>
+                </span>
+              </div>
+
+              {preview.drivers.length === 0 ? (
+                <p className="text-cell text-[var(--text-muted)]">
+                  이 종목의 점수를 바꾸는 가중치 변경이 없습니다. 데이터가 없는 축은
+                  가중치를 올려도 점수에 들어가지 않습니다.
+                </p>
+              ) : (
+                <ul className="space-y-0.5">
+                  {preview.drivers.map((d) => (
+                    <li key={d.axis ?? d.label} className="flex items-center gap-2 text-cell">
+                      <span className="min-w-0 flex-1 truncate text-[var(--text-secondary)]">
+                        {d.detail}
+                      </span>
+                      <span
+                        className={cn(
+                          "w-14 shrink-0 text-right font-num font-semibold tabular-nums",
+                          d.effect > 0 ? "text-[var(--profit)]" : "text-[var(--loss)]",
+                        )}
+                      >
+                        {d.effect > 0 ? "+" : ""}
+                        {d.effect.toFixed(2)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {/*
+                가중치는 분모에도 들어가 선형이 아니다 — 각 항은 「이 순서에서의 몫」이고
+                합만 정확하다. 그 사실을 숨기면 항을 따로 떼어 인용하게 된다.
+              */}
+              <p className="mt-2 text-micro text-[var(--text-muted)]">
+                합 {preview.exactDelta > 0 ? "+" : ""}
+                {preview.exactDelta.toFixed(2)}점
+                {Math.abs(preview.roundingResidual) >= 0.01 &&
+                  ` · 표시 반올림 ${preview.roundingResidual > 0 ? "+" : ""}${preview.roundingResidual.toFixed(2)}`}
+                {" · 축을 "}
+                {preview.order.join(" → ")}
+                {" 순으로 하나씩 바꾸며 잰 값입니다"}
+              </p>
+            </div>
           )}
         </section>
 

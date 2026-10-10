@@ -1,7 +1,9 @@
 import type { ApiResponse } from "@/lib/api-types";
 import type {
   NewsArticle,
+  NewsAssetTag,
   NewsListFilter,
+  NewsTopic,
   NewsPreviewMode,
   NewsReaderContent,
   NewsSourceId,
@@ -11,6 +13,15 @@ import { publisherById, resolvePublisherFromUrl } from "@/lib/news-publishers";
 import { parseNewsSearchSymbol } from "@/lib/header-search-config";
 import { getApiBaseUrl, mergeFetchInit, parseJson } from "@/lib/api-client";
 import { cachedGet } from "@/lib/fetch-cache";
+import { fetchWithTimeout } from "@/lib/fetch-timeout";
+
+/**
+ * 「오늘의 키워드」·「많이 언급된 종목」 집계의 클라이언트 캐시 TTL.
+ *
+ * 화면 갱신 주기(`NEWS_REFRESH_MS`)가 이 값보다 **길어야** 회차가 실제로 왕복한다.
+ * 그 관계는 `screen-refresh.test.ts`가 잠근다 — 값에 이름을 붙인 이유가 그것이다.
+ */
+export const NEWS_AGGREGATE_TTL = 60_000;
 
 type NewsArticleDTO = {
   id: string;
@@ -35,6 +46,8 @@ type NewsArticleDTO = {
   embedPolicy?: "ok" | "blocked" | "unknown";
   readerMode?: boolean;
   highlighted?: boolean;
+  topic?: NewsTopic;
+  assetTags?: NewsAssetTag[];
 };
 
 type NewsListResponse = ApiResponse<NewsArticleDTO[]> & {
@@ -110,6 +123,8 @@ function mapArticle(dto: NewsArticleDTO): NewsArticle {
     embedPolicy: dto.embedPolicy ?? "unknown",
     readerMode: dto.readerMode,
     highlighted: dto.highlighted,
+    topic: dto.topic,
+    assetTags: dto.assetTags,
   };
 }
 
@@ -139,7 +154,7 @@ export async function fetchUsNews(
     }
   }
 
-  const res = await fetch(`${getApiBaseUrl()}/api/v1/news/us?${params}`, mergeFetchInit(init ?? {
+  const res = await fetchWithTimeout(`${getApiBaseUrl()}/api/v1/news/us?${params}`, mergeFetchInit(init ?? {
     cache: "no-store",
   }));
 
@@ -168,6 +183,9 @@ export async function fetchDomesticNews(
   if (filter.symbol?.trim()) {
     params.set("symbol", filter.symbol.trim());
   }
+  if (filter.topic) {
+    params.set("topic", filter.topic);
+  }
   const query = filter.query?.trim();
   if (query) {
     params.set("q", query);
@@ -177,7 +195,7 @@ export async function fetchDomesticNews(
     }
   }
 
-  const res = await fetch(`${getApiBaseUrl()}/api/v1/news/domestic?${params}`, mergeFetchInit(init ?? {
+  const res = await fetchWithTimeout(`${getApiBaseUrl()}/api/v1/news/domestic?${params}`, mergeFetchInit(init ?? {
     cache: "no-store",
   }));
 
@@ -203,12 +221,14 @@ export async function fetchDashboardNews(
    * 수만큼은 온전한 기사여야 한다.** 서버 상한은 30이다.
    */
   full = 8,
+  /** 국내 카테고리 칩(2026-10-09). 해외는 무시. */
+  topic: NewsTopic | "" = "",
 ): Promise<DashboardNewsResult> {
-  const path = `/api/v1/news/${market}/dashboard?full=${full}`;
+  const path = `/api/v1/news/${market}/dashboard?full=${full}${market === "domestic" && topic ? `&topic=${topic}` : ""}`;
   // 서버도 이 목록을 15초 캐시한다. 여기 캐시는 그 위에서 **왕복 자체를** 없앤다 —
   // 홈을 떠났다 돌아오는 30초 안에는 회선을 아예 쓰지 않는다.
   return cachedGet(path, async () => {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${getApiBaseUrl()}${path}`,
       mergeFetchInit({ cache: "no-store" }),
     );
@@ -284,7 +304,7 @@ export async function fetchStockNews(params: {
 type UsDemoDTO = NewsArticleDTO & { readerMode?: boolean };
 
 export async function fetchUsNewsDemo(): Promise<NewsArticle> {
-  const res = await fetch(`${getApiBaseUrl()}/api/v1/news/us/demo`, mergeFetchInit({
+  const res = await fetchWithTimeout(`${getApiBaseUrl()}/api/v1/news/us/demo`, mergeFetchInit({
     cache: "no-store",
   }));
   if (!res.ok) {
@@ -306,7 +326,7 @@ export async function fetchNewsReader(
   if (opts?.articleId) {
     params.set("articleId", opts.articleId);
   }
-  const res = await fetch(`${getApiBaseUrl()}/api/v1/news/reader?${params}`, mergeFetchInit({
+  const res = await fetchWithTimeout(`${getApiBaseUrl()}/api/v1/news/reader?${params}`, mergeFetchInit({
     cache: "no-store",
   }));
   if (!res.ok) {
@@ -341,7 +361,7 @@ export function prefetchNewsReader(
 
 export async function recordNewsView(id: string): Promise<void> {
   const params = new URLSearchParams({ id });
-  await fetch(`${getApiBaseUrl()}/api/v1/news/view?${params}`, mergeFetchInit({
+  await fetchWithTimeout(`${getApiBaseUrl()}/api/v1/news/view?${params}`, mergeFetchInit({
     method: "POST",
     cache: "no-store",
   })).catch(() => {
@@ -379,7 +399,7 @@ export async function fetchTopKeywords(
   return cachedGet(
     path,
     async () => {
-      const res = await fetch(
+      const res = await fetchWithTimeout(
         `${getApiBaseUrl()}${path}`,
         mergeFetchInit({ cache: "no-store" }),
       );
@@ -391,7 +411,7 @@ export async function fetchTopKeywords(
         minMentions: body.data?.minMentions ?? 2,
       };
     },
-    60_000,
+    NEWS_AGGREGATE_TTL,
   );
 }
 
@@ -431,7 +451,7 @@ export async function fetchTopSymbols(
   return cachedGet(
     path,
     async () => {
-      const res = await fetch(
+      const res = await fetchWithTimeout(
         `${getApiBaseUrl()}${path}`,
         mergeFetchInit({ cache: "no-store" }),
       );
@@ -443,6 +463,6 @@ export async function fetchTopSymbols(
         minMentions: body.data?.minMentions ?? 2,
       };
     },
-    60_000,
+    NEWS_AGGREGATE_TTL,
   );
 }

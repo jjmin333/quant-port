@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useAuth } from "@/components/providers/auth-provider";
 import {
   createStampClient,
   fetchStampStateClient,
@@ -59,11 +60,19 @@ export function useStampButton(symbol: string, { interval }: Options = {}) {
     setError(null);
   }
 
+  /*
+    **비로그인이면 묻지 않는다.** 스탬프는 개인 데이터라 답은 언제나 401이고, 그 401이
+    처음 온 방문자·검색엔진 렌더러의 콘솔에 오류로 찍혔다(2026-09-26 외부 방문자 점검).
+    로그인하면 `signedIn`이 바뀌어 그때 받는다.
+  */
+  const { session } = useAuth();
+  const signedIn = session != null;
+
   useEffect(() => {
     symbolRef.current = symbol;
-    if (!symbol) return;
+    if (!symbol || !signedIn) return;
     refresh(symbol);
-  }, [symbol, refresh]);
+  }, [symbol, signedIn, refresh]);
 
   // Local countdown so the label ticks without polling the server.
   useEffect(() => {

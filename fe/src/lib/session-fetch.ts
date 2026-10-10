@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from "@/lib/fetch-timeout";
+
 const DEFAULT_API_URL = "http://localhost:8080";
 
 function getApiBaseUrl(): string {
@@ -48,6 +50,17 @@ export function markRefreshUsable(): void {
   refreshKnownImpossible = false;
 }
 
+/*
+서버가 「갱신 못 한다」(401·403)고 답한 순간을 화면에 알린다 (2026-10-07 제보 2).
+그전에는 `AuthProvider`가 이 답을 몰라서, 세션이 끝난 탭이 **로그인 헤더를 단 채**
+「내 종목」 같은 카드만 401로 비어 있었다. 구독자는 `AuthProvider` 하나다.
+*/
+let onSignedOut: (() => void) | null = null;
+
+export function setSignedOutHandler(fn: (() => void) | null): void {
+  onSignedOut = fn;
+}
+
 /** 로그아웃 — 갱신 쿠키가 사라졌으니 더 묻지 않는다. */
 export function markRefreshImpossible(): void {
   refreshKnownImpossible = true;
@@ -66,14 +79,22 @@ export async function refreshSession(): Promise<boolean> {
 
   inflightRefresh = (async () => {
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/v1/auth/refresh`, {
+      /*
+        갱신에도 상한이 필요하다. `inflightRefresh`는 **모두가 함께 기다리는
+        promise 하나**라, 이 요청이 안 끝나면 401을 받은 화면 전부가 같이 멈춘다 —
+        한 요청이 늦는 것과 앱이 서는 것의 차이다.
+      */
+      const res = await fetchWithTimeout(`${getApiBaseUrl()}/api/v1/auth/refresh`, {
         method: "POST",
         credentials: "include",
       });
       // 401·403은 「쿠키가 없거나 만료됐다」이고, 그건 다시 물어도 같은 답이다.
       // 5xx·네트워크 실패는 **서버 사정**이라 굳히지 않는다 — 그때까지 로그인해
       // 있던 사람이 서버가 잠깐 흔들렸다고 로그아웃당하면 안 된다.
-      if (res.status === 401 || res.status === 403) refreshKnownImpossible = true;
+      if (res.status === 401 || res.status === 403) {
+        refreshKnownImpossible = true;
+        onSignedOut?.();
+      }
       return res.ok;
     } catch {
       return false;
@@ -95,11 +116,19 @@ export async function sessionFetch(path: string, init: RequestInit = {}): Promis
     },
   };
 
-  let res = await fetch(url, merged);
+  /*
+    상한을 여기에 거는 이유는 **모든 세션 요청이 이 문을 지나기 때문**이다.
+    호출부마다 AbortController를 세우면 빠뜨린 곳이 생기고, 빠뜨린 그 한 곳이
+    화면을 영원한 로딩으로 굳힌다 — 실제로 앱 전체에서 상한이 걸린 fetch는
+    `fetchMarketIndicesClient` 하나뿐이었다(`lib/fetch-timeout.ts` 머리글).
+
+    시세 스트림은 `EventSource`가 열므로 이 경로를 지나지 않는다.
+  */
+  let res = await fetchWithTimeout(url, merged);
   if (res.status === 401 && !path.includes("/auth/refresh")) {
     const renewed = await refreshSession();
     if (renewed) {
-      res = await fetch(url, merged);
+      res = await fetchWithTimeout(url, merged);
     }
   }
   return res;

@@ -12,6 +12,16 @@ export type DailyCloseRow = {
   score: number | null;
   /** "" when no analysis ran. */
   aiSummary: string;
+  /**
+   * 그날의 「핵심 요약」 한 문단 (2026-09-15 사용자 요청 1).
+   *
+   * `aiSummary`가 네 갈래 본문을 **이어붙인** 글인 반면 이쪽은 같은 LLM 호출이 그 넷을
+   * 전부 근거로 **다시 쓴** 요약이다. 모달의 「간단」이 이 값을 쓴다.
+   *
+   * **없을 수 있다** — 이 컬럼은 2026-09-15 배치부터 쌓이므로 그 이전 날짜의 행은
+   * 비어 온다. 그때는 화면이 예전 방식(`aiSummary`의 앞 두 문장)으로 되돌아간다.
+   */
+  aiOverview?: string;
   analysisSource?: "llm" | "rule" | "";
   /**
    * 지수 전용 — 그날의 LLM 해설과 국면 라벨. 종목 응답에는 없다.

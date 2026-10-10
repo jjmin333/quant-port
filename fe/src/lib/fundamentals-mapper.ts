@@ -52,7 +52,8 @@ function psrVerdict(psr: number): { verdict: string; tone: MetricTone; gauge: nu
  */
 function computePSR(data: FundamentalsData): number | undefined {
   const { price, sharesOutstanding, revenue } = data;
-  if (price == null || sharesOutstanding == null || revenue == null) return undefined;
+  // 금액이 없으면(20-F 현지 통화라 비운 ADR 등) 보조 출처의 PSR을 쓴다.
+  if (price == null || sharesOutstanding == null || revenue == null) return data.psr;
   if (price <= 0 || sharesOutstanding <= 0 || revenue <= 0) return undefined;
   return (price * sharesOutstanding) / revenue;
 }

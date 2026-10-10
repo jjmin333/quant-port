@@ -5,7 +5,8 @@ import Link from "next/link";
 import { ArrowLeft, Clock3, Eye, Flag, History, Loader2 } from "lucide-react";
 import { PageScrollShell } from "@/components/layout/page-content-shell";
 import { Card } from "@/components/ui/card";
-import { Markdown } from "@/components/ui/markdown";
+import { MentionMarkdown } from "@/components/mentions/mention-markdown";
+import { ResearchReviewCard } from "@/components/research/research-review-card";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { StockAvatar } from "@/components/stocks/stock-avatar";
 import {
@@ -29,6 +30,7 @@ import {
   recordResearchViewClient,
   reportResearchClient,
   retractResearchClient,
+  deleteResearchClient,
   updateResearchClient,
 } from "@/lib/research-api";
 import {
@@ -43,6 +45,11 @@ import { readingMinutes } from "@/lib/markdown";
 import { analysisSymbolHref } from "@/lib/analysis-tabs";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/providers/confirm-provider";
+import { useAuth } from "@/components/providers/auth-provider";
+import { isAdminSession } from "@/lib/admin-features";
+import { TopicBadge } from "@/components/common/topic-ui";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { toUserMessage } from "@/lib/error-message";
 import { PriceDisplay } from "@/components/ui/price-display";
 import { buttonVariants } from "@/components/ui/button";
@@ -95,6 +102,9 @@ export function ResearchDetailClient({
   initialCall?: ResearchCall | null;
 }) {
   const confirm = useConfirm();
+  const router = useRouter();
+  const { session } = useAuth();
+  const isAdmin = isAdminSession(session);
   const [call, setCall] = useState<ResearchCall | null>(initialCall);
   const [revisions, setRevisions] = useState<ResearchRevision[]>([]);
   const [showRevisions, setShowRevisions] = useState(false);
@@ -170,6 +180,25 @@ export function ResearchDetailClient({
     }
   }
 
+  async function handleDelete() {
+    if (!call) return;
+    const ok = await confirm({
+      title: "이 리포트를 삭제할까요?",
+      description: "댓글·추천과 함께 완전히 지워지고 성적 집계에서도 빠집니다. 되돌릴 수 없습니다.",
+      confirmLabel: "삭제",
+      tone: "danger",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await deleteResearchClient(call.id);
+      router.push("/reports");
+    } catch (err) {
+      toast.error(toUserMessage(err, "삭제하지 못했습니다."));
+      setBusy(false);
+    }
+  }
+
   async function handleReport() {
     if (!call) return;
     const reason = window.prompt(
@@ -212,6 +241,8 @@ export function ResearchDetailClient({
   // 어긋날 수 있고, 이 컬럼에 그것을 보여 줄 자리도 더는 없다.
   const gaps = call.context.dataGaps ?? [];
   const dueDays = daysUntilDue(call.dueAt, call.status);
+  // 부동산·금융상품 분석 리포트 — 종목·근거·판정·레일이 없다(2026-10-09 요청 9).
+  const isNote = call.status === "note";
 
   return (
     <>
@@ -235,13 +266,27 @@ export function ResearchDetailClient({
           한 컬럼일 때의 순서는 **격자에 적힌 순서 그대로**다: 본문 → 계기판 → 댓글.
           09-14 오전에 정한 순서이고, 넓은 화면에서만 가운데가 오른쪽으로 나간다.
         */}
-        <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_19rem] xl:gap-5 xl:grid-cols-[minmax(0,1fr)_21rem]">
+        <div
+          className={cn(
+            "grid min-w-0 items-start gap-4",
+            !isNote && "lg:grid-cols-[minmax(0,1fr)_19rem] xl:gap-5 xl:grid-cols-[minmax(0,1fr)_21rem]",
+          )}
+        >
           <div className="min-w-0 space-y-5 lg:col-start-1">
         {/* ---- 글머리 ---- */}
         <header className="space-y-3">
           <div className="flex flex-wrap items-center gap-1.5">
-            <DirectionBadge direction={call.direction} />
-            <StatusBadge status={call.status} />
+            {isNote ? (
+              <>
+                <TopicBadge topic={call.topic} />
+                <span className="text-cell font-medium text-[var(--text-secondary)]">분석 리포트</span>
+              </>
+            ) : (
+              <>
+                <DirectionBadge direction={call.direction} />
+                <StatusBadge status={call.status} />
+              </>
+            )}
             {call.contrarian && <ContrarianBadge />}
             {call.visibility !== "public" && (
               <span className="text-micro text-[var(--text-muted)]">
@@ -315,24 +360,34 @@ export function ResearchDetailClient({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <ReactionBar call={call} />
           <div className="flex flex-wrap items-center gap-2">
+            {(call.canEdit || isAdmin) && call.status !== "retracted" && (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]")}
+              >
+                본문 수정
+              </button>
+            )}
             {call.canEdit && call.status !== "retracted" && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]")}
-                >
-                  본문 수정
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRetract}
-                  disabled={busy}
-                  className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] text-[var(--loss)] disabled:opacity-40")}
-                >
-                  철회
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={handleRetract}
+                disabled={busy}
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] text-[var(--loss)] disabled:opacity-40")}
+              >
+                철회
+              </button>
+            )}
+            {(call.canEdit || isAdmin) && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={busy}
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--border)] text-[var(--loss)] disabled:opacity-40")}
+              >
+                삭제
+              </button>
             )}
             {!call.canEdit && (
               <button
@@ -348,6 +403,8 @@ export function ResearchDetailClient({
           </div>
         </div>
 
+        {!isNote && (
+        <>
         {/*
           한 줄 요약 띠 — 종목과 「무엇을 얼마에」.
 
@@ -382,9 +439,11 @@ export function ResearchDetailClient({
             </span>
           )}
         </div>
+        </>
+        )}
 
         {/* ---- 본문 ---- */}
-        {editing && call.canEdit ? (
+        {editing && (call.canEdit || isAdmin) ? (
           <EditPanel
             call={call}
             busy={busy}
@@ -400,13 +459,17 @@ export function ResearchDetailClient({
             {call.bodyMd.trim() === "" ? (
               <p className="text-sm text-[var(--text-muted)]">본문이 없습니다.</p>
             ) : (
-              <Markdown source={call.bodyMd} />
+              <MentionMarkdown source={call.bodyMd} mentions={call.mentions} />
             )}
           </Card>
         )}
 
+        {/* AI 검토 노트 — 공개 리포트만, 배치가 저장한 것(2026-09-27 결정 C ④). */}
+        {!editing && call.visibility === "public" && <ResearchReviewCard callId={call.id} bodyRev={call.bodyRev} />}
 
-        {/* ---- 서버가 잰 근거 ---- */}
+
+        {/* ---- 서버가 잰 근거 ---- 분석 리포트에는 없다 */}
+        {!isNote && (
         <section className="space-y-3">
           <h2 className="text-section font-semibold text-[var(--text-primary)]">발행 시점 근거</h2>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -520,6 +583,7 @@ export function ResearchDetailClient({
             </Card>
           )}
         </section>
+        )}
 
         {/*
           ---- 댓글 ----
@@ -533,7 +597,7 @@ export function ResearchDetailClient({
         <CommentThread callId={call.id} authorUserId={call.userId} />
 
         <p className="px-1 pb-2 text-micro leading-relaxed text-[var(--text-muted)]">
-          서비스는 발행 시점 데이터를 박제하고 결과를 채점할 뿐입니다.
+          {isNote ? "회원 개인의 분석이며 투자 권유가 아닙니다." : "서비스는 발행 시점 데이터를 박제하고 결과를 채점할 뿐입니다."}
         </p>
           </div>
 
@@ -547,10 +611,12 @@ export function ResearchDetailClient({
             그때는 걸지 않는다(`lg:` 접두). 쌓인 블록을 붙여 두면 스크롤이 거기서
             멈춘 것처럼 보인다 — `page-columns.tsx`가 같은 이유로 같은 처리를 한다.
           */}
+          {!isNote && (
           <aside className="flex min-w-0 flex-col gap-3 lg:col-start-2 lg:row-start-1 lg:self-start lg:sticky lg:top-3 lg:max-h-[calc(100dvh-1.5rem)] lg:overflow-y-auto lg:overscroll-contain">
             <ResearchCallRail call={call} />
             <RatingPanel call={call} onRated={load} />
           </aside>
+          )}
         </div>
       </PageScrollShell>
     </>
@@ -600,7 +666,7 @@ function EditPanel({
         maxLength={200}
         className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] px-3.5 py-2.5 text-base font-semibold text-[var(--text-primary)] outline-none focus:border-[var(--brand)]"
       />
-      <MarkdownEditor value={body} onChange={setBody} rows={18} disabled={saving} />
+      <MarkdownEditor mentions value={body} onChange={setBody} rows={18} disabled={saving} />
 
       {/* 표지는 논거가 아니라 표현이다 — 바꿔도 수정 이력(bodyRev)이 오르지 않는다. */}
       <div className="space-y-1.5 border-t border-[var(--border)] pt-3">

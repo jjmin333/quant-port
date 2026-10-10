@@ -8,6 +8,7 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { useConfirm } from "@/components/providers/confirm-provider";
 import { changeDisplayName, changePassword, deleteAccount } from "@/lib/auth";
 import { toUserMessage } from "@/lib/error-message";
+import { DISPLAY_NAME_MAX, PASSWORD_MAX, PASSWORD_MIN } from "@/lib/auth-rules";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 
@@ -141,16 +142,16 @@ export function AccountSettings() {
     <div className="space-y-4">
       <section className={sectionClass}>
         <h3 className="text-sm font-semibold text-[var(--text-primary)]">계정</h3>
-        <p className="mt-1 text-cell text-[var(--text-muted)]">{session.user.email}</p>
+        <p className="mt-1 text-cell text-[var(--text-muted)]">아이디 {session.user.email}</p>
 
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <div className="min-w-0 flex-1">
-            <label className={labelClass} htmlFor="account-display-name">표시 이름</label>
+            <label className={labelClass} htmlFor="account-display-name">닉네임 (2~10자 · 다른 회원과 겹칠 수 없음)</label>
             <input
               id="account-display-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              maxLength={100}
+              maxLength={DISPLAY_NAME_MAX}
               className={inputClass}
             />
           </div>
@@ -198,7 +199,9 @@ export function AccountSettings() {
             <input
               type="password"
               autoComplete="new-password"
-              minLength={8}
+              minLength={PASSWORD_MIN}
+              maxLength={PASSWORD_MAX}
+              placeholder="8~15자"
               id="account-new-password"
               value={next}
               onChange={(e) => setNext(e.target.value)}
@@ -210,7 +213,8 @@ export function AccountSettings() {
             <input
               type="password"
               autoComplete="new-password"
-              minLength={8}
+              minLength={PASSWORD_MIN}
+              maxLength={PASSWORD_MAX}
               id="account-confirm-password"
               value={confirmNext}
               onChange={(e) => setConfirmNext(e.target.value)}

@@ -21,6 +21,13 @@ export type FundamentalsData = {
   price?: number;
   per?: number;
   pbr?: number;
+  /** 보조 출처에만 있다(서버 계산 PSR은 화면이 매출·주식 수로 만든다). */
+  psr?: number;
+  /**
+   * EDGAR가 비운 칸을 채운 보조 출처(Finnhub, 2026-09-28). 본국 상장 기준 비율이라 ADR에도 맞다.
+   * `fields`는 채운 칸의 이름(per·pbr·roe…).
+   */
+  supplement?: { source: string; asOf: string; fields: string[] };
 
   roe?: number;
   operatingMargin?: number;

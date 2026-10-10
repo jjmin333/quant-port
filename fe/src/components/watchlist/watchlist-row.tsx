@@ -18,6 +18,8 @@ import { ValueFlash } from "@/components/ui/value-flash";
 import { SCORE_TONE_BADGE, scoreTone } from "@/lib/stock-score-api";
 import { trendTextClass } from "@/lib/trend-colors";
 import type { WatchlistRow as Row } from "@/lib/watchlist-calc";
+import type { MyTodayItem } from "@/lib/my-today-api";
+import { firstSentences } from "@/lib/summary-sentences";
 import { cn } from "@/lib/utils";
 
 /**
@@ -41,6 +43,7 @@ export function WatchlistRow({
   isDragging,
   isDropTarget,
   events,
+  today,
   onOpen,
   onRemove,
   onDragStart,
@@ -55,6 +58,8 @@ export function WatchlistRow({
   isDragging: boolean;
   isDropTarget: boolean;
   events: UpcomingEvent[];
+  /** 오늘의 신호(`/user/today`) — 뉴스 수·변화 한 줄·AI 한 줄. 예시 모드에는 없다. */
+  today?: MyTodayItem;
   onOpen: () => void;
   onRemove: () => void;
   onDragStart: () => void;
@@ -75,14 +80,14 @@ export function WatchlistRow({
   return (
     <Card
       className={cn(
-        WL_ROW_OUTER,
-        "px-3 py-2.5 transition-colors hover:border-[var(--brand)] hover:bg-[var(--surface-elevated)]/40",
+        "flex flex-col gap-1 px-3 py-2.5 transition-colors hover:border-[var(--brand)] hover:bg-[var(--surface-elevated)]/40",
         isDragging && "opacity-50",
         isDropTarget && "border-[var(--brand)]/50",
       )}
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
+      <div className={cn(WL_ROW_OUTER, "min-w-0")}>
       <span className={WL_COL.grip}>
         {draggable && (
           <button
@@ -217,7 +222,83 @@ export function WatchlistRow({
           <Trash2 className="h-4 w-4" />
         </button>
       </span>
+      </div>
+      <TodayLines
+        today={today}
+        eventDays={eventSoon ? nextEventDays : null}
+        onOpen={onOpen}
+      />
     </Card>
+  );
+}
+
+/**
+ * 행 아래 두 줄 — **오늘 무슨 일이 있었나** (2026-09-27 사용자 결정 A).
+ *
+ * 1줄: 실적 D-n · 24시간 뉴스 수 · 오늘의 변화 한 줄(홈 「내 종목」 카드와 같은 재료).
+ * 2줄: AI 한 줄 — 저장된 AI 요약 글의 첫 문장. LLM을 부르지 않는다.
+ *
+ * 둘 다 **값이 있을 때만** 선다. 신호가 없는 종목까지 빈 줄을 그리면 목록이 길어지기만 한다.
+ * 한 칸짜리 grid(minmax(0,1fr))로 폭을 가둔다 — Safari에서 버튼 안 flex 자식이 말줄임 없이
+ * 카드를 뚫고 나가던 홈 카드의 결함(같은 날 제보 2)을 여기서는 처음부터 피한다.
+ */
+function TodayLines({
+  today,
+  eventDays,
+  onOpen,
+}: {
+  today?: MyTodayItem;
+  eventDays: number | null;
+  onOpen: () => void;
+}) {
+  const ai = firstSentences(today?.aiOverview, 1);
+  const hasSignals = eventDays != null || (today?.news24h ?? 0) > 0 || Boolean(today?.change);
+  if (!hasSignals && !ai) return null;
+  const change = today?.change;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      tabIndex={-1}
+      className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-0.5 overflow-hidden text-left text-micro text-[var(--text-muted)] @3xl:pl-9"
+    >
+      {hasSignals && (
+        <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+          {eventDays != null && (
+            <span className="shrink-0 rounded bg-amber-500/15 px-1 text-amber-700 dark:text-amber-400">
+              실적 {eventDays === 0 ? "오늘" : `D-${eventDays}`}
+            </span>
+          )}
+          {(today?.news24h ?? 0) > 0 && <span className="shrink-0">뉴스 {today?.news24h}</span>}
+          {change && (
+            <span
+              className={cn(
+                "block min-w-0 flex-1 truncate",
+                change.direction > 0
+                  ? "text-[var(--profit)]"
+                  : change.direction < 0
+                    ? "text-[var(--loss)]"
+                    : undefined,
+              )}
+              title={change.title}
+            >
+              {change.title}
+            </span>
+          )}
+        </span>
+      )}
+      {ai && (
+        <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+          <span className="shrink-0 rounded bg-[var(--brand-muted)] px-1 font-semibold text-[var(--brand)]">AI</span>
+          <span
+            className="block min-w-0 flex-1 truncate text-[var(--text-secondary)]"
+            title={today?.aiAt ? `${ai} (AI 요약 ${today.aiAt.slice(5).replace("-", "/")})` : ai}
+          >
+            {ai}
+          </span>
+        </span>
+      )}
+    </button>
   );
 }
 

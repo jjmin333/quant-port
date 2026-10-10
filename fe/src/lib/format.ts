@@ -178,7 +178,8 @@ export function formatTradingValue(value: number, currency: "KRW" | "USD", excha
   if (value <= 0) return "—";
   if (currency === "USD") {
     let usdPart: string;
-    if (value >= 1_000_000_000) usdPart = `$${(value / 1_000_000_000).toFixed(1)}B`;
+    if (value >= 1_000_000_000_000) usdPart = `$${(value / 1_000_000_000_000).toFixed(2)}T`;
+    else if (value >= 1_000_000_000) usdPart = `$${(value / 1_000_000_000).toFixed(1)}B`;
     else if (value >= 1_000_000) usdPart = `$${(value / 1_000_000).toFixed(1)}M`;
     else usdPart = `$${formatUSD(value, 0)}`;
     if (exchangeRate && exchangeRate > 0) {
@@ -200,11 +201,22 @@ export function formatTradingValue(value: number, currency: "KRW" | "USD", excha
  * And market-data amounts are always positive turnover, so widening that
  * function would change unrelated call sites.
  */
+/**
+ * 재무 금액. `currency`는 보통 KRW/USD지만, 20-F 해외 발행사는 공시 통화 코드(TWD·JPY…)가 온다
+ * (2026-09-28) — 그때는 $를 붙이지 않고 「2.9T TWD」처럼 코드를 적는다. 대만 달러를 달러로 읽으면 30배다.
+ */
 export function formatFinancialAmount(
   value: number | null | undefined,
-  currency: "KRW" | "USD",
+  currency: "KRW" | "USD" | (string & {}),
 ): string {
   if (value == null || !Number.isFinite(value)) return "—";
+  if (currency !== "KRW" && currency !== "USD") {
+    const sign = value < 0 ? "-" : "";
+    const abs = Math.abs(value);
+    const body =
+      abs >= 1e12 ? `${(abs / 1e12).toFixed(1)}T` : abs >= 1e9 ? `${(abs / 1e9).toFixed(1)}B` : abs >= 1e6 ? `${(abs / 1e6).toFixed(1)}M` : abs.toFixed(2);
+    return `${sign}${body} ${currency}`;
+  }
   if (value === 0) return currency === "USD" ? "$0" : "0원";
 
   const sign = value < 0 ? "-" : "";
@@ -224,11 +236,12 @@ export function formatFinancialAmount(
 }
 
 /** Compact axis tick — same scaling, no currency word, to keep ticks narrow. */
-export function formatFinancialTick(value: number, currency: "KRW" | "USD"): string {
+export function formatFinancialTick(value: number, currency: "KRW" | "USD" | (string & {})): string {
   if (!Number.isFinite(value) || value === 0) return "0";
   const sign = value < 0 ? "-" : "";
   const abs = Math.abs(value);
-  if (currency === "USD") {
+  if (currency !== "KRW") {
+    if (abs >= 1_000_000_000_000) return `${sign}${(abs / 1_000_000_000_000).toFixed(1)}T`;
     if (abs >= 1_000_000_000) return `${sign}${(abs / 1_000_000_000).toFixed(0)}B`;
     if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(0)}M`;
     if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(0)}K`;

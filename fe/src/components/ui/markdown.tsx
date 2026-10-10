@@ -1,4 +1,6 @@
-import { Fragment, type ReactNode } from "react";
+"use client";
+
+import { createContext, Fragment, useContext, type ReactNode } from "react";
 import {
   parseMarkdown,
   type BlockNode,
@@ -18,16 +20,55 @@ import { cn } from "@/lib/utils";
  * typography plugin, and reports are read on phones as often as on desktops, so
  * the scale is set once and reused by the editor preview and the detail page.
  */
-export function Markdown({ source, className }: { source: string; className?: string }) {
+/**
+ * 글자 조각을 그리는 방법을 바꿔 끼우는 자리 — 리포트 본문의 데이터 태그(2026-09-28 요청 2).
+ * `text`는 글자 노드를, `after`는 문단 하나의 평문을 받아 그 문단 **아래**에 붙일 것(# 카드)을 낸다.
+ * 이 파일은 태그를 모른다 — 부르는 쪽이 넣는다.
+ */
+export type MarkdownTextRenderer = {
+  text: (value: string) => ReactNode;
+  after?: (paragraph: string) => ReactNode;
+};
+
+const TextRendererContext = createContext<MarkdownTextRenderer | null>(null);
+
+export function Markdown({
+  source,
+  className,
+  renderer,
+}: {
+  source: string;
+  className?: string;
+  renderer?: MarkdownTextRenderer;
+}) {
   const blocks = parseMarkdown(source);
   if (blocks.length === 0) return null;
   return (
-    <div className={cn("markdown-body space-y-4 text-article", className)}>
-      {blocks.map((block, i) => (
-        <Block key={i} node={block} />
-      ))}
-    </div>
+    <TextRendererContext.Provider value={renderer ?? null}>
+      <div className={cn("markdown-body space-y-4 text-article", className)}>
+        {blocks.map((block, i) => (
+          <Block key={i} node={block} />
+        ))}
+      </div>
+    </TextRendererContext.Provider>
   );
+}
+
+function plainText(nodes: InlineNode[]): string {
+  return nodes
+    .map((n) => (n.type === "text" || n.type === "code" ? n.value : "children" in n ? plainText(n.children) : ""))
+    .join("");
+}
+
+function ParagraphAfter({ nodes }: { nodes: InlineNode[] }) {
+  const r = useContext(TextRendererContext);
+  if (!r?.after) return null;
+  return <>{r.after(plainText(nodes))}</>;
+}
+
+function TextNode({ value }: { value: string }) {
+  const r = useContext(TextRendererContext);
+  return <>{r ? r.text(value) : value}</>;
 }
 
 function Block({ node }: { node: BlockNode }): ReactNode {
@@ -64,9 +105,12 @@ function Block({ node }: { node: BlockNode }): ReactNode {
 
     case "paragraph":
       return (
-        <p className="text-[var(--text-secondary)]">
-          <Inlines nodes={node.children} />
-        </p>
+        <>
+          <p className="text-[var(--text-secondary)]">
+            <Inlines nodes={node.children} />
+          </p>
+          <ParagraphAfter nodes={node.children} />
+        </>
       );
 
     case "list": {
@@ -177,7 +221,7 @@ function Inlines({ nodes }: { nodes: InlineNode[] }) {
 function InlineNodeView({ node }: { node: InlineNode }): ReactNode {
   switch (node.type) {
     case "text":
-      return node.value;
+      return <TextNode value={node.value} />;
     case "break":
       return <br />;
     case "strong":

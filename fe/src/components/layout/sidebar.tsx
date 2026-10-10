@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
+  LayoutList,
   Globe,
   Briefcase,
   Heart,
@@ -19,13 +20,26 @@ import {
   Sparkles,
   Calculator,
   ListChecks,
+  SlidersHorizontal,
   Trophy,
   LineChart,
   CalendarClock,
   CalendarRange,
+  Search,
+  TrendingUp,
+  Activity,
+  MessagesSquare,
+  MessageSquareWarning,
+  PiggyBank,
+  Building2,
+  Gavel,
+  Percent,
+  HandCoins,
 } from "lucide-react";
 import { isAdminNavVisible, isAdminSession } from "@/lib/admin-features";
+import { isHiddenRoute } from "@/lib/hidden-features";
 import { fetchAdminBatchHealth } from "@/lib/admin";
+import { useMyChangeSummary } from "@/hooks/use-my-change-summary";
 import { useAuth } from "@/components/providers/auth-provider";
 import { useShellMode } from "@/components/providers/shell-mode-provider";
 import { cn } from "@/lib/utils";
@@ -55,14 +69,21 @@ const navGroups = [
     label: "순위",
     items: [
       { href: "/market", label: "실시간 차트", icon: LineChart, rail: "실시간 차트" },
-      { href: "/analysis", label: "AI 추천 랭킹", icon: Trophy, rail: "AI 랭킹" },
+      // 「추천」은 투자 권유로 읽힌다 — 「점수 순위」(2026-10-10, BUSINESS_REVIEW §5 D8).
+      { href: "/analysis", label: "AI 점수 순위", icon: Trophy, rail: "AI 점수" },
+      { href: "/screener", label: "종목 스크리너", icon: SlidersHorizontal, rail: "스크리너" },
+      // 그날 전 종목의 급등락·공시·실적·점수 변화 (2026-09-23 사용자 결정 — 새 메뉴).
+      { href: "/changes", label: "오늘의 변화", icon: Activity, rail: "변화" },
+      // 색인 대상 종목을 섹터별 링크로 — 종목 페이지가 고아가 되지 않게 하는 입구(2026-10-09).
+      { href: "/stocks", label: "종목 모음", icon: LayoutList, rail: "종목 모음" },
     ],
   },
   {
     label: "뉴스",
     items: [
-      { href: "/news/domestic", label: "국내 주식", icon: Newspaper, rail: "국내 뉴스" },
-      { href: "/news/us", label: "해외 주식", icon: Globe, rail: "해외 뉴스" },
+      // 주식만이 아니라 부동산·금리·예적금·대출 기사도 모은다(2026-10-09 요청 4).
+      { href: "/news/domestic", label: "실시간 국내 뉴스", icon: Newspaper, rail: "국내 뉴스" },
+      { href: "/news/us", label: "실시간 해외 뉴스", icon: Globe, rail: "해외 뉴스" },
     ],
   },
   {
@@ -79,7 +100,7 @@ const navGroups = [
     label: "내 투자",
     items: [
       { href: "/holdings", label: "내 포트폴리오", icon: Briefcase, rail: "보유" },
-      { href: "/watchlist", label: "관심 종목", icon: Heart, rail: "관심" },
+      { href: "/watchlist", label: "관심 목록", icon: Heart, rail: "관심" },
       /*
        * 「목표가 예측」 = 옛 `스탬프` + `목표가 관리`.
        *
@@ -94,11 +115,41 @@ const navGroups = [
     ],
   },
   {
+    /*
+     * 부동산 (2026-10-01 사용자 결정 — 순자산은 「내 포트폴리오」로 합쳤다). 매물이 아니라 신고된 실거래,
+     * 공매는 캠코 온비드.
+     */
+    label: "부동산",
+    items: [
+      { href: "/real-estate", label: "부동산 시세", icon: Building2, rail: "부동산" },
+      { href: "/real-estate/auctions", label: "부동산 공매", icon: Gavel, rail: "공매" },
+    ],
+  },
+  {
     // 리포트는 공개 발행물이라 사적 기록과 그룹을 분리한다.
     // 순위표(리더보드)는 두지 않는다 — 작성자를 줄 세우면 리포트가 대회
     // 참가작이 되고, 대회는 보상 없이는 유지되지 않는다.
     label: "커뮤니티",
-    items: [{ href: "/reports", label: "투자 리포트", icon: PenLine, rail: "리포트" }],
+    // 커뮤니티(2026-09-27 사용자 요청 4)는 투자 리포트 **위**. 뱃지는 활동·습관만이고
+    // 순위·보상은 없다 — 리포트와 같은 방침.
+    items: [
+      { href: "/community", label: "커뮤니티", icon: MessagesSquare, rail: "커뮤니티" },
+      { href: "/reports", label: "투자 리포트", icon: PenLine, rail: "리포트" },
+    ],
+  },
+  {
+    /*
+     * 금융상품 (2026-09-29 사용자 결정 — 3항목 + 페이지 안 탭). 예금·적금, 신용·주담대·전세는
+     * 각 화면의 탭이다. 주식 메뉴와 섞지 않으려고 커뮤니티 아래 독립 그룹으로 둔다.
+     * 파킹통장은 공식 공시 API가 없어 넣지 않았다.
+     */
+    // 2026-10-09 사용자 결정 A — 「비교」가 아니라 정보 + AI 분석. 금융 계산기는 없앴다(주소는 예·적금 분석으로).
+    label: "금융상품 분석",
+    items: [
+      { href: "/finance/savings", label: "예·적금 분석", icon: PiggyBank, rail: "예·적금" },
+      { href: "/finance/loans", label: "대출 분석", icon: HandCoins, rail: "대출" },
+      { href: "/finance/rates", label: "금리 동향", icon: Percent, rail: "금리" },
+    ],
   },
   {
     // 그룹 이름이 레일에서 사라졌으므로 하위 이름이 스스로를 설명한다 — 앱 메뉴에
@@ -112,6 +163,9 @@ const navGroups = [
       { href: "/admin/score", label: "점수 관리", icon: Calculator, rail: "점수 관리" },
       { href: "/admin/batch", label: "배치 관리", icon: ListChecks, rail: "배치 관리" },
       { href: "/admin/aliases", label: "별칭 관리", icon: Tags, rail: "별칭 관리" },
+      { href: "/admin/seo", label: "화면 메타 관리", icon: Search, rail: "메타 관리" },
+      { href: "/admin/growth", label: "검색 유입 보고서", icon: TrendingUp, rail: "유입 보고서" },
+      { href: "/admin/community", label: "커뮤니티 신고 관리", icon: MessageSquareWarning, rail: "신고 관리" },
       { href: "/admin/cache", label: "캐시 관리", icon: Database, rail: "캐시 관리" },
       { href: "/admin/database", label: "데이터베이스 관리", icon: Table2, rail: "DB 관리" },
     ],
@@ -195,6 +249,8 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
   const { session } = useAuth();
   const activeHref = activeNavHref(pathname);
   const batchAlerts = useBatchAlertCount(session);
+  // 오늘 변화가 있는 내 관심·보유 종목 수 (2026-09-23 — 알림은 앱 안 배지부터).
+  const myChanges = useMyChangeSummary()?.symbols ?? 0;
 
   return (
     <nav
@@ -206,7 +262,10 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
       {navGroups
         .map((group) => ({
           ...group,
-          items: group.items.filter((item) => isAdminNavVisible(item.href, session)),
+          // 노출을 끈 기능(lib/hidden-features)은 관리자에게도 메뉴에서 뺀다.
+          items: group.items.filter(
+            (item) => isAdminNavVisible(item.href, session) && !isHiddenRoute(item.href),
+          ),
         }))
         .filter((group) => group.items.length > 0)
         .map((group) => (
@@ -283,6 +342,17 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
                       <span className="hidden group-data-[sidebar-state=open]/sidebar:inline">
                         {item.label}
                       </span>
+                      {item.href === "/changes" && myChanges > 0 && (
+                        <span
+                          aria-label={`오늘 변화가 있는 내 종목 ${myChanges}개`}
+                          className={cn(
+                            "ml-auto shrink-0 rounded-full bg-[var(--brand)] px-1.5 text-[10px] font-semibold leading-[18px] text-white",
+                            "group-data-[sidebar-state=collapsed]/sidebar:ml-0",
+                          )}
+                        >
+                          {myChanges}
+                        </span>
+                      )}
                       {item.href === "/admin/batch" && batchAlerts > 0 && (
                         <span
                           aria-label={`제때 돌지 않은 배치 ${batchAlerts}개`}
@@ -302,6 +372,19 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
             </ul>
           </div>
         ))}
+      {/*
+        푸터 대신(이 앱에는 푸터가 없다) — 약관 두 페이지가 어디서도 링크되지 않던 고아였다
+        (2026-10-09 색인 점검). 접힌 레일에서는 자리가 없어 숨기고, 링크 자체는 HTML에 남는다.
+      */}
+      <p className="mt-4 px-2 text-micro text-[var(--text-muted)] group-data-[sidebar-state=collapsed]/sidebar:hidden">
+        <Link href="/legal/terms" prefetch={false} onClick={onNavigate} className="hover:underline">
+          이용약관
+        </Link>
+        {" · "}
+        <Link href="/legal/privacy" prefetch={false} onClick={onNavigate} className="hover:underline">
+          개인정보처리방침
+        </Link>
+      </p>
     </nav>
   );
 }

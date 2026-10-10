@@ -7,6 +7,7 @@ import { RankingMemoModal, type RankingMemoTarget } from "@/components/market-ra
 import { StampButton } from "@/components/stamps/stamp-button";
 import { HEADER_ACTION_CLASS } from "@/components/stocks/stock-symbol-action-bar";
 import { TargetPriceDialog } from "@/components/targets/target-price-dialog";
+import { PREDICTION_FEATURES_HIDDEN } from "@/lib/hidden-features";
 import { Button } from "@/components/ui/button";
 import { useLoginGate } from "@/hooks/use-login-gate";
 import type { QuoteAssetType, QuoteCurrency, StockInfo } from "@/lib/quotes-types";
@@ -183,30 +184,35 @@ export function StockQuickLookActions({
         <Briefcase />
       </Button>
 
-      <StampButton
-        symbol={stock.symbol}
-        price={stock.price}
-        currency={stock.currency}
-        week52High={stock.week52High ?? undefined}
-        week52Low={stock.week52Low ?? undefined}
-        iconOnly
-      />
+      {/* 목표가 예측(스탬프·목표가) 비노출 — lib/hidden-features (2026-10-10). */}
+      {!PREDICTION_FEATURES_HIDDEN && (
+        <>
+          <StampButton
+            symbol={stock.symbol}
+            price={stock.price}
+            currency={stock.currency}
+            week52High={stock.week52High ?? undefined}
+            week52Low={stock.week52Low ?? undefined}
+            iconOnly
+          />
 
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          setFrozenPrice(stock.price);
-          setTargetOpen(true);
-        }}
-        aria-label="목표가 설정"
-        title={
-          gate.authed ? "이 종목의 목표가 설정" : "로그인하면 이 종목의 목표가를 설정할 수 있습니다"
-        }
-        className={cn(HEADER_ACTION_CLASS, "px-2")}
-      >
-        <Target />
-      </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setFrozenPrice(stock.price);
+              setTargetOpen(true);
+            }}
+            aria-label="목표가 설정"
+            title={
+              gate.authed ? "이 종목의 목표가 설정" : "로그인하면 이 종목의 목표가를 설정할 수 있습니다"
+            }
+            className={cn(HEADER_ACTION_CLASS, "px-2")}
+          >
+            <Target />
+          </Button>
+        </>
+      )}
 
       <RankingMemoModal item={memoTarget} onClose={() => setMemoTarget(null)} />
       <AddHoldingDialog

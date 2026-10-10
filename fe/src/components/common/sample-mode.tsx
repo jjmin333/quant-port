@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useId, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useId, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import {
   anyAutoVote,
+  nextAutoVote,
   resolveSample,
   shouldDropOverride,
   type PathScopedFlag,
@@ -246,22 +247,32 @@ export function useSampleMode() {
  * (켜짐 → isEmpty false → 자동 끄기 → isEmpty true → 켜짐…). 각 화면이 그래서
  * `hasNothingYet` 같은 별도 값을 따로 계산한다.
  */
-export function useAutoSample(nothingOfMineYet: boolean) {
+export function useAutoSample(nothingOfMineYet: boolean | null) {
   const pathname = usePathname();
+  /*
+    표는 **내 데이터를 본 순간에만** 고친다 (2026-09-27 제보 1 — `nextAutoVote`).
+    받는 중(`null`)이거나 화면이 예시를 보여 주는 중이면 직전 표를 붙든다. 그렇지
+    않으면 예시가 켜지는 순간 로딩이 다시 돌고 예시 목록을 세어 표가 뒤집혀,
+    켜짐·꺼짐이 끝없이 반복됐다.
+  */
+  const showingSample = useSyncExternalStore(subscribeSample, currentSample, () => false);
+  const [vote, setVote] = useState(false);
+  const nextVote = nextAutoVote(vote, nothingOfMineYet, showingSample);
+  if (nextVote !== vote) setVote(nextVote);
   /*
     이 훅을 부른 **자리**의 이름. 표를 누가 냈는지 구분하는 열쇠다 — 한 화면에서
     둘 이상이 부르므로(껍데기와 본문), 이름이 없으면 서로의 표를 덮어쓴다.
   */
   const voter = useId();
   useEffect(() => {
-    setAutoSample(voter, pathname, nothingOfMineYet);
+    setAutoSample(voter, pathname, vote);
     /*
       떠날 때 **표를 거둔다**(거짓으로 바꾸는 것이 아니다). 거짓 표를 남기면 그
       화면을 떠난 컴포넌트가 계속 투표장에 서 있는 셈이고, 모듈 전역이라
       `/holdings`에서 낸 표가 `/watchlist`까지 따라간다.
     */
     return () => dropAutoSample(voter, pathname);
-  }, [voter, pathname, nothingOfMineYet]);
+  }, [voter, pathname, vote]);
 }
 
 /**

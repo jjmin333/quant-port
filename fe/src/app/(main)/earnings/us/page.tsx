@@ -1,18 +1,27 @@
 import { Suspense } from "react";
 import { EarningsClient } from "@/components/earnings/earnings-client";
-import { pageMetadata } from "@/lib/seo";
+import { EarningsSeoList } from "@/components/earnings/earnings-seo-list";
+import { PageHeading } from "@/components/layout/page-heading";
+import { resolvePageMetadata } from "@/lib/page-meta.server";
 
-export const metadata = pageMetadata({
-  title: "해외 실적 발표 일정",
-  description:
-    "미국 상장사의 실적 발표 일정과 EPS·매출 추정치를 봅니다. 장전·장후 발표 시각까지 함께 표시되어 어느 종목이 언제 발표하는지 한눈에 들어옵니다.",
-  path: "/earnings/us",
-});
+/*
+ * 제목·설명은 `lib/page-meta-routes`의 기본값이고, 관리자가 `/admin/seo`에서
+ * 덮어쓸 수 있다 (2026-09-15 사용자 요청 2). `const metadata`가 아니라 함수인
+ * 이유는 그 덮어쓰기를 **렌더 시점에** 읽어야 하기 때문이다.
+ */
+export function generateMetadata() {
+  return resolvePageMetadata("/earnings/us");
+}
 
 export default function UsEarningsPage() {
   return (
-    <Suspense>
-      <EarningsClient market="us" />
-    </Suspense>
+    <>
+      <PageHeading>해외 실적 발표 일정</PageHeading>
+      {/* 서버가 그리는 2주 발표 목록 — 크롤러가 종목 페이지로 가는 길(2026-10-10). */}
+      <EarningsSeoList market="us" />
+      <Suspense>
+        <EarningsClient market="us" />
+      </Suspense>
+    </>
   );
 }

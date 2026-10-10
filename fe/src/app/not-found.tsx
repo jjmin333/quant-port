@@ -40,7 +40,7 @@ export default function NotFound() {
           href="/analysis"
           className={cn(buttonVariants({ variant: "outline", size: "default" }), "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]")}
         >
-          AI 추천 랭킹
+          AI 점수 순위
         </Link>
         <Link
           href="/market"

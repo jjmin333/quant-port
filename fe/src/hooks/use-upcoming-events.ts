@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useVisibleInterval } from "@/hooks/use-visible-interval";
+import { SCREEN_SLOW_REFRESH_MS } from "@/lib/screen-refresh";
 import { fetchEarningsBatchClient } from "@/lib/earnings-api";
 import type { EarningsCalendarEvent } from "@/lib/earnings-types";
 
@@ -76,6 +78,38 @@ export function useUpcomingEvents(
     // 배열 참조는 렌더마다 새로 만들어지므로 심볼 문자열로 의존성을 잡는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
+
+  /*
+    **30분마다 다시 받는다** (2026-09-16 사용자 요청, `lib/screen-refresh`).
+
+    「D-3 실적」이라고 적힌 배지가 화면을 열어 둔 채 날짜가 바뀌어도 그대로 D-3이었다.
+    일정을 만드는 것은 하루 한두 번 도는 적재 배치라 느린 쪽을 쓴다 — 이 훅은
+    관심·보유·뉴스 레일 셋이 함께 쓰므로 주기를 짧게 잡으면 그 셋이 동시에 두드린다.
+
+    실패하면 손대지 않는다. 첫 적재만 빈 목록으로 떨어지고(위 catch), 갱신의 실패는
+    보고 있던 일정을 남긴다.
+  */
+  useVisibleInterval(
+    () => {
+      const list = key.split(",");
+      const nameBySymbol = new Map(targets.map((t) => [t.symbol, t.name]));
+      fetchEarningsBatchClient(list)
+        .then((bySymbol) => {
+          const rows: UpcomingEvent[] = [];
+          for (const symbol of list) {
+            for (const ev of bySymbol[symbol]?.calendar ?? []) {
+              if (ev.kind !== "upcoming") continue;
+              rows.push({ ...ev, symbol, name: nameBySymbol.get(symbol) || symbol });
+            }
+          }
+          rows.sort((a, b) => a.date.localeCompare(b.date));
+          setLoaded({ key, rows });
+        })
+        .catch(() => {});
+    },
+    SCREEN_SLOW_REFRESH_MS,
+    Boolean(key),
+  );
 
   const events = !key ? [] : loaded?.key === key ? loaded.rows : null;
 

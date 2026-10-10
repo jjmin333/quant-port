@@ -31,6 +31,8 @@ import {
   type ResearchDirection,
 } from "@/lib/research-types";
 import { cn } from "@/lib/utils";
+import { TopicBadge } from "@/components/common/topic-ui";
+import { TOPIC_FILTERS, type ContentTopic } from "@/lib/topics";
 import { buttonVariants } from "@/components/ui/button";
 
 /**
@@ -96,11 +98,19 @@ export function ResearchClient({ initialCalls = [] }: { initialCalls?: ResearchC
   } = useResearchCalls("feed", initialCalls);
 
   const [symbolFilter, setSymbolFilter] = useState<string | null>(null);
+  // 주제(2026-10-09 요청 9) — 부동산·금융상품은 판정 없는 분석 리포트다. 의견·역발상 필터는 주식에만 뜻이 있다.
+  const [topicFilter, setTopicFilter] = useState<ContentTopic | "">("");
 
   const visible = useMemo(
-    () => (symbolFilter ? calls.filter((c) => c.symbol === symbolFilter) : calls),
-    [calls, symbolFilter],
+    () =>
+      calls.filter(
+        (c) =>
+          (!symbolFilter || c.symbol === symbolFilter) &&
+          (!topicFilter || (c.topic ?? "stock") === topicFilter),
+      ),
+    [calls, symbolFilter, topicFilter],
   );
+  const stockCalls = useMemo(() => allCalls.filter((c) => c.status !== "note"), [allCalls]);
   const symbolFilterName = symbolFilter
     ? allCalls.find((c) => c.symbol === symbolFilter)?.symbolName || symbolFilter
     : null;
@@ -112,7 +122,7 @@ export function ResearchClient({ initialCalls = [] }: { initialCalls?: ResearchC
           rail={
             <ResearchSideRail
               summary={summary}
-              allCalls={allCalls}
+              allCalls={stockCalls}
               onPickSymbol={(symbol) =>
                 setSymbolFilter((cur) => (cur === symbol ? null : symbol))
               }
@@ -139,6 +149,11 @@ export function ResearchClient({ initialCalls = [] }: { initialCalls?: ResearchC
             {/* 왼쪽은 "무엇을 보느냐"(의견), 오른쪽 끝은 "어떤 순서로 보느냐"(정렬).
                 좁은 화면에서는 정렬 그룹이 아래 줄로 내려가되 계속 오른쪽에 붙는다. */}
             <div className="flex flex-wrap items-center gap-1.5">
+              <FilterGroup
+                options={TOPIC_FILTERS}
+                value={topicFilter}
+                onChange={(id) => setTopicFilter(id as ContentTopic | "")}
+              />
               <FilterGroup
                 options={DIRECTION_FILTERS}
                 value={directionFilter}
@@ -246,12 +261,21 @@ function ReportCard({ call }: { call: ResearchCall }) {
     >
       <div className="min-w-0 space-y-2">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          <StockAvatar symbol={call.symbol} name={call.symbolName} size="xs" />
-          <span className="truncate text-cell font-medium text-[var(--text-secondary)]">
-            {call.symbolName || call.symbol}
-          </span>
-          <DirectionBadge direction={call.direction} />
-          <StatusBadge status={call.status} />
+          {call.status === "note" ? (
+            <>
+              <TopicBadge topic={call.topic} />
+              <span className="text-cell font-medium text-[var(--text-secondary)]">분석 리포트</span>
+            </>
+          ) : (
+            <>
+              <StockAvatar symbol={call.symbol} name={call.symbolName} size="xs" />
+              <span className="truncate text-cell font-medium text-[var(--text-secondary)]">
+                {call.symbolName || call.symbol}
+              </span>
+              <DirectionBadge direction={call.direction} />
+              <StatusBadge status={call.status} />
+            </>
+          )}
           {call.contrarian && <ContrarianBadge />}
           {call.visibility !== "public" && (
             <span className="text-micro text-[var(--text-muted)]">

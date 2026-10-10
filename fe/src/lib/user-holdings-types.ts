@@ -54,6 +54,12 @@ export type UserHolding = {
   brokerHint?: string;
   source: string;
   updatedAt: string;
+  /** 공통 11섹터 키. 모르면 없다 — 구성 도넛은 「미분류」로 그린다. */
+  sector?: string;
+  /** 서버가 주는 한국어 섹터 이름. */
+  sectorLabel?: string;
+  /** 살 때 본 축(최대 셋) — 보유 이유 점검이 추적한다. */
+  thesisAxes?: string[];
 };
 
 export type ImportCommitRow = {

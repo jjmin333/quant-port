@@ -26,6 +26,7 @@ import {
   resolveBarStep,
 } from "@/lib/daily-close-window";
 import { formatPercent, formatRelativeTime } from "@/lib/format";
+import { INDEX_ATTRIBUTION } from "@/lib/market-indices-catalog";
 import { leaveModal } from "@/lib/modal-history";
 import { fetchDomesticNews, fetchUsNews } from "@/lib/news-api";
 import {
@@ -245,6 +246,9 @@ export function IndexQuickLookModal({
                     : ""}
                   {index.badge ? ` · ${index.badge}` : ""}
                 </DialogDescription>
+                {INDEX_ATTRIBUTION[index.id] && (
+                  <p className="text-micro text-muted-foreground">출처 {INDEX_ATTRIBUTION[index.id]}</p>
+                )}
               </DialogHeader>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">

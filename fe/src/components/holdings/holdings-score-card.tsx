@@ -190,10 +190,6 @@ export function HoldingsScoreCard({
               </li>
             ))}
           </ul>
-          <p className="mt-1 text-micro leading-relaxed text-muted-foreground">
-            점수는 정보이지 매매 신호가 아닙니다. 종목을 누르면 5축 분해와 내 보유 내역이
-            열립니다.
-          </p>
         </div>
       </Card>
   );

@@ -18,7 +18,10 @@ import {
 } from "@/lib/score-ranking-config";
 import { toUserMessage } from "@/lib/error-message";
 import { useQuoteStream } from "@/hooks/use-quote-stream";
-import { changeRateFrom, type ListPriceMap } from "@/lib/quote-stream-state";
+import { useVisibleInterval } from "@/hooks/use-visible-interval";
+import { SCREEN_SLOW_REFRESH_MS } from "@/lib/screen-refresh";
+import { type ListPriceMap } from "@/lib/quote-stream-state";
+import { liveOverlayFor, PRICE_AS_OF_LIVE } from "@/lib/list-price-overlay";
 
 export type EnrichedScoreItem = StockScoreListItem & {
   isWatchlisted: boolean;
@@ -41,18 +44,21 @@ function applyStreamPricesToScoreRows(
 ): EnrichedScoreItem[] {
   let changed = false;
   const next = rows.map((row) => {
-    const tick = stream.get(row.symbol.toUpperCase());
-    if (!tick || !(tick.price > 0)) return row;
-    if (row.closePrice === tick.price) return row;
+    /*
+      **판정은 `lib/list-price-overlay`가 한다** — 종목 스크리너도 같은 함수를
+      쓴다(2026-09-23 QA P0-01). 예전에는 이 규칙이 이 파일에만 있어서, 장중에
+      같은 종목이 랭킹에서는 흐르는 값으로 스크리너에서는 어제 종가로 보였다.
+    */
+    const live = liveOverlayFor(row.symbol, row.closePrice, row.basePrice, stream);
+    if (!live) return row;
 
-    const rate = changeRateFrom(tick.price, row.basePrice);
     changed = true;
     return {
       ...row,
-      closePrice: tick.price,
+      closePrice: live.price,
       // 기준가를 모르면 **직전 등락률을 지키고** 0으로 덮지 않는다.
-      changeRate: rate ?? row.changeRate,
-      priceAsOf: "live",
+      changeRate: live.changeRate ?? row.changeRate,
+      priceAsOf: PRICE_AS_OF_LIVE,
     };
   });
   return changed ? next : rows;
@@ -72,12 +78,34 @@ function applyStreamPricesToScoreRows(
  * 요청이다(기준가 해석이 종목당 5회). 그래서 **가격만 SSE로 따로 받는다**:
  * 순위는 그대로 두고 행의 가격 칸만 덮는다. 서버 작업은 뷰어 수와 무관하다.
  */
-export function useScoreRankings(params: ScoreRankingParams, limit = 20) {
+export function useScoreRankings(
+  params: ScoreRankingParams,
+  limit = 20,
+  /**
+   * 서버가 미리 받아 둔 첫 목록 (`lib/home-api.server.ts`, `app/(main)/analysis/page.tsx`).
+   *
+   * 있으면 **첫 렌더부터 목록이 있다** — 그전까지 `/analysis`의 서버 HTML은
+   * 「랭킹 로딩 중…」이 전부였고, 크롤러가 받는 문서에 종목명이 한 개도 없었다
+   * (2026-09-20 점검 요청 9).
+   *
+   * **관심·보유 표시는 싣지 않는다.** 그 둘은 사용자마다 다르고 `enrich`가
+   * localStorage·API를 읽어 채우는데, 서버는 그 값을 모른다. 서버가 그린 하트와
+   * 브라우저가 그릴 하트가 다르면 그게 곧 hydration 불일치라, 씨앗은 언제나
+   * 「둘 다 꺼짐」으로 들어오고 마운트 뒤 아래 이펙트들이 켠다.
+   */
+  seed?: { items: StockScoreListItem[]; tradeDate: string },
+) {
   const paramsKey = scoreRankingParamsKey(params);
   const { session } = useAuth();
-  const [items, setItems] = useState<EnrichedScoreItem[]>([]);
-  const [tradeDate, setTradeDate] = useState("");
-  const [loading, setLoading] = useState(true);
+  const seeded = (seed?.items.length ?? 0) > 0;
+  const seededKey = useRef(seeded ? paramsKey : null);
+  const [items, setItems] = useState<EnrichedScoreItem[]>(() =>
+    (seed?.items ?? []).map((row) => ({ ...row, isWatchlisted: false, isHeld: false })),
+  );
+  const [tradeDate, setTradeDate] = useState(seed?.tradeDate ?? "");
+  // `seededKey.current`가 아니라 `seeded`를 읽는다 — 렌더 중에 ref를 읽으면 안 된다
+  // (`react-hooks/refs`). 두 값은 첫 렌더에서 같은 것을 뜻한다.
+  const [loading, setLoading] = useState(!seeded);
   const [error, setError] = useState<string | null>(null);
   /** 「다시 시도」가 올리는 값. 이펙트를 한 번 더 돌린다(§BUG-11). */
   const [retryKey, setRetryKey] = useState(0);
@@ -95,6 +123,22 @@ export function useScoreRankings(params: ScoreRankingParams, limit = 20) {
   }, []);
 
   useEffect(() => {
+    /*
+      **씨앗으로 채워진 첫 회차는 건너뛴다** (2026-09-20 점검 요청 5).
+
+      건너뛰지 않으면 마운트 직후 `setLoading(true)`가 돌아 서버가 그려 준 목록이
+      **스켈레톤으로 한 번 지워졌다** 돌아온다 — 선반입으로 없애려던 깜박임을
+      선반입이 만드는 꼴이다.
+
+      손잡이를 바꾸면 `paramsKey`가 달라지므로 그때는 정상적으로 받아온다.
+      `seededKey`를 null로 비우는 것은 「씨앗은 한 번만 쓴다」는 뜻이다 — 같은
+      손잡이로 되돌아왔을 때 서버 시점의 목록을 다시 쓰면 그 사이의 갱신이 사라진다.
+    */
+    if (seededKey.current === paramsKey) {
+      seededKey.current = null;
+      return;
+    }
+
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -125,6 +169,35 @@ export function useScoreRankings(params: ScoreRankingParams, limit = 20) {
       cancelled = true;
     };
   }, [paramsKey, limit, enrich, retryKey]);
+
+  /*
+    **30분마다 순위를 다시 받는다** (2026-09-16 사용자 요청, `lib/screen-refresh`).
+
+    이 순위를 만드는 것은 하루 한 번 도는 점수 배치(00:25)다 — 5분 주기는 스물아홉
+    번이 헛걸음인데, 요청 하나가 실측 100 SELECT · 194ms라 그 헛걸음이 싸지도 않다.
+    그래도 0이 아닌 이유는 화면을 열어 둔 채 자정을 넘기면 어제 랭킹에 오늘 날짜가
+    붙기 때문이다(`tradeDate`가 화면에 적힌다).
+
+    가격은 여기 걸리지 않는다 — 이미 SSE가 아래에서 밀어 준다. 이 회차가 갱신하는
+    것은 **순위·점수·기준일**이다.
+
+    갱신은 스피너를 띄우지 않고, 실패하면 보고 있던 순위를 남긴다 — 「다시 시도」가
+    있는 오류 화면으로 떨어뜨리면 멀쩡히 보던 목록이 사라진다.
+  */
+  useVisibleInterval(() => {
+    const [market, axis, duration] = paramsKey.split("|");
+    fetchScoreRankingsClient({
+      market: market as ScoreRankingParams["market"],
+      axis,
+      duration,
+      limit,
+    })
+      .then(({ items: rows, tradeDate: date }) => {
+        setItems(enrich(rows));
+        setTradeDate(date);
+      })
+      .catch(() => {});
+  }, SCREEN_SLOW_REFRESH_MS);
 
   /*
     가격만 푸시로 받는다. 순위·점수는 위 이펙트가 받은 그대로 둔다.

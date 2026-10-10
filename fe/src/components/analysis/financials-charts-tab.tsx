@@ -25,6 +25,7 @@ import { fetchFinancialHistoryClient } from "@/lib/financial-history-api";
 import { buildPeriodTicks, periodTickIndex } from "@/lib/financial-period-label";
 import type { FinancialHistoryPeriod } from "@/lib/financial-history-types";
 import { formatFinancialAmount, formatFinancialTick } from "@/lib/format";
+import { RetryMark } from "@/components/ui/provenance-stamp";
 import type { FundamentalsData } from "@/lib/fundamentals-types";
 import type { QuoteCurrency, StockInfo } from "@/lib/quotes-types";
 
@@ -36,18 +37,35 @@ type FinancialsChartsTabProps = {
 
 export function FinancialsChartsTab({ stock, fundamentals, loading }: FinancialsChartsTabProps) {
   const [history, setHistory] = useState<FinancialHistoryPeriod[] | null>(null);
+  /*
+    **「불러오지 못했다」와 「없다」는 다른 답이다** (요구 8).
+
+    예전에는 실패를 `setHistory(null)`로 삼켜서, 우리가 고장 난 경우와 공시가 아직
+    없는 경우가 화면에서 똑같았다. 사용자는 전자를 후자로 읽고 기다렸다.
+  */
+  const [historyError, setHistoryError] = useState(false);
+  const [retry, setRetry] = useState(0);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [modalPreset, setModalPreset] = useState<FinancialDetailPreset | null>(null);
+  // 공시 통화가 상장 통화와 다를 때(TSM → TWD). 금액은 그 통화로 적는다(2026-09-28).
+  const [reporting, setReporting] = useState<{ code: string; mixed: boolean } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setHistoryLoading(true);
     fetchFinancialHistoryClient(stock.symbol, 3)
       .then((res) => {
-        if (!cancelled) setHistory(res.periods);
+        if (!cancelled) {
+          setHistory(res.periods);
+          setReporting(res.currency ? { code: res.currency, mixed: Boolean(res.currencyMixed) } : null);
+          setHistoryError(false);
+        }
       })
       .catch(() => {
-        if (!cancelled) setHistory(null);
+        if (!cancelled) {
+          setHistory(null);
+          setHistoryError(true);
+        }
       })
       .finally(() => {
         if (!cancelled) setHistoryLoading(false);
@@ -55,7 +73,7 @@ export function FinancialsChartsTab({ stock, fundamentals, loading }: Financials
     return () => {
       cancelled = true;
     };
-  }, [stock.symbol]);
+  }, [stock.symbol, retry]);
 
   const periods = useMemo(() => history ?? [], [history]);
   const charts = useMemo(() => buildFinancialCharts(periods), [periods]);
@@ -75,6 +93,20 @@ export function FinancialsChartsTab({ stock, fundamentals, loading }: Financials
    * 실측 2,516종목(국내 1,308 · 미국 1,208)이 그 지어낸 그림을 보고 있었다.
    * 빈 화면은 「모른다」지만 지어낸 곡선은 「이랬다」고 말한다 — 후자가 더 나쁘다.
    */
+  /*
+    실패는 빈 화면보다 **먼저** 가른다. 아래 빈 화면은 「공시가 없다」·「아직 수집
+    전이다」를 말하는데, 그 둘 다 사용자가 할 일이 없는 상태다. 실패는 유일하게
+    할 일이 있는 상태라 유일하게 누를 것을 단다.
+  */
+  if (historyError) {
+    return (
+      <Card className="flex min-h-[160px] flex-col items-center justify-center gap-2 p-6 text-center">
+        <p className="text-cell text-[var(--text-muted)]">분기별 재무 데이터를 불러오지 못했습니다.</p>
+        <RetryMark onRetry={() => setRetry((n) => n + 1)} />
+      </Card>
+    );
+  }
+
   if (periods.length === 0) {
     const notCovered = !fundamentals || fundamentals.coverageTier === "unavailable";
     return (
@@ -95,13 +127,21 @@ export function FinancialsChartsTab({ stock, fundamentals, loading }: Financials
   // Statement lines are scaled to the listing's own currency: 억/조원 for a
   // domestic filing, M/B for a US one. Without this the raw figure (e.g.
   // 240000000) reached the tooltip unformatted.
-  const currency: QuoteCurrency = stock.currency === "USD" ? "USD" : "KRW";
+  const currency: QuoteCurrency | string = reporting?.code ?? (stock.currency === "USD" ? "USD" : "KRW");
   const amountTooltip = (v: unknown, name: unknown) =>
     [formatFinancialAmount(Number(v), currency), String(name ?? "")] as [string, string];
   const periodTick = periodTickRenderer(charts.tickIndex);
 
   return (
     <div className="grid gap-2.5 sm:grid-cols-2">
+      {reporting && (
+        <p className="rounded-lg border border-dashed border-[var(--border)] px-3 py-2 text-micro leading-relaxed text-[var(--text-muted)] sm:col-span-2">
+          이 회사는 재무제표를 <b className="text-[var(--text-secondary)]">{reporting.code}</b>(현지 통화)로 공시합니다. 금액은 그 통화
+          그대로이고 달러가 아닙니다
+          {reporting.mixed ? " — 일부 기간은 달러 환산치가 섞여 있을 수 있습니다" : ""}. 주가(달러)와 나눈 분기별 PER·PBR은 싣지
+          않습니다.
+        </p>
+      )}
       <ChartCard
         title="매출 · 순이익"
         subtitle="분기별 실적 (클릭 시 상세)"
@@ -224,7 +264,7 @@ export function FinancialsChartsTab({ stock, fundamentals, loading }: Financials
         open={modalPreset != null}
         onClose={() => setModalPreset(null)}
         symbol={stock.symbol}
-        currency={stock.currency}
+        currency={reporting?.code ?? stock.currency}
         preset={modalPreset ?? "profitability"}
       />
     </div>
@@ -296,15 +336,17 @@ function AreaMiniChart({
 }: {
   data: { year: string; value: number | null }[];
   color: string;
-  currency: QuoteCurrency;
+  currency: QuoteCurrency | string;
   tick: ReturnType<typeof periodTickRenderer>;
 }) {
   // EPS is a per-share amount, so it stays in plain currency units rather than
   // the 억/조 scaling used for statement totals.
   const perShare = (v: unknown) =>
     currency === "USD"
-      ? `$${Number(v).toFixed(2)}`
-      : `${Number(v).toLocaleString("ko-KR", { maximumFractionDigits: 0 })}원`;
+      ? `${Number(v).toFixed(2)}`
+      : currency === "KRW"
+        ? `${Number(v).toLocaleString("ko-KR", { maximumFractionDigits: 0 })}원`
+        : `${Number(v).toFixed(2)} ${currency}`;
 
   return (
     <ResponsiveContainer width="100%" height="100%">

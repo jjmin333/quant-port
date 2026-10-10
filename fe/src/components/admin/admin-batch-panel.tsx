@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   AlertTriangle,
   BookOpen,
@@ -19,12 +20,14 @@ import { Markdown } from "@/components/ui/markdown";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { PageScrollShell } from "@/components/layout/page-content-shell";
 import { useAuth } from "@/components/providers/auth-provider";
+import { useVisibleInterval } from "@/hooks/use-visible-interval";
 import { isAdminSession } from "@/lib/admin-features";
 import { formatDateTimeKST } from "@/lib/format";
 import {
   fetchAdminBatchJobs,
   fetchAdminBatchSchedule,
   runAdminBatchJob,
+  runAdminOverdueBatches,
   saveAdminBatchSchedule,
   batchHealthNeedsAttention,
   BATCH_HEALTH_LABELS,
@@ -433,7 +436,19 @@ function formatLateFor(seconds: number | undefined): string {
  * 두 가지를 따로 말한다: 잡들이 늦었는지, 그리고 **그것을 판정하는 워치독이 살아
  * 있는지**. 후자가 죽으면 전자의 「정상」은 정상이라는 뜻이 아니다.
  */
-function BatchHealthBanner({ health }: { health: BatchHealthView | null }) {
+function BatchHealthBanner({
+  health,
+  bulkBusy,
+  onRunOverdue,
+  chaining,
+  onChain,
+}: {
+  health: BatchHealthView | null;
+  bulkBusy: boolean;
+  onRunOverdue: () => void;
+  chaining: boolean;
+  onChain: () => void;
+}) {
   if (!health) return null;
 
   const attention = (health.report?.jobs ?? []).filter((j) =>
@@ -464,6 +479,28 @@ function BatchHealthBanner({ health }: { health: BatchHealthView | null }) {
           <span>배치 감시가 멈췄습니다 — 아래 상태는 최신이 아닐 수 있습니다</span>
         ) : (
           <span>제때 돌지 않은 배치 {attention.length}개</span>
+        )}
+        {attention.length > 0 && (
+          <button
+            type="button"
+            onClick={onRunOverdue}
+            disabled={bulkBusy || chaining}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "ml-auto border-[var(--danger)] text-[var(--danger)] disabled:opacity-50")}
+          >
+            {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+            일괄 실행
+          </button>
+        )}
+        {attention.length > 0 && (
+          <button
+            type="button"
+            onClick={onChain}
+            disabled={bulkBusy}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[var(--danger)] text-[var(--danger)] disabled:opacity-50")}
+          >
+            {chaining ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            {chaining ? "이어 실행 중 — 멈추기" : "끝까지 이어 실행"}
+          </button>
         )}
       </div>
       <ul className="space-y-0.5 text-cell text-[var(--text-secondary)]">
@@ -505,18 +542,39 @@ export function AdminBatchPanel() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  /** 서버가 커버리지를 아직 한 번도 세지 못했다 — 잠시 뒤 다시 묻는다. */
+  const [coveragePending, setCoveragePending] = useState(false);
+
   const anyRunning = jobs.some((j) => j.running);
 
+  /*
+    요청은 **한 번에 하나** (2026-09-27 제보 1). 예전에는 4초 타이머가 앞 응답을
+    기다리지 않아, 응답이 20초 걸리던 때 같은 요청이 다섯 개씩 겹쳐 DB를 더 느리게
+    만들었다. 앞 요청이 아직이면 이번 회차는 건너뛴다.
+  */
+  const inFlightRef = useRef(false);
+  /** 진행 중인 요청 때문에 건너뛴 새로고침 — 끝나면 한 번 더 받는다(실행 직후 새로고침이 묻히지 않게). */
+  const againRef = useRef(false);
   const load = useCallback(async () => {
+    if (inFlightRef.current) {
+      againRef.current = true;
+      return;
+    }
+    inFlightRef.current = true;
     try {
-      const res = await fetchAdminBatchJobs();
-      setJobs(res.jobs ?? []);
-      setHistory(res.history ?? []);
-      setHealth(res.health ?? null);
-      setError(null);
+      do {
+        againRef.current = false;
+        const res = await fetchAdminBatchJobs();
+        setJobs(res.jobs ?? []);
+        setHistory(res.history ?? []);
+        setHealth(res.health ?? null);
+        setCoveragePending(Boolean(res.coveragePending));
+        setError(null);
+      } while (againRef.current);
     } catch (e) {
       setError(toUserMessage(e, "배치 목록을 불러오지 못했습니다"));
     } finally {
+      inFlightRef.current = false;
       setLoading(false);
     }
   }, []);
@@ -530,26 +588,16 @@ export function AdminBatchPanel() {
     void load();
   }, [authLoading, isAdmin, router, load]);
 
-  // Poll while something is in flight so the outcome appears without a manual
-  // refresh; stop as soon as it settles rather than polling forever.
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  useEffect(() => {
-    if (!anyRunning) {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-      return;
-    }
-    if (pollRef.current) return;
-    pollRef.current = setInterval(() => void load(), 4000);
-    return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    };
-  }, [anyRunning, load]);
+  // Poll while something is in flight (or coverage is still being counted) so
+  // the outcome appears without a manual refresh; stop as soon as it settles.
+  // 보이는 동안만 돈다 — 숨은 관리자 탭이 배치 원장을 계속 두드릴 이유가 없다.
+  /*
+    수동 실행 직후 90초는 결과가 보일 때까지 따라간다(2026-10-02 사용자: 「실행을 눌러도 아무 동작 안 함」).
+    워커가 큐를 집어 가기 전 한 박자 동안은 원장에 아직 queued가 안 보일 수 있고, 몇 초짜리 잡은
+    그 사이 끝나 버려 anyRunning만으로는 폴링이 한 번도 안 돈다 — 카드가 옛 실행에 멈춰 있었다.
+  */
+  const [watching, setWatching] = useState(false);
+  useVisibleInterval(() => void load(), 4000, anyRunning || coveragePending || watching);
 
   async function handleRun(job: BatchJobStatus, since: string, limit: number) {
     setError(null);
@@ -561,9 +609,123 @@ export function AdminBatchPanel() {
         limit: job.spec.acceptsLimit ? limit : undefined,
       });
       setNotice(`${job.spec.label} 실행을 시작했습니다.`);
+      // 알림 줄은 페이지 맨 위라 아래 카드에서 누르면 안 보인다 — 어디서 눌러도 보이는 토스트로도 알린다.
+      toast.success(`${job.spec.label} 실행을 요청했습니다 — 워커가 곧 시작합니다`);
+      setWatching(true);
+      setTimeout(() => setWatching(false), 90_000);
       await load();
     } catch (e) {
-      setError(toUserMessage(e, "실행 실패"));
+      const msg = toUserMessage(e, "실행 실패");
+      setError(msg);
+      toast.error(msg);
+    }
+  }
+
+  const [bulkBusy, setBulkBusy] = useState(false);
+  /*
+    서버가 계획을 세운다(제외·선행 순서 보류). 먼저 계획만 받아 확인을 받고, 승인하면 그 계획을 실행한다.
+    보류된 잡은 선행이 끝난 뒤 다시 누르면 풀린다.
+  */
+  async function handleRunOverdue() {
+    setBulkBusy(true);
+    setError(null);
+    try {
+      const plan = await runAdminOverdueBatches(true);
+      if (plan.run.length === 0) {
+        const msg = plan.skip.length
+          ? `지금 일괄로 돌릴 수 있는 배치가 없습니다 (${plan.skip.length}개 보류·제외).`
+          : "돌릴 배치가 없습니다.";
+        setNotice(msg);
+        toast.info(msg);
+        return;
+      }
+      const lines = [
+        `다음 ${plan.run.length}개를 실행합니다:`,
+        ...plan.run.map((i) => `  • ${i.label}${i.llm ? " (LLM 지출)" : ""}`),
+      ];
+      if (plan.skip.length) {
+        lines.push("", `이번에 넣지 않는 ${plan.skip.length}개:`, ...plan.skip.map((i) => `  • ${i.label} — ${i.reason}`));
+      }
+      if (!window.confirm(lines.join("\n"))) return;
+      const done = await runAdminOverdueBatches(false);
+      const msg = `${done.run.length}개 배치 실행을 요청했습니다${done.skip.length ? ` (${done.skip.length}개는 보류·제외)` : ""}`;
+      setNotice(msg);
+      toast.success(msg);
+      setWatching(true);
+      setTimeout(() => setWatching(false), 90_000);
+      await load();
+    } catch (e) {
+      const msg = toUserMessage(e, "일괄 실행 실패");
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  /*
+    선행이 끝나면 다음 단을 이어 돌린다 — 화면이 열려 있는 동안만(서버 오케스트레이터는 두지 않았다).
+    잡마다 **한 번만** 넣는다: 선행이 실패하면 그 잡이 계속 「늦음」이라 다시 넣으면 무한 재시도가 되고,
+    실패한 선행의 후행은 보류로 남아 사람이 본다. 계획·제외·순서 규칙은 서버(dryRun)가 정한다.
+  */
+  const [chaining, setChaining] = useState(false);
+  const stopChainRef = useRef(false);
+  async function handleChain() {
+    if (chaining) {
+      stopChainRef.current = true;
+      return;
+    }
+    const first = await runAdminOverdueBatches(true).catch(() => null);
+    if (!first || first.run.length === 0) {
+      toast.info("지금 돌릴 수 있는 배치가 없습니다.");
+      return;
+    }
+    const llm = first.run.filter((i) => i.llm).length;
+    if (
+      !window.confirm(
+        `제때 돌지 않은 배치를 선행 순서대로 끝날 때까지 이어서 실행합니다.\n` +
+          `지금 단 ${first.run.length}개${llm ? ` (LLM 지출 ${llm}개)` : ""}부터 시작하고, 후행 잡은 선행이 끝나면 자동으로 넣습니다.\n` +
+          `이 화면을 닫으면 멈춥니다. 최대 3시간.`,
+      )
+    ) {
+      return;
+    }
+    stopChainRef.current = false;
+    setChaining(true);
+    setError(null);
+    const started = new Set<string>();
+    const deadline = Date.now() + 3 * 3600_000;
+    try {
+      while (!stopChainRef.current && Date.now() < deadline) {
+        const plan = await runAdminOverdueBatches(true);
+        const next = plan.run.filter((i) => !started.has(i.jobId));
+        for (const item of next) {
+          started.add(item.jobId);
+          try {
+            await runAdminBatchJob({ job: item.jobId });
+          } catch (e) {
+            toast.error(`${item.label}: ${toUserMessage(e, "실행 실패")}`);
+          }
+        }
+        await load();
+        const { jobs: current } = await fetchAdminBatchJobs();
+        const busy = (current ?? []).some((j) => j.running);
+        if (next.length === 0 && !busy) break;
+        await new Promise((r) => setTimeout(r, 5000));
+      }
+      const left = (await runAdminOverdueBatches(true)).skip.length;
+      const msg = stopChainRef.current
+        ? "이어 실행을 멈췄습니다."
+        : `이어 실행을 마쳤습니다 — ${started.size}개 실행${left ? `, ${left}개는 보류·제외로 남음` : ""}`;
+      setNotice(msg);
+      toast.success(msg);
+    } catch (e) {
+      const msg = toUserMessage(e, "이어 실행 실패");
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setChaining(false);
+      await load();
     }
   }
 
@@ -597,7 +759,7 @@ export function AdminBatchPanel() {
           </div>
         )}
 
-        <BatchHealthBanner health={health} />
+        <BatchHealthBanner health={health} bulkBusy={bulkBusy} onRunOverdue={() => void handleRunOverdue()} chaining={chaining} onChain={() => void handleChain()} />
 
         <ScheduleDoc />
 

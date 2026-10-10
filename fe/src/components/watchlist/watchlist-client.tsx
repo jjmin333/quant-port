@@ -20,8 +20,11 @@ import { WatchlistQuickLookModal } from "@/components/watchlist/watchlist-quick-
 import { WatchlistRow } from "@/components/watchlist/watchlist-row";
 import { WatchlistSideRail } from "@/components/watchlist/watchlist-side-rail";
 import { WatchlistToolbar } from "@/components/watchlist/watchlist-toolbar";
+import { WatchlistTodayStrip } from "@/components/watchlist/watchlist-today-strip";
+import { fetchMyToday, type MyTodayItem } from "@/lib/my-today-api";
+import { summarizeWatchlistToday } from "@/lib/watchlist-today";
 import { useHeaderSearch } from "@/components/providers/header-search-provider";
-import { useUpcomingEvents } from "@/hooks/use-upcoming-events";
+import { daysUntil, useUpcomingEvents } from "@/hooks/use-upcoming-events";
 import { Card } from "@/components/ui/card";
 import {
   addWatchlistClient,
@@ -39,6 +42,7 @@ import {
   mergeQuoteSummariesForSymbols,
 } from "@/lib/merge-quotes";
 import { useQuoteStreamByMarket } from "@/hooks/use-quote-stream";
+import { useVisibleInterval } from "@/hooks/use-visible-interval";
 import { PRICE_POLL_MS, PRICE_POLL_MS_WHILE_STREAMING } from "@/lib/price-cadence";
 import {
   buildWatchlistRows,
@@ -53,6 +57,7 @@ import { toast } from "sonner";
 import { toUserMessage } from "@/lib/error-message";
 
 const COPY = MENU_COPY.watchlist;
+const EMPTY_TODAY: Map<string, MyTodayItem> = new Map();
 
 /*
 시세 폴링 주기. **5초에서 2초로 맞췄다 (2026-09-04 사용자 요청 1).**
@@ -103,6 +108,31 @@ export function WatchlistClient() {
   const scoresGenRef = useRef(0);
 
   const symbols = useMemo(() => items.map((i) => i.symbol), [items]);
+
+  /*
+    오늘의 신호 — 홈 「내 종목」 카드와 같은 `/user/today` (2026-09-27 사용자 결정 A).
+    뉴스 수 · 변화 한 줄 · 점수 변화 · AI 한 줄. 예시 모드와 비로그인은 부르지 않는다
+    (남의 예시 종목에 내 신호를 얹을 이유가 없다). 키는 **종목 목록**이다 — 시세처럼
+    틱마다 바뀌는 값을 키에 넣으면 요청이 틱마다 다시 나간다.
+  */
+  const todayKey = !sample && session ? symbols.join(",") : "";
+  const [todayItems, setTodayItems] = useState<Map<string, MyTodayItem>>(() => new Map());
+  useEffect(() => {
+    if (!todayKey) return;
+    let alive = true;
+    fetchMyToday()
+      .then((res) => {
+        if (!alive) return;
+        setTodayItems(new Map(res.items.map((i) => [i.symbol.toUpperCase(), i])));
+      })
+      .catch(() => {
+        // 신호가 없어도 목록은 온전하다 — 줄만 생략된다.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [todayKey]);
+  const today = todayKey ? todayItems : EMPTY_TODAY;
 
   const loadWatchlist = useCallback(async (): Promise<WatchlistItem[]> => {
     const gen = ++listGenRef.current;
@@ -233,15 +263,19 @@ export function WatchlistClient() {
     [quotes, streamPrices],
   );
 
-  useEffect(() => {
-    // 예시는 고정 값이다 — 폴링하면 인증 뒤의 시세 API를 헛되이 두드린다.
-    if (sample || symbols.length === 0) return;
-    const every = streaming ? PRICE_POLL_MS_WHILE_STREAMING : POLL_MS;
-    const id = window.setInterval(() => {
+  /*
+    예시는 고정 값이다 — 폴링하면 인증 뒤의 시세 API를 헛되이 두드린다.
+
+    그리고 **안 보이는 탭에서는 아예 돌지 않는다** (2026-09-15 사용자 요청 3).
+    돌아오면 건너뛴 회차를 즉시 한 번 메운다 — 규칙은 `useVisibleInterval`에.
+  */
+  useVisibleInterval(
+    () => {
       void refreshQuotes(symbols);
-    }, every);
-    return () => window.clearInterval(id);
-  }, [sample, symbols, refreshQuotes, streaming]);
+    },
+    streaming ? PRICE_POLL_MS_WHILE_STREAMING : POLL_MS,
+    !sample && symbols.length > 0,
+  );
 
   async function handleAddStock(stock: StockInfo) {
     if (symbols.includes(stock.symbol)) {
@@ -371,7 +405,7 @@ export function WatchlistClient() {
     꺼짐 → 0건 → 켜짐으로 무한히 돈다. 아래 `isEmpty`가 그 위에 `!sample`을 얹는다.
   */
   const hasNothingYet = !listLoading && !error && items.length === 0;
-  useAutoSample(hasNothingYet);
+  useAutoSample(listLoading ? null : hasNothingYet);
   const isEmpty = !sample && hasNothingYet;
 
   const counts = useMemo(
@@ -413,6 +447,23 @@ export function WatchlistClient() {
     [rows],
   );
   const { events, bySymbol: eventsBySymbol } = useUpcomingEvents(eventTargets, EVENT_SYMBOL_LIMIT);
+
+  const todaySummary = useMemo(
+    () =>
+      summarizeWatchlistToday(
+        rows.map((r) => {
+          const next = eventsBySymbol.get(r.symbol)?.[0];
+          return {
+            symbol: r.symbol,
+            name: r.quote?.name || r.symbol,
+            changeRate: r.quote && r.quote.currentPrice > 0 ? r.quote.changeRate : undefined,
+            today: today.get(r.symbol.toUpperCase()),
+            eventDays: next ? daysUntil(next.date) : null,
+          };
+        }),
+      ),
+    [rows, eventsBySymbol, today],
+  );
 
   const openRow = openSymbol ? rows.find((r) => r.symbol === openSymbol) ?? null : null;
 
@@ -488,6 +539,8 @@ export function WatchlistClient() {
               </div>
             )}
 
+            {rows.length > 0 && <WatchlistTodayStrip summary={todaySummary} />}
+
             {rows.length > 0 && (
               <WatchlistToolbar
                 sort={sort}
@@ -548,6 +601,7 @@ export function WatchlistClient() {
                       isDragging={dragSymbol === row.symbol}
                       isDropTarget={dragSymbol != null && dragSymbol !== row.symbol && dragEnabled}
                       events={eventsBySymbol.get(row.symbol) ?? []}
+                      today={today.get(row.symbol.toUpperCase())}
                       onOpen={() => setOpenSymbol(row.symbol)}
                       onRemove={() => void handleRemove(row.symbol)}
                       onDragStart={() => setDragSymbol(row.symbol)}

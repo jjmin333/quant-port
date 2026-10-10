@@ -20,6 +20,8 @@ type ScoreRankingToolbarProps = {
   tradeDate: string;
   onChange: (next: ScoreRankingParams) => void;
   compact?: boolean;
+  /** 주면 시장 탭 끝에 「국내 ETF」가 붙는다(2026-09-24). 누르면 ETF 점검 목록으로 바뀐다. */
+  onEtf?: () => void;
 };
 
 /*
@@ -32,11 +34,14 @@ AI 추천 랭킹의 필터 줄 — **실시간 차트와 같은 부품**으로 �
 시각을 찍을 값이 없고, 대신 「무엇을 잰 순위인가」를 아래 한 줄이 말한다 — 같은
 날짜에 축·기간에 따라 여섯 가지 다른 순위가 나오기 때문에 그 문장이 필요하다.
 */
+export const ETF_TAB = { id: "etf", label: "국내 ETF" } as const;
+
 export function ScoreRankingToolbar({
   params,
   tradeDate,
   onChange,
   compact,
+  onEtf,
 }: ScoreRankingToolbarProps) {
   function patch(partial: Partial<ScoreRankingParams>) {
     onChange({ ...params, ...partial });
@@ -46,10 +51,13 @@ export function ScoreRankingToolbar({
     <RadarToolbarShell
       compact={compact}
       tabs={
-        <RadarMarketTabs
-          options={SCORE_RANKING_MARKET_OPTIONS}
+        <RadarMarketTabs<string>
+          options={onEtf ? [...SCORE_RANKING_MARKET_OPTIONS, ETF_TAB] : SCORE_RANKING_MARKET_OPTIONS}
           value={params.market}
-          onChange={(market) => patch({ market })}
+          onChange={(market) => {
+            if (market === ETF_TAB.id) onEtf?.();
+            else patch({ market: market as ScoreRankingParams["market"] });
+          }}
           compact={compact}
         />
       }
@@ -69,8 +77,11 @@ export function ScoreRankingToolbar({
         label="기간"
       />
 
-      <p className="truncate text-micro text-[var(--text-muted)]">
-        {scoreRankingCaption(params, tradeDate)}
+      <p
+        className="truncate text-micro text-[var(--text-muted)]"
+        title="점수는 공개 재무·시세·뉴스로 계산한 참고 지표이며 특정 종목의 매수·매도 권유가 아닙니다. 투자 판단과 책임은 본인에게 있습니다."
+      >
+        {scoreRankingCaption(params, tradeDate)} · 투자 권유 아님
       </p>
     </RadarToolbarShell>
   );

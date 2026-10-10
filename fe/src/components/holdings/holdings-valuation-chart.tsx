@@ -1,5 +1,6 @@
 "use client";
 
+import { PortfolioBenchmarkCompare } from "@/components/holdings/portfolio-benchmark-compare";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -319,8 +320,7 @@ export function HoldingsValuationChart({
           </div>
 
           <p className="mt-1.5 border-t pt-1.5 text-micro leading-relaxed text-muted-foreground">
-            실선 = 평가금액, 점선 = 매입금액. 매매 이력에 기록된 날짜별 실제 보유수량 ×
-            그날 종가로 계산합니다.
+            실선 = 평가금액, 점선 = 매입금액
             {series?.untrackedSymbols && series.untrackedSymbols.length > 0 && (
               <>
                 {" "}
@@ -334,6 +334,9 @@ export function HoldingsValuationChart({
               <> 일별 종가가 없는 {series.missingSymbols.join(", ")}도 빠졌습니다.</>
             )}
           </p>
+
+          {/* 같은 기간 지수와 비교 — 접힌 한 줄로 시작한다 (2026-09-24 사용자 결정). */}
+          {chart && <PortfolioBenchmarkCompare points={chart.points} />}
 
           {showBulkPrompt && (
             <BulkRegisterBlock

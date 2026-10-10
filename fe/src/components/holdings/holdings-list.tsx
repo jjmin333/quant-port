@@ -201,9 +201,7 @@ function HoldingTable({ metrics, exchangeRate, onSelect }: ListProps) {
     <Card className="p-0">
       {usesUsd && (
         <p className="border-b px-3 py-1.5 text-micro text-muted-foreground">
-          달러 종목은 현재 환율 {exchangeRate > 0 ? formatKRW(exchangeRate) : "—"} 기준으로
-          환산했습니다.
-          매입 시점 환율이 없어 환차손익은 따로 떼어내지 않습니다.
+          달러 종목: 현재 환율 {exchangeRate > 0 ? formatKRW(exchangeRate) : "—"} 기준 환산 · 환차손익 미분리
         </p>
       )}
       {/* 표는 좁은 화면에서 자기 안에서 가로 스크롤한다 — 페이지가 가로로 밀리면 안 된다. */}

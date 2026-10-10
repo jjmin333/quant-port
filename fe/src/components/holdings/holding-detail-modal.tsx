@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
+import { HoldingThesisPicker } from "@/components/holdings/holding-thesis-picker";
 import {
   QuickLookKV,
   QuickLookSection,
@@ -137,6 +138,14 @@ export function HoldingDetailModal({
                 {error}
               </p>
             )}
+
+            {/* 매수 이유 — 보유 이유 점검이 이 축을 추적한다 (2026-09-24). */}
+            <HoldingThesisPicker
+              key={m.symbol}
+              symbol={m.symbol}
+              initial={m.row.thesisAxes ?? []}
+              onSaved={() => onTradesChanged()}
+            />
 
             <TradeSection
               symbol={m.symbol}

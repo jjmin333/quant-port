@@ -1,16 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DashboardNewsMetaLine } from "@/components/dashboard/dashboard-news-meta-line";
 import { MiniToggle } from "@/components/ui/mini-toggle";
 import { useOpenMarket } from "@/hooks/use-open-market";
 import { SectionCard, SectionEmpty, SectionSkeleton } from "@/components/ui/section-card";
 import { useMarketIndices } from "@/hooks/use-market-indices";
 import { useSymbolQuotes } from "@/hooks/use-news-symbols";
+import { useVisibleInterval } from "@/hooks/use-visible-interval";
+import { SCREEN_REFRESH_MS } from "@/lib/screen-refresh";
 import { fetchDashboardNews } from "@/lib/news-api";
 import { isArticleBreakingNews } from "@/lib/news-breaking";
 import { allArticleSymbols } from "@/lib/news-derive";
-import type { NewsArticle, NewsMarket } from "@/lib/news-types";
+import type { NewsArticle, NewsMarket, NewsTopic } from "@/lib/news-types";
+import { NEWS_TOPIC_CHIPS } from "@/lib/news-types";
+import { cn } from "@/lib/utils";
 
 /** 뉴스 쪽 국내/해외 이름. `useOpenMarket`이 열린 쪽을 골라 이 값을 돌려준다. */
 const NEWS_MARKET_PAIR = { domestic: "domestic", us: "us" } as const satisfies {
@@ -134,29 +138,54 @@ function LatestNewsCardBody({
   className?: string;
 }) {
   const [articles, setArticles] = useState<NewsArticle[] | null>(null);
+  /** 국내 카테고리 칩(2026-10-09 요청 4). 해외 탭에서는 칩을 숨기고 이 값도 쓰지 않는다. */
+  const [topic, setTopic] = useState<NewsTopic | "">("");
+  const activeTopic = market === "domestic" ? topic : "";
 
+  /** 언마운트 뒤 도착한 응답을 버린다 — 요청을 거는 자리가 첫 적재와 주기 둘이다. */
+  const aliveRef = useRef(true);
+  /** 한 번이라도 받아 본 적이 있는가 — 첫 적재의 실패와 갱신의 실패를 가른다. */
+  const loadedRef = useRef(false);
   useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+
+  const load = useCallback(() => {
     if (market == null) return; // 어느 시장을 받을지 아직 모른다
-    let alive = true;
-    fetchDashboardNews(market, DASHBOARD_NEWS_ROWS)
+    fetchDashboardNews(market, DASHBOARD_NEWS_ROWS, activeTopic)
       .then((res) => {
-        if (!alive) return;
+        if (!aliveRef.current) return;
         // 뒤쪽 요약본은 칩·모달에 쓰면 빈 창이 뜬다. 본문이 온전한 앞부분만 둔다.
         const full = res.articles.slice(0, res.fullCount);
+        loadedRef.current = true;
         setArticles(full);
         onPoolChange?.(full);
       })
       .catch(() => {
-        if (!alive) return;
+        // 갱신이 실패하면 **보고 있던 기사를 지우지 않는다**. 첫 적재의 실패만
+        // 「표시할 뉴스가 없습니다」로 떨어진다(`lib/screen-refresh`).
+        if (!aliveRef.current || loadedRef.current) return;
         setArticles([]);
         onPoolChange?.([]);
       });
-    return () => {
-      alive = false;
-    };
     // `onPoolChange`는 부모 setState라 렌더마다 같은 참조다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [market]);
+  }, [market, activeTopic]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  /*
+    **5분마다 다시 받는다** (2026-09-16 사용자 요청). 「실시간 뉴스」라고 적힌 카드가
+    홈을 열어 둔 동안에는 마운트 시각의 기사 열넷을 그대로 들고 있었다 — 이름이 참이
+    되려면 목록도 따라와야 한다. 서버 캐시가 15초, 클라이언트 캐시가 30초라 이 주기는
+    실제로 왕복한다.
+  */
+  useVisibleInterval(load, SCREEN_REFRESH_MS, market != null);
 
   const rows = useMemo(() => articles?.slice(0, DASHBOARD_NEWS_ROWS) ?? null, [articles]);
 
@@ -178,7 +207,7 @@ function LatestNewsCardBody({
   return (
     <SectionCard
       title="실시간 뉴스"
-      href={market === "us" ? "/news/us" : "/news/domestic"}
+      href={market === "us" ? "/news/us" : `/news/domestic${activeTopic ? `?topic=${activeTopic}` : ""}`}
       hrefLabel="뉴스"
       className={className}
       /*
@@ -202,6 +231,29 @@ function LatestNewsCardBody({
         />
       }
     >
+      {market === "domestic" && (
+        <div className="-mx-1 mb-1.5 flex min-w-0 gap-1 overflow-x-auto px-1 pb-0.5" role="group" aria-label="뉴스 카테고리">
+          {NEWS_TOPIC_CHIPS.map((c) => (
+            <button
+              key={c.id || "all"}
+              type="button"
+              aria-pressed={topic === c.id}
+              onClick={() => {
+                setArticles(null);
+                setTopic(c.id);
+              }}
+              className={cn(
+                "shrink-0 rounded-full border px-2 py-0.5 text-micro transition-colors",
+                topic === c.id
+                  ? "border-[var(--brand)] bg-[var(--brand)] font-semibold text-white"
+                  : "border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+              )}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
       {rows === null ? (
         <SectionSkeleton rows={8} />
       ) : rows.length === 0 ? (

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useVisibleInterval } from "@/hooks/use-visible-interval";
 import { apiRequest } from "@/lib/api-client";
 
 /** Mirrors service.IndexScoreSummary. */
@@ -33,27 +34,45 @@ export type IndexScoreSummary = {
  *
  * Batched on purpose: the overview renders a dozen cards at once, and a request
  * per card would make the page feel slow for a dozen tiny rows.
+ *
+ * @param refreshMs 0보다 크면 **탭이 보이는 동안** 이 주기로 다시 받는다. 기본은
+ *                  0(한 번만) — 점수는 하루 한 번 도는 배치가 만들지만, 홈처럼 **열어
+ *                  둔 채 날짜가 바뀌는** 화면은 주기를 준다(2026-09-16 사용자 요청).
  */
-export function useIndexScores() {
+export function useIndexScores(refreshMs = 0) {
   const [byId, setById] = useState<Record<string, IndexScoreSummary>>({});
 
-  useEffect(() => {
-    let cancelled = false;
+  /** 마지막으로 건 요청만 쓴다 — 요청을 거는 자리가 첫 적재와 주기 둘이다. */
+  const seqRef = useRef(0);
+  useEffect(
+    () => () => {
+      seqRef.current += 1;
+    },
+    [],
+  );
+
+  const load = useCallback((initial: boolean) => {
+    seqRef.current += 1;
+    const seq = seqRef.current;
     apiRequest<IndexScoreSummary[]>("/api/v1/indices/scores", undefined, "지수 점수 조회 실패")
       .then((rows) => {
-        if (cancelled) return;
+        if (seq !== seqRef.current) return;
         const map: Record<string, IndexScoreSummary> = {};
         for (const row of rows ?? []) map[row.indexId] = row;
         setById(map);
       })
       .catch(() => {
         // Scores are supplementary — an index card renders fine without one.
-        if (!cancelled) setById({});
+        // 갱신의 실패는 들고 있던 점수를 지우지 않는다(첫 적재만 빈 표로).
+        if (seq === seqRef.current && initial) setById({});
       });
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    load(true);
+  }, [load]);
+
+  useVisibleInterval(() => load(false), refreshMs, refreshMs > 0);
 
   return byId;
 }
