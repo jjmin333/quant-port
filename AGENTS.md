@@ -48,3 +48,10 @@ The user authorized **restarting the API/workers and rebuilding the FE container
 4. **After**: `/health` 200, `docker ps` shows api/fe not restart-looping, `docker logs --tail 200 quant-port-api 2>&1 | grep -iE 'panic|fatal'` is empty, and `docker inspect <worker> --format '{{.Image}}'` equals the api container's image.
 
 Still **ask first** for: DB DROP/data deletion, external account or secret changes, Cloudflare/nginx config, and anything the user marked as needing a decision.
+
+## Cloud sessions (claude.ai/code · 원격 컨테이너)
+
+GitHub `jjmin333/quant-port`(public, `master`)를 받아 작업한다. 운영 스택(MySQL·Redis·Docker·Toss 자격증명)은 **사용자 PC에만** 있다.
+- 되는 것: `cd be && go build ./... && go test ./...`(DB가 필요한 시험은 `*_TEST_DSN`·`LIVE_MYSQL`이 없으면 건너뛴다), `cd fe && npm ci && npx tsc --noEmit && npx vitest run && npx eslint <파일>`.
+- 안 되는 것: 위 「Backend restart」·「Deploy after changes」(Windows·Docker 전용) — 클라우드에서는 **배포하지 않는다.** 브랜치를 푸시하고 PR을 올리면, 사용자 PC 세션이 머지 뒤 배포한다.
+- 운영 데이터 확인은 공개 API(`https://www.quant-port.com/api/v1/...`)로 읽기만 한다. 비밀값은 저장소에 없다(`be/.env`·`be/secrets/`는 git 밖) — 새로 만들거나 커밋하지 않는다.
