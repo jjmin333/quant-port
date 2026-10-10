@@ -24,7 +24,18 @@ type NewsArticle struct {
 	PreviewMode   string    `json:"previewMode,omitempty"`
 	EmbedPolicy   string    `json:"embedPolicy,omitempty"`
 	Highlighted   bool      `json:"highlighted,omitempty"`
-	MatchedKeys   []string  `json:"-"`
+	// Topic — stock(기본) · real_estate · rates · deposit · loan (2026-10-09 요청 4). 국내만 주식 밖이 있다.
+	Topic string `json:"topic,omitempty"`
+	// AssetTags — 제목에서 수집 때 뽑은 자산 칩(지역·금리). 누르면 자산 미리보기 모달.
+	AssetTags   []NewsAssetTag `json:"assetTags,omitempty"`
+	MatchedKeys []string       `json:"-"`
+}
+
+// NewsAssetTag is one asset chip on an article — kind/key are the asset quick-look's (region=lawdCd, rate=ECOS key).
+type NewsAssetTag struct {
+	Kind string `json:"kind"`
+	Key  string `json:"key"`
+	Name string `json:"name"`
 }
 
 type NewsListFilter struct {
@@ -33,5 +44,13 @@ type NewsListFilter struct {
 	Sort     string
 	Query    string
 	Symbol   string
-	Limit    int
+	// Topic — 비우면 전부. NewsTopics 중 하나.
+	Topic string
+	Limit int
 }
+
+// NewsTopics — 국내 뉴스 카테고리(화면 칩 순서). 「전체」는 빈 값이다.
+var NewsTopics = []string{"stock", "real_estate", "rates", "deposit", "loan"}
+
+// NewsTopicStock is the default topic of every article that is not one of the asset topics.
+const NewsTopicStock = "stock"

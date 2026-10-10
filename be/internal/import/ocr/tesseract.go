@@ -27,10 +27,6 @@ func (e Engine) Available() bool {
 	return cmd.Run() == nil
 }
 
-func (e Engine) RecognizeFile(imagePath string) (string, error) {
-	return e.RecognizeFilePSM(imagePath, "11")
-}
-
 func (e Engine) RecognizeFilePSM(imagePath, psm string) (string, error) {
 	if strings.TrimSpace(psm) == "" {
 		psm = "11"

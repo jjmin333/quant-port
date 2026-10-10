@@ -39,16 +39,31 @@ var batchCatchUpAllowed = map[model.BatchJobID]string{
 	model.BatchStockScores:     "DB만 읽고 쓴다. 하루 낡으면 첫 화면의 AI 랭킹이 낡는다",
 	model.BatchDataRetention:   "만료 토큰 정리. 늦게 돌아도 하는 일이 같다",
 	model.BatchResearchVerdict: "DB만. 열린 콜의 판정이 밀린다",
+	model.BatchGrowthAudit:     "우리 사이트 크롤 + 무료 한도 안의 Google·Bing 조회. 같은 날 다시 돌면 보고서를 덮는다",
 
 	// ── 멱등 · 외부 호출이지만 「그날 것」을 다시 받으면 되는 잡 ──────────
-	model.BatchWarnings:    "전 종목 매일. 경고 배지가 낡으면 틀린 정보를 보여준다",
-	model.BatchDisclosures: "시장 전체 매일(실측 2페이지). 실적 탭의 최근 공시가 빈다",
+	model.BatchWarnings:        "전 종목 매일. 경고 배지가 낡으면 틀린 정보를 보여준다",
+	model.BatchInvestorFlow:    "전 종목 매일(5일 창). 늦게 돌아도 빠진 날을 메운다",
+	model.BatchAnalystDomestic: "전 종목 매일. 늦게 돌아도 하는 일이 같다(네이버 1.2초 간격)",
+	model.BatchSocialMentions:  "170호출 남짓. 늦게 돌면 그날 스냅샷을 그 시각 것으로 찍는다",
+	model.BatchSocialPosts:     "로테이션 80(분당 1회). 늦게라도 돌면 그 종목들의 글이 채워진다",
+	model.BatchFinProducts:     "금감원 공시 전체 약 60호출. 늦게 돌아도 하는 일이 같다",
+	model.BatchReTrades:        "로테이션(호출 상한 6,000). 늦게 돌아도 밀린 구간부터 채운다",
+	model.BatchAssetScores:     "DB만. 늦게 돌아도 하는 일이 같다",
+	model.BatchAssetAI:         "자산 전용 키·기능 버킷 안. 입력이 같으면 다시 부르지 않는다",
+	model.BatchReIndex:         "마지막 시점부터 받는다. 늦게 돌아도 하는 일이 같다",
+	model.BatchEcosRates:       "21계열 남짓. 늦게 돌아도 하는 일이 같다",
+	model.BatchOnbid:           "공고 30일 앞 + 상세 900. 늦게 돌아도 하는 일이 같다",
+	model.BatchETFScore:        "마지막 적재일 다음부터 받는다. 늦게 돌아도 빠진 날을 메운다",
+	model.BatchDisclosures:     "시장 전체 매일(실측 2페이지). 실적 탭의 최근 공시가 빈다",
 
 	// ── 등급제 로테이션 · 늦게라도 돌면 그 슬라이스가 채워진다 ────────────
 	model.BatchInsiderOverseas:    "로테이션 1,200. 건너뛴 슬라이스는 다음 바퀴까지 낡은 채로 남는다",
 	model.BatchInsiderDomestic:    "로테이션 1,500. 위와 같다",
 	model.BatchFinancialsOverseas: "로테이션 600. 위와 같다",
 	model.BatchFinancialsDomestic: "로테이션 400. 위와 같다",
+	model.BatchExtMetrics:         "로테이션 1,500(Finnhub 20/분). 위와 같다",
+	model.BatchSectorSync:         "로테이션(90일 신선도). 늦게 돌아도 하는 일이 같다",
 
 	// ── 실적 일정 ─────────────────────────────────────────────────────────
 	// 기동 catch-up이 이미 있지만 그것은 **프로세스가 다시 뜰 때만** 돈다.
@@ -72,13 +87,28 @@ enqueueCatchUps — late인 잡 중 허용된 것을 큐에 넣고, 넣은 잡 �
 `failed`·`stuck`은 **일부러 뺀다.** 그 둘은 「안 돌았다」가 아니라 「돌았는데 깨졌다」
 또는 「지금 붙잡혀 있다」이고, 원인을 모른 채 다시 넣으면 같은 실패를 반복하거나
 붙잡힌 실행과 겹친다. 그쪽은 사람이 봐야 한다.
+
+# 예외 하나: 프로세스가 사라져 잘린 실행 (2026-09-20)
+
+그 규칙에 **구멍이 있었다.** 배포나 재기동으로 도중에 죽은 실행은
+`MarkStaleRunsFailed`가 `error`로 닫는데, 그러면 판정이 `failed`가 되어 여기서
+빠진다. 하지만 그것은 「돌았는데 깨졌다」가 아니라 **「못 돌았다」**이고, 원인도
+이미 안다 — 다시 돌리는 것이 정확히 옳은 행동이다.
+
+실측(2026-08-20~09-20): 그렇게 닫힌 실행이 **69건 · 8개 잡 · 20일**이었고, 그
+하루치는 아무도 다시 받지 않았다. 종목 경고·유니버스·재무처럼 하루 한 번 도는
+잡에서 그 하루가 그대로 구멍이 된다.
+
+그래서 `failed`라도 **잘린 것이 확실하면**(`LastInterrupted`) 받아 준다. 허용
+목록은 그대로 지킨다 — 「다시 돌려도 되는 잡인가」는 여전히 따로 답해야 하는
+질문이고, 이 예외가 답하는 것은 「왜 실패했는가」뿐이다.
 */
 // selectCatchUpCandidates — 보고서에서 재처리할 잡을 고른다. DB를 보지 않는
 // 순수 함수라 판정 규칙만 따로 시험할 수 있다.
 func selectCatchUpCandidates(report model.BatchHealthReport) []model.BatchJobID {
 	late := make([]model.BatchJobID, 0, 4)
 	for _, job := range report.Jobs {
-		if job.Health != model.BatchHealthLate {
+		if !catchUpEligible(job) {
 			continue
 		}
 		if _, ok := batchCatchUpAllowed[job.JobID]; !ok {
@@ -95,6 +125,20 @@ func selectCatchUpCandidates(report model.BatchHealthReport) []model.BatchJobID 
 		late = late[:batchCatchUpPerTick]
 	}
 	return late
+}
+
+// catchUpEligible — 이 판정이 「다시 돌리면 채워지는가」인가. 위 머리글의 규칙을
+// 한 자리에 모은 것이다.
+func catchUpEligible(job model.BatchJobHealth) bool {
+	switch job.Health {
+	case model.BatchHealthLate:
+		return true
+	case model.BatchHealthFailed:
+		// 잘린 실행만. 진짜 실패는 사람이 본다.
+		return job.LastInterrupted
+	default:
+		return false
+	}
 }
 
 func (s *BatchHealthService) enqueueCatchUps(ctx context.Context, report model.BatchHealthReport) []string {

@@ -392,7 +392,7 @@ func (p *marketPoller) tickPrice(ctx context.Context) {
 		사용자의 호가·체결과 같은 창이다.
 
 		마감 중 가격이 필요한 곳은 화면인데, 그 값은 **이미 캐시와 DB에 있다**
-		(`symbol_last_prices` — AGENT_STATE 「Quotes 데이터 정책」). 요청 경로의
+		(`symbol_last_prices` — PRINCIPLES 「Quotes 데이터 정책」). 요청 경로의
 		`EnsurePrices`가 캐시가 비면 그때 한 번 받으므로, 배경에서 1초마다 미리
 		받아 둘 이유가 없다 — 받아 봐야 이미 가진 것과 같은 값이다.
 	*/

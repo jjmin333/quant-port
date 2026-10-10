@@ -25,7 +25,7 @@ func NewNewsKeywordRepo(db *sql.DB) *NewsKeywordRepo {
 
 func (r *NewsKeywordRepo) List(ctx context.Context, market string, includeDisabled bool) ([]model.NewsPollKeyword, error) {
 	query := `
-		SELECT id, market, keyword, enabled, sort_order, created_at, updated_at
+		SELECT id, market, keyword, topic, enabled, sort_order, created_at, updated_at
 		FROM news_poll_keywords
 		WHERE market = ?
 	`
@@ -51,6 +51,7 @@ func (r *NewsKeywordRepo) List(ctx context.Context, market string, includeDisabl
 	return out, rows.Err()
 }
 
+// ListEnabledTexts — 종목 뉴스 큐에 섞이는 일반 키워드만(주제 검색어는 ListTopicKeywords).
 func (r *NewsKeywordRepo) ListEnabledTexts(ctx context.Context, market string) ([]string, error) {
 	items, err := r.List(ctx, market, false)
 	if err != nil {
@@ -58,14 +59,31 @@ func (r *NewsKeywordRepo) ListEnabledTexts(ctx context.Context, market string) (
 	}
 	out := make([]string, 0, len(items))
 	for _, item := range items {
-		out = append(out, item.Keyword)
+		if item.Topic == "" {
+			out = append(out, item.Keyword)
+		}
+	}
+	return out, nil
+}
+
+// ListTopicKeywords — 켜진 국내 주제 검색어(부동산·금리·예적금·대출), 정렬 순.
+func (r *NewsKeywordRepo) ListTopicKeywords(ctx context.Context) ([]model.NewsPollKeyword, error) {
+	items, err := r.List(ctx, "domestic", false)
+	if err != nil {
+		return nil, err
+	}
+	out := items[:0]
+	for _, item := range items {
+		if item.Topic != "" {
+			out = append(out, item)
+		}
 	}
 	return out, nil
 }
 
 func (r *NewsKeywordRepo) GetByID(ctx context.Context, id int64) (*model.NewsPollKeyword, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, market, keyword, enabled, sort_order, created_at, updated_at
+		SELECT id, market, keyword, topic, enabled, sort_order, created_at, updated_at
 		FROM news_poll_keywords WHERE id = ?
 	`, id)
 	item, err := scanNewsKeyword(row)
@@ -78,16 +96,16 @@ func (r *NewsKeywordRepo) GetByID(ctx context.Context, id int64) (*model.NewsPol
 	return &item, nil
 }
 
-func (r *NewsKeywordRepo) Create(ctx context.Context, market, keyword string, enabled bool, sortOrder int) (*model.NewsPollKeyword, error) {
+func (r *NewsKeywordRepo) Create(ctx context.Context, market, keyword, topic string, enabled bool, sortOrder int) (*model.NewsPollKeyword, error) {
 	market = normalizeNewsMarket(market)
 	keyword = strings.TrimSpace(keyword)
 	if market == "" || keyword == "" {
 		return nil, fmt.Errorf("market and keyword required")
 	}
 	res, err := r.db.ExecContext(ctx, `
-		INSERT INTO news_poll_keywords (market, keyword, enabled, sort_order)
-		VALUES (?, ?, ?, ?)
-	`, market, keyword, boolToTiny(enabled), sortOrder)
+		INSERT INTO news_poll_keywords (market, keyword, topic, enabled, sort_order)
+		VALUES (?, ?, ?, ?, ?)
+	`, market, keyword, topic, boolToTiny(enabled), sortOrder)
 	if err != nil {
 		if isDuplicateKey(err) {
 			return nil, ErrNewsKeywordDuplicate
@@ -98,16 +116,16 @@ func (r *NewsKeywordRepo) Create(ctx context.Context, market, keyword string, en
 	return r.GetByID(ctx, id)
 }
 
-func (r *NewsKeywordRepo) Update(ctx context.Context, id int64, keyword string, enabled bool, sortOrder int) (*model.NewsPollKeyword, error) {
+func (r *NewsKeywordRepo) Update(ctx context.Context, id int64, keyword, topic string, enabled bool, sortOrder int) (*model.NewsPollKeyword, error) {
 	keyword = strings.TrimSpace(keyword)
 	if keyword == "" {
 		return nil, fmt.Errorf("keyword required")
 	}
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE news_poll_keywords
-		SET keyword = ?, enabled = ?, sort_order = ?
+		SET keyword = ?, topic = ?, enabled = ?, sort_order = ?
 		WHERE id = ?
-	`, keyword, boolToTiny(enabled), sortOrder, id)
+	`, keyword, topic, boolToTiny(enabled), sortOrder, id)
 	if err != nil {
 		if isDuplicateKey(err) {
 			return nil, ErrNewsKeywordDuplicate
@@ -158,7 +176,7 @@ func scanNewsKeyword(row newsKeywordScanner) (model.NewsPollKeyword, error) {
 	var item model.NewsPollKeyword
 	var enabled int
 	if err := row.Scan(
-		&item.ID, &item.Market, &item.Keyword, &enabled, &item.SortOrder, &item.CreatedAt, &item.UpdatedAt,
+		&item.ID, &item.Market, &item.Keyword, &item.Topic, &enabled, &item.SortOrder, &item.CreatedAt, &item.UpdatedAt,
 	); err != nil {
 		return item, err
 	}

@@ -387,4 +387,3 @@ func optionalPrice(v float64) *float64 {
 // 저장하지 않도록 이 값을 쓴다 — internal/handler/sample_cache.go 참조.
 func WatchlistSeedCount() int { return len(watchlistSeeds) }
 func HoldingSeedCount() int   { return len(holdingSeeds) }
-func JournalSeedCount() int   { return len(journalSeeds) }

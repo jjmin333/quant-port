@@ -158,12 +158,3 @@ func (st *MarketIndexStore) loadFromDBOneWithTime(ctx context.Context, id string
 	}
 	return idx, rec.UpdatedAt, true
 }
-
-func (st *MarketIndexStore) loadFromDBOne(ctx context.Context, id string) *model.MarketIndex {
-	idx, _, ok := st.loadFromDBOneWithTime(ctx, id)
-	if !ok {
-		return nil
-	}
-	out := idx
-	return &out
-}

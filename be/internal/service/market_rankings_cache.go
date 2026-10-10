@@ -34,11 +34,6 @@ func rankingsCacheKey(p toss.GetRankingsParams) string {
 	)
 }
 
-func rankingsCacheKeyV1(p toss.GetRankingsParams) string {
-	return fmt.Sprintf("market:rankings:v1:%s:%s:%s:%t",
-		p.MarketCountry, p.Type, p.Duration, p.ExcludeInvestmentCaution)
-}
-
 func (s *MarketService) loadRankingsPayload(ctx context.Context, key string) (rankingsStorePayload, bool) {
 	if s.redis == nil {
 		return rankingsStorePayload{}, false
@@ -70,20 +65,4 @@ func (s *MarketService) fetchRankingsFromToss(ctx context.Context, p toss.GetRan
 		return nil, err
 	}
 	return client.GetRankings(ctx, p)
-}
-
-// Deprecated helpers kept for tests — rankings API no longer reads Toss on demand.
-func (s *MarketService) loadRankingsCache(ctx context.Context, key string) (*toss.RankingResponse, bool) {
-	wrapped, ok := s.loadRankingsPayload(ctx, key)
-	if !ok {
-		return nil, false
-	}
-	return &toss.RankingResponse{
-		RankedAt: wrapped.TossRankedAt,
-		Rankings: wrapped.Rankings,
-	}, true
-}
-
-func (s *MarketService) storeRankingsCache(ctx context.Context, key string, resp *toss.RankingResponse) {
-	s.storeRankingsPayload(ctx, key, wrapRankingsStore(resp, time.Now().UTC()), 2*time.Minute)
 }

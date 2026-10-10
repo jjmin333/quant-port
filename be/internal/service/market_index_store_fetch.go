@@ -2,78 +2,48 @@ package service
 
 import (
 	"context"
-	"time"
 
-	"github.com/enact/quant-port/be/internal/marketdata"
-	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/toss"
 )
 
-func (st *MarketIndexStore) fetchIndex(ctx context.Context, entry indexCatalogEntry) model.MarketIndex {
-	switch entry.source {
-	case indexSourceToss:
-		return st.fetchTossIndex(ctx, entry)
-	default:
-		return st.fetchExternalIndex(ctx, entry)
-	}
-}
-
-func (st *MarketIndexStore) fetchTossIndex(ctx context.Context, entry indexCatalogEntry) model.MarketIndex {
-	fresh := emptyMarketIndex(entry.id, entry.name, entry.currency)
-	if st.toss == nil || !st.toss.Enabled() {
-		return fresh
-	}
-
-	switch entry.id {
-	case "kospi", "kosdaq":
-		prices, err := st.toss.GetMarketIndicatorPrices(ctx, []string{entry.symbol})
-		if err != nil {
-			return fresh
-		}
-		for _, p := range prices {
-			if p.Symbol != entry.symbol {
-				continue
-			}
-			fresh.Value = parseDecimal(p.LastPrice)
-			if ch, cr, ok := st.indexChangeFromCandles(ctx, entry.symbol); ok {
-				fresh.Change, fresh.ChangeRate = ch, cr
-			}
-			fresh.Sparkline = st.tossIndexSparkline(ctx, entry.symbol)
-			break
-		}
-	case "usd-krw":
-		if st.fx != nil {
-			snap, ok := st.fx.Get(ctx)
-			if ok && snap.MidRate > 0 {
-				fresh.Value = snap.MidRate
-				q := marketdata.Quote{Value: snap.MidRate, AsOf: snap.UpdatedAt}
-				applyIndexMeta(&fresh, entry, q, snap.UpdatedAt)
-			}
-		}
-	}
-	return fresh
-}
-
-func (st *MarketIndexStore) tossIndexSparkline(ctx context.Context, symbol string) []float64 {
+// tossIndexDailyCloses — 지표 일봉 종가, **최신이 먼저**(오늘 봉의 종가 = 지금 값). 일봉은 지수·국채 모두 지원한다.
+func (st *MarketIndexStore) tossIndexDailyCloses(ctx context.Context, symbol string) []float64 {
 	page, err := st.toss.GetMarketIndicatorCandles(ctx, toss.GetMarketIndicatorCandlesParams{
 		Symbol:   symbol,
 		Interval: toss.CandleInterval1d,
 		Count:    indexSparklinePoints,
 	})
-	if err != nil || page == nil || len(page.Candles) == 0 {
+	if err != nil || page == nil {
 		return nil
 	}
 	closes := make([]float64, 0, len(page.Candles))
-	for i := len(page.Candles) - 1; i >= 0; i-- {
-		close := parseDecimal(page.Candles[i].ClosePrice)
-		if close > 0 {
-			closes = append(closes, close)
+	for _, c := range page.Candles {
+		if v := parseDecimal(c.ClosePrice); v > 0 {
+			closes = append(closes, v)
 		}
 	}
-	if len(closes) < 2 {
+	return closes
+}
+
+// changeFromCloses — 최신 봉 대 직전 봉. 봉이 둘 미만이면 false.
+func changeFromCloses(newestFirst []float64) (change, changeRate float64, ok bool) {
+	if len(newestFirst) < 2 || newestFirst[1] <= 0 {
+		return 0, 0, false
+	}
+	change = newestFirst[0] - newestFirst[1]
+	return change, change / newestFirst[1] * 100, true
+}
+
+// sparklineFromCloses — 화면용(오래된 것이 먼저). 점이 둘 미만이면 그리지 않는다.
+func sparklineFromCloses(newestFirst []float64) []float64 {
+	if len(newestFirst) < 2 {
 		return nil
 	}
-	return closes
+	out := make([]float64, len(newestFirst))
+	for i, v := range newestFirst {
+		out[len(newestFirst)-1-i] = v
+	}
+	return out
 }
 
 func (st *MarketIndexStore) usdKrwRate(ctx context.Context) float64 {
@@ -86,61 +56,3 @@ func (st *MarketIndexStore) usdKrwRate(ctx context.Context) float64 {
 	return 0
 }
 
-func (st *MarketIndexStore) indexChangeFromCandles(ctx context.Context, indicatorSymbol string) (change, changeRate float64, ok bool) {
-	page, err := st.toss.GetMarketIndicatorCandles(ctx, toss.GetMarketIndicatorCandlesParams{
-		Symbol:   indicatorSymbol,
-		Interval: toss.CandleInterval1d,
-		Count:    2,
-	})
-	if err != nil || page == nil || len(page.Candles) == 0 {
-		return 0, 0, false
-	}
-	last := parseDecimal(page.Candles[0].ClosePrice)
-	if len(page.Candles) >= 2 {
-		prev := parseDecimal(page.Candles[1].ClosePrice)
-		if prev > 0 {
-			change = last - prev
-			changeRate = (change / prev) * 100
-			return change, changeRate, true
-		}
-	}
-	return 0, 0, false
-}
-
-func (st *MarketIndexStore) fetchExternalIndex(ctx context.Context, entry indexCatalogEntry) model.MarketIndex {
-	fresh := emptyMarketIndex(entry.id, entry.name, entry.currency)
-	if st.external == nil {
-		return fresh
-	}
-
-	var q marketdata.Quote
-	var err error
-	switch entry.source {
-	case indexSourceFinnhub:
-		q, err = st.external.Finnhub.Quote(ctx, entry.symbol)
-	case indexSourceFRED:
-		q, err = st.external.FRED.QuoteWithSparkline(ctx, entry.symbol, indexSparklinePoints)
-	case indexSourceUpbit:
-		q, err = st.external.Upbit.Ticker(ctx, entry.symbol)
-		if err == nil {
-			if closes, cerr := st.external.Upbit.DailyCloses(ctx, entry.symbol, indexSparklinePoints); cerr == nil {
-				q.Sparkline = closes
-			}
-		}
-	case indexSourceGoldPrice:
-		currency := "USD"
-		if entry.currency == model.CurrencyKRW {
-			currency = "KRW"
-		}
-		q, err = st.external.GoldPrice.Spot(ctx, entry.symbol, currency)
-		if err == nil {
-			q = enrichGoldQuote(ctx, st.redis, q)
-		}
-	default:
-		return fresh
-	}
-	if err != nil {
-		return fresh
-	}
-	return indexFromQuote(entry, q, time.Now().UTC())
-}

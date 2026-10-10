@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/enact/quant-port/be/internal/config"
+	"github.com/enact/quant-port/be/internal/growth"
 	"github.com/enact/quant-port/be/internal/handler"
 	"github.com/enact/quant-port/be/internal/import/resolver"
 	"github.com/enact/quant-port/be/internal/llm"
@@ -50,6 +52,9 @@ type Server struct {
 	stamps           *handler.StampHandler
 	sample           *handler.SampleHandler
 	research         *handler.ResearchHandler
+	community        *handler.CommunityHandler
+	externalSignals  *handler.ExternalSignalHandler
+	mentions         *handler.MentionHandler
 	userHoldings     *handler.UserHoldingsHandler
 	holdingTrades    *handler.HoldingTradesHandler
 	priceTargets     *handler.PriceTargetHandler
@@ -59,13 +64,35 @@ type Server struct {
 	fundamentals     *handler.FundamentalsHandler
 	earnings         *handler.EarningsHandler
 	earningsCalendar *handler.EarningsCalendarHandler
+	earningsPreview  *handler.EarningsPreviewHandler
+	researchReview   *handler.ResearchReviewHandler
 	financialHistory *handler.FinancialHistoryHandler
 	insider          *handler.InsiderHandler
 	stockSummary     *handler.StockSummaryHandler
 	dailyCloses      *handler.DailyCloseHandler
 	scores           *handler.ScoreHandler
+	scoreBacktest    *handler.ScoreBacktestHandler
+	screener         *handler.ScreenerHandler
+	notifications    *handler.NotificationHandler
+	stockTimeline    *handler.StockTimelineHandler
+	changes          *handler.ChangesHandler
+	myToday          *handler.MyTodayHandler
+	reportCard       *handler.ScoreReportCardHandler
+	scoreCustom      *handler.ScoreCustomHandler
+	holdingThesis    *handler.HoldingThesisHandler
+	etfScores        *handler.ETFScoreHandler
+	finProducts      *handler.FinProductHandler
+	wealth           *handler.WealthHandler
+	assetSearch      *handler.AssetSearchHandler
+	closesBatch      *handler.ClosesBatchHandler
+	seoStocks        *handler.SEOStocksHandler
+	adminGrowth      *handler.AdminGrowthHandler
+	priceScenario    *handler.PriceScenarioHandler
+	symbolContext    *handler.SymbolContextHandler
+	holdingsDiag     *handler.HoldingsDiagnosisHandler
 	news             *handler.NewsHandler
 	admin            *handler.AdminHandler
+	pageMeta         *handler.PageMetaHandler
 	clientError      *handler.ClientErrorHandler
 
 	importJobsSvc *service.ImportJobService
@@ -85,8 +112,25 @@ func New(cfg *config.Config) (*Server, error) {
 		return fail(fmt.Errorf("mysql: %w", err))
 	}
 
+	/*
+		SERVER_ROLE (2026-10-01 사용자 결정 — API 컨테이너의 배치를 별도 컨테이너로):
+		  api   = HTTP + 실시간 루프(순위·시세·환율·지수·뉴스 수집·스트림). 배치 잡은 안 돌린다.
+		  batch = 같은 의존 그래프로 LLM 배치 9개만(worker-content). 실시간 루프는 안 돌린다 —
+		          두 프로세스가 같은 외부 API를 두 번 부르지 않게.
+		  ""    = 예전처럼 전부(로컬 단독 실행용).
+		마이그레이터는 api(또는 전부) 하나다. batch는 스키마를 기다리기만 한다.
+	*/
+	role := strings.ToLower(strings.TrimSpace(os.Getenv("SERVER_ROLE")))
+	live, batch := role != "batch", role != "api"
+	log.Printf("server role: %q (live=%v batch=%v)", role, live, batch)
+
 	migrationsDir := filepath.Join("migrations")
-	if err := repository.EnsureSchema(bgCtx, mysql.DB(), migrationsDir); err != nil {
+	if live {
+		if err := repository.EnsureSchema(bgCtx, mysql.DB(), migrationsDir); err != nil {
+			mysql.Close()
+			return fail(fmt.Errorf("mysql schema: %w", err))
+		}
+	} else if err := repository.VerifySchema(bgCtx, mysql.DB(), 3*time.Minute); err != nil {
 		mysql.Close()
 		return fail(fmt.Errorf("mysql schema: %w", err))
 	}
@@ -144,6 +188,12 @@ func New(cfg *config.Config) (*Server, error) {
 	candleBarRepo := repository.NewCandleBarRepo(mysql.DB())
 	quoteTerminalRepo := repository.NewQuoteTerminalRepo(mysql.DB())
 	stockRepo := repository.NewStockRepo(mysql.DB())
+	/*
+		화면 제목·설명 덮어쓰기. **한 벌만 만든다** — 관리자 쓰기와 공개 읽기가 같은
+		객체를 쓰게 해 두면 「표가 있는가」를 재는 캐시도 한 벌이라, 방금 마이그레이션이
+		돈 직후에 한쪽만 「표가 없다」고 답하는 일이 없다.
+	*/
+	pageMetaRepo := repository.NewPageMetaRepo(mysql.DB())
 	marketDataSettingsRepo := repository.NewMarketDataSettingsRepo(mysql.DB())
 	marketDataSettings := service.NewMarketDataSettingsStore(marketDataSettingsRepo)
 
@@ -160,7 +210,9 @@ func New(cfg *config.Config) (*Server, error) {
 	if n := marketSvc.WarmRankingsCache(bgCtx); n == 0 {
 		log.Println("market rankings: no persisted rankings in DB/Redis yet")
 	}
-	go marketSvc.RunRankingsPoller(bgCtx)
+	if live {
+		go marketSvc.RunRankingsPoller(bgCtx)
+	}
 	apiBudget := apibudget.NewManager(redis.Client())
 	llmQuota := llmLimits(cfg.LLM, apiBudget.LimitsFor(apibudget.ProviderOpenAI))
 	apiBudget.SetLimits(apibudget.ProviderOpenAI, llmQuota)
@@ -170,12 +222,14 @@ func New(cfg *config.Config) (*Server, error) {
 	earningsClient := service.NewEarningsClient(service.EarningsConfig{FinnhubAPIKey: cfg.Finnhub.APIKey}, apiBudget)
 	marketStore := service.NewMarketDataStore(tossClient, redis.Client(), earningsClient, dartClient, quoteTerminalRepo)
 	marketStore.SetDisclosures(repository.NewDisclosureRepo(mysql.DB()))
-	go marketStore.Run(bgCtx)
-	// TTL 없는 키 비중을 감시한다 — maxmemory에 닿으면 volatile-lru가 TTL 있는
-	// 캐시만 버리므로 이 비율이 곧 실질 캐시 용량의 잠식률이다.
-	safego.GoCtx(bgCtx, "redis-census", func(ctx context.Context) {
-		service.RunRedisCensus(ctx, redis.Client())
-	})
+	if live {
+		go marketStore.Run(bgCtx)
+		// TTL 없는 키 비중을 감시한다 — maxmemory에 닿으면 volatile-lru가 TTL 있는
+		// 캐시만 버리므로 이 비율이 곧 실질 캐시 용량의 잠식률이다.
+		safego.GoCtx(bgCtx, "redis-census", func(ctx context.Context) {
+			service.RunRedisCensus(ctx, redis.Client())
+		})
+	}
 
 	marketClients := marketdata.NewClients(cfg.MarketData, apiBudget, redis.Client())
 	indexRepo := repository.NewMarketIndexRepo(mysql.DB())
@@ -184,6 +238,7 @@ func New(cfg *config.Config) (*Server, error) {
 	// 원/달러·SOXX·QQQ는 실시간 응답에 이력이 없어 차트·등락률이 비어 나온다.
 	// 종가 표에는 매일 쌓이고 있으므로 거기서 메운다(market_index_history.go).
 	indexStore.SetDailyCloses(repository.NewIndexDailyCloseRepo(mysql.DB()))
+	indexStore.SetRates(repository.NewPublicDataRepo(mysql.DB()))
 	quotesSvc := service.NewQuotesService(tossClient, marketClients, fxSvc, watchlistRepo, stockRepo, redis.Client(), candleBarRepo, quoteTerminalRepo)
 	userHoldingsSvc := service.NewUserHoldingsService(userHoldingsRepo, redis.Client())
 	userCashBalancesSvc := service.NewUserCashBalancesService(userCashBalancesRepo)
@@ -210,11 +265,15 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		return false
 	})
-	go fxSvc.Run(bgCtx)
+	if live {
+		go fxSvc.Run(bgCtx)
+	}
 
 	quotesSvc.SetUserHoldings(userHoldingsSvc)
 	quotesSvc.SetIndexStore(indexStore)
-	go indexStore.Run(bgCtx)
+	if live {
+		go indexStore.Run(bgCtx)
+	}
 	quotesSvc.SetMarketStore(marketStore)
 	quotesSvc.SetRankingsRepo(marketRankingsRepo)
 	marketSvc.SetMarketStore(marketStore)
@@ -235,6 +294,8 @@ func New(cfg *config.Config) (*Server, error) {
 		Provider: cfg.LLM.Provider,
 		BaseURL:  cfg.LLM.BaseURL,
 		Model:    cfg.LLM.Model,
+		// 503 대체 모델은 시장 브리핑만 쓴다(chatCompletionWithFallback).
+		FallbackModel: cfg.LLM.FallbackModel,
 	}, cfg.LLM.KeyKR, cfg.LLM.KeyUS, apiBudget)
 	newsStore := service.NewNewsStore(cfg.News, naverNews, kakaoNews, rssNews, finnhubNews, rssUSNews, googleNews, newsRepo, keywordRepo, pollSettingsRepo, stockRepo, watchlistRepo, userHoldingsRepo, redis.Client())
 	newsStore.SetLLM(llmPool)
@@ -253,7 +314,9 @@ func New(cfg *config.Config) (*Server, error) {
 	if !translatorChain.Available() {
 		log.Print("news translate: **아무 엔진도 못 붙었다** — 해외 제목이 영어로 남는다")
 	}
-	go newsStore.Run(bgCtx)
+	if live {
+		go newsStore.Run(bgCtx)
+	}
 	newsReader := service.NewNewsReaderService(redis.Client(), readerTransRepo, newsRepo)
 
 	newsBriefingSvc := service.NewNewsBriefingService(
@@ -285,10 +348,13 @@ func New(cfg *config.Config) (*Server, error) {
 		cfg.Import.TempDir,
 	)
 
-	edgarClient := service.NewEdgarClient(service.EdgarConfig{UserAgent: cfg.Edgar.UserAgent}, apiBudget)
+	// 이 클라이언트를 부르는 것은 지표 로테이션(배치)뿐이다 — 조회 경로는 DB만 읽는다.
+	// 요청용 8/min 버킷을 쓰면 1.1초 간격 로테이션이 8종목 뒤 전부 한도 실패였다.
+	edgarClient := service.NewEdgarClient(service.EdgarConfig{UserAgent: cfg.Edgar.UserAgent}, apiBudget).UseBatchBudget()
 	fundamentalsRepo := repository.NewFundamentalsRepo(mysql.DB())
 	fundamentalsSvc := service.NewFundamentalsService(dartClient, edgarClient, tossClient, stockRepo, fundamentalsRepo)
 	fundamentalsSvc.SetMarketStore(marketStore)
+	fundamentalsSvc.SetExternalSignals(repository.NewExternalSignalRepo(mysql.DB()))
 	// 실적 이벤트 표는 워커가 채우고 API는 읽기만 한다 — FnGuide·Finnhub 호출은
 	// 이 프로세스에 없다(조회 경로에서 외부 HTTP 금지).
 	earningsEventRepo := repository.NewEarningsEventRepo(mysql.DB())
@@ -333,6 +399,7 @@ func New(cfg *config.Config) (*Server, error) {
 	// The scheduled AI 요약 batch draws its targets from 마켓 레이더's stored
 	// 1일 기준 rankings — no live Toss call, just what the poller already saved.
 	stockSummarySvc.SetRankings(marketRankingsRepo)
+	stockSummarySvc.SetSocial(repository.NewExternalSignalRepo(mysql.DB()))
 	/*
 		LLM이 쓴 글은 **캐시 밖에도 한 벌** 남긴다 (migrations/065).
 
@@ -378,6 +445,68 @@ func New(cfg *config.Config) (*Server, error) {
 	scoreRankingSvc := service.NewScoreRankingService(scoreRankingRepo, scoreSvc)
 
 	/*
+		백테스트는 **얇은 이력 표와 종가만** 읽는다 — 읽기 두 번, 나머지는 메모리 산수다.
+		사전 계산으로 옮기지 않은 이유는 조합(시장 × 축 × 상위 N × 주기 × 창)이 곱셈으로
+		늘어나는데 그 대부분을 아무도 열지 않기 때문이다 (`handler/score_backtest.go`).
+	*/
+	/*
+		포트폴리오 진단 — Phase 1의 귀인과 Phase 3의 사건을 보유 종목에 그대로 적용한다.
+		새 계산은 판정 규칙뿐이고, 그 규칙이 무엇을 못 보는지도 응답이 함께 낸다
+		(`model/holdings_diagnosis.go` 머리글).
+	*/
+	holdingsDiagSvc := service.NewHoldingsDiagnosisService(
+		repository.NewHoldingsDiagnosisRepo(mysql.DB()),
+		holdingTradesRepo,
+		userHoldingsRepo,
+		repository.NewStockScoreRepo(mysql.DB()),
+		scoreSettingsStore,
+	)
+	rankingHistorySvc := service.NewScoreRankingHistoryService(
+		repository.NewScoreRankingHistoryRepo(mysql.DB()),
+		scoreRankingRepo,
+		scoreSvc,
+	)
+	/*
+		종목 타임라인 — 다섯 표를 같은 날짜 축에 세운다. 새 수집도 새 표도 없다.
+		레인마다 시작일이 다르다는 사실이 이 기능의 핵심이라, 응답이 그것을 함께 낸다
+		(`model/stock_timeline.go` 머리글).
+	*/
+	stockTimelineSvc := service.NewStockTimelineService(
+		repository.NewStockTimelineRepo(mysql.DB()),
+		scoreSvc,
+		stockRepo,
+	)
+	scoreBacktestSvc := service.NewScoreBacktestService(
+		repository.NewScoreRankingHistoryRepo(mysql.DB()),
+		repository.NewStockDailyCloseRepo(mysql.DB()),
+		indexCloseRepo,
+	)
+	/*
+		스크리너는 점수 서비스를 빌려 쓴다 — 「가장 최근 점수일」이 두 화면에서
+		달라지면 랭킹과 스크리너가 다른 날을 보게 된다.
+	*/
+	/*
+		목표가 시나리오는 종가와 점수를 빌려 쓴다 — 변동성은 종가에서,
+		내재 PER의 기준은 앱이 이미 쓰는 PER에서 나온다(두 화면이 어긋나면 안 된다).
+	*/
+	priceScenarioSvc := service.NewPriceScenarioService(
+		repository.NewStockDailyCloseRepo(mysql.DB()),
+		scoreSvc,
+		repository.NewStockScoreRankingRepo(mysql.DB()),
+		stockRepo,
+	)
+	/*
+		「내 기록」은 판정을 **빌려 쓴다** — 보유 이유 점검을 두 벌로 만들면
+		언젠가 갈라지고, 그때 두 화면이 같은 종목에 다른 판정을 말한다.
+	*/
+	symbolContextSvc := service.NewSymbolContextService(
+		repository.NewSymbolContextRepo(mysql.DB()),
+		holdingsDiagSvc,
+	)
+	screenerSvc := service.NewScreenerService(repository.NewScreenerRepo(mysql.DB()), scoreSvc)
+	screenerSvc.SetScreens(repository.NewUserScreenRepo(mysql.DB()))
+
+	/*
 		AI 요약 배치의 대상은 세 층에서 온다 (service/llm_batch_targets.go 머리글).
 
 		1순위 레이더만 있던 동안에는 목록의 머리가 고정이라 매일 같은 종목이 다시
@@ -419,6 +548,33 @@ func New(cfg *config.Config) (*Server, error) {
 	researchSvc.SetMarketStore(marketStore)
 	researchSvc.SetStockSummary(stockSummarySvc)
 
+	// 커뮤니티 (2026-09-27 요청 4) — 붙인 종목의 스냅샷에 시세·점수를 쓴다(LLM 0).
+	communitySvc := service.NewCommunityService(repository.NewCommunityRepo(mysql.DB()))
+	communitySvc.SetQuotes(quotesSvc)
+	communitySvc.SetScores(scoreSvc)
+	// 글 안의 데이터 태그 (2026-09-28 요청 2) — 커뮤니티 글·리포트 본문이 같이 쓴다.
+	mentionSvc := service.NewMentionService(repository.NewMentionRepo(mysql.DB()), screenerSvc)
+	mentionSvc.SetQuotes(quotesSvc)
+	mentionSvc.SetScores(scoreSvc)
+	mentionSvc.SetAIOverviews(communitySvc.AIOverviews)
+	// 자산 태그(2026-10-03) — 단지·지역·금융상품·금리. 저장값만 읽는다.
+	assetMentionSvc := service.NewAssetMentionService(repository.NewAssetIntelRepo(mysql.DB()), repository.NewPublicDataRepo(mysql.DB()), repository.NewAssetWatchRepo(mysql.DB()))
+	mentionSvc.SetAssets(assetMentionSvc)
+	// 뉴스 주제 기사(부동산·금리 …)의 자산 칩 — 글 태그와 같은 색인(2026-10-09 요청 4).
+	newsStore.SetAssetTagger(assetMentionSvc)
+	communitySvc.SetMentions(mentionSvc)
+	researchSvc.SetMentions(mentionSvc)
+
+	// 실적 관전 포인트 (2026-09-27 결정 C ②) — 07:10 KST 배치, 기능 버킷 llm_feat_earnings.
+	earningsPreviewSvc := service.NewEarningsPreviewService(repository.NewEarningsPreviewRepo(mysql.DB()), llmPool, apiBudget)
+	earningsPreviewSvc.SetCalendar(earningsCalendarSvc)
+	// 실적 화면 맨 위 AI 요약 (2026-10-09 요청 1) — 위 배치 끝에서, 같은 기능 버킷.
+	earningsPreviewSvc.SetDigest(service.NewEarningsDigestService(earningsCalendarSvc, repository.NewEarningsDigestRepo(mysql.DB()), llmPool, apiBudget))
+	// 리포트 AI 검토 노트 (2026-09-27 결정 C ④) — 30분 배치, 기능 버킷 llm_feat_research.
+	researchReviewSvc := service.NewResearchReviewService(repository.NewResearchReviewRepo(mysql.DB()), llmPool, apiBudget)
+	// Reddit 커뮤니티 AI 요약 (2026-09-29) — 04:20 KST 배치, 기능 버킷 llm_feat_social.
+	socialSummarySvc := service.NewSocialSummaryService(repository.NewExternalSignalRepo(mysql.DB()), llmPool, apiBudget)
+
 	batchRunRepo := repository.NewBatchJobRunRepo(mysql.DB())
 	/*
 		크래시가 남긴 running 행을 닫는다. **6시간 넘은 것만** 건드린다.
@@ -441,7 +597,15 @@ func New(cfg *config.Config) (*Server, error) {
 	*/
 	stockSummarySvc.SetBatchRuns(batchRunRepo)
 	newsBriefingSvc.SetBatchRuns(batchRunRepo)
-	go newsBriefingSvc.Run(bgCtx)
+	earningsPreviewSvc.SetBatchRuns(batchRunRepo)
+	researchReviewSvc.SetBatchRuns(batchRunRepo)
+	socialSummarySvc.SetBatchRuns(batchRunRepo)
+	if batch {
+		go newsBriefingSvc.Run(bgCtx)
+		go earningsPreviewSvc.Run(bgCtx)
+		go researchReviewSvc.Run(bgCtx)
+		go socialSummarySvc.Run(bgCtx)
+	}
 
 	batchHealthSvc := service.NewBatchHealthService(batchRunRepo, repository.NewBatchHealthRepo(mysql.DB()))
 	// api 쪽은 판정을 화면에 내주는 역할이지만, 사건 원장은 같은 배선을 쓴다 —
@@ -456,55 +620,136 @@ func New(cfg *config.Config) (*Server, error) {
 	// 판정은 워커의 워치독이 하지만, `/metrics`는 이 프로세스에 있다. 관리자가
 	// 화면을 열 때만 갱신하면 아무도 안 열었을 때 게이지가 얼어붙는다.
 	safego.GoCtx(bgCtx, "batch-health-metrics", batchHealthSvc.RunMetricsLoop)
+	notifyRepo := repository.NewNotificationRepo(mysql.DB())
+	if live {
+		/*
+			앱 안 알림 생성(2026-10-10 요청 4) — 30분마다. DB만 읽고 INSERT IGNORE라 몇 번 돌아도 같다.
+			실거래는 03:30 적재 · 금융상품은 05:10 · 「오늘의 변화」는 00:33 뒤라 30분이면 충분히 따라간다.
+		*/
+		safego.GoCtx(bgCtx, "user-notifications", func(ctx context.Context) {
+			t := time.NewTicker(30 * time.Minute)
+			defer t.Stop()
+			for {
+				var made int64
+				for name, gen := range map[string]func(context.Context) (int64, error){
+					"stock": notifyRepo.GenerateStock, "re_trade": notifyRepo.GenerateReTrades, "fin_rate": notifyRepo.GenerateFinRates,
+				} {
+					n, err := gen(ctx)
+					if err != nil {
+						log.Printf("notifications %s: %v", name, err)
+					}
+					made += n
+				}
+				if made > 0 {
+					log.Printf("notifications: %d new", made)
+				}
+				_ = notifyRepo.Prune(ctx)
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+				}
+			}
+		})
+		// 스크리너 프리셋 수 예열 — 점수일이 바뀐 뒤 첫 방문자가 집계 8번(수 초)을 기다리지 않게(2026-10-09).
+		// 이미 센 점수일이면 LatestScoredDate 한 번으로 끝난다.
+		safego.GoCtx(bgCtx, "screener-presets-warm", func(ctx context.Context) {
+			t := time.NewTicker(20 * time.Minute)
+			defer t.Stop()
+			for {
+				screenerSvc.Presets(ctx, "domestic")
+				screenerSvc.Presets(ctx, "overseas")
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+				}
+			}
+		})
+	}
 	batchAdminSvc.SetResearch(researchSvc)
 	batchAdminSvc.SetEarnings(earningsEventRepo)
 	batchAdminSvc.SetIngestCoverage(syncStateRepo, disclosureRepo)
 
-	stockSummarySvc.Start(bgCtx)
+	// 예약 회차는 batch 역할만. api는 사용자의 수동 재생성이 쓸 배경 컨텍스트만 갖는다.
+	if batch {
+		stockSummarySvc.Start(bgCtx)
+	} else {
+		stockSummarySvc.SetBackground(bgCtx)
+	}
 	// The AI 요약 batch has no dedicated worker process (see BatchAdminService
 	// for why — its dependency graph is this process's), so 배치 관리's manual
 	// trigger is served by a queue poller running right here, the same
 	// abstraction cmd/worker-* uses, just sharing this process instead of one
 	// of its own.
-	safego.GoCtx(bgCtx, "batch-llm-domestic", func(ctx context.Context) {
-		service.RunBatchQueueWorker(ctx, batchRunRepo, model.BatchLLMSummaryDomestic,
-			func(ctx context.Context, params map[string]any) (map[string]any, string, error) {
-				return stockSummarySvc.RunBatchNow(ctx, toss.MarketKR)
-			})
-	})
-	safego.GoCtx(bgCtx, "batch-llm-overseas", func(ctx context.Context) {
-		service.RunBatchQueueWorker(ctx, batchRunRepo, model.BatchLLMSummaryOverseas,
-			func(ctx context.Context, params map[string]any) (map[string]any, string, error) {
-				return stockSummarySvc.RunBatchNow(ctx, toss.MarketUS)
-			})
-	})
-	// 뉴스 브리핑도 API 프로세스 안에서 돈다 — NewsStore·시세·LLM 클라이언트를
-	// 그대로 쓰기 때문에 전용 워커로 뗄 수 없다.
-	safego.GoCtx(bgCtx, "batch-news-briefing-domestic", func(ctx context.Context) {
-		service.RunBatchQueueWorker(ctx, batchRunRepo, model.BatchNewsBriefingDomestic,
-			func(ctx context.Context, params map[string]any) (map[string]any, string, error) {
-				return newsBriefingSvc.RunBatchNow(ctx, "domestic")
-			})
-	})
-	safego.GoCtx(bgCtx, "batch-news-briefing-overseas", func(ctx context.Context) {
-		service.RunBatchQueueWorker(ctx, batchRunRepo, model.BatchNewsBriefingOverseas,
-			func(ctx context.Context, params map[string]any) (map[string]any, string, error) {
-				return newsBriefingSvc.RunBatchNow(ctx, "us")
-			})
-	})
-	go service.RunReferenceDataPoller(bgCtx, marketDataSettings, marketSvc, fundamentalsSvc)
-	safego.GoCtx(bgCtx, "startup-repair-asset-types", func(ctx context.Context) {
-		ctx, cancel := context.WithTimeout(bgCtx, 5*time.Minute)
-		defer cancel()
-		time.Sleep(15 * time.Second)
-		if n, err := marketSvc.RepairDomesticAssetTypes(ctx); err != nil {
-			log.Printf("startup repair asset types: %v", err)
-		} else if n > 0 {
-			log.Printf("startup repair asset types: %d symbols", n)
-		}
-		// Bulk DART refresh disabled at startup — apibudget + rate limits caused mass failed overwrites.
-		// Use: go run ./cmd/seed-fundamentals or wait for scheduled reference_data_poller.
-	})
+	if batch {
+		safego.GoCtx(bgCtx, "batch-llm-domestic", func(ctx context.Context) {
+			service.RunBatchQueueWorker(ctx, batchRunRepo, model.BatchLLMSummaryDomestic,
+				func(ctx context.Context, params map[string]any) (map[string]any, string, error) {
+					return stockSummarySvc.RunBatchNow(ctx, toss.MarketKR)
+				})
+		})
+		safego.GoCtx(bgCtx, "batch-llm-overseas", func(ctx context.Context) {
+			service.RunBatchQueueWorker(ctx, batchRunRepo, model.BatchLLMSummaryOverseas,
+				func(ctx context.Context, params map[string]any) (map[string]any, string, error) {
+					return stockSummarySvc.RunBatchNow(ctx, toss.MarketUS)
+				})
+		})
+		// 뉴스 브리핑도 API 프로세스 안에서 돈다 — NewsStore·시세·LLM 클라이언트를
+		// 그대로 쓰기 때문에 전용 워커로 뗄 수 없다.
+		safego.GoCtx(bgCtx, "batch-news-briefing-domestic", func(ctx context.Context) {
+			service.RunBatchQueueWorker(ctx, batchRunRepo, model.BatchNewsBriefingDomestic,
+				func(ctx context.Context, params map[string]any) (map[string]any, string, error) {
+					return newsBriefingSvc.RunBatchNow(ctx, "domestic")
+				})
+		})
+		// 실적 관전 포인트 — 같은 LLM 풀·기능 버킷을 쓰므로 API 프로세스 안에서 돈다.
+		safego.GoCtx(bgCtx, "batch-earnings-preview-domestic", func(ctx context.Context) {
+			service.RunBatchQueueWorker(ctx, batchRunRepo, model.BatchEarningsPreviewDomestic,
+				func(ctx context.Context, params map[string]any) (map[string]any, string, error) {
+					return earningsPreviewSvc.RunBatchNow(ctx, "domestic")
+				})
+		})
+		safego.GoCtx(bgCtx, "batch-earnings-preview-overseas", func(ctx context.Context) {
+			service.RunBatchQueueWorker(ctx, batchRunRepo, model.BatchEarningsPreviewOverseas,
+				func(ctx context.Context, params map[string]any) (map[string]any, string, error) {
+					return earningsPreviewSvc.RunBatchNow(ctx, "us")
+				})
+		})
+		safego.GoCtx(bgCtx, "batch-social-summary", func(ctx context.Context) {
+			service.RunBatchQueueWorker(ctx, batchRunRepo, model.BatchSocialSummary,
+				func(ctx context.Context, params map[string]any) (map[string]any, string, error) {
+					return socialSummarySvc.RunBatchNow(ctx)
+				})
+		})
+		safego.GoCtx(bgCtx, "batch-research-review", func(ctx context.Context) {
+			service.RunBatchQueueWorker(ctx, batchRunRepo, model.BatchResearchReview,
+				func(ctx context.Context, params map[string]any) (map[string]any, string, error) {
+					return researchReviewSvc.RunBatchNow(ctx)
+				})
+		})
+		safego.GoCtx(bgCtx, "batch-news-briefing-overseas", func(ctx context.Context) {
+			service.RunBatchQueueWorker(ctx, batchRunRepo, model.BatchNewsBriefingOverseas,
+				func(ctx context.Context, params map[string]any) (map[string]any, string, error) {
+					return newsBriefingSvc.RunBatchNow(ctx, "us")
+				})
+		})
+	}
+	if live {
+		go service.RunReferenceDataPoller(bgCtx, marketDataSettings, marketSvc, fundamentalsSvc)
+		safego.GoCtx(bgCtx, "startup-repair-asset-types", func(ctx context.Context) {
+			ctx, cancel := context.WithTimeout(bgCtx, 5*time.Minute)
+			defer cancel()
+			time.Sleep(15 * time.Second)
+			if n, err := marketSvc.RepairDomesticAssetTypes(ctx); err != nil {
+				log.Printf("startup repair asset types: %v", err)
+			} else if n > 0 {
+				log.Printf("startup repair asset types: %d symbols", n)
+			}
+			// Bulk DART refresh disabled at startup — apibudget + rate limits caused mass failed overwrites.
+			// Use: go run ./cmd/seed-fundamentals or wait for scheduled reference_data_poller.
+		})
+	}
 	// User uploads (리포트 본문 이미지가 첫 사용처). A store that cannot be
 	// created is not fatal — the app runs fine without uploads, and failing
 	// startup over a media directory would take the whole API down for a
@@ -528,7 +773,7 @@ func New(cfg *config.Config) (*Server, error) {
 
 		폴러보다 **먼저** 붙인다 — 폴러가 첫 틱에서 구독 대상을 넘기기 때문이다.
 	*/
-	if cfg.Toss.StreamReady() && tossClient != nil {
+	if live && cfg.Toss.StreamReady() && tossClient != nil {
 		/*
 			**REST 클라이언트의 토큰 관리자를 그대로 넘긴다.**
 
@@ -547,11 +792,13 @@ func New(cfg *config.Config) (*Server, error) {
 		log.Printf("toss stream: websocket quotes enabled (%d credentials, %d connections, %d slots)",
 			len(auths), len(auths)*service.StreamConnections,
 			len(auths)*service.StreamConnections*service.StreamSlotsPerConn)
-	} else if cfg.Toss.StreamEnabled {
+	} else if live && cfg.Toss.StreamEnabled {
 		log.Println("toss stream: requested but Toss credentials missing — staying on polling")
 	}
 
-	quotesSvc.StartPolling(bgCtx)
+	if live {
+		quotesSvc.StartPolling(bgCtx)
+	}
 
 	s := &Server{
 		cfg:              cfg,
@@ -570,8 +817,11 @@ func New(cfg *config.Config) (*Server, error) {
 		watchlist:        handler.NewWatchlistHandler(watchlistSvc),
 		journal:          handler.NewJournalHandler(journalSvc),
 		stamps:           handler.NewStampHandler(stampSvc),
-		sample:           handler.NewSampleHandler(quotesSvc, redis),
+		sample:           handler.NewSampleHandler(quotesSvc, redis).WithSectors(repository.NewStockSectorRepo(mysql.DB())),
 		research:         handler.NewResearchHandler(researchSvc),
+		community:        handler.NewCommunityHandler(communitySvc),
+		mentions:         handler.NewMentionHandler(mentionSvc),
+		externalSignals:  handler.NewExternalSignalHandler(repository.NewExternalSignalRepo(mysql.DB())),
 		userHoldings:     handler.NewUserHoldingsHandler(userHoldingsSvc),
 		holdingTrades:    handler.NewHoldingTradesHandler(holdingTradesSvc),
 		priceTargets:     handler.NewPriceTargetHandler(priceTargetSvc),
@@ -581,13 +831,42 @@ func New(cfg *config.Config) (*Server, error) {
 		fundamentals:     handler.NewFundamentalsHandler(fundamentalsSvc),
 		earnings:         handler.NewEarningsHandler(earningsTabSvc),
 		earningsCalendar: handler.NewEarningsCalendarHandler(earningsCalendarSvc),
+		earningsPreview:  handler.NewEarningsPreviewHandler(earningsPreviewSvc),
+		assetSearch:      handler.NewAssetSearchHandler(repository.NewPublicDataRepo(mysql.DB()), assetMentionSvc),
+		researchReview:   handler.NewResearchReviewHandler(researchReviewSvc),
 		financialHistory: handler.NewFinancialHistoryHandler(financialHistorySvc),
 		insider:          handler.NewInsiderHandler(insiderTabSvc),
 		stockSummary:     handler.NewStockSummaryHandler(stockSummarySvc),
 		dailyCloses:      handler.NewDailyCloseHandler(dailyCloseSvc),
 		scores:           handler.NewScoreHandler(scoreSvc, indexScoreSvc, scoreRankingSvc),
-		news:             handler.NewNewsHandler(newsStore, newsReader, newsBriefingSvc),
-		clientError:      handler.NewClientErrorHandler(),
+		scoreBacktest:    handler.NewScoreBacktestHandler(scoreBacktestSvc),
+		screener:         handler.NewScreenerHandler(screenerSvc),
+		notifications:    handler.NewNotificationHandler(notifyRepo),
+		stockTimeline:    handler.NewStockTimelineHandler(stockTimelineSvc),
+		changes:          handler.NewChangesHandler(repository.NewChangeEventRepo(mysql.DB())),
+		myToday: handler.NewMyTodayHandler(
+			repository.NewMyTodayRepo(mysql.DB()), repository.NewChangeEventRepo(mysql.DB())),
+		reportCard:    handler.NewScoreReportCardHandler(service.NewScoreReportCardService(repository.NewScoreICRepo(mysql.DB()))).WithSettings(scoreSettingsStore),
+		holdingThesis: handler.NewHoldingThesisHandler(repository.NewHoldingThesisRepo(mysql.DB())),
+		etfScores:     handler.NewETFScoreHandler(repository.NewETFMetricsRepo(mysql.DB())),
+		finProducts:   handler.NewFinProductHandler(repository.NewFinProductRepo(mysql.DB()), repository.NewAssetIntelRepo(mysql.DB())),
+		// 순자산(2026-10-01). 외부 호출은 업비트 원화 시세 1분 캐시뿐 — 나머지는 worker-filings가 채운 표.
+		wealth: handler.NewWealthHandler(repository.NewWealthRepo(mysql.DB()), repository.NewPublicDataRepo(mysql.DB()),
+			service.NewWealthValuer(mysql.DB(), marketdata.NewUpbitClient("", "", &http.Client{Timeout: 10 * time.Second}, apiBudget)),
+			repository.NewAssetIntelRepo(mysql.DB())).WithWatch(repository.NewAssetWatchRepo(mysql.DB())),
+		closesBatch: handler.NewClosesBatchHandler(mysql.DB()),
+		seoStocks:   handler.NewSEOStocksHandler(mysql.DB()),
+		adminGrowth: handler.NewAdminGrowthHandler(growth.NewReportReader(mysql.DB())),
+		scoreCustom: handler.NewScoreCustomHandler(
+			service.NewCustomRankingService(repository.NewUserScoreWeightsRepo(mysql.DB()), scoreSettingsStore),
+			repository.NewUserScoreWeightsRepo(mysql.DB()),
+		),
+		priceScenario: handler.NewPriceScenarioHandler(priceScenarioSvc),
+		symbolContext: handler.NewSymbolContextHandler(symbolContextSvc),
+		holdingsDiag:  handler.NewHoldingsDiagnosisHandler(holdingsDiagSvc),
+		news:          handler.NewNewsHandler(newsStore, newsReader, newsBriefingSvc),
+		clientError:   handler.NewClientErrorHandler(),
+		pageMeta:      handler.NewPageMetaHandler(pageMetaRepo),
 		admin: handler.NewAdminHandler(
 			keywordRepo, newsStore, apiBudget, marketDataSettings,
 			service.NewCacheAdminService(redis.Client()),
@@ -596,6 +875,7 @@ func New(cfg *config.Config) (*Server, error) {
 			llmSettingsStore,
 			scoreSvc,
 			scoreSettingsStore,
+			rankingHistorySvc,
 			batchAdminSvc,
 		),
 	}
@@ -606,6 +886,9 @@ func New(cfg *config.Config) (*Server, error) {
 	// 종목 별칭 관리. stockRepo는 「없는 심볼을 거부한다」에만 쓴다 —
 	// 그 검사가 없으면 오타가 조용히 저장되고 그 별칭은 영영 아무 데도 안 붙는다.
 	s.admin.SetStockAliases(repository.NewStockAliasRepo(mysql.DB()), stockRepo)
+	// 화면 메타 관리. 공개 읽기(pageMeta 핸들러)와 **같은 리포지터리**를 쓴다 —
+	// 둘로 나누면 관리자가 저장한 값과 사이트가 읽는 값이 어긋날 자리가 생긴다.
+	s.admin.SetPageMeta(pageMetaRepo)
 
 	s.http = &http.Server{
 		Addr:         cfg.Addr(),

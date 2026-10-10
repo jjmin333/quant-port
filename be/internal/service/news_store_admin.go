@@ -60,13 +60,6 @@ func (st *NewsStore) pollConfig(ctx context.Context) model.NewsPollSettings {
 	return settings
 }
 
-func (st *NewsStore) InvalidatePollSettings() {
-	st.mu.Lock()
-	st.pollSettingsCache = model.DefaultNewsPollSettings()
-	st.pollSettingsAt = time.Time{}
-	st.mu.Unlock()
-}
-
 func (st *NewsStore) GetPollSettings(ctx context.Context) model.NewsPollSettings {
 	return st.pollConfig(ctx)
 }
@@ -95,14 +88,22 @@ func (st *NewsStore) InvalidateAdminKeywords() {
 
 func (st *NewsStore) ResetKeywordCursors(ctx context.Context) {
 	st.mu.Lock()
-	st.keywordCursor = 0
 	st.usKeywordCursor = 0
-	st.usGoogleCursor = 0
+	st.laneCursors = map[string]int{}
 	st.mu.Unlock()
 
-	if st.redis != nil {
-		_ = st.redis.Del(ctx, newsKeywordCursorKey, newsUSKeywordCursorKey, newsUSGoogleKeywordCursorKey).Err()
+	if st.redis == nil {
+		return
 	}
+	// 옛 단일 커서 키도 같이 버린다 — 차선으로 갈아탄 뒤로는 아무도 안 읽지만,
+	// 남겨 두면 다음 사람이 「어느 쪽이 정본인가」를 다시 물어야 한다.
+	keys := []string{newsKeywordCursorKey, newsUSKeywordCursorKey, newsUSGoogleKeywordCursorKey}
+	for _, prefix := range []string{newsDomesticLaneCursorPrefix, newsUSGoogleLaneCursorPrefix} {
+		for _, lane := range newsKeywordLaneOrder {
+			keys = append(keys, newsLaneCursorKey(prefix, lane))
+		}
+	}
+	_ = st.redis.Del(ctx, keys...).Err()
 }
 
 func (st *NewsStore) NewsStats(ctx context.Context) (domesticCount, usCount int, domesticUpdated, usUpdated time.Time) {

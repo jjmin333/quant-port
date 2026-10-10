@@ -40,21 +40,9 @@ func LogoURL(symbol string, currency model.QuoteCurrency, assetType model.QuoteA
 			}
 		}
 	}
+	// 국내 신규 상장은 FMP `.KS`가 거의 다 404다 — 네이버 CDN(월간 갱신이 받는 그림)으로.
+	if IsDomestic(currency, assetType) {
+		return NaverLogoURL(sym)
+	}
 	return FMPImageURL(symbol, currency, assetType)
-}
-
-// FMPFallbackURL returns the FMP CDN URL for img onError fallback (empty when primary is already FMP).
-//
-// 로고가 없는 것으로 판정된 종목(tone == "blank")에는 폴백도 주지 않는다 — 원격에
-// 있는 그림이 화면에서 안 보이던 바로 그 그림이다.
-func FMPFallbackURL(symbol string, currency model.QuoteCurrency, assetType model.QuoteAssetType) string {
-	primary := LogoURL(symbol, currency, assetType)
-	if primary == "" {
-		return ""
-	}
-	fmp := FMPImageURL(symbol, currency, assetType)
-	if primary != fmp {
-		return fmp
-	}
-	return ""
 }

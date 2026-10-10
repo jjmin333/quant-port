@@ -4,11 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/enact/quant-port/be/internal/llm"
+	"github.com/enact/quant-port/be/internal/marketdata/apibudget"
 )
 
 /*
@@ -30,6 +32,33 @@ import (
     같은 날 같은 지수에 두 번 쓰지 않는다.
   - 지표가 얕은 지수(30봉 미만)는 부르지 않는다 — 할 말이 없는 것에 문단을 붙이면
     모델이 채워 넣는다.
+
+# 한 번의 실패가 열셋을 데려갔다 (2026-09-16 사용자 신고 · 실측)
+
+「지수 LLM이 동작하지 않는 것 같다」는 신고를 DB로 확인했더니, 열세 지수 중 열하나의
+해설이 **점수보다 정확히 한 거래일 뒤에** 있었다(kospi 해설 09-14 / 점수 09-15 …).
+화면이 읽는 행은 점수가 앉은 행이라, 그 행에 해설이 없으면 규칙 문장만 보인다 —
+「LLM이 꺼진 것처럼」 보이는 것이 이것이다.
+
+배치 기록이 원인을 가리켰다: `stock_scores` 09-16 00:25 회차가 **생성 0 · 실패 11 ·
+토큰 0**. 토큰이 0이면 모델은 한 번도 답하지 않은 것이다. 그리고 실패가 **열하나
+연속**이라는 모양이 원인을 좁힌다 — 열한 번 따로 실패한 것이 아니라 **한 번 실패한
+뒤 나머지가 딸려 갔다**.
+
+딸려 간 길이 둘이었다.
+
+  ① 옛 코드의 간격 대기(`waitInterval`)가 **성공한 회차에만** 있었다. 실패하면
+     다음 호출이 곧바로 나가고 `Check`가 `ErrPacing`(4초가 안 지났다)으로 막는다.
+  ② 제공자가 429를 주면 `BlockFor`가 차단 구간을 걸고, 그 뒤 호출은 전부
+     `ErrExhausted`로 떨어진다.
+
+그래서 지금은 **간격을 성공·실패와 무관하게** 두고, `ErrExhausted`를 만나면 남은
+지수를 부르지 않고 사유를 `HaltReason`에 적어 멈춘다.
+
+**그리고 실패한 날을 하루 통째로 잃지 않는다.** 이 함수를 다시 부르는 것은 공짜에
+가깝다(해설이 있는 지수는 SELECT 한 번으로 건너뛴다). 그래서 worker-scores가
+같은 날 늦은 슬롯에 한 번 더 부른다 — 00:25의 실패가 **다음 날 00:25까지** 화면에
+남아 있을 이유가 없다.
 */
 
 // indexNoteMinBars — 이만큼은 있어야 20일선·RSI가 의미를 가진다(`indexTagMinBars`와 같은 기준).
@@ -67,6 +96,15 @@ type IndexNoteResult struct {
 	Skipped   int
 	Failed    int
 	Tokens    int64
+	/*
+		예산이 막아서 **남은 지수를 아예 부르지 못한** 경우의 사유.
+
+		비어 있으면 열세 칸을 전부 시도했다는 뜻이다. 이 칸이 필요한 이유는 「실패 11」과
+		「예산이 닫혀서 11칸을 못 물어봤다」가 배치 기록에서 같은 줄로 보이면 안 되기
+		때문이다 — 앞은 모델이나 우리 코드를 의심할 일이고, 뒤는 **부른 시각을 의심할
+		일**이다(2026-09-16 실측, 아래 머리글).
+	*/
+	HaltReason string
 }
 
 /*
@@ -96,7 +134,15 @@ func (s *IndexScoreService) GenerateNotes(ctx context.Context, force bool) (Inde
 		return res, err
 	}
 
+	// 실제로 모델을 부른 횟수. 첫 호출 앞에서는 간격을 둘 이유가 없다.
+	attempted := 0
 	for _, entry := range marketIndexCatalog {
+		// 추종 ETF(지수와 같은 말)·한국 금리(금리 카드·자산 AI가 따로 다룬다)는 해설을 만들지 않는다 —
+		// 공용 KR 키 사용량을 늘리지 않게(2026-10-01).
+		if noIndexNote[entry.id] {
+			res.Skipped++
+			continue
+		}
 		sr, ok := series[entry.id]
 		if !ok || len(sr.closes) < indexNoteMinBars {
 			res.Skipped++
@@ -126,10 +172,38 @@ func (s *IndexScoreService) GenerateNotes(ctx context.Context, force bool) (Inde
 			continue
 		}
 
+		/*
+			**간격은 성공·실패를 가리지 않는다.**
+
+			예전에는 이 대기가 루프 맨 아래, 성공한 회차에만 있었다. 그래서 한 칸이
+			실패하면 다음 칸이 **곧바로** 나갔고 `Check`가 `ErrPacing`(최소 간격 4초가
+			안 지났다)으로 막았다 — 한 번의 실패가 남은 전부를 실패로 만든다. 실측
+			2026-09-16 00:25: 생성 0 · 실패 11 · 토큰 0.
+		*/
+		if attempted > 0 && !waitInterval(ctx, client.Limits().MinInterval) {
+			return res, ctx.Err()
+		}
+		attempted++
+
 		out, err := client.GenerateIndexNote(ctx, string(payload))
 		if err != nil {
 			log.Printf("index note %s: %v", entry.id, err)
 			res.Failed++
+			/*
+				**예산이 닫혔으면 나머지는 부르지 않는다.**
+
+				`ErrExhausted`는 일·월 한도, 토큰 상한, 그리고 제공자가 429와 함께 건
+				차단 구간이다(`apibudget/errors.go`). 다시 물어도 같은 대답이라 남은
+				열둘은 같은 줄을 로그에 열두 번 더 쓰는 일밖에 못 한다 — 그리고 그
+				열둘이 「실패」로 세어지면 기록이 원인을 감춘다.
+
+				오류로 올리지는 않는다. 규칙 문장(`ai_summary`)이 그 자리에 그대로 있어
+				화면은 멀쩡하고, 이 배치의 본체는 점수다.
+			*/
+			if errors.Is(err, apibudget.ErrExhausted) {
+				res.HaltReason = err.Error()
+				return res, nil
+			}
 			continue
 		}
 		if out.Note == "" {
@@ -143,11 +217,6 @@ func (s *IndexScoreService) GenerateNotes(ctx context.Context, force bool) (Inde
 		}
 		res.Generated++
 		res.Tokens += out.TotalTokens
-
-		// 제공자가 요구하는 최소 간격을 지킨다. 열세 번을 연달아 쏘면 429가 난다.
-		if !waitInterval(ctx, client.Limits().MinInterval) {
-			return res, ctx.Err()
-		}
 	}
 	return res, nil
 }
@@ -241,3 +310,6 @@ func waitInterval(ctx context.Context, gap time.Duration) bool {
 		return true
 	}
 }
+
+// noIndexNote — LLM 지수 해설을 건너뛰는 지수.
+var noIndexNote = map[string]bool{"kr-base": true, "ktb3": true, "ktb10": true}

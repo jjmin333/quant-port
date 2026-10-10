@@ -98,13 +98,8 @@ func (s *QuotesService) statsFromDBCandles(ctx context.Context, symbol string, s
 	}
 
 	currentPrice := lastDaily.Close
-	for _, c := range daily {
-		if c.High > stats.Week52High {
-			stats.Week52High = c.High
-		}
-		if stats.Week52Low == 0 || (c.Low > 0 && c.Low < stats.Week52Low) {
-			stats.Week52Low = c.Low
-		}
+	if h, l, ok := week52RangeFromBars(daily); ok {
+		stats.Week52High, stats.Week52Low = h, l
 	}
 
 	intraday, _, err := s.candles.ListBefore(ctx, symbol, model.Interval1m, "", 480)

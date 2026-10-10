@@ -71,7 +71,7 @@ func (h *EarningsCalendarHandler) Calendar(w http.ResponseWriter, r *http.Reques
 // Summary serves GET /earnings/calendar/summary?from&to&market.
 //
 // 히트맵 전용 경량 응답. 상세 행을 세어 만들면 월 하나에 2,000행을 내리는 셈이
-// 되므로 집계만 내린다(AGENT_STATE 응답 속도 원칙 #4).
+// 되므로 집계만 내린다(PRINCIPLES 응답 속도 원칙 #4).
 func (h *EarningsCalendarHandler) Summary(w http.ResponseWriter, r *http.Request) {
 	from, to, ok := earningsRange(w, r)
 	if !ok {

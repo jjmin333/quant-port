@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/enact/quant-port/be/internal/authctx"
+	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/repository"
 	"github.com/enact/quant-port/be/internal/service"
 	"github.com/enact/quant-port/be/pkg/response"
@@ -24,6 +25,7 @@ func NewResearchHandler(svc *service.ResearchService) *ResearchHandler {
 }
 
 type researchPublishBody struct {
+	Topic        string   `json:"topic"`
 	Symbol       string   `json:"symbol"`
 	Title        string   `json:"title"`
 	Direction    string   `json:"direction"`
@@ -68,6 +70,7 @@ func (h *ResearchHandler) Publish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view, err := h.svc.Publish(r.Context(), service.ResearchPublishRequest{
+		Topic:        body.Topic,
 		Symbol:       body.Symbol,
 		Title:        body.Title,
 		Direction:    body.Direction,
@@ -212,8 +215,20 @@ func (h *ResearchHandler) Update(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, map[string]any{"data": view})
 }
 
-// Retract withdraws a call. There is deliberately no delete endpoint: a
-// removable call would make every hit rate on the service unfalsifiable.
+// Delete removes a call for good — author or admin (2026-10-09 사용자 결정: 성적에서도 빠진다).
+func (h *ResearchHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id, ok := researchIDParam(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.Delete(r.Context(), id); err != nil {
+		h.writeResearchError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]any{"data": map[string]bool{"ok": true}})
+}
+
+// Retract withdraws a call; the row stays and counts toward the retract rate.
 func (h *ResearchHandler) Retract(w http.ResponseWriter, r *http.Request) {
 	id, ok := researchIDParam(w, r)
 	if !ok {
@@ -451,6 +466,7 @@ func researchFilterFrom(r *http.Request, publicOnly bool) repository.ResearchLis
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
 	return repository.ResearchListFilter{
+		Topic:      model.TopicFilter(q.Get("topic")),
 		Symbol:     strings.ToUpper(strings.TrimSpace(q.Get("symbol"))),
 		Status:     strings.TrimSpace(q.Get("status")),
 		Direction:  strings.TrimSpace(q.Get("direction")),

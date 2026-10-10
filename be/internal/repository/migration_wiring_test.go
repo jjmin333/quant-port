@@ -42,6 +42,7 @@ func TestEveryMigrationFileIsReferenced(t *testing.T) {
 		"026_storage_cleanup.sql":                       "저장 공간 정리 — 사람이 필요할 때 돌린다",
 		"045_holding_trades_price_mismatch_cleanup.sql": "잘못된 행 정리 — 일회성",
 		"060_drop_60m_candles.sql":                      "표 제거 — 일회성 (다시 돌면 안 된다)",
+		"091_screener_phrases.sql":                      "문장 검색 표 — 기능을 내렸고 103이 DROP한다(이미 도는 DB에 다시 만들면 안 된다)",
 	}
 	dir := filepath.Join("..", "..", "migrations")
 	entries, err := os.ReadDir(dir)

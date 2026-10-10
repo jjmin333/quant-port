@@ -92,12 +92,6 @@ func (c *Client) GenerateIndexNote(ctx context.Context, factsJSON string) (*Inde
 	return &out, nil
 }
 
-// EstimateIndexNoteTokens reports one call's expected cost so the batch can
-// decide whether thirteen of them still fit the day's budget.
-func (c *Client) EstimateIndexNoteTokens(factsJSON string) int64 {
-	return EstimateTokens(indexNoteSystemPrompt, factsJSON) + indexNoteOutputTokens
-}
-
 /*
 normalizeIndexStance keeps the label inside the three values the UI can colour.
 

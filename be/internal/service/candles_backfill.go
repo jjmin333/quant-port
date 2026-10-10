@@ -112,29 +112,26 @@ func (s *QuotesService) ensureDailyBarsHistory(ctx context.Context, symbol strin
 	return bars
 }
 
-// dailyBarsForMetrics returns DB bars immediately and schedules async backfill when
-// history is too short, so watchlist list responses are not blocked on Toss pagination.
-func (s *QuotesService) dailyBarsForMetrics(ctx context.Context, symbol string, limit int) []model.Candle {
-	bars := s.listDailyBarsFromDB(ctx, symbol, limit)
-	if !barsCoverYearHistory(bars) && s.TossEnabled() {
-		s.triggerDailyBarsBackfill(symbol)
-	}
-	return bars
-}
+/*
+week52RangeFromBars — 일봉에서 **가장 최근 봉으로부터 52주 안**의 최고·최저.
 
-func (s *QuotesService) triggerDailyBarsBackfill(symbol string) {
-	s.initQuoteRefresh()
-	sym := strings.ToUpper(strings.TrimSpace(symbol))
-	if sym == "" {
-		return
-	}
-	s.quoteRefresh.runOnce("daily-backfill:"+sym, func(ctx context.Context) {
-		_ = s.ensureDailyBarsHistory(ctx, sym, metricsDailyBarLimit)
-	})
-}
-
+예전에는 받은 봉 전부를 훑었다. 부르는 쪽이 넘기는 봉은 400개(약 1.6년) · 280개(약 13개월)
+· 원본 캐시 전부로 제각각이라, 「52주 범위」가 1년보다 긴 구간의 값이 됐다(2026-09-26 외부
+방문자 점검: SK하이닉스 52주 최저 162,700원 — 실제 52주 최저는 335,500원, 162,700원은 1년
+반 전 값). 순서는 가정하지 않는다(토스 페이지는 최신순, DB는 오래된순).
+*/
 func week52RangeFromBars(bars []model.Candle) (high, low float64, ok bool) {
+	var newest time.Time
 	for _, c := range bars {
+		if t := parseQuoteCandleTime(c.Time); t.After(newest) {
+			newest = t
+		}
+	}
+	cutoff := newest.AddDate(0, 0, -364)
+	for _, c := range bars {
+		if !newest.IsZero() && parseQuoteCandleTime(c.Time).Before(cutoff) {
+			continue
+		}
 		if c.High > high {
 			high = c.High
 		}

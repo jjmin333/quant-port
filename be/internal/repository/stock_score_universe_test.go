@@ -44,6 +44,14 @@ func TestRankableProductClauseBindsEveryPlaceholder(t *testing.T) {
 	}
 }
 
+// 국내 우선주(끝자리가 0이 아닌 코드)도 랭킹 우주에서 빠진다 — 보통주 재무로 평가돼 싸 보인다.
+func TestRankableProductClauseExcludesDomesticPreferred(t *testing.T) {
+	clause, _ := scoreRankableProductClause("s")
+	if !strings.Contains(clause, "NOT (s.asset_type = 'domestic' AND RIGHT(s.symbol, 1) <> '0')") {
+		t.Errorf("우선주 조건이 없다: %s", clause)
+	}
+}
+
 func TestRankableProductClauseCoversEveryIndexProductType(t *testing.T) {
 	clause, _ := scoreRankableProductClause("s")
 	// 대소문자가 섞여 들어오므로 비교 전에 정규화해야 한다.
@@ -94,5 +102,39 @@ func TestMinAxesClauseUsesTheConfiguredThreshold(t *testing.T) {
 	// 조각은 이미 WHERE가 있는 쿼리 뒤에 붙는다 — AND로 시작해야 한다.
 	if !strings.HasPrefix(strings.TrimSpace(clause), "AND ") {
 		t.Errorf("AND로 시작하지 않는다: %s", clause)
+	}
+}
+
+// 추천할 수 있는 크기(09-26): SPAC · 거래대금 · 시총. 인자 수와 「규칙 전의 행은 통과」를 본다.
+func TestRecommendableClauseBindsAndSparesPreRuleRows(t *testing.T) {
+	clause, args := scoreRecommendableClause("sc", "s")
+	if got := strings.Count(clause, "?"); got != len(args) {
+		t.Fatalf("placeholders = %d, args = %d", got, len(args))
+	}
+	for _, want := range []string{
+		"'%ACQUISITION%'",
+		"'%스팩%'",
+		"s.name LIKE '%우선주%' AND s.name NOT LIKE '%ADR%'",
+		"JSON_EXTRACT(sc.inputs, '$.avgTradeValue') IS NULL OR",
+		"JSON_EXTRACT(sc.inputs, '$.marketCap') IS NULL OR",
+		"s.asset_type = 'domestic'",
+	} {
+		if !strings.Contains(clause, want) {
+			t.Errorf("조각에 %q가 없다: %s", want, clause)
+		}
+	}
+	if !strings.HasPrefix(strings.TrimSpace(clause), "AND ") {
+		t.Errorf("AND로 시작하지 않는다: %s", clause)
+	}
+	// 국내가 원, 해외가 달러다 — IF(domestic, 국내, 해외) 순서로 묶여야 한다.
+	want := []any{scoreMinTradeValueDomestic, scoreMinTradeValueUS, scoreMinMarketCapDomestic, scoreMinMarketCapUS}
+	for i := range want {
+		if args[i] != want[i] {
+			t.Errorf("args[%d] = %v, want %v", i, args[i], want[i])
+		}
+	}
+	if scoreMinTradeValueDomestic != 5e8 || scoreMinTradeValueUS != 2e6 ||
+		scoreMinMarketCapDomestic != 5e10 || scoreMinMarketCapUS != 3e8 {
+		t.Error("하한이 사용자 결정(「중간」: 5억·500억 원 / 200만·3억 달러)과 다르다")
 	}
 }

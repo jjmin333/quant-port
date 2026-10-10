@@ -114,6 +114,9 @@ func (s *IndexBackfillService) Run(ctx context.Context, since time.Time) (IndexB
 		case entry.source == indexSourceFRED:
 			source = "fred"
 			points, err = s.fromFRED(ctx, entry.symbol, since)
+		case entry.source == indexSourceEcos:
+			source = "ecos"
+			points, err = s.fromMacroRates(ctx, entry.symbol, since)
 		default:
 			res.Report = append(res.Report,
 				fmt.Sprintf("%-10s 건너뜀 — %s 는 날짜 있는 이력 소스가 없습니다(이후 일별 배치로 누적)", entry.id, entry.source))
@@ -296,4 +299,24 @@ func (s *IndexBackfillService) store(
 		return 0, err
 	}
 	return len(rows), nil
+}
+
+// fromMacroRates reads 한국 금리 history from macro_rates (worker-asset의 ecos_rates가 채운다).
+func (s *IndexBackfillService) fromMacroRates(ctx context.Context, seriesID string, since time.Time) ([]datedClose, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT period_date, value FROM macro_rates WHERE series_id = ? AND period_date >= ? ORDER BY period_date`,
+		seriesID, since.Format("2006-01-02"))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []datedClose
+	for rows.Next() {
+		var d time.Time
+		var v float64
+		if err := rows.Scan(&d, &v); err != nil {
+			return nil, err
+		}
+		out = append(out, datedClose{date: d, close: v})
+	}
+	return out, rows.Err()
 }

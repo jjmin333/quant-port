@@ -30,7 +30,10 @@ type AdminHandler struct {
 
 	scores        *service.ScoreService
 	scoreSettings *service.ScoreSettingsStore
-	batch         *service.BatchAdminService
+	// rankingHistory는 백테스트가 읽는 날짜별 랭킹 구성을 채운다. 평소에는 점수
+	// 배치가 부르고, 여기 입구는 재계산 뒤 손으로 다시 채울 때 쓴다.
+	rankingHistory *service.ScoreRankingHistoryService
+	batch          *service.BatchAdminService
 	// incidents는 운영 사건 원장이다. 생성자 인자로 받지 않고 세터로 붙인다 —
 	// 생성자 인자가 이미 열 개가 넘어 순서 실수가 나기 쉽고, 이 값은 없어도
 	// 나머지 관리자 기능이 전부 동작한다.
@@ -39,6 +42,8 @@ type AdminHandler struct {
 	// 이유로 세터다. aliasStocks 는 심볼이 카탈로그에 실재하는지 보는 데만 쓴다.
 	aliases     *repository.StockAliasRepo
 	aliasStocks *repository.StockRepo
+	// pageMeta — 화면별 제목·설명 덮어쓰기 (`admin_page_meta.go`). 같은 이유로 세터다.
+	pageMeta *repository.PageMetaRepo
 }
 
 // SetIncidents wires the ops ledger reader.
@@ -59,20 +64,22 @@ func NewAdminHandler(
 	llmSettings *service.LLMSettingsStore,
 	scores *service.ScoreService,
 	scoreSettings *service.ScoreSettingsStore,
+	rankingHistory *service.ScoreRankingHistoryService,
 	batch *service.BatchAdminService,
 ) *AdminHandler {
 	return &AdminHandler{
-		keywords:      keywords,
-		newsStore:     newsStore,
-		apiBudget:     apiBudget,
-		dataSettings:  dataSettings,
-		cacheAdmin:    cacheAdmin,
-		dbAdmin:       dbAdmin,
-		stockSummary:  stockSummary,
-		llmSettings:   llmSettings,
-		scores:        scores,
-		batch:         batch,
-		scoreSettings: scoreSettings,
+		keywords:       keywords,
+		newsStore:      newsStore,
+		apiBudget:      apiBudget,
+		dataSettings:   dataSettings,
+		cacheAdmin:     cacheAdmin,
+		dbAdmin:        dbAdmin,
+		stockSummary:   stockSummary,
+		llmSettings:    llmSettings,
+		scores:         scores,
+		batch:          batch,
+		scoreSettings:  scoreSettings,
+		rankingHistory: rankingHistory,
 	}
 }
 
@@ -272,6 +279,7 @@ func (h *AdminHandler) CreateNewsKeyword(w http.ResponseWriter, r *http.Request)
 	var body struct {
 		Market    string `json:"market"`
 		Keyword   string `json:"keyword"`
+		Topic     string `json:"topic"`
 		Enabled   *bool  `json:"enabled"`
 		SortOrder int    `json:"sortOrder"`
 	}
@@ -279,11 +287,15 @@ func (h *AdminHandler) CreateNewsKeyword(w http.ResponseWriter, r *http.Request)
 		response.Error(w, http.StatusBadRequest, "invalid json body")
 		return
 	}
+	if msg := validKeywordTopic(body.Market, body.Topic); msg != "" {
+		response.Error(w, http.StatusBadRequest, msg)
+		return
+	}
 	enabled := true
 	if body.Enabled != nil {
 		enabled = *body.Enabled
 	}
-	item, err := h.keywords.Create(r.Context(), body.Market, body.Keyword, enabled, body.SortOrder)
+	item, err := h.keywords.Create(r.Context(), body.Market, body.Keyword, body.Topic, enabled, body.SortOrder)
 	if err != nil {
 		if err == repository.ErrNewsKeywordDuplicate {
 			response.Error(w, http.StatusConflict, "keyword already exists")
@@ -305,14 +317,29 @@ func (h *AdminHandler) UpdateNewsKeyword(w http.ResponseWriter, r *http.Request)
 	}
 	var body struct {
 		Keyword   string `json:"keyword"`
-		Enabled   bool   `json:"enabled"`
-		SortOrder int    `json:"sortOrder"`
+		// Topic — 생략하면 그대로 둔다(켜기·끄기 토글은 이 칸을 보내지 않는다).
+		Topic     *string `json:"topic"`
+		Enabled   bool    `json:"enabled"`
+		SortOrder int     `json:"sortOrder"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid json body")
 		return
 	}
-	item, err := h.keywords.Update(r.Context(), id, body.Keyword, body.Enabled, body.SortOrder)
+	cur, err := h.keywords.GetByID(r.Context(), id)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "keyword not found")
+		return
+	}
+	topic := cur.Topic
+	if body.Topic != nil {
+		topic = *body.Topic
+	}
+	if msg := validKeywordTopic(cur.Market, topic); msg != "" {
+		response.Error(w, http.StatusBadRequest, msg)
+		return
+	}
+	item, err := h.keywords.Update(r.Context(), id, body.Keyword, topic, body.Enabled, body.SortOrder)
 	if err != nil {
 		if err == repository.ErrNewsKeywordNotFound {
 			response.Error(w, http.StatusNotFound, "keyword not found")
@@ -555,4 +582,18 @@ func formatTimeOrNil(t time.Time) any {
 		return nil
 	}
 	return t.UTC().Format(time.RFC3339)
+}
+
+// validKeywordTopic — 주제 검색어는 국내만, 값은 주식이 아닌 뉴스 주제 중 하나(빈 값 = 일반 키워드). 문제가 없으면 "".
+func validKeywordTopic(market, topic string) string {
+	if topic == "" {
+		return ""
+	}
+	if topic == model.NewsTopicStock || !service.IsNewsTopic(topic) {
+		return "unknown topic: " + topic
+	}
+	if strings.TrimSpace(strings.ToLower(market)) != "domestic" {
+		return "topic keywords are domestic only"
+	}
+	return ""
 }

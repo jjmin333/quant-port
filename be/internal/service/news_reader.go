@@ -160,49 +160,6 @@ func (s *NewsReaderService) extractEnglish(ctx context.Context, rawURL string) (
 	return out, nil
 }
 
-/*
-**리더 본문은 더 이상 번역하지 않는다.**
-
-여기 있던 `translateUSReader`는 Papago의 웹 번역(HTML 구조를 지키며 통째로 옮기는
-엔드포인트)을 불렀다. NCP 자격증명이 만료됐고 갱신하지 않기로 했으므로(2026-09-03)
-이 경로는 어차피 오류만 내고 있었다 — 호출자가 그 오류를 삼키고 원문을 돌려주므로
-화면에는 티가 안 났다. 안 도는 코드를 남겨 두면 다음 사람이 「왜 번역이 안 되지」를
-여기서부터 파게 된다.
-
-자체 모델로 대신하지 않는 이유는 성격이 달라서다. 제목은 배치라 한 건에 몇 초가
-걸려도 되지만, 리더 본문은 **사람이 화면을 보며 기다리고** 기사 한 건이 2,000단어다.
-2 OCPU ARM에서 소형 모델로 돌리면 분 단위가 걸린다(be/docs/TRANSLATION_SELFHOST.md §1).
-
-**이미 저장된 번역은 그대로 쓴다** — `loadStoredTranslation`이 읽는 그 행들은
-Papago가 살아 있을 때 만든 진짜 번역이라 버릴 이유가 없다. 새로 만들지 않을 뿐이다.
-*/
-func (s *NewsReaderService) resolveReaderTitleKo(ctx context.Context, articleID, fallback string) string {
-	articleID = strings.TrimSpace(articleID)
-	if articleID != "" && s.newsRepo != nil {
-		if rec, err := s.newsRepo.GetByID(ctx, articleID); err == nil {
-			if ko := strings.TrimSpace(rec.HeadlineKo); ko != "" {
-				return ko
-			}
-		}
-	}
-	// 저장된 한국어 제목이 없으면 원문 제목을 그대로 쓴다. 여기서 번역기를 부르지
-	// 않는 이유는 리더를 여는 사람이 그 몇 초를 기다리게 되기 때문이다 — 제목 번역은
-	// 2분마다 도는 배치의 몫이고, 그 배치가 끝나면 다음 열람부터 한국어로 보인다.
-	return strings.TrimSpace(fallback)
-}
-
-func (s *NewsReaderService) resolveReaderExcerptKo(ctx context.Context, articleID, fallback string) string {
-	articleID = strings.TrimSpace(articleID)
-	if articleID != "" && s.newsRepo != nil {
-		if rec, err := s.newsRepo.GetByID(ctx, articleID); err == nil {
-			if ko := strings.TrimSpace(rec.SummaryKo); ko != "" {
-				return ko
-			}
-		}
-	}
-	return strings.TrimSpace(fallback)
-}
-
 func (s *NewsReaderService) loadStoredTranslation(ctx context.Context, rawURL string) (*model.NewsReaderContent, error) {
 	if s.transRepo == nil {
 		return nil, fmt.Errorf("translation repo not configured")
@@ -259,49 +216,6 @@ func (s *NewsReaderService) saveKoCache(ctx context.Context, rawURL string, cont
 	_ = s.redis.Set(ctx, readerKoCacheKey(rawURL), payload, readerKoCacheTTL).Err()
 }
 
-func readerHTMLForTranslation(base *model.NewsReaderContent) string {
-	if base == nil {
-		return ""
-	}
-	if html := strings.TrimSpace(base.ContentHTML); html != "" {
-		return html
-	}
-	text := strings.TrimSpace(base.TextContent)
-	if text == "" {
-		return ""
-	}
-	paras := strings.Split(text, "\n\n")
-	var b strings.Builder
-	b.WriteString("<article>")
-	if title := strings.TrimSpace(base.Title); title != "" {
-		b.WriteString("<h1>")
-		b.WriteString(htmlEscape(title))
-		b.WriteString("</h1>")
-	}
-	for _, p := range paras {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		b.WriteString("<p>")
-		b.WriteString(htmlEscape(p))
-		b.WriteString("</p>")
-	}
-	b.WriteString("</article>")
-	return b.String()
-}
-
-func htmlEscape(s string) string {
-	replacer := strings.NewReplacer(
-		"&", "&amp;",
-		"<", "&lt;",
-		">", "&gt;",
-		`"`, "&quot;",
-		"'", "&#39;",
-	)
-	return replacer.Replace(s)
-}
-
 func stripHTMLToText(html string) string {
 	html = strings.TrimSpace(html)
 	if html == "" {
@@ -320,11 +234,6 @@ func stripHTMLToText(html string) string {
 		}
 	}
 	return strings.Join(strings.Fields(b.String()), " ")
-}
-
-func hashString(s string) string {
-	sum := sha256.Sum256([]byte(s))
-	return hex.EncodeToString(sum[:])
 }
 
 func validateReaderURL(rawURL string) error {

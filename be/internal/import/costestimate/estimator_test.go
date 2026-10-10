@@ -7,8 +7,6 @@ import (
 	"github.com/enact/quant-port/be/internal/import/textparse"
 )
 
-func ptr(v float64) *float64 { return &v }
-
 func TestEstimateEvalAndPnL(t *testing.T) {
 	// Samsung SDI-like: 4 shares, eval 1,544,672, loss -397,328 → avg 485,500
 	eval := 1_544_672.0

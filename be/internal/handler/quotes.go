@@ -30,6 +30,11 @@ func (h *QuotesHandler) ListIndices(w http.ResponseWriter, r *http.Request) {
 	if !updatedAt.IsZero() {
 		payload["updatedAt"] = updatedAt.Format(time.RFC3339)
 	}
+	// 값이 바뀐 시각(updatedAt)과 별개로 「마지막으로 확인한 시각」. 화면의 「낡은 값」
+	// 배지가 이것을 본다 — 주말에 값이 안 변한 것은 낡은 것이 아니다.
+	if checked := h.svc.IndicesCheckedAt(); !checked.IsZero() {
+		payload["checkedAt"] = checked.Format(time.RFC3339)
+	}
 	if groups := h.svc.ListIndexGroups(r.Context()); len(groups) > 0 {
 		payload["groups"] = groups
 	}

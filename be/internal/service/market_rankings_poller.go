@@ -313,6 +313,8 @@ func (s *MarketService) refreshRankingsFromToss(ctx context.Context, p toss.GetR
 	if err := s.persistRankings(ctx, p, resp, refreshedAt); err != nil {
 		log.Printf("market rankings persist: %v", err)
 	}
+	// 상장 첫날 순위에 오른 종목이 이름 없이 코드로 뜨지 않게(market_rankings_catalog.go).
+	s.registerUnknownRankingSymbols(ctx, resp.Rankings)
 
 	return nil
 }

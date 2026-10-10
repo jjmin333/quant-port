@@ -17,7 +17,19 @@ type DailyCloseRow struct {
 	Volume         int64    `json:"volume,omitempty"`
 	Score          *int     `json:"score"`
 	AISummary      string   `json:"aiSummary"`
-	AnalysisSource string   `json:"analysisSource,omitempty"` // llm | rule | ""
+	/*
+		그날의 「핵심 요약」 한 문단 (2026-09-15 사용자 요청 1).
+
+		`AISummary`는 LLM이 쓴 네 갈래 본문을 **이어붙인** 글이고, 이쪽은 같은 호출이
+		그 넷을 전부 근거로 **다시 쓴** 요약이다. 종목 모달의 「간단」이 이 값을 쓴다 —
+		예전에는 본문의 앞 두 문장을 잘라 썼는데, 자르는 것과 요약하는 것은 다른
+		일이라 앞 두 문장이 하필 한 갈래만 말하면 「간단」도 한 갈래만 말했다.
+
+		오늘 배치부터 쌓인다. 비어 있으면(과거 행·규칙 생성) 화면이 예전 방식으로
+		되돌아가므로 이 칸이 없다고 요약이 사라지지는 않는다.
+	*/
+	AIOverview     string `json:"aiOverview,omitempty"`
+	AnalysisSource string `json:"analysisSource,omitempty"` // llm | rule | ""
 	/*
 		지수 전용 — 그날의 LLM 해설과 국면 라벨.
 
@@ -43,11 +55,12 @@ type DailyCloseSeries struct {
 // DailyCloseAnalysis is the per-date score/summary written by the analysis
 // pipeline. Score nil leaves the stored score untouched-as-empty.
 type DailyCloseAnalysis struct {
-	Symbol    string
-	TradeDate string
-	Score     *int
-	AISummary string
-	Source    string // llm | rule
+	Symbol     string
+	TradeDate  string
+	Score      *int
+	AISummary  string
+	AIOverview string
+	Source     string // llm | rule
 }
 
 var weekdayKo = [...]string{"일", "월", "화", "수", "목", "금", "토"}

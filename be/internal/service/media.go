@@ -110,3 +110,59 @@ func (s *MediaService) URLFor(key string) string {
 	}
 	return mediaAPIPath + key
 }
+
+// CommunityImageRawMax is the largest *uploaded* file the community accepts before
+// compression. 화면이 올리기 전에 먼저 줄여 보내지만(브라우저 캔버스), 그게 안 되는
+// 환경에서도 휴대폰 원본 사진은 받아야 한다.
+const CommunityImageRawMax = 15 << 20
+
+// communityImageMaxPixels guards decode memory: 40MP RGBA ≈ 160MB. 휴대폰 사진(12~50MP)
+// 중 이보다 큰 것은 화면이 줄여 보내므로 서버에 원본이 올 일이 드물다.
+const communityImageMaxPixels = 40_000_000
+
+// communityCompressSlots bounds concurrent decodes — 무료 인스턴스 메모리를 지킨다.
+var communityCompressSlots = make(chan struct{}, 2)
+
+// SaveCompressedImage re-encodes an upload (media.CompressImage: ≤1600px JPEG,
+// 목표 200KB · 상한 1MB, EXIF 제거) and stores the result.
+func (s *MediaService) SaveCompressedImage(ctx context.Context, r io.Reader) (model.MediaUpload, error) {
+	if s == nil || s.store == nil {
+		return model.MediaUpload{}, fmt.Errorf("media storage is not configured")
+	}
+	data, err := io.ReadAll(io.LimitReader(r, CommunityImageRawMax+1))
+	if err != nil {
+		return model.MediaUpload{}, err
+	}
+	if int64(len(data)) > CommunityImageRawMax {
+		return model.MediaUpload{}, media.ErrTooLarge
+	}
+	if len(data) == 0 {
+		return model.MediaUpload{}, media.ErrEmpty
+	}
+	if cfg, _, err := image.DecodeConfig(bytes.NewReader(data)); err == nil && cfg.Width*cfg.Height > communityImageMaxPixels {
+		return model.MediaUpload{}, media.ErrTooLarge
+	}
+
+	select {
+	case communityCompressSlots <- struct{}{}:
+	case <-ctx.Done():
+		return model.MediaUpload{}, ctx.Err()
+	}
+	out, err := media.CompressImage(data)
+	<-communityCompressSlots
+	if err != nil {
+		return model.MediaUpload{}, err
+	}
+	obj, err := s.store.Put(ctx, out.Data, out.ContentType)
+	if err != nil {
+		return model.MediaUpload{}, err
+	}
+	return model.MediaUpload{
+		Key:         obj.Key,
+		URL:         s.URLFor(obj.Key),
+		ContentType: obj.ContentType,
+		Size:        obj.Size,
+		Width:       out.Width,
+		Height:      out.Height,
+	}, nil
+}

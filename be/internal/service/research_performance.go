@@ -357,6 +357,11 @@ func summarizeResearch(calls []model.ResearchCall) model.ResearchSummary {
 		brierN           int
 	)
 	for _, c := range calls {
+		// 분석 리포트(부동산·금융상품)는 판정이 없어 성적에 들지 않는다(2026-10-09 요청 9).
+		if c.Status == model.StatusNote {
+			out.Total--
+			continue
+		}
 		symbols[c.Symbol] = struct{}{}
 		switch {
 		case c.Status == model.StatusRetracted:

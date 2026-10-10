@@ -44,15 +44,15 @@ type StampListFilter struct {
 
 func scanStamp(row interface{ Scan(dest ...any) error }) (model.Stamp, error) {
 	var (
-		s          model.Stamp
-		assetType  string
-		currency   string
-		stampedAt  time.Time
-		tradeDate  time.Time
-		prevClose  sql.NullFloat64
-		changeRate sql.NullFloat64
-		score      sql.NullInt64
-		grade      sql.NullString
+		s           model.Stamp
+		assetType   string
+		currency    string
+		stampedAt   time.Time
+		tradeDate   time.Time
+		prevClose   sql.NullFloat64
+		changeRate  sql.NullFloat64
+		score       sql.NullInt64
+		grade       sql.NullString
 		stance      string
 		horizonKind string
 		dueAt       time.Time
@@ -332,27 +332,6 @@ func (r *StampRepo) CountForUser(ctx context.Context, userID int64) (int, error)
 	var n int
 	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM stamps WHERE user_id = ?`, userID).Scan(&n)
 	return n, err
-}
-
-// SymbolCounts returns stamp counts per symbol for the current user, newest
-// first — the 종목별 묶음 view and the button badge both read it.
-func (r *StampRepo) SymbolCounts(ctx context.Context, userID int64) (map[string]int, error) {
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT symbol, COUNT(*) FROM stamps WHERE user_id = ? GROUP BY symbol`, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := map[string]int{}
-	for rows.Next() {
-		var sym string
-		var n int
-		if err := rows.Scan(&sym, &n); err != nil {
-			return nil, err
-		}
-		out[sym] = n
-	}
-	return out, rows.Err()
 }
 
 // MigrateStampsIfNeeded applies 035_stamps.sql.

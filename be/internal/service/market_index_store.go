@@ -30,13 +30,18 @@ type MarketIndexStore struct {
 	// 실시간 시세가 스파크라인·등락률을 안 주는 지수를 메우는 종가 표.
 	// 자세한 사정은 market_index_history.go.
 	closes *repository.IndexDailyCloseRepo
+	// 한국 금리 지수(ecos)가 읽는 표 — worker-asset이 채운다.
+	rates *repository.PublicDataRepo
 	histMu sync.Mutex
 	hist   map[string][]repository.DailyClosePoint
 	histAt time.Time
 
-	mu           sync.RWMutex
-	indices      []model.MarketIndex
-	updatedAt    time.Time
+	mu        sync.RWMutex
+	indices   []model.MarketIndex
+	updatedAt time.Time
+	// checkedAt — 마지막으로 갱신 회차를 끝낸 시각. updatedAt은 **값이 바뀐** 시각이라
+	// 주말·밤에는 몇 분씩 멈춘다(비트코인·금만 움직인다). 「낡은 값」 판정은 이쪽을 본다.
+	checkedAt    time.Time
 	lastRefresh  map[string]time.Time
 	groupMu      sync.RWMutex
 	groupRefresh map[string]time.Time
@@ -60,6 +65,13 @@ func NewMarketIndexStore(
 		groupRefresh: make(map[string]time.Time),
 		groupMeta:    make(map[string]model.IndexGroupMeta),
 	}
+}
+
+// CheckedAt is when the refresh loop last finished a cycle (zero before the first).
+func (st *MarketIndexStore) CheckedAt() time.Time {
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+	return st.checkedAt
 }
 
 func (st *MarketIndexStore) SetMarketStore(store *MarketDataStore) {
@@ -185,9 +197,9 @@ func (st *MarketIndexStore) snapshotOrCatalog() []model.MarketIndex {
 	st.mu.RLock()
 	defer st.mu.RUnlock()
 	if len(st.indices) > 0 {
-		out := make([]model.MarketIndex, len(st.indices))
-		copy(out, st.indices)
-		return out
+		// 카탈로그 위치로 덮어쓰므로 길이·순서를 카탈로그에 맞춘다 — Redis에서 되살린 옛 스냅샷(지수 13종)이
+		// 그대로 오면 새 지수(spy·dia)의 칸이 없어 패닉했다(2026-10-01 배포 직후 재시작 루프).
+		return alignIndicesToCatalog(st.indices)
 	}
 	return emptyIndicesFromCatalog()
 }

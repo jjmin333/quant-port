@@ -32,59 +32,6 @@ func NewRankingSnapshotRepo(db *sql.DB) *RankingSnapshotRepo {
 	return &RankingSnapshotRepo{db: db}
 }
 
-func (r *RankingSnapshotRepo) LastRankedAt(
-	ctx context.Context,
-	marketCountry, rankingType, duration string,
-) (*time.Time, error) {
-	var t sql.NullTime
-	err := r.db.QueryRowContext(ctx, `
-		SELECT MAX(ranked_at)
-		FROM ranking_snapshot_entries
-		WHERE market_country = ? AND ranking_type = ? AND duration = ?
-	`, marketCountry, rankingType, duration).Scan(&t)
-	if err != nil {
-		return nil, err
-	}
-	if !t.Valid {
-		return nil, nil
-	}
-	out := t.Time
-	return &out, nil
-}
-
-func (r *RankingSnapshotRepo) InsertBatch(ctx context.Context, entries []RankingSnapshotEntry) error {
-	if len(entries) == 0 {
-		return nil
-	}
-
-	const cols = 7
-	placeholders := make([]string, 0, len(entries))
-	args := make([]any, 0, len(entries)*cols)
-	for _, e := range entries {
-		placeholders = append(placeholders, "(?,?,?,?,?,?,?)")
-		args = append(args,
-			e.MarketCountry,
-			e.RankingType,
-			e.Duration,
-			e.RankedAt,
-			strings.ToUpper(strings.TrimSpace(e.Symbol)),
-			e.Rank,
-			nullFloat64Arg(e.ChangeRate),
-		)
-	}
-
-	query := `
-		INSERT INTO ranking_snapshot_entries
-		  (market_country, ranking_type, duration, ranked_at, symbol, rank_pos, change_rate)
-		VALUES ` + strings.Join(placeholders, ",")
-
-	_, err := r.db.ExecContext(ctx, query, args...)
-	if err != nil {
-		return fmt.Errorf("insert ranking snapshots: %w", err)
-	}
-	return nil
-}
-
 func (r *RankingSnapshotRepo) SymbolHistory(
 	ctx context.Context,
 	symbol, marketCountry, rankingType, duration string,
@@ -125,13 +72,6 @@ func (r *RankingSnapshotRepo) SymbolHistory(
 		out = append(out, p)
 	}
 	return out, rows.Err()
-}
-
-func nullFloat64Arg(v *float64) any {
-	if v == nil {
-		return nil
-	}
-	return *v
 }
 
 // rankingHistoryRetention bounds how far back ranking history is kept. The

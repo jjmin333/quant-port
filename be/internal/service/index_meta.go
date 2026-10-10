@@ -21,7 +21,7 @@ func dataKindForIndex(indexID string) model.IndexDataKind {
 
 func eodScheduleForIndex(indexID string) calendar.ScheduleID {
 	switch indexID {
-	case "kospi", "kosdaq":
+	case "kospi", "kosdaq", "kr-base", "ktb3", "ktb10":
 		return calendar.ScheduleKRX
 	default:
 		return calendar.ScheduleUS
@@ -99,7 +99,8 @@ func (st *MarketIndexStore) finalizeIndexMeta(ctx context.Context, entry indexCa
 		}
 		return idx
 	}
-	if entry.id == "kospi" || entry.id == "kosdaq" {
+	// 토스 지표 API로 받는 국내 지표 — 장중에는 실시간이다(국고채는 2026-10-07부터).
+	if entry.id == "kospi" || entry.id == "kosdaq" || entry.id == "ktb3" || entry.id == "ktb10" {
 		if st.krSessionOpen(now) {
 			idx.DataKind = model.IndexDataKindLive
 			if t := st.lastRefreshAt(ctx, entry.id); !t.IsZero() {

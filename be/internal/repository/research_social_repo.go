@@ -469,12 +469,13 @@ func (r *ResearchRepo) comment(ctx context.Context, id, viewerID int64) (model.R
 	return c, nil
 }
 
+// anyOwner — 관리자가 남의 댓글을 고칠 때(서비스가 권한을 확인한 뒤에만 true).
 func (r *ResearchRepo) UpdateComment(
-	ctx context.Context, id, userID int64, body string,
+	ctx context.Context, id, userID int64, body string, anyOwner bool,
 ) (model.ResearchComment, error) {
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE research_comments SET body = ? WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
-		body, id, userID)
+		`UPDATE research_comments SET body = ? WHERE id = ? AND (user_id = ? OR ?) AND deleted_at IS NULL`,
+		body, id, userID, anyOwner)
 	if err != nil {
 		return model.ResearchComment{}, err
 	}
@@ -485,10 +486,10 @@ func (r *ResearchRepo) UpdateComment(
 }
 
 // DeleteComment soft-deletes so replies keep their anchor.
-func (r *ResearchRepo) DeleteComment(ctx context.Context, id, userID int64) error {
+func (r *ResearchRepo) DeleteComment(ctx context.Context, id, userID int64, anyOwner bool) error {
 	res, err := r.db.ExecContext(ctx,
 		`UPDATE research_comments SET deleted_at = CURRENT_TIMESTAMP(3), body = ''
-		  WHERE id = ? AND user_id = ? AND deleted_at IS NULL`, id, userID)
+		  WHERE id = ? AND (user_id = ? OR ?) AND deleted_at IS NULL`, id, userID, anyOwner)
 	if err != nil {
 		return err
 	}

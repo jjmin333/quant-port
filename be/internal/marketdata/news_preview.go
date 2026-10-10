@@ -111,10 +111,3 @@ func normalizeImageURL(imageURL, pageURL string) string {
 	}
 	return base.ResolveReference(ref).String()
 }
-
-func normalizeNewsHost(host string) string {
-	host = strings.ToLower(host)
-	host = strings.TrimPrefix(host, "www.")
-	host = strings.TrimPrefix(host, "m.")
-	return host
-}

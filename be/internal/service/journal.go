@@ -34,14 +34,14 @@ func NewJournalService(repo *repository.JournalNoteRepo) *JournalService {
 func (s *JournalService) SetQuotes(q *QuotesService)                       { s.quotes = q }
 func (s *JournalService) SetDailyCloses(c *repository.StockDailyCloseRepo) { s.closes = c }
 
-func (s *JournalService) List(ctx context.Context, symbol, q string) ([]model.JournalNote, error) {
+func (s *JournalService) List(ctx context.Context, symbol, topic, q string) ([]model.JournalNote, error) {
 	userID, err := authctx.RequireUserID(ctx)
 	if err != nil {
 		return nil, err
 	}
 	symbol = strings.ToUpper(strings.TrimSpace(symbol))
 	q = strings.TrimSpace(q)
-	notes, err := s.repo.List(ctx, userID, symbol, q)
+	notes, err := s.repo.List(ctx, userID, symbol, model.TopicFilter(topic), q)
 	if err != nil {
 		return nil, err
 	}
@@ -87,6 +87,7 @@ func (s *JournalService) Delete(ctx context.Context, id int64) error {
 // design: the author does not get to state what the stock was worth.
 type JournalNoteInput struct {
 	Title      string
+	Topic      string // 빈 값: 새 메모는 주식, 수정은 그대로
 	Body       string
 	Symbol     string
 	SymbolName string
@@ -168,8 +169,14 @@ func isSixDigitCode(symbol string) bool {
 }
 
 func validateJournalFields(in JournalNoteInput) (repository.JournalNoteWrite, error) {
+	if in.Topic != "" {
+		if _, ok := model.ParseTopic(in.Topic); !ok {
+			return repository.JournalNoteWrite{}, invalidInput("알 수 없는 주제입니다")
+		}
+	}
 	w := repository.JournalNoteWrite{
 		Title:      strings.TrimSpace(in.Title),
+		Topic:      in.Topic,
 		Body:       strings.TrimSpace(in.Body),
 		Symbol:     strings.ToUpper(strings.TrimSpace(in.Symbol)),
 		SymbolName: strings.TrimSpace(in.SymbolName),

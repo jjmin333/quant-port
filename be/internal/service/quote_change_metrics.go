@@ -54,22 +54,6 @@ func barCalendarDay(ts time.Time, loc *time.Location) time.Time {
 	return time.Date(ts.Year(), ts.Month(), ts.Day(), 0, 0, 0, 0, loc)
 }
 
-// calendarMonthLastClose returns the last daily close belonging to a calendar month.
-// For domestic symbols, include the next month's 1st 00:00 bar (KRX month-end stamp).
-func calendarMonthLastClose(
-	bars []model.Candle,
-	year int,
-	month time.Month,
-	loc *time.Location,
-	includeNextDayMidnight bool,
-	beforeDay time.Time,
-) (float64, bool) {
-	closePx, _, ok := calendarMonthLastCloseBar(
-		bars, year, month, loc, includeNextDayMidnight, beforeDay, 0,
-	)
-	return closePx, ok
-}
-
 // calendarMonthLastCloseBar returns the last daily close in a calendar month.
 // When avoidClose > 0, skips the latest close if it matches avoidClose and walks back.
 func calendarMonthLastCloseBar(
@@ -179,15 +163,6 @@ func close52WeeksAgo(bars []model.Candle, now time.Time, loc *time.Location) (fl
 	}
 	cutoff := now.In(loc).AddDate(-1, 0, 0)
 	return closeAtOrBefore(bars, cutoff, loc)
-}
-
-func closeOnTradingDay(bars []model.Candle, day time.Time, loc *time.Location) (float64, bool) {
-	if loc == nil {
-		loc = time.UTC
-	}
-	day = day.In(loc)
-	end := time.Date(day.Year(), day.Month(), day.Day(), 23, 59, 59, 0, loc)
-	return closeAtOrBefore(bars, end, loc)
 }
 
 // barsCoverYearHistory reports whether daily bars reach at least ~1 year back.

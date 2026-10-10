@@ -115,6 +115,16 @@ func (s *ScoreRankingService) ComputeAll(ctx context.Context) error {
 		log.Println("score rankings: no scored date yet — nothing to compute")
 		return nil
 	}
+	/*
+		추천 목록의 거래대금 하한(`scoreRecommendableClause`)이 읽는 값을 먼저 채운다.
+		점수 배치가 이미 채웠으면 0행이다. 이 규칙 전에 매긴 최신일이면 여기서 채워져,
+		배포 직후 랭킹을 다시 만들 때 다음 점수 배치를 기다리지 않는다.
+	*/
+	if n, err := s.scores.EnsureTradeValue(ctx, tradeDate); err != nil {
+		log.Printf("score rankings: avg trade value %s: %v", tradeDate, err)
+	} else if n > 0 {
+		log.Printf("score rankings: filled avg trade value on %d rows (%s)", n, tradeDate)
+	}
 
 	var failures []string
 	for market, assetTypes := range scoreRankingMarkets {

@@ -15,7 +15,7 @@ type Redis struct {
 /*
 Redis가 죽었을 때 **빠르게 포기해야** 폴백이 폴백 노릇을 한다.
 
-이 저장소의 원칙은 「Redis 장애 시 API 500 금지 — MySQL로 떨어진다」(AGENT_STATE
+이 저장소의 원칙은 「Redis 장애 시 API 500 금지 — MySQL로 떨어진다」(PRINCIPLES
 개발 원칙 5)인데, 2026-09-09 실측에서 그 원칙이 지켜지지 않았다. Redis 컨테이너를
 내리고 재 보니:
 

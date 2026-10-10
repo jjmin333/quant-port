@@ -37,6 +37,8 @@ type TechnicalIndicators struct {
 	// moved rather than making the model infer it from moving averages.
 	Return5D  *float64 `json:"return5d,omitempty"`
 	Return20D *float64 `json:"return20d,omitempty"`
+	// Return60D — 스크리너 개요 열(2026-10-09 요청 3).
+	Return60D *float64 `json:"return60d,omitempty"`
 }
 
 const (
@@ -93,6 +95,7 @@ func ComputeTechnicalIndicators(candles []model.Candle) *TechnicalIndicators {
 
 	out.Return5D = trailingReturn(closes, 5)
 	out.Return20D = trailingReturn(closes, 20)
+	out.Return60D = trailingReturn(closes, 60)
 
 	swingStart := 0
 	if n > tiSwingLookback {

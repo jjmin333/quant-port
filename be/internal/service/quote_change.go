@@ -110,6 +110,23 @@ func (s *QuotesService) resolveRegularClose(ctx context.Context, symbol string, 
 		return 0
 	}
 	sym := strings.ToUpper(strings.TrimSpace(symbol))
+	/*
+		**닫혀 있으면 그 세션의 확정 일봉 종가가 정규장 종가다** (2026-09-26 외부 방문자 점검).
+
+		아래 경로들은 「오늘」의 정규장 구간(`regularSessionBounds`)에서 종가를 찾는다. 그래서
+		주말·휴장일·평일 개장 전에는 늘 빈손이었고, 화면의 「정규장 종가」 줄이 사라졌다. 국내는
+		현재가가 NXT 20:00 최종가라 그 줄이 없으면 종목 화면(SK하이닉스 1,862,000원)과 검색 결과
+		요약의 「종가 1,863,000원」(KRX 정규장)이 설명 없이 다른 숫자로 보였다.
+	*/
+	if session == "closed" {
+		loc := kst
+		if assetType == model.AssetUS || assetType == model.AssetETF {
+			loc = usEastern
+		}
+		if c, ok := s.closedSessionDailyBar(ctx, sym, s.quoteSessionStart(ctx, sym, loc)); ok && c.Close > 0 {
+			return c.Close
+		}
+	}
 	now := time.Now()
 	var cals marketCalendars
 	if s.marketStore != nil {

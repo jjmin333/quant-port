@@ -87,8 +87,15 @@ func (s *FinancialHistoryService) Get(ctx context.Context, symbol string, years 
 	// 마진·비율도 마찬가지로 읽을 때 계산한다 — `financial_periods`에는 금액만
 	// 저장한다(적재 때 계산한 값을 담을 칼럼이 없다). 예전에는 이 단계가 없어
 	// 「이익률」 차트와 상세 모달의 비율 선이 통째로 빈 채 나갔다.
+	view.Periods = dropMislabeledPeriods(view.Periods)
 	applyPeriodRatios(view.Periods)
-	s.applyValuation(ctx, stock.Symbol, view.Periods, s.lookupShares(ctx, stock.Symbol))
+	if assetType != model.AssetDomestic {
+		view.Currency, view.CurrencyMixed = s.reportingCurrency(ctx, stock.Symbol)
+	}
+	// 공시 통화가 가격 통화와 다르면 분기말 종가 ÷ EPS는 뜻이 없다(TSM 2024 PER 1.42였다).
+	if view.Currency == "" {
+		s.applyValuation(ctx, stock.Symbol, view.Periods, s.lookupShares(ctx, stock.Symbol))
+	}
 
 	if len(view.Periods) == 0 {
 		synced, err := s.sync.WasSynced(ctx, financialsSyncKind(assetType), stock.Symbol)
@@ -100,6 +107,54 @@ func (s *FinancialHistoryService) Get(ctx context.Context, symbol string, years 
 		}
 	}
 	return view, nil
+}
+
+// reportingCurrency — 지표 로테이션이 남긴 통화 표식(`currency_twd_usd`)에서 현지 통화를 읽는다.
+func (s *FinancialHistoryService) reportingCurrency(ctx context.Context, symbol string) (string, bool) {
+	if s.fundamentals == nil {
+		return "", false
+	}
+	row, err := s.fundamentals.GetBySymbol(ctx, symbol)
+	if err != nil || row == nil {
+		return "", false
+	}
+	return foreignCurrencyFromCalcError(row.CalcError, "USD")
+}
+
+// foreignCurrencyFromCalcError — "roe,currency_twd_usd" → ("TWD", true). 표식이 없으면 ("", false).
+func foreignCurrencyFromCalcError(calcError, listing string) (string, bool) {
+	for _, tok := range strings.Split(calcError, ",") {
+		tok = strings.TrimSpace(tok)
+		if !strings.HasPrefix(tok, "currency_") {
+			continue
+		}
+		codes := strings.Split(strings.TrimPrefix(tok, "currency_"), "_")
+		for _, c := range codes {
+			if c = strings.ToUpper(c); c != "" && c != listing {
+				return c, len(codes) > 1
+			}
+		}
+	}
+	return "", false
+}
+
+/*
+dropMislabeledPeriods — 회계연도 표식이 결산일보다 2년 넘게 어긋난 행을 뺀다. EDGAR 사실의 `fy`는
+**그 값을 실은 보고서**의 연도라, 2017년 보고서에 실린 2015년 비교 수치가 「FY2017」로 들어왔다(TSM).
+1년 차이는 정상이다(애플 FY2024 1분기 = 2023-12-30, 소매업 1월 결산).
+*/
+func dropMislabeledPeriods(in []model.FinancialHistoryPeriod) []model.FinancialHistoryPeriod {
+	out := in[:0]
+	for _, p := range in {
+		if p.PeriodEnd != nil && p.FiscalYear != 0 {
+			d := p.FiscalYear - p.PeriodEnd.Year()
+			if d >= 2 || d <= -2 {
+				continue
+			}
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 // financialsSyncKind maps the screen to the batch that fills it.

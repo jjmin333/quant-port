@@ -30,3 +30,19 @@ func RequireAdmin(users *repository.UserRepo) func(http.Handler) http.Handler {
 		})
 	}
 }
+
+// MarkAdmin lets the request through either way and only records whether the
+// caller is an admin — for routes an author owns but an admin may also moderate
+// (edit·delete someone else's post). One user lookup, only on those routes.
+func MarkAdmin(users *repository.UserRepo) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if userID, ok := authctx.UserID(r.Context()); ok {
+				if user, err := users.GetByID(r.Context(), userID); err == nil && model.IsAdminUser(user.Email, user.Role) {
+					r = r.WithContext(authctx.WithAdmin(r.Context()))
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}

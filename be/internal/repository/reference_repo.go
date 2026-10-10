@@ -378,38 +378,6 @@ func (r *WarningRepo) ListForSymbol(ctx context.Context, symbol string) ([]model
 	return out, rows.Err()
 }
 
-// ListForSymbols returns warnings for many symbols in one query — the insights
-// dashboard needs every held symbol at once.
-func (r *WarningRepo) ListForSymbols(ctx context.Context, symbols []string) (map[string][]model.StockWarningRow, error) {
-	out := map[string][]model.StockWarningRow{}
-	if r == nil || r.db == nil || len(symbols) == 0 {
-		return out, nil
-	}
-	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(symbols)), ",")
-	args := make([]any, 0, len(symbols))
-	for _, s := range symbols {
-		args = append(args, strings.ToUpper(strings.TrimSpace(s)))
-	}
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT symbol, warning_type, exchange, start_date, end_date FROM stock_warnings
-		WHERE symbol IN (`+placeholders+`) ORDER BY symbol, warning_type`, args...)
-	if err != nil {
-		return out, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var (
-			symbol string
-			w      model.StockWarningRow
-		)
-		if err := rows.Scan(&symbol, &w.WarningType, &w.Exchange, &w.StartDate, &w.EndDate); err != nil {
-			return out, err
-		}
-		out[symbol] = append(out[symbol], w)
-	}
-	return out, rows.Err()
-}
-
 func truncate(s string, max int) string {
 	s = strings.TrimSpace(s)
 	if len(s) <= max {

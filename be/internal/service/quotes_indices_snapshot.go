@@ -25,6 +25,14 @@ func (s *QuotesService) ListIndices(ctx context.Context) ([]model.MarketIndex, t
 	return emptyIndicesFromCatalog(), time.Time{}
 }
 
+// IndicesCheckedAt is when the index refresh loop last completed a cycle.
+func (s *QuotesService) IndicesCheckedAt() time.Time {
+	if s.indexStore == nil {
+		return time.Time{}
+	}
+	return s.indexStore.CheckedAt()
+}
+
 func (s *QuotesService) ListIndexGroups(ctx context.Context) map[string]model.IndexGroupMeta {
 	if s.indexStore != nil {
 		return s.indexStore.GroupMeta()

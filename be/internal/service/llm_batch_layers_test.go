@@ -44,128 +44,45 @@ func assertOrder(t *testing.T, got []model.LLMBatchTarget, want ...string) {
 	}
 }
 
-func TestScoreDurationWeightRanksTodayFirst(t *testing.T) {
-	// realtime과 1d는 실측으로 같은 목록이라 같은 무게다. 1개월 10위(16)는 실시간
-	// 20위(20)보다 앞이고 실시간 5위(5)보다는 뒤여야 한다.
-	if w := scoreDurationWeight(model.RankDurationRealtime); w != scoreDurationWeight(model.RankDuration1D) {
-		t.Fatalf("realtime %v and 1d %v must weigh the same", w, scoreDurationWeight(model.RankDuration1D))
-	}
-	month := 10 * scoreDurationWeight(model.RankDuration1M)
-	if !(month < 20*scoreDurationWeight(model.RankDurationRealtime)) {
-		t.Fatalf("1개월 10위(%v) should outrank 실시간 20위", month)
-	}
-	if !(month > 5*scoreDurationWeight(model.RankDurationRealtime)) {
-		t.Fatalf("1개월 10위(%v) should rank behind 실시간 5위", month)
-	}
-	if scoreDurationWeight(model.RankDuration1W) >= scoreDurationWeight(model.RankDuration1M) {
-		t.Fatal("1주는 1개월보다 가벼워야 한다")
-	}
-}
-
-func TestMergeScoreRanksKeepsBestWeightedPosition(t *testing.T) {
+func TestMergeScoreRanksKeepsCompositeTodayTop100(t *testing.T) {
 	rows := []repository.RankedSymbol{
-		// 035420: 1개월 1위(1.6)와 실시간 40위(40) — 강한 쪽이 남는다.
-		{Axis: model.RankAxisGrowth, Duration: model.RankDuration1M, Symbol: "035420", Rank: 1},
-		{Axis: model.RankAxisGrowth, Duration: model.RankDurationRealtime, Symbol: "035420", Rank: 40},
-		// 005930: 종합 실시간 3위 — head이면서 가장 앞이다.
+		// 종합 실시간 3위와 1일 5위 — 높은 쪽(3)이 남는다.
 		{Axis: model.RankAxisComposite, Duration: model.RankDurationRealtime, Symbol: "005930", Rank: 3},
-		// 000660: 종합 1주 2위 — 종합축이지만 오늘 목록이 아니라 head가 아니다.
-		{Axis: model.RankAxisComposite, Duration: model.RankDuration1W, Symbol: "000660", Rank: 2},
-		// 잡음: 빈 심볼과 0순위는 버린다.
-		{Axis: model.RankAxisQuality, Duration: model.RankDuration1D, Symbol: "  ", Rank: 1},
-		{Axis: model.RankAxisQuality, Duration: model.RankDuration1D, Symbol: "051910", Rank: 0},
+		{Axis: model.RankAxisComposite, Duration: model.RankDuration1D, Symbol: "005930", Rank: 5},
+		{Axis: model.RankAxisComposite, Duration: model.RankDuration1D, Symbol: "000660", Rank: 1},
+		// 빠지는 것: 다른 축 · 1주·1개월 · 100위 밖 · 빈 심볼 · 0순위.
+		{Axis: model.RankAxisGrowth, Duration: model.RankDurationRealtime, Symbol: "035420", Rank: 1},
+		{Axis: model.RankAxisComposite, Duration: model.RankDuration1W, Symbol: "051910", Rank: 1},
+		{Axis: model.RankAxisComposite, Duration: model.RankDurationRealtime, Symbol: "NVDA", Rank: llmScoreTopN + 1},
+		{Axis: model.RankAxisComposite, Duration: model.RankDurationRealtime, Symbol: "  ", Rank: 2},
+		{Axis: model.RankAxisComposite, Duration: model.RankDurationRealtime, Symbol: "122630", Rank: 0},
 	}
-
 	got := mergeScoreRanks(rows)
-
-	if len(got) != 3 {
-		t.Fatalf("got %+v, want 3 candidates", got)
-	}
-	// 정렬은 가중 순위만 본다: 035420(1×1.6) · 000660(2×1.3) · 005930(3×1.0).
-	// head는 buildScoreTargets가 순서를 뒤집을 때 쓰는 표시일 뿐이다.
-	if got[0].symbol != "035420" || got[0].weighted != 1.6 {
-		t.Fatalf("head = %+v, want 035420 at 1.6", got[0])
-	}
-	if got[1].symbol != "000660" || got[1].head {
-		t.Fatalf("000660 must not be head (1주 목록): %+v", got[1])
-	}
-	if got[2].symbol != "005930" || !got[2].head {
-		t.Fatalf("005930 should be marked head: %+v", got[2])
+	if len(got) != 2 || got[0].symbol != "000660" || got[1].symbol != "005930" || got[1].rank != 3 {
+		t.Fatalf("got %+v, want [000660#1 005930#3]", got)
 	}
 }
 
-func TestMergeScoreRanksHeadOnlyWithinDepth(t *testing.T) {
-	rows := []repository.RankedSymbol{
-		{Axis: model.RankAxisComposite, Duration: model.RankDurationRealtime, Symbol: "005930", Rank: llmScoreHeadDepth},
-		{Axis: model.RankAxisComposite, Duration: model.RankDurationRealtime, Symbol: "000660", Rank: llmScoreHeadDepth + 1},
-	}
-	got := mergeScoreRanks(rows)
-	if !got[0].head {
-		t.Fatalf("rank %d should be head: %+v", llmScoreHeadDepth, got[0])
-	}
-	if got[1].head {
-		t.Fatalf("rank %d is past the head depth: %+v", llmScoreHeadDepth+1, got[1])
-	}
-}
-
-func TestBuildScoreTargetsOrdersHeadThenUnanalysedThenOldest(t *testing.T) {
-	now := time.Date(2026, 9, 8, 18, 0, 0, 0, time.UTC)
+func TestBuildScoreTargetsKeepsRankOrderAndSkipsIneligible(t *testing.T) {
 	candidates := []scoreCandidate{
-		{symbol: "005930", weighted: 2, head: true},                 // ① 매일 갱신
-		{symbol: "035420", weighted: 50},                            // ② 요약 없음
-		{symbol: "051910", weighted: 10},                            // ② 요약 없음, 더 앞선 순위
-		{symbol: "000660", weighted: 3},                             // ③ 오래된 순
-		{symbol: "NVDA", weighted: 1},                               // 다른 시장 — 제외
-		{symbol: "122630", weighted: 4},                             // 파생상품 — 제외
-		{symbol: "900110", weighted: 5},                             // 거래정지 — 제외
-		{symbol: "MISSING", weighted: 6},                            // 카탈로그에 없음 — 제외
+		{symbol: "051910", rank: 1},
+		{symbol: "NVDA", rank: 2},    // 다른 시장
+		{symbol: "122630", rank: 3},  // 파생상품
+		{symbol: "900110", rank: 4},  // 거래정지
+		{symbol: "MISSING", rank: 5}, // 카탈로그에 없음
+		{symbol: "005930", rank: 6},
+		{symbol: "000660", rank: 7}, // 1층이 이미 데려감
 	}
-	analyzed := map[string]time.Time{
-		"005930": now.Add(-2 * time.Hour),
-		"000660": now.Add(-72 * time.Hour),
+	seen := map[string]bool{"000660": true}
+	got := buildScoreTargets(candidates, layerCatalog(), toss.MarketKR, seen)
+	assertOrder(t, got, "051910", "005930")
+	if !seen["005930"] {
+		t.Fatal("selected symbols must be recorded so a later layer skips them")
 	}
-
-	got := buildScoreTargets(candidates, layerCatalog(), toss.MarketKR, analyzed, map[string]bool{})
-
-	assertOrder(t, got, "005930", "051910", "035420", "000660")
 	for _, target := range got {
 		if target.Source != model.LLMBatchSourceScore {
-			t.Fatalf("source = %q, want score: %+v", target.Source, target)
+			t.Fatalf("source = %q, want score", target.Source)
 		}
-	}
-}
-
-func TestBuildScoreTargetsRotatesOldestFirstOnceBackfilled(t *testing.T) {
-	// 한 바퀴 돌아 미분석이 사라지면 남는 규칙은 「가장 오래 안 본 종목부터」다.
-	base := time.Date(2026, 9, 8, 0, 0, 0, 0, time.UTC)
-	candidates := []scoreCandidate{
-		{symbol: "005930", weighted: 1},
-		{symbol: "000660", weighted: 2},
-		{symbol: "035420", weighted: 3},
-	}
-	analyzed := map[string]time.Time{
-		"005930": base.Add(-1 * time.Hour),
-		"000660": base.Add(-100 * time.Hour),
-		"035420": base.Add(-50 * time.Hour),
-	}
-
-	got := buildScoreTargets(candidates, layerCatalog(), toss.MarketKR, analyzed, map[string]bool{})
-
-	assertOrder(t, got, "000660", "035420", "005930")
-}
-
-func TestBuildScoreTargetsSkipsSymbolsAlreadyTaken(t *testing.T) {
-	seen := map[string]bool{"005930": true}
-	candidates := []scoreCandidate{
-		{symbol: "005930", weighted: 1, head: true},
-		{symbol: "000660", weighted: 2},
-	}
-
-	got := buildScoreTargets(candidates, layerCatalog(), toss.MarketKR, map[string]time.Time{}, seen)
-
-	assertOrder(t, got, "000660")
-	if !seen["000660"] {
-		t.Fatal("selected symbols must be recorded so a later layer skips them")
 	}
 }
 

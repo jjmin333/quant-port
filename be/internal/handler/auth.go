@@ -2,9 +2,12 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/enact/quant-port/be/internal/authctx"
+	"github.com/enact/quant-port/be/internal/repository"
 	"github.com/enact/quant-port/be/internal/service"
 	"github.com/enact/quant-port/be/pkg/response"
 )
@@ -17,18 +20,32 @@ func NewAuthHandler(auth *service.AuthService) *AuthHandler {
 	return &AuthHandler{auth: auth}
 }
 
-func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Email       string `json:"email"`
-		Password    string `json:"password"`
-		DisplayName string `json:"displayName"`
+/*
+loginBody — 가입·로그인 공용 입력. 아이디는 `loginId`로 받고, 배포 직후 옛 화면이
+보내는 `email`도 같은 뜻으로 받는다 (2026-09-27 요청 3 — 기존 회원은 이메일이 곧 아이디).
+*/
+type loginBody struct {
+	LoginID     string `json:"loginId"`
+	Email       string `json:"email"`
+	Password    string `json:"password"`
+	DisplayName string `json:"displayName"`
+}
+
+func (b loginBody) loginID() string {
+	if id := strings.TrimSpace(b.LoginID); id != "" {
+		return id
 	}
+	return strings.TrimSpace(b.Email)
+}
+
+func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
+	var body loginBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid json body")
 		return
 	}
 
-	session, pair, err := h.auth.Signup(r.Context(), body.Email, body.Password, body.DisplayName)
+	session, pair, err := h.auth.Signup(r.Context(), body.loginID(), body.Password, body.DisplayName)
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -39,16 +56,13 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
+	var body loginBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid json body")
 		return
 	}
 
-	session, pair, err := h.auth.Login(r.Context(), body.Email, body.Password, r.UserAgent())
+	session, pair, err := h.auth.Login(r.Context(), body.loginID(), body.Password, r.UserAgent())
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -97,6 +111,39 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, http.StatusOK, map[string]any{"data": session})
+}
+
+/*
+Session serves GET /auth/session — 앱이 뜰 때 한 번 묻는 「지금 누구인가」.
+
+`/auth/me`는 로그인이 전제라 비로그인 방문자에게 401을 주고, 그러면 FE가 갱신을
+시도해 `/auth/refresh`도 401이 된다. 처음 온 사람·검색엔진 렌더러가 **모든 화면에서
+콘솔 오류 두 줄**을 봤다(2026-09-26 외부 방문자 점검). 비로그인은 오류가 아니라
+정상 상태이므로 이 경로는 언제나 200이고, 대신 갱신 쿠키가 있는지(`refreshable`)를
+알려 준다 — 액세스 토큰만 만료된 사용자는 FE가 그걸 보고 갱신한다. 갱신 쿠키는
+경로가 `/api/v1/auth`라 여기까지 실려 온다.
+
+DB 오류는 삼키지 않는다 — 5xx는 FE가 「답을 못 받았다」로 보고 세션을 비우지 않는다.
+*/
+func (h *AuthHandler) Session(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	if userID, err := authctx.RequireUserID(r.Context()); err == nil {
+		session, err := h.auth.Me(r.Context(), userID)
+		switch {
+		case err == nil:
+			response.JSON(w, http.StatusOK, map[string]any{"data": session, "refreshable": true})
+			return
+		case errors.Is(err, repository.ErrUserNotFound):
+			// 토큰은 멀쩡한데 계정이 없다(탈퇴) — 비로그인과 같다.
+		default:
+			writeServiceError(w, err)
+			return
+		}
+	}
+	response.JSON(w, http.StatusOK, map[string]any{
+		"data":        nil,
+		"refreshable": refreshTokenFromRequest(r) != "",
+	})
 }
 
 func setAuthCookies(w http.ResponseWriter, auth *service.AuthService, pair *service.TokenPair) {

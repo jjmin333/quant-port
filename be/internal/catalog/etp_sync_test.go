@@ -1,24 +1,10 @@
 package catalog
 
 import (
-	"context"
 	"testing"
 
 	"github.com/enact/quant-port/be/internal/model"
 )
-
-type stubETPSource struct {
-	domestic []model.Stock
-	us       []model.Stock
-}
-
-func (s stubETPSource) DomesticETP(context.Context) ([]model.Stock, error) {
-	return s.domestic, nil
-}
-
-func (s stubETPSource) US_ETP(context.Context) ([]model.Stock, error) {
-	return s.us, nil
-}
 
 func TestMergeStocksDedupes(t *testing.T) {
 	merged := mergeStocks([]model.Stock{

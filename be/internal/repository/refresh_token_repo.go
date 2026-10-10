@@ -22,30 +22,48 @@ func (r *RefreshTokenRepo) Create(ctx context.Context, userID int64, tokenHash s
 	return err
 }
 
-func (r *RefreshTokenRepo) FindValid(ctx context.Context, tokenHash string) (int64, time.Time, error) {
+/*
+FindValid — 살아 있는 토큰, 또는 **방금(30초 안) 회전돼 폐기된** 토큰.
+
+유예를 두는 이유(2026-10-07): 탭 여럿이 같은 쿠키로 거의 동시에 갱신하면 먼저 도착한 쪽이
+토큰을 폐기하고, 늦은 쪽은 401을 받는다. 그 401 응답이 쿠키를 지우므로(`clearAuthCookies`)
+응답 도착 순서에 따라 **방금 받은 새 쿠키까지 지워져** 로그인이 풀렸다. 30초 안의 재사용은
+같은 사람의 경합으로 보고 통과시킨다 — 둘 다 새 토큰을 받고, 나중에 도착한 쿠키가 남는다.
+폐기 시각은 처음 폐기한 순간에 고정된다(덮어쓰지 않는다) — 유예가 늘어나지 않는다.
+
+유예는 **회전(`MarkRotated`)에만** 산다. 로그아웃·비밀번호 변경의 폐기(`Revoke`·`RevokeAllForUser`)는
+폐기 시각을 유예보다 앞으로 적어 그 즉시 막힌다.
+*/
+func (r *RefreshTokenRepo) FindValid(ctx context.Context, tokenHash string) (int64, error) {
 	var userID int64
-	var expiresAt time.Time
 	err := r.db.QueryRowContext(ctx, `
-		SELECT user_id, expires_at FROM user_refresh_tokens
-		WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > CURRENT_TIMESTAMP
-	`, tokenHash).Scan(&userID, &expiresAt)
-	if err == sql.ErrNoRows {
-		return 0, time.Time{}, sql.ErrNoRows
-	}
-	return userID, expiresAt, err
+		SELECT user_id FROM user_refresh_tokens
+		WHERE token_hash = ? AND expires_at > CURRENT_TIMESTAMP
+		  AND (revoked_at IS NULL OR revoked_at > CURRENT_TIMESTAMP - INTERVAL 30 SECOND)
+	`, tokenHash).Scan(&userID)
+	return userID, err
 }
 
+// MarkRotated — 갱신으로 새 토큰을 내준 뒤의 폐기. 30초 유예가 걸린다(FindValid).
+func (r *RefreshTokenRepo) MarkRotated(ctx context.Context, tokenHash string) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE user_refresh_tokens SET revoked_at = CURRENT_TIMESTAMP WHERE token_hash = ? AND revoked_at IS NULL
+	`, tokenHash)
+	return err
+}
+
+// Revoke — 로그아웃의 폐기. 유예 없이 즉시(폐기 시각을 유예보다 앞으로 적는다).
 func (r *RefreshTokenRepo) Revoke(ctx context.Context, tokenHash string) error {
 	_, err := r.db.ExecContext(ctx, `
-		UPDATE user_refresh_tokens SET revoked_at = CURRENT_TIMESTAMP WHERE token_hash = ?
+		UPDATE user_refresh_tokens SET revoked_at = CURRENT_TIMESTAMP - INTERVAL 1 MINUTE WHERE token_hash = ?
 	`, tokenHash)
 	return err
 }
 
 func (r *RefreshTokenRepo) RevokeAllForUser(ctx context.Context, userID int64) error {
 	_, err := r.db.ExecContext(ctx, `
-		UPDATE user_refresh_tokens SET revoked_at = CURRENT_TIMESTAMP
-		WHERE user_id = ? AND revoked_at IS NULL
+		UPDATE user_refresh_tokens SET revoked_at = CURRENT_TIMESTAMP - INTERVAL 1 MINUTE
+		WHERE user_id = ? AND (revoked_at IS NULL OR revoked_at > CURRENT_TIMESTAMP - INTERVAL 1 MINUTE)
 	`, userID)
 	return err
 }

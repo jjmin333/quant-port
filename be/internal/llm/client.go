@@ -19,6 +19,9 @@ type Config struct {
 	APIKey   string
 	BaseURL  string
 	Model    string
+	// FallbackModel answers when Model is out of capacity (503). Only callers
+	// that opt in use it — see chatCompletionWithFallback. Empty disables it.
+	FallbackModel string
 	// BudgetProvider is the apibudget bucket this client charges. Empty
 	// means ProviderOpenAI (shared/legacy key). Split KR/US keys use
 	// ProviderLLMKR / ProviderLLMUS so each API key has its own RPD.
@@ -50,7 +53,10 @@ func NewClient(cfg Config, budget *apibudget.Manager) *Client {
 		bp = apibudget.ProviderOpenAI
 	}
 	return &Client{
-		cfg:            Config{Provider: cfg.Provider, APIKey: cfg.APIKey, BaseURL: base, Model: model, BudgetProvider: bp},
+		cfg: Config{
+			Provider: cfg.Provider, APIKey: cfg.APIKey, BaseURL: base, Model: model,
+			FallbackModel: strings.TrimSpace(cfg.FallbackModel), BudgetProvider: bp,
+		},
 		httpClient:     &http.Client{Timeout: 45 * time.Second},
 		budget:         budget,
 		budgetProvider: bp,
@@ -150,9 +156,48 @@ func (c *Client) chatCompletion(
 	jsonMode bool,
 	expectedOutput int64,
 ) (string, int64, error) {
-	content, used, err := c.chatCompletionOnce(ctx, systemPrompt, userContent, temperature, jsonMode, expectedOutput)
+	content, used, _, err := c.chatCompletionRetry(ctx, c.cfg.Model, systemPrompt, userContent, temperature, jsonMode, expectedOutput)
+	return content, used, err
+}
+
+// chatCompletionWithFallback is chatCompletion whose one 503 retry goes to
+// FallbackModel instead of the same model, and reports which model answered.
+//
+// 왜 재시도 대상을 바꾸나: 주 모델(gemini-3.1-flash-lite)의 503은 몇 초짜리
+// 순간 혼잡이 아니라 **미국 낮 시간(KST 22:00~03:00) 내내** 이어진다(09-23 ·
+// 09-24 두 밤 실측, 국내·해외 두 키 모두). 4초 뒤 같은 모델을 다시 부르는
+// 것은 그 시간대에 거의 늘 같은 대답이라, 그 한 번을 용량 풀이 다른 모델에
+// 쓴다. 시도 횟수는 그대로 둘이다.
+//
+// Opt-in per caller: 대량 배치(종목 AI 요약)가 여기에 붙으면 대체 모델의
+// 무료 한도를 브리핑 몫까지 먹는다. 지금은 시장 브리핑만 쓴다.
+func (c *Client) chatCompletionWithFallback(
+	ctx context.Context,
+	systemPrompt, userContent string,
+	temperature float64,
+	jsonMode bool,
+	expectedOutput int64,
+) (string, int64, string, error) {
+	retryModel := c.cfg.Model
+	if c.cfg.FallbackModel != "" {
+		retryModel = c.cfg.FallbackModel
+	}
+	return c.chatCompletionRetry(ctx, retryModel, systemPrompt, userContent, temperature, jsonMode, expectedOutput)
+}
+
+// chatCompletionRetry sends to the primary model and, on a 503 only, waits and
+// sends once more to retryModel. It returns the model that produced the answer.
+func (c *Client) chatCompletionRetry(
+	ctx context.Context,
+	retryModel string,
+	systemPrompt, userContent string,
+	temperature float64,
+	jsonMode bool,
+	expectedOutput int64,
+) (string, int64, string, error) {
+	content, used, err := c.chatCompletionOnce(ctx, c.cfg.Model, systemPrompt, userContent, temperature, jsonMode, expectedOutput)
 	if err == nil || !isLLMUnavailable(err) {
-		return content, used, err
+		return content, used, c.cfg.Model, err
 	}
 	wait := llmUnavailableRetryWait
 	if c.budget != nil {
@@ -162,14 +207,16 @@ func (c *Client) chatCompletion(
 	}
 	select {
 	case <-ctx.Done():
-		return "", 0, err
+		return "", 0, c.cfg.Model, err
 	case <-time.After(wait):
 	}
-	return c.chatCompletionOnce(ctx, systemPrompt, userContent, temperature, jsonMode, expectedOutput)
+	content, used, err = c.chatCompletionOnce(ctx, retryModel, systemPrompt, userContent, temperature, jsonMode, expectedOutput)
+	return content, used, retryModel, err
 }
 
 func (c *Client) chatCompletionOnce(
 	ctx context.Context,
+	model string,
 	systemPrompt, userContent string,
 	temperature float64,
 	jsonMode bool,
@@ -186,7 +233,7 @@ func (c *Client) chatCompletionOnce(
 	}
 
 	reqBody := map[string]any{
-		"model": c.cfg.Model,
+		"model": model,
 		"messages": []map[string]string{
 			{"role": "system", "content": systemPrompt},
 			{"role": "user", "content": userContent},
@@ -195,6 +242,10 @@ func (c *Client) chatCompletionOnce(
 	}
 	if jsonMode {
 		reqBody["response_format"] = map[string]string{"type": "json_object"}
+	}
+	// 출력 상한 — 부른 쪽이 context로 줄 때만(자산 AI, 2026-10-01 토큰 최적화). 기존 호출은 그대로.
+	if mt, ok := ctx.Value(maxTokensKey{}).(int64); ok && mt > 0 {
+		reqBody["max_tokens"] = mt
 	}
 
 	payload, err := json.Marshal(reqBody)
@@ -399,8 +450,16 @@ Every peer figure in the facts — "peerTopPercent" and each "...TopPercent" —
 means better. Write each one in Korean exactly as given ("상위 6%"): never subtract it from 100, never
 re-rank it, and never turn 상위 6% into 상위 94% or the reverse. Prefer these over raw ratios when judging
 cheap/expensive — "PER 24.9" alone says nothing without the peer context.
+When "perStanding", "pbrStanding" or "roeStanding" is given, use that phrase as written instead of a bare
+"PER 상위 77%" — a bare 상위 N% on a valuation multiple reads as "the multiple is high" and readers get the
+direction backwards. Never write "PER 상위 N%" or "PBR 상위 N%" without 「저렴한 순」.
 
 "dataGaps" lists what could not be measured. Stay silent on those areas rather than hedging throughout.
+
+"reddit", when present, is retail chatter on Reddit stock forums (ApeWisdom counts, a server-computed
+communityScore −100..100 and its stance) — opinion, not fundamentals, and never a reason on its own. Mention it
+in at most one clause of "news" (or "overview" when it clearly matters), attributed to Reddit, and only when it is
+notable: |communityScore| ≥ 25, or mentions24h at least double mentionsPrev24h. Otherwise leave it out.
 
 Respond with valid JSON only, this exact shape:
 {
@@ -417,3 +476,11 @@ newsSentiments must contain exactly one entry per article id given in the facts'
 the SAME ids — do not add, remove, or invent ids. keywords must be short (1-2 words each), drawn only from
 the facts and the sentences you wrote above — never a theme or strategy not supported by the given data.
 This is informational analysis only, not investment advice.`
+
+// maxTokensKey carries an output cap through chatCompletion without touching every signature.
+type maxTokensKey struct{}
+
+// WithMaxTokens caps the completion length of calls made with ctx.
+func WithMaxTokens(ctx context.Context, n int64) context.Context {
+	return context.WithValue(ctx, maxTokensKey{}, n)
+}

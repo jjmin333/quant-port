@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -151,9 +152,82 @@ func (e *EdgarClient) FetchFinancialSnapshots(ctx context.Context, ticker string
 		current.FiscalYear = revCurFact.FY
 		current.PeriodEnd = parseFactDate(revCurFact.End)
 		current.FiledAt = parseFactDate(revCurFact.Filed)
+
 	}
+	current.Currency = factCurrencies(facts,
+		revenueConceptFallbacks, operatingIncomeConceptFallbacks, netIncomeConceptFallbacks,
+		equityConceptFallbacks, assetsConceptFallbacks, liabilitiesConceptFallbacks,
+		epsBasicConceptFallbacks, epsDilutedConceptFallbacks)
 	_ = opPrior
 	return current, prior, shares, nil
+}
+
+/*
+factCurrencies — 스냅샷에 쓴 값들의 통화(쉼표로, 정렬). 20-F는 한 보고서 안에서도 섞인다:
+TSM은 매출에 달러 환산치가 있고 EPS는 대만 달러라, 매출 단위만 보면 PER 331이 나왔다(2026-09-28).
+"TWD/shares" 같은 주당 단위는 앞 통화만 본다.
+*/
+func factCurrencies(facts map[string]map[string][]XBRLFact, groups ...[]string) string {
+	seen := map[string]bool{}
+	for _, tags := range groups {
+		cur, _ := pickAnnualPairFacts(facts, tags)
+		if cur == nil || cur.Unit == "" {
+			continue
+		}
+		unit := strings.ToUpper(cur.Unit)
+		if i := strings.IndexByte(unit, '/'); i >= 0 {
+			unit = unit[:i]
+		}
+		seen[unit] = true
+	}
+	out := make([]string, 0, len(seen))
+	for u := range seen {
+		out = append(out, u)
+	}
+	sort.Strings(out)
+	return strings.Join(out, ",")
+}
+
+// isCurrencyCode — companyfacts의 통화 단위는 대문자 세 글자다(USD·TWD). shares·pure·USD/shares는 아니다.
+func isCurrencyCode(unit string) bool {
+	if len(unit) != 3 {
+		return false
+	}
+	for _, r := range unit {
+		if r < 'A' || r > 'Z' {
+			return false
+		}
+	}
+	return true
+}
+
+// primaryMonetaryUnit — 사실이 가장 많은 통화(동률이면 USD, 그다음 사전순). 통화가 없으면 "".
+func primaryMonetaryUnit(counts map[string]int) string {
+	best, bestN := "", -1
+	for unit, n := range counts {
+		if !isCurrencyCode(unit) {
+			continue
+		}
+		if n > bestN || (n == bestN && (unit == "USD" || (best != "USD" && unit < best))) {
+			best, bestN = unit, n
+		}
+	}
+	return best
+}
+
+// keepFactUnit — 주 통화가 아닌 통화 금액·주당 값은 버린다(환산 사본). 주식 수·비율 같은 단위는 둔다.
+func keepFactUnit(unit, primary string) bool {
+	if primary == "" {
+		return true
+	}
+	code := unit
+	if i := strings.IndexByte(unit, '/'); i >= 0 {
+		code = unit[:i]
+	}
+	if !isCurrencyCode(code) {
+		return true
+	}
+	return code == primary
 }
 
 // FetchQuarterlySnapshots returns up to limit real reported periods (10-Q/10-K),
@@ -363,13 +437,28 @@ func (e *EdgarClient) fetchCompanyFacts(ctx context.Context, cik string) (map[st
 		e.budget.Record(ctx, e.provider)
 	}
 
+	// 한 회사 = 한 공시 통화. 20-F는 같은 값을 현지 통화와 달러 환산치로 **두 번** 싣는다(TSM: TWD·USD).
+	// 둘을 한 목록에 섞으면 매출은 TWD, 영업이익은 USD가 뽑혀 영업마진 1%·성장률 −97%가 나왔다(2026-09-28).
+	unitCounts := map[string]int{}
+	for _, tags := range payload.Facts {
+		for _, concept := range tags {
+			for unit, unitItems := range concept.Units {
+				unitCounts[unit] += len(unitItems)
+			}
+		}
+	}
+	primary := primaryMonetaryUnit(unitCounts)
+
 	out := make(map[string]map[string][]XBRLFact)
 	for taxonomy, tags := range payload.Facts {
 		if out[taxonomy] == nil {
 			out[taxonomy] = make(map[string][]XBRLFact)
 		}
 		for tag, concept := range tags {
-			for _, unitItems := range concept.Units {
+			for unit, unitItems := range concept.Units {
+				if !keepFactUnit(unit, primary) {
+					continue
+				}
 				for _, item := range unitItems {
 					out[taxonomy][tag] = append(out[taxonomy][tag], XBRLFact{
 						End:   item.End,
@@ -379,6 +468,7 @@ func (e *EdgarClient) fetchCompanyFacts(ctx context.Context, cik string) (map[st
 						FP:    item.FP,
 						Form:  item.Form,
 						Filed: item.Filed,
+						Unit:  unit,
 					})
 				}
 			}

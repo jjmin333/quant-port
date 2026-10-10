@@ -119,36 +119,16 @@ func dedupeKeywords(items []newsKeyword) []newsKeyword {
 	return out
 }
 
+/*
+nextKeywords — 이번 틱에 네이버·카카오로 부를 국내 검색어.
+
+큐를 한 줄로 돌리지 않고 **생산성 차선**에 나눠 돈다 — 이유와 실측은
+`news_keyword_lanes.go` 머리글에. 네이버와 카카오가 같은 차선 커서를 쓰는 것은
+예전 단일 커서 때와 같다: 두 소스가 같은 말을 연달아 부르면 같은 기사를 두 번
+받는 일이라, 커서를 나누면 한도만 더 쓴다.
+*/
 func (st *NewsStore) nextKeywords(ctx context.Context, count int) []newsKeyword {
-	queue := st.buildKeywordQueue(ctx)
-	if len(queue) == 0 || count <= 0 {
-		return nil
-	}
-
-	st.mu.Lock()
-	cursor := st.keywordCursor
-	if st.redis != nil {
-		if n, err := st.redis.Get(ctx, newsKeywordCursorKey).Int(); err == nil && n >= 0 {
-			cursor = n
-		}
-	}
-	if cursor >= len(queue) {
-		cursor = 0
-	}
-	end := cursor + count
-	if end > len(queue) {
-		end = len(queue)
-	}
-	batch := append([]newsKeyword(nil), queue[cursor:end]...)
-	next := end
-	if next >= len(queue) {
-		next = 0
-	}
-	st.keywordCursor = next
-	st.mu.Unlock()
-
-	if st.redis != nil {
-		_ = st.redis.Set(ctx, newsKeywordCursorKey, next, 7*24*time.Hour).Err()
-	}
-	return batch
+	return st.nextKeywordsInLanes(
+		ctx, "domestic", newsDomesticLaneCursorPrefix, st.buildKeywordQueue(ctx), count,
+	)
 }

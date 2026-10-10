@@ -16,6 +16,9 @@ type XBRLFact struct {
 	FP    string
 	Form  string
 	Filed string
+	// Unit is the companyfacts unit key — a currency code for money ("USD", "TWD"),
+	// "USD/shares" for per-share values, "shares" for counts.
+	Unit string
 }
 
 // 태그 목록은 **우선순위 순**이다 — `pickConceptFacts`가 사실이 하나라도 있는
@@ -377,20 +380,6 @@ func averageTwo(current, prior *int64) *float64 {
 	}
 	v := (float64(*current) + float64(*prior)) / 2
 	return &v
-}
-
-func int64Value(v *int64) float64 {
-	if v == nil {
-		return 0
-	}
-	return float64(*v)
-}
-
-func float64Value(v *float64) float64 {
-	if v == nil {
-		return 0
-	}
-	return *v
 }
 
 func int64Ptr(v int64) *int64 {

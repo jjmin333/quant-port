@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"maps"
 	"sort"
 	"strings"
 	"time"
@@ -473,6 +474,14 @@ ambiguousUSLocalNames — 한국어 이름이 **일상어와 같은** 미국 종
 */
 var ambiguousUSLocalNames = map[string]struct{}{
 	"비자": {}, // V — 「비자 발급」·「비자 면제」
+	/*
+		지수 이름과 같은 상호(2026-10-10). 영어 쪽은 `usNameStopwords`가 nasdaq을 막았는데
+		토스 한국어 이름 「나스닥」(NDAQ)은 이 문으로 들어와, 「나스닥이 1.2% 하락」 기사
+		49건이 홈 「많이 언급된 종목」 2위로 NDAQ을 올렸다. 조사가 붙어도 지수다.
+	*/
+	"나스닥": {}, // NDAQ
+	"다우":  {}, // DOW — 「다우 지수」
+	"러셀":  {}, // 러셀 2000
 }
 
 func (st *NewsStore) rebuildUSNameIndex(ctx context.Context) {
@@ -513,14 +522,19 @@ func (st *NewsStore) rebuildUSNameIndex(ctx context.Context) {
 		addUSNameIndexKeys(idx, tickers, sym, "", "")
 	}
 	st.mu.Lock()
+	// 새 인덱스는 같은 본문에도 다른 심볼을 붙일 수 있다. 세대를 올려 예전 결과가
+	// 조용히 재사용되지 않게 한다 (usSymbolMemo). 단 **세 표가 전부 그대로면 올리지
+	// 않는다** — 30분 주기 재구성마다 메모를 비우면 다음 목록이 기사 전부를 다시
+	// 훑고 이름 검색을 DB로 다시 보낸다(rebuildNameIndex 같은 자리 주석).
+	if !maps.Equal(st.usNameIndex, idx) || !maps.Equal(st.usTickerIndex, tickers) || !maps.Equal(st.usAliases, aliases) {
+		st.usNameIndexGen++
+		st.usSymbolMemo = nil
+		st.usNameLookupMemo = nil
+	}
 	st.usNameIndex = idx
 	st.usTickerIndex = tickers
 	st.usAliases = aliases
 	st.usNameIndexAt = time.Now()
-	// 새 인덱스는 같은 본문에도 다른 심볼을 붙일 수 있다. 세대를 올려 예전 결과가
-	// 조용히 재사용되지 않게 한다 (usSymbolMemo).
-	st.usNameIndexGen++
-	st.usSymbolMemo = nil
 	st.mu.Unlock()
 }
 

@@ -24,10 +24,3 @@ func parseDecimalInt(s string) int64 {
 	}
 	return int64(parseDecimal(s))
 }
-
-func derefString(v *string) string {
-	if v == nil {
-		return ""
-	}
-	return *v
-}

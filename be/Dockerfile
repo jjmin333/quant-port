@@ -6,17 +6,9 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api
-# Batch workers are built into the same image and selected at runtime via
-# `command:` in docker-compose — one image, isolated processes/containers.
-# See docs/AGENT_STATE.md "배치 잡을 독립 워커 프로세스로 분리".
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/worker-close-domestic ./cmd/worker-close-domestic
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/worker-close-overseas ./cmd/worker-close-overseas
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/worker-scores ./cmd/worker-scores
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/worker-index ./cmd/worker-index
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/worker-fetch ./cmd/worker-fetch
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/worker-research ./cmd/worker-research
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/worker-earnings ./cmd/worker-earnings
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/worker-filings ./cmd/worker-filings
+# 배치 워커는 바이너리 하나(cmd/worker)가 WORKER_ROLES로 역할을 고른다(2026-10-01, 9→4 컨테이너).
+# LLM 배치는 api 바이너리를 SERVER_ROLE=batch로 띄운다(worker-content).
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/worker ./cmd/worker
 
 FROM debian:bookworm-slim AS runtime
 
@@ -36,14 +28,7 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY --from=build /out/api ./api
-COPY --from=build /out/worker-close-domestic ./worker-close-domestic
-COPY --from=build /out/worker-close-overseas ./worker-close-overseas
-COPY --from=build /out/worker-scores ./worker-scores
-COPY --from=build /out/worker-index ./worker-index
-COPY --from=build /out/worker-fetch ./worker-fetch
-COPY --from=build /out/worker-research ./worker-research
-COPY --from=build /out/worker-earnings ./worker-earnings
-COPY --from=build /out/worker-filings ./worker-filings
+COPY --from=build /out/worker ./worker
 COPY migrations ./migrations
 COPY docs/BATCH_SCHEDULE.md ./docs/BATCH_SCHEDULE.md
 RUN chown -R appuser:root /app/docs \
@@ -63,6 +48,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD curl -fsS "http://127.0.0.1:${API_PORT:-8080}/health" >/dev/null || exit 1
 
-# Default command runs the API; docker-compose overrides `command:` for each
-# worker service to run its own binary from this same image instead.
+# Default command runs the API; workers run ./worker (WORKER_ROLES) or ./api (SERVER_ROLE=batch).
 CMD ["./api"]

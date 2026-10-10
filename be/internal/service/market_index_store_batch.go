@@ -10,6 +10,7 @@ import (
 	"github.com/enact/quant-port/be/internal/marketdata"
 	"github.com/enact/quant-port/be/internal/marketdata/calendar"
 	"github.com/enact/quant-port/be/internal/model"
+	"github.com/enact/quant-port/be/internal/repository"
 	"github.com/enact/quant-port/be/internal/toss"
 )
 
@@ -59,6 +60,15 @@ func (st *MarketIndexStore) refreshAll(ctx context.Context, warmup bool) {
 		st.mu.Unlock()
 		st.persistSnapshotRedis(refreshCtx, out, at)
 	}
+	/*
+		회차를 끝냈다는 표시 — 값이 안 바뀌어도 움직인다. 제한 시간 안에 못 끝낸 회차는
+		적지 않는다(그건 「못 받아 왔다」에 가깝다).
+	*/
+	if refreshCtx.Err() == nil {
+		st.mu.Lock()
+		st.checkedAt = time.Now().UTC()
+		st.mu.Unlock()
+	}
 }
 
 func (st *MarketIndexStore) shouldRunBatch(
@@ -96,7 +106,7 @@ func (st *MarketIndexStore) shouldRunBatch(
 		if calendar.ShouldPoll(calendar.ScheduleAlways, now, krCal, usCal) {
 			return true, false
 		}
-	case batchGoldSpot:
+	case batchGoldSpot, batchEcosKR:
 		return true, false
 	}
 	return false, false
@@ -127,6 +137,8 @@ func (st *MarketIndexStore) refreshBatch(ctx context.Context, batch indexBatch, 
 		st.refreshUpbitBatch(ctx, batch, entries, out, at)
 	case batchGoldSpot:
 		st.refreshGoldBatch(ctx, batch, entries, out, at)
+	case batchEcosKR:
+		st.refreshEcosBatch(ctx, entries, out, at)
 	default:
 		return
 	}
@@ -148,7 +160,11 @@ func (st *MarketIndexStore) refreshTossKRBatch(
 		st.applyBatchFallback(ctx, entries, out)
 		return
 	}
-	prices, err := st.toss.GetMarketIndicatorPrices(ctx, []string{"KOSPI", "KOSDAQ"})
+	symbols := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		symbols = append(symbols, entry.symbol)
+	}
+	prices, err := st.toss.GetMarketIndicatorPrices(ctx, symbols)
 	if err != nil {
 		log.Printf("market indices batch %s: %v", batch.id, err)
 		st.applyBatchFallback(ctx, entries, out)
@@ -166,10 +182,12 @@ func (st *MarketIndexStore) refreshTossKRBatch(
 		}
 		idx := emptyMarketIndex(entry.id, entry.name, entry.currency)
 		idx.Value = parseDecimal(last)
-		if ch, cr, ok := st.indexChangeFromCandles(ctx, entry.symbol); ok {
+		// 일봉 한 번으로 등락과 흐름선을 함께 만든다(예전엔 같은 일봉을 두 번 불렀다).
+		closes := st.tossIndexDailyCloses(ctx, entry.symbol)
+		if ch, cr, ok := changeFromCloses(closes); ok {
 			idx.Change, idx.ChangeRate = ch, cr
 		}
-		idx.Sparkline = st.tossIndexSparkline(ctx, entry.symbol)
+		idx.Sparkline = sparklineFromCloses(closes)
 		applyIndexMeta(&idx, entry, marketdata.Quote{}, at)
 		st.applyIndexSuccess(ctx, entry, out, idx, at)
 	}
@@ -417,4 +435,39 @@ func (st *MarketIndexStore) markEODDone(ctx context.Context, groupID indexBatchI
 		return
 	}
 	_ = st.redis.Set(ctx, key, "1", 48*time.Hour).Err()
+}
+
+// SetRates wires the macro_rates table for the 한국 금리 지수(ecos).
+func (st *MarketIndexStore) SetRates(repo *repository.PublicDataRepo) { st.rates = repo }
+
+// refreshEcosBatch reads the latest rates from macro_rates (DB만) — 값 %, 등락 %p, 스파크라인 최근 20개.
+func (st *MarketIndexStore) refreshEcosBatch(ctx context.Context, entries []indexCatalogEntry, out []model.MarketIndex, at time.Time) {
+	if st.rates == nil {
+		st.applyBatchFallback(ctx, entries, out)
+		return
+	}
+	for _, entry := range entries {
+		pts, err := st.rates.RateSeries(ctx, entry.symbol, time.Now().AddDate(-2, 0, 0))
+		if err != nil || len(pts) == 0 {
+			st.applyIndexFallback(ctx, entry, out)
+			continue
+		}
+		last := pts[len(pts)-1]
+		q := marketdata.Quote{Value: last.Value}
+		if len(pts) >= 2 {
+			prev := pts[len(pts)-2].Value
+			q.Change = last.Value - prev
+			if prev != 0 {
+				q.ChangeRate = q.Change / prev * 100
+			}
+		}
+		start := max(0, len(pts)-20)
+		for _, p := range pts[start:] {
+			q.Sparkline = append(q.Sparkline, p.Value)
+		}
+		if t, err := time.ParseInLocation("2006-01-02", last.Date, time.FixedZone("KST", 9*3600)); err == nil {
+			q.AsOf = t
+		}
+		st.applyIndexSuccess(ctx, entry, out, indexFromQuote(entry, q, at), at)
+	}
 }

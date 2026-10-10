@@ -1,0 +1,3 @@
+# torch>=2.6: torch.load의 기본값이 weights_only=True — pickle 가중치가 코드를 실행하지 못한다(app.py 머리글).
+torch>=2.6,<3
+transformers>=4.46,<5

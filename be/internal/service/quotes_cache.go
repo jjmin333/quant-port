@@ -34,29 +34,6 @@ func (s *QuotesService) cacheGetJSON(ctx context.Context, key string, dest any) 
 	return json.Unmarshal(raw, dest) == nil
 }
 
-// cacheGetOrPopulate reads Redis first; on miss it runs fetch, stores the result, and unmarshals into dest.
-func (s *QuotesService) cacheGetOrPopulate(
-	ctx context.Context,
-	key string,
-	ttl time.Duration,
-	dest any,
-	fetch func() (any, bool),
-) bool {
-	if s.cacheGetJSON(ctx, key, dest) {
-		return true
-	}
-	value, ok := fetch()
-	if !ok {
-		return false
-	}
-	s.cacheSetJSON(ctx, key, value, ttl)
-	payload, err := json.Marshal(value)
-	if err != nil {
-		return false
-	}
-	return json.Unmarshal(payload, dest) == nil
-}
-
 // cacheKeyExists asks **whether** a key is there without dragging its value
 // across the wire. `md:raw:1m:*` is ~291KB (실측 000660) and two call sites only
 // wanted to know that it had been warmed.
@@ -181,17 +158,6 @@ func (s *QuotesService) storeFormingCandle(
 	}).Err()
 }
 
-func tradesNewestTime(trades []model.TradeTick) time.Time {
-	var best time.Time
-	for _, t := range trades {
-		ts := parseQuoteCandleTime(t.Time)
-		if !ts.IsZero() && ts.After(best) {
-			best = ts
-		}
-	}
-	return best
-}
-
 /*
 loadQuoteDetailFromTerminalCache — 상세 시세 사다리의 한 칸. **1초 안쪽만** 받는다.
 
@@ -305,8 +271,4 @@ func (s *QuotesService) InvalidateQuotesListCache(ctx context.Context, filter st
 		key := quotesListCacheKey(filter, "", limit, 0)
 		_ = s.redis.Del(ctx, key).Err()
 	}
-}
-
-func (s *QuotesService) redisReady() bool {
-	return s.redis != nil
 }

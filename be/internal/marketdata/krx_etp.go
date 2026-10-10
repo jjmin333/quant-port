@@ -138,12 +138,12 @@ func (c *KRXClient) fetchETPEndpoint(ctx context.Context, endpoint, basDd, secTy
 }
 
 type krxETPRow struct {
-	ISUCD     string `json:"ISU_CD"`
-	ISUSRTCD  string `json:"ISU_SRT_CD"`
-	ISUNM     string `json:"ISU_NM"`
-	ISUABBRV  string `json:"ISU_ABBRV"`
-	MKTNM     string `json:"MKT_NM"`
-	LISTDD    string `json:"LIST_DD"`
+	ISUCD    string `json:"ISU_CD"`
+	ISUSRTCD string `json:"ISU_SRT_CD"`
+	ISUNM    string `json:"ISU_NM"`
+	ISUABBRV string `json:"ISU_ABBRV"`
+	MKTNM    string `json:"MKT_NM"`
+	LISTDD   string `json:"LIST_DD"`
 }
 
 func parseKRXETPResponse(raw []byte) ([]krxETPRow, error) {

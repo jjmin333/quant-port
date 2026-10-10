@@ -160,19 +160,3 @@ func (s *session) inSession(now time.Time) bool {
 
 	return !local.Before(preOpen) && !local.After(close)
 }
-
-// ScheduleForIndex maps a market index id to its polling schedule.
-func ScheduleForIndex(indexID string) ScheduleID {
-	switch indexID {
-	case "kospi", "kosdaq":
-		return ScheduleKRX
-	case "usd-krw":
-		return ScheduleWeekdays
-	case "btc":
-		return ScheduleAlways
-	case "nasdaq", "nasdaq100", "nq100", "sp500", "dow", "vix", "sox", "gold", "us10y":
-		return ScheduleUS
-	default:
-		return ScheduleAlways
-	}
-}

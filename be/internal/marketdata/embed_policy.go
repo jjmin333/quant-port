@@ -2,7 +2,6 @@ package marketdata
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -23,9 +22,9 @@ const embedPolicyCachePrefix = "news:embed:v1:"
 type EmbedPolicy string
 
 const (
-	EmbedPolicyOK       EmbedPolicy = "ok"
-	EmbedPolicyBlocked  EmbedPolicy = "blocked"
-	EmbedPolicyUnknown  EmbedPolicy = "unknown"
+	EmbedPolicyOK      EmbedPolicy = "ok"
+	EmbedPolicyBlocked EmbedPolicy = "blocked"
+	EmbedPolicyUnknown EmbedPolicy = "unknown"
 )
 
 var metaCSPRe = regexp.MustCompile(`(?i)content=["']?([^"'>]*frame-ancestors[^"'>]*)["']?`)
@@ -210,18 +209,4 @@ func policyFromHTML(html string) EmbedPolicy {
 		}
 	}
 	return EmbedPolicyUnknown
-}
-
-func EmbedPolicyLabel(policy EmbedPolicy, publisherName string) string {
-	switch policy {
-	case EmbedPolicyOK:
-		return "사이트 내 미리보기 가능"
-	case EmbedPolicyBlocked:
-		if publisherName != "" {
-			return fmt.Sprintf("%s는 사이트 내 미리보기 제한", publisherName)
-		}
-		return "사이트 내 미리보기 제한"
-	default:
-		return "미리보기 미확인"
-	}
 }

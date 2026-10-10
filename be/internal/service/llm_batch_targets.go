@@ -19,32 +19,16 @@ Target selection for the scheduled AI 요약 batch.
 AI 추천 랭킹은 00:25 배치가 계산해 둔 표를, 보유·관심은 사용자 표를 읽는다.
 외부 API를 한 번도 부르지 않으므로 대상을 고르는 데 드는 쿼터는 0이다.
 
-# 세 층 (2026-09-08)
+# 세 층 (2026-09-08, 2층은 2026-10-10 사용자 결정으로 바뀜)
 
-예전에는 층이 하나였다 — 레이더 1일 기준 top 100(거래대금 + 거래량). 그 목록의
-머리는 거의 고정이라 **매일 같은 종목이 다시 구워졌다.** 실측으로 나흘 동안 분석된
-종목은 335개뿐이었고, 그 사이 사용자가 실제로 들고 있는 208종목 중 190개는 요약이
-아예 없었다.
+	순위  층                      무엇을 데려오나                                   회전
+	1    실시간 차트(레이더)        거래대금 top 100 ∪ 거래량 top 100 (ETF·ETN 제외)   매일 같은 얼굴이 정상
+	2    AI 추천 랭킹              종합축 · 오늘 목록 top 100 (1층과 겹치면 뺀다)       매일 같은 얼굴
+	3    사용자 보유·관심          요약이 없거나 일주일 넘은 것                        생기는 대로
 
-	순위  층                      무엇을 데려오나                        회전
-	1    실시간 차트(레이더)        오늘 실제로 거래된 것 (거래대금·거래량)   매일 같은 얼굴이 정상
-	2    AI 추천 랭킹              6축 × 4기간 저장분의 합집합              오래된 순으로 하루치씩
-	3    사용자 보유·관심          요약이 없거나 일주일 넘은 것              생기는 대로
-
-1층은 매일 다시 도는 것이 맞다 — 숫자가 매일 바뀌고 사람들이 매일 보는 목록이다.
-다양성은 2층이 만든다. 실측(2026-09-08)으로 AI 랭킹 합집합은 국내 681 · 해외 617
-종목이고 그중 요약이 있던 것은 16% · 13%뿐이라, 하루 백여 개씩 오래된 순으로 돌면
-6~7일에 한 바퀴가 돈다.
-
-# 왜 기간 단계(실시간 → 1일 → 1주 → 1개월)로 돌지 않나
-
-그렇게 하면 처음 나흘 동안 1주·1개월 탭이 빈 채로 남는다. 게다가 실측으로
-`realtime`과 `1d`의 목록은 **완전히 같다**(국내 434종목, 차이 0건) — 점수가 하루
-한 번 계산되기 때문이다. 단계 하나가 통째로 빈다는 뜻이다.
-
-그래서 기간이 아니라 **순위로 돈다.** 기간은 가중치로만 남는다(scoreDurationWeight):
-같은 10위라도 실시간 10위가 1개월 10위보다 먼저 간다. 네 탭의 상위권이 함께
-채워지므로 어느 탭도 며칠씩 비지 않는다.
+1층 둘은 3분의 1쯤 겹치고 레버리지 ETF가 많아, 걸러내면 실측 약 109종목이다(2026-10-09 국내).
+2층은 예전에 6축 × 4기간 합집합(국내 약 680)을 오래된 순으로 돌며 상한까지 채웠다 — 대상 수가 상한(350)
+그 자체였고 KR 키 토큰이 하루 96%였다. 지금은 사용자가 아는 「100 + 100 + 100」 그대로다.
 
 # 왜 3층에 최소 보장분이 있나
 
@@ -79,9 +63,6 @@ const (
 	// llmInterestStaleAfter — 보유·관심 종목의 글을 다시 쓰는 주기. 주 1회다.
 	llmInterestStaleAfter = 7 * 24 * time.Hour
 
-	// llmScoreHeadDepth — AI 추천 랭킹 종합축에서 **매일** 다시 굽는 상위 깊이.
-	// 첫 화면에 보이는 자리라 회전에 맡기지 않는다.
-	llmScoreHeadDepth = 30
 )
 
 var batchRankingTypes = []toss.RankingType{
@@ -283,7 +264,7 @@ func (s *StockSummaryService) selectBatchTargets(
 
 	analyzed := s.narrativeAnalyzedAt(ctx)
 	interestTargets := buildInterestTargets(interested, catalog, market, analyzed, seen, time.Now())
-	scoreTargets := buildScoreTargets(scoreRanked, catalog, market, analyzed, seen)
+	scoreTargets := buildScoreTargets(scoreRanked, catalog, market, seen)
 
 	ordered := composeTargetLayers(targets, scoreTargets, interestTargets, llmInterestFloor)
 	out.Targets = prependPinned(pinned, catalog, ordered)
@@ -317,46 +298,23 @@ func composeTargetLayers(radar, score, interest []model.LLMBatchTarget, floor in
 }
 
 /*
-2순위 · AI 추천 랭킹.
+2순위 · AI 추천 랭킹 종합 top 100 (2026-10-10 사용자 결정 — 「거래대금 100 · 거래량 100 · AI 랭킹 100」).
 
-# 기간 가중치
-
-`realtime`과 `1d`는 실측으로 **같은 목록**이라 가중치도 같다. 1주·1개월은 「그 창에서
-한 번 잘했다」는 뜻이라 오늘의 목록보다 한 발 뒤에 세우되, 상위권이라면 실시간
-중위권보다는 앞에 오도록 1.3·1.6으로 눌러 둔다 — 예를 들어 1개월 10위(=16)는
-실시간 20위(=20)보다 앞이고 실시간 5위(=5)보다는 뒤다.
-
-# 종합축 머리는 매일 갱신한다
-
-회전만 두면 AI 추천 랭킹의 **첫 화면 상위권도 며칠에 한 번**만 갱신된다. 사람들이
-가장 많이 누르는 자리라 여기만 예외로 매일 다시 굽는다. 실측(2026-09-08)으로 종합축
-상위 20의 union은 20종목이고, 그중 요약이 있던 것은 국내 2 · 해외 3개뿐이었다.
+예전에는 6축 × 4기간 저장분의 합집합(국내 약 680종목)을 오래된 순으로 **회전**해 상한(350)까지 채웠다 —
+그래서 대상 수가 사용자가 아는 300이 아니라 상한 그 자체였고, KR 키 토큰이 하루 96%까지 찼다.
+이제는 첫 화면이 보여 주는 **종합축 · 오늘 목록(실시간·1일) 상위 100**만, 순위대로 매일 다시 쓴다.
+다른 축·기간 탭 종목은 그 종목을 다시 고를 때까지 지난 글을 이어 쓴다(carryOverNarrative · analyzedAt).
 */
-func scoreDurationWeight(duration model.ScoreRankingDuration) float64 {
-	switch duration {
-	case model.RankDuration1W:
-		return 1.3
-	case model.RankDuration1M:
-		return 1.6
-	default:
-		// realtime · 1d — 오늘의 목록.
-		return 1.0
-	}
-}
+const llmScoreTopN = 100
 
-// scoreCandidate is one symbol's standing across every stored leaderboard of
-// one market.
+// scoreCandidate is one symbol's best 종합 순위 in today's lists.
 type scoreCandidate struct {
 	symbol string
-	// weighted is the best (lowest) 기간 가중 순위 the symbol reached.
-	weighted float64
-	// head marks 종합축 상위 llmScoreHeadDepth — refreshed every run.
-	head bool
+	rank   int
 }
 
-// loadScoreRankCandidates folds a market's stored AI 추천 랭킹 into one
-// candidate list. Returns nil when the ranking batch has not run yet, which
-// simply leaves the 2순위 layer empty.
+// loadScoreRankCandidates reads the stored 종합 ranking of one market. Returns
+// nil when the ranking batch has not run yet, which leaves the 2순위 layer empty.
 func (s *StockSummaryService) loadScoreRankCandidates(
 	ctx context.Context,
 	market toss.MarketCountry,
@@ -373,111 +331,47 @@ func (s *StockSummaryService) loadScoreRankCandidates(
 	return mergeScoreRanks(rows)
 }
 
-// mergeScoreRanks keeps each symbol's strongest weighted position and marks the
-// 종합축 head.
+// mergeScoreRanks keeps 종합축 · 오늘 목록(실시간·1일)의 상위 llmScoreTopN, symbol마다 더 높은 순위로.
 func mergeScoreRanks(rows []repository.RankedSymbol) []scoreCandidate {
-	best := make(map[string]*scoreCandidate, len(rows))
+	best := make(map[string]int, llmScoreTopN)
 	for _, row := range rows {
 		symbol := strings.ToUpper(strings.TrimSpace(row.Symbol))
-		if symbol == "" || row.Rank <= 0 {
+		today := row.Duration == model.RankDurationRealtime || row.Duration == model.RankDuration1D
+		if symbol == "" || row.Rank <= 0 || row.Rank > llmScoreTopN || row.Axis != model.RankAxisComposite || !today {
 			continue
 		}
-		weighted := float64(row.Rank) * scoreDurationWeight(row.Duration)
-		head := row.Axis == model.RankAxisComposite &&
-			scoreDurationWeight(row.Duration) == 1.0 &&
-			row.Rank <= llmScoreHeadDepth
-
-		entry, ok := best[symbol]
-		if !ok {
-			best[symbol] = &scoreCandidate{symbol: symbol, weighted: weighted, head: head}
-			continue
+		if cur, ok := best[symbol]; !ok || row.Rank < cur {
+			best[symbol] = row.Rank
 		}
-		if weighted < entry.weighted {
-			entry.weighted = weighted
-		}
-		entry.head = entry.head || head
 	}
-
 	out := make([]scoreCandidate, 0, len(best))
-	for _, entry := range best {
-		out = append(out, *entry)
+	for symbol, rank := range best {
+		out = append(out, scoreCandidate{symbol: symbol, rank: rank})
 	}
 	sort.Slice(out, func(i, j int) bool {
-		if out[i].weighted != out[j].weighted {
-			return out[i].weighted < out[j].weighted
+		if out[i].rank != out[j].rank {
+			return out[i].rank < out[j].rank
 		}
 		return out[i].symbol < out[j].symbol
 	})
 	return out
 }
 
-/*
-buildScoreTargets orders the 2순위 layer.
-
-	① 종합축 머리 — 가중 순위 순 (매일)
-	② 요약이 아예 없는 종목 — 가중 순위 순
-	③ 나머지 — 글이 쓰인 지 오래된 순
-
-①과 ②가 앞에 있는 동안은 백필이고, 한 바퀴가 돌아 ②가 비면 ③만 남아 **하나의 회전
-큐**가 된다. 그때부터는 기간·축 구분이 사라지고 「가장 오래 안 본 종목부터」가 된다.
-*/
+// buildScoreTargets — 순위 순. 1순위(실시간 차트)가 이미 데려간 종목과 다른 시장·파생상품은 뺀다.
 func buildScoreTargets(
 	candidates []scoreCandidate,
 	catalog map[string]model.Stock,
 	market toss.MarketCountry,
-	analyzed map[string]time.Time,
 	seen map[string]bool,
 ) []model.LLMBatchTarget {
-	type entry struct {
-		target model.LLMBatchTarget
-		bucket int
-		at     time.Time
-		rank   float64
-	}
-
-	rows := make([]entry, 0, len(candidates))
+	out := make([]model.LLMBatchTarget, 0, len(candidates))
 	for _, candidate := range candidates {
 		stock, ok := eligibleStock(candidate.symbol, catalog, market, seen)
 		if !ok {
 			continue
 		}
 		seen[candidate.symbol] = true
-		at, hasNarrative := analyzed[candidate.symbol]
-		bucket := 2
-		switch {
-		case candidate.head:
-			bucket = 0
-		case !hasNarrative:
-			bucket = 1
-		}
-		rows = append(rows, entry{
-			target: model.LLMBatchTarget{
-				Symbol: stock.Symbol,
-				Name:   stock.Name,
-				Source: model.LLMBatchSourceScore,
-			},
-			bucket: bucket,
-			at:     at,
-			rank:   candidate.weighted,
-		})
-	}
-
-	sort.SliceStable(rows, func(i, j int) bool {
-		if rows[i].bucket != rows[j].bucket {
-			return rows[i].bucket < rows[j].bucket
-		}
-		if rows[i].bucket == 2 && !rows[i].at.Equal(rows[j].at) {
-			return rows[i].at.Before(rows[j].at)
-		}
-		if rows[i].rank != rows[j].rank {
-			return rows[i].rank < rows[j].rank
-		}
-		return rows[i].target.Symbol < rows[j].target.Symbol
-	})
-
-	out := make([]model.LLMBatchTarget, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, row.target)
+		out = append(out, model.LLMBatchTarget{Symbol: stock.Symbol, Name: stock.Name, Source: model.LLMBatchSourceScore})
 	}
 	return out
 }

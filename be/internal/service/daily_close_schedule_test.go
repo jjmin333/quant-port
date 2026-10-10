@@ -79,3 +79,33 @@ func TestLastCompletedTriggerNoneWhenCurrent(t *testing.T) {
 		t.Fatalf("catch-up trigger day = %s, want %s", got.Format("2006-01-02"), want.Format("2006-01-02"))
 	}
 }
+
+/*
+카탈로그에 있는 지수는 **전부** 일별 종가 세션이 정해져 있어야 한다.
+
+빠지면 오류가 나지 않는다 — `IngestIndexCloses`의 `dailyCloseIndexSchedules[idx.ID]
+!= schedule`이 없는 키를 빈 ScheduleID로 읽고 조용히 건너뛴다. 그래서 라이브 값은
+멀쩡한 채 일별 종가만 멈추고, 그 위에 앉은 점수·키워드·LLM 해설이 같이 멈춘다.
+`us10y`가 2026-08-27부터 3주를 그렇게 보냈다(daily_close.go의 표 머리글).
+
+지수를 새로 담는 사람이 잊기 가장 쉬운 자리라 여기서 잡는다.
+*/
+func TestEveryCatalogIndexHasACloseSchedule(t *testing.T) {
+	for _, entry := range marketIndexCatalog {
+		if _, ok := dailyCloseIndexSchedules[entry.id]; !ok {
+			t.Errorf("%s: dailyCloseIndexSchedules에 없다 — 일별 종가가 한 줄도 안 쌓인다", entry.id)
+		}
+	}
+	for id := range dailyCloseIndexSchedules {
+		found := false
+		for _, entry := range marketIndexCatalog {
+			if entry.id == id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("%s: 카탈로그에 없는 지수가 표에 남아 있다", id)
+		}
+	}
+}

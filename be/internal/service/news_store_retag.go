@@ -51,7 +51,9 @@ const (
 	//      같은 문자열을 주면 그 방어가 이름 쪽 문으로 우회됐다 — AMID의 이름이
 	//      그냥 「AMID」라 키 `amid`가 살아 있었고, v6가 잡았다고 적은 바로 그
 	//      종목이 09-12~13 이틀에 다시 20건 붙었다("…IPO amid AI safety…").
-	retagDoneKeyPrefix = "news:retag:v9:"
+	// v10 — 10-10 한국어 이름이 지수와 같은 미국 종목(나스닥 → NDAQ 49건)을 이름 인덱스에서 뺐다
+	//      (`ambiguousUSLocalNames`).
+	retagDoneKeyPrefix = "news:retag:v10:"
 	retagDoneTTL       = 90 * 24 * time.Hour
 )
 

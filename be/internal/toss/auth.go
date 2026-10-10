@@ -30,6 +30,17 @@ const (
 
 var tokenIssueBackoff = [tokenIssueAttempts - 1]time.Duration{200 * time.Millisecond, 600 * time.Millisecond}
 
+/*
+tokenHTTP — 발급 전용 클라이언트. **상한이 반드시 있어야 한다.**
+
+예전에는 http.DefaultClient(타임아웃 없음)였고, 배경 갱신은 context.Background()로 부른다.
+그 요청이 응답 없이 걸리면 refreshing=true가 풀리지 않고, 같은 프로세스의 다른 호출은
+전부 ensureFresh의 refreshWait.Wait()에서 선다 — 그 대기는 ctx를 보지 않으므로 호출자의
+기한도 소용이 없다. 하루 한 번 회전 구간에 그 프로세스의 Toss가 통째로 멈추는 자리였다.
+상한을 두면 대기는 최악 발급 시도 수 × 이 값으로 묶인다.
+*/
+var tokenHTTP = &http.Client{Timeout: 15 * time.Second}
+
 type cachedToken struct {
 	AccessToken string    `json:"accessToken"`
 	ExpiresAt   time.Time `json:"expiresAt"`
@@ -58,10 +69,6 @@ type TokenManager struct {
 	refreshing  bool
 	refreshWait sync.Cond
 	memToken    *cachedToken
-}
-
-func NewTokenManager(baseURL, clientID, clientSecret string, store TokenStore) *TokenManager {
-	return NewTokenManagerWithKey(baseURL, clientID, clientSecret, store, tokenCacheKey)
 }
 
 func NewTokenManagerWithKey(baseURL, clientID, clientSecret string, store TokenStore, cacheKey string) *TokenManager {
@@ -404,7 +411,7 @@ func (tm *TokenManager) issue(ctx context.Context) (string, time.Time, error) {
 	// 이 카운터가 그보다 크게 늘면 재발급 왕복이 돌고 있다는 뜻이다.
 	metrics.TossRESTCall("OAUTH_TOKEN")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := tokenHTTP.Do(req)
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("token request: %w", err)
 	}

@@ -66,6 +66,19 @@ func (r *SyncStateRepo) Mark(ctx context.Context, out SyncOutcome) error {
 	return err
 }
 
+// LastSyncedAt — 이 kind의 가장 최근 시도 시각(없으면 zero). 기동 직후의 주기 판단용.
+func (r *SyncStateRepo) LastSyncedAt(ctx context.Context, kind string) (time.Time, error) {
+	if r == nil || r.db == nil {
+		return time.Time{}, nil
+	}
+	var t sql.NullTime
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT MAX(last_synced_at) FROM symbol_sync_state WHERE kind = ?`, kind).Scan(&t); err != nil {
+		return time.Time{}, err
+	}
+	return t.Time, nil
+}
+
 // WasSynced reports whether this kind of batch ever successfully visited symbol.
 //
 // 화면이 "내역 없음"과 "아직 수집 전"을 구분하기 위한 한 줄이다. 이 구분이

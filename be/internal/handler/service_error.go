@@ -30,14 +30,16 @@ func writeServiceError(w http.ResponseWriter, err error) {
 		response.Error(w, http.StatusUnauthorized, err.Error())
 	case errors.Is(err, service.ErrWeakPassword):
 		response.Error(w, http.StatusBadRequest, err.Error())
-	case errors.Is(err, service.ErrInvalidEmail):
+	case errors.Is(err, service.ErrInvalidLoginID):
 		response.Error(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, service.ErrInvalidDisplayName):
 		response.Error(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, repository.ErrEmailTaken):
-		response.Error(w, http.StatusConflict, "email already registered")
+		response.Error(w, http.StatusConflict, "login id already registered")
+	case errors.Is(err, repository.ErrDisplayNameTaken):
+		response.Error(w, http.StatusConflict, "display name already taken")
 	case errors.Is(err, repository.ErrUserNotFound):
-		response.Error(w, http.StatusUnauthorized, "invalid email or password")
+		response.Error(w, http.StatusUnauthorized, "invalid login id or password")
 	// 카탈로그에 없는 종목을 사용자 데이터에 넣으려 한 것 — 입력 오류가 아니라
 	// 「그런 종목이 없다」이므로 404다 (service/symbol_catalog.go).
 	case errors.Is(err, service.ErrUnknownSymbol):

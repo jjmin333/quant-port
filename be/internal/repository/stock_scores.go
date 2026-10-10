@@ -206,43 +206,6 @@ func (r *StockScoreRepo) Latest(ctx context.Context, symbol string) (*model.Stoc
 	return r.scan(rows)
 }
 
-/*
-UpdateAxes rewrites one already-stored row's composite, grade, coverage,
-breakdown and inputs — everything the 심리·수급 축이 뒤늦게 바꾸는 값들.
-
-**INSERT는 하지 않는다.** 이 축은 요약 파이프라인이 다녀간 종목에만 붙는데, 그
-종목이 아직 점수 배치에 잡히지 않았다면(상장 직후·재무 결측) 여기서 행을 만들어
-봐야 심리 하나만 든 점수가 된다. 그건 점수가 아니라 뉴스 감성이다 — 배치가 그
-종목을 채점하는 날 정상적으로 합류한다.
-
-peer_pct는 건드리지 않는다. 그 값은 같은 날 전 종목을 함께 줄 세워야 나오는데,
-한 종목만 고쳐 놓고 순위를 다시 매길 수는 없다. 다음 배치가 바로잡는다.
-*/
-func (r *StockScoreRepo) UpdateAxes(
-	ctx context.Context,
-	symbol, tradeDate string,
-	score sql.NullInt64,
-	grade string,
-	coverage float64,
-	breakdown, inputs string,
-) error {
-	if r == nil || r.db == nil {
-		return nil
-	}
-	var gradeArg any
-	if grade != "" {
-		gradeArg = grade
-	}
-	_, err := r.db.ExecContext(ctx, `
-		UPDATE stock_scores
-		   SET score = ?, grade = ?, coverage = ?, breakdown = ?, inputs = ?
-		 WHERE symbol = ? AND trade_date = ?`,
-		score, gradeArg, coverage, breakdown, inputs,
-		strings.ToUpper(strings.TrimSpace(symbol)), tradeDate,
-	)
-	return err
-}
-
 // History returns a symbol's recent scores, newest first.
 func (r *StockScoreRepo) History(ctx context.Context, symbol string, limit int) ([]model.StockScoreView, error) {
 	if r == nil || r.db == nil {
@@ -354,6 +317,42 @@ func (r *StockScoreRepo) SyncDailyCloseScores(ctx context.Context, tradeDate str
 }
 
 /*
+FillAvgTradeValue — 그날 점수 행에 `inputs.avgTradeValue`(30일 평균 거래대금, 현지 통화)를
+채운다. 추천 목록의 거래대금 하한이 이 값을 읽는다(`scoreRecommendableClause`).
+
+**키가 없는 행만** 건드린다 — 점수 배치가 막 쓴 행, 그리고 이 규칙 전에 매긴 최신일 행.
+그래서 두 번 불러도 같고, 랭킹 사전계산이 시작할 때 한 번 더 불러 두면 배포 직후에도
+기다리지 않고 하한이 걸린다. 창 안에 종가가 하나도 없으면 0을 적는다 — 키가 없다는 것은
+「규칙 전의 행」이라는 뜻으로만 남긴다.
+
+창은 달력 30일(≈20거래일)이다. 거래가 없던 날(거래량 0)도 평균에 넣는다 — 그 자체가
+「사고팔기 어렵다」는 증거다. 점수일 **이후** 종가는 쓰지 않는다(재계산해도 그날 몰랐던
+값이 섞이지 않게, `attachTechnicals` 주석과 같은 이유).
+*/
+func (r *StockScoreRepo) FillAvgTradeValue(ctx context.Context, tradeDate string) (int64, error) {
+	if r == nil || r.db == nil || tradeDate == "" {
+		return 0, nil
+	}
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE stock_scores sc
+		  LEFT JOIN (
+		        SELECT symbol, AVG(close_price * COALESCE(volume, 0)) AS v
+		          FROM stock_daily_closes
+		         WHERE trade_date <= ? AND trade_date > DATE_SUB(?, INTERVAL 30 DAY)
+		         GROUP BY symbol
+		       ) t ON t.symbol = sc.symbol
+		   SET sc.inputs = JSON_SET(sc.inputs, '$.avgTradeValue', ROUND(COALESCE(t.v, 0)))
+		 WHERE sc.trade_date = ?
+		   AND JSON_EXTRACT(sc.inputs, '$.avgTradeValue') IS NULL`,
+		tradeDate, tradeDate, tradeDate)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
+/*
 scoreCloseFallbackDays — 등락률을 메울 때 거슬러 올라갈 수 있는 최대 일수.
 
 7일인 이유는 **정상적으로 벌어질 수 있는 간격**을 덮되 그 이상은 덮지 않기 위해서다.
@@ -435,6 +434,7 @@ func (r *StockScoreRepo) TopScores(ctx context.Context, tradeDate string, assetT
 		`stock_score_universe.go` 한 곳에 있다.
 	*/
 	productClause, productArgs := scoreRankableProductClause("s")
+	sizeClause, sizeArgs := scoreRecommendableClause("sc", "s")
 	query := `
 		SELECT sc.symbol, s.name, s.asset_type, sc.score, sc.grade, sc.peer_pct,
 		       d.change_rate, d.close_price, d.prev_close, d.currency,
@@ -451,16 +451,17 @@ func (r *StockScoreRepo) TopScores(ctx context.Context, tradeDate string, assetT
 		         LIMIT 1
 		       ) d ON TRUE
 		 WHERE sc.trade_date = ? AND sc.score IS NOT NULL AND s.asset_type IN (` + placeholders + `)` +
-		productClause + scoreMinAxesClause("sc") + `
+		productClause + scoreMinAxesClause("sc") + sizeClause + `
 		 ORDER BY sc.score DESC, sc.peer_pct DESC
 		 LIMIT ?`
 
-	args := make([]any, 0, len(assetTypes)+len(productArgs)+2)
+	args := make([]any, 0, len(assetTypes)+len(productArgs)+len(sizeArgs)+2)
 	args = append(args, tradeDate)
 	for _, a := range assetTypes {
 		args = append(args, a)
 	}
 	args = append(args, productArgs...)
+	args = append(args, sizeArgs...)
 	args = append(args, limit)
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
@@ -802,6 +803,94 @@ func (r *StockScoreRepo) PeerGroupsBefore(ctx context.Context, tradeDate string)
 			return nil, err
 		}
 		out[symbol] = peer
+	}
+	return out, rows.Err()
+}
+
+/*
+ScoreLightRow is a score row **without the inputs blob**.
+
+목록용 변화 요약이 읽는 모양이다. `inputs`는 평균 825B라 200종목 × 2회차면 330KB를
+읽어 버리는데, 그 행에서 쓰는 것은 축 점수와 커버리지뿐이다.
+*/
+type ScoreLightRow struct {
+	Symbol    string
+	TradeDate string
+	Score     sql.NullInt64
+	Coverage  float64
+	Breakdown model.ScoreBreakdown
+}
+
+/*
+RecentPairs returns the latest **two** scored rows per symbol, newest first.
+
+# 왜 두 행인가
+
+목록은 「어제와 얼마나 달라졌나」만 묻는다. 그 답에 필요한 것은 최신 회차와 직전
+회차 둘뿐이고, 셋째 행부터는 읽는 만큼 손해다.
+
+# 왜 창을 자르나
+
+`sinceDate` 없이 윈도 함수를 돌리면 보관 중인 30거래일 전부가 파티션에 들어간다.
+직전 회차는 며칠 안에 있으므로(점수 배치가 매일 도는 것은 아니다 — 실측 27일 중
+16일) 창을 좁혀 스캔을 줄인다. 그 창 안에 한 행뿐이면 비교 대상이 없는 것이고,
+그것은 정상 상태다.
+*/
+func (r *StockScoreRepo) RecentPairs(
+	ctx context.Context, symbols []string, sinceDate string,
+) (map[string][]ScoreLightRow, error) {
+	if r == nil || r.db == nil || len(symbols) == 0 {
+		return nil, nil
+	}
+	args := make([]any, 0, len(symbols)+1)
+	placeholders := make([]string, 0, len(symbols))
+	seen := map[string]struct{}{}
+	for _, sym := range symbols {
+		sym = strings.ToUpper(strings.TrimSpace(sym))
+		if sym == "" {
+			continue
+		}
+		if _, dup := seen[sym]; dup {
+			continue
+		}
+		seen[sym] = struct{}{}
+		placeholders = append(placeholders, "?")
+		args = append(args, sym)
+	}
+	if len(args) == 0 {
+		return nil, nil
+	}
+	args = append(args, sinceDate)
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT symbol, DATE_FORMAT(trade_date, '%Y-%m-%d'), score, coverage, breakdown
+		  FROM (
+		        SELECT symbol, trade_date, score, coverage, breakdown,
+		               ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY trade_date DESC) AS rn
+		          FROM stock_scores
+		         WHERE symbol IN (`+strings.Join(placeholders, ",")+`)
+		           AND trade_date >= ?
+		       ) t
+		 WHERE rn <= 2
+		 ORDER BY symbol, trade_date DESC`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make(map[string][]ScoreLightRow, len(args))
+	for rows.Next() {
+		var (
+			row       ScoreLightRow
+			breakdown sql.NullString
+		)
+		if err := rows.Scan(&row.Symbol, &row.TradeDate, &row.Score, &row.Coverage, &breakdown); err != nil {
+			return nil, err
+		}
+		if breakdown.Valid && breakdown.String != "" {
+			_ = json.Unmarshal([]byte(breakdown.String), &row.Breakdown)
+		}
+		out[row.Symbol] = append(out[row.Symbol], row)
 	}
 	return out, rows.Err()
 }

@@ -108,6 +108,9 @@ type StockSummaryService struct {
 	*/
 	batchRuns *repository.BatchJobRunRepo
 
+	// social — 미국 종목의 Reddit 여론(2026-09-29). 사실표의 "reddit"이 된다. nil이면 빠진다.
+	social *repository.ExternalSignalRepo
+
 	// scores supplies the server-computed 종합 점수 and its axis breakdown to
 	// the prompt. Without it the prose and the number shown beside it would be
 	// reasoning from different inputs.
@@ -162,6 +165,9 @@ func (s *StockSummaryService) buildCoordinator() *quoteRefreshCoordinator {
 	}
 	return s.buildOnce
 }
+
+// SetSocial wires the Reddit tables (ApeWisdom 요약 · 커뮤니티 점수) into the facts.
+func (s *StockSummaryService) SetSocial(repo *repository.ExternalSignalRepo) { s.social = repo }
 
 // SetRankings wires 마켓 레이더's stored rankings so the scheduled batch can
 // pick its targets from the 1일 기준 top 100.
@@ -460,6 +466,9 @@ func (s *StockSummaryService) build(ctx context.Context, symbol string, useLLM b
 	if useLLM && client.Enabled() {
 		stats.llmAttempted = true
 		facts := buildStockSummaryFacts(stock, fundamentals, history, insiderTxns, technical, articles, scoreView)
+		if assetType == model.AssetUS {
+			facts.Reddit = redditFacts(ctx, s.social, stock.Symbol, time.Now())
+		}
 		factsJSON, err := json.Marshal(facts)
 		if err != nil {
 			stats.llmErr = err
@@ -511,37 +520,11 @@ func (s *StockSummaryService) build(ctx context.Context, symbol string, useLLM b
 	out.GeneratedAt = time.Now().Format(time.RFC3339)
 	s.recordDailyAnalysis(ctx, stock, assetType, out)
 	/*
-		심리·수급 축을 이 종목의 저장된 점수에 얹는다 (`stock_score_sentiment.go`).
-
-		재료(뉴스 감성 · 내부자 거래)는 방금 이 빌드가 모은 것이고, 점수 배치는
-		전 종목에 그것을 돌릴 수 없어 그 축을 비워 둔다. **LLM 호출은 늘지 않는다** —
-		프롬프트에 넣던 값을 한 번 더 쓸 뿐이다. 그래서 LLM 없이 도는 재빌드에서도
-		부른다(감성은 `carryOverNarrative`가 이어 받는다): 배치가 덮어쓴 축이 다음
-		읽기에서 스스로 복구된다.
-
-		실패는 로그만 남긴다 — 요약 자체는 이미 완성됐고, 점수 한 축 때문에 화면이
-		비면 안 된다.
+		심리·수급 축은 **여기서 얹지 않는다** (2026-09-23). 점수 배치가 기사 라벨과
+		내부자 거래로 전 종목에 매긴다(`ScoreService.attachSentiment`). 예전처럼 요약이
+		다녀간 종목에만 덧칠하면 한 축의 원천이 둘이 되고, 00:25와 08:00 사이에 축이
+		생겼다 사라진다.
 	*/
-	if s.scores != nil {
-		if err := s.scores.ApplySentiment(ctx, stock.Symbol, out.NewsSentiment, insiderTxns); err != nil {
-			log.Printf("sentiment axis %s: %v", stock.Symbol, err)
-		} else if updated, err := s.scores.Get(ctx, stock.Symbol); err == nil && updated != nil {
-			/*
-				시장 분석을 **바뀐 점수로 다시 쓴다.**
-
-				브리핑은 위에서 이미 한 번 만들어졌는데, 그때의 `scoreView`는 심리
-				축이 붙기 **전** 값이다. 그대로 두면 같은 화면에서 점수 카드는 66,
-				바로 아래 「투자 포인트」 첫 줄은 69를 말한다 — §6에서 고친 것과
-				똑같은 종류의 어긋남이 이 축을 더하면서 새로 생긴다(실측 000660).
-
-				브리핑 조립은 순수 함수라 다시 부르는 비용이 조회 한 번뿐이다.
-				LLM 프롬프트는 다시 만들지 않는다 — 이미 호출이 끝났고, 그 글은
-				「어느 쪽 숫자로 썼는가」가 아니라 해석이라 한 축의 차이로 무효가
-				되지 않는다.
-			*/
-			out.Briefing = buildMarketBriefing(stock, fundamentals, history, insiderTxns, technical, updated)
-		}
-	}
 	return out, stats, nil
 }
 
@@ -709,11 +692,22 @@ func (s *StockSummaryService) recordDailyAnalysis(
 		한 종목·한 날짜에 두 개의 「종합 점수」를 만들어 냈다. 이제 이 함수는 그날의
 		**글만** 남긴다 — 점수는 `stock_scores`에서 조인해 온다.
 	*/
+	/*
+		본문과 요약을 **둘 다** 남긴다 (2026-09-15 사용자 요청 1).
+
+		`AISummary`는 네 갈래를 이어붙인 본문이고 `AIOverview`는 같은 호출이 그 넷을
+		근거로 다시 쓴 한 문단이다. 요약을 본문에서 잘라 만들 수 없는 이유가 이것이다 —
+		본문의 앞부분은 그저 첫 갈래(밸류에이션)일 뿐이다.
+
+		LLM이 안 돌았으면 `Overview`는 서버가 네 갈래 첫 문장을 엮어 둔 값이다
+		(`composeOverview`). 그것도 「네 갈래를 다 거친 한 문단」이라 여기 쌓아도 된다.
+	*/
 	analysis := model.DailyCloseAnalysis{
-		Symbol:    stock.Symbol,
-		TradeDate: tradeDate,
-		AISummary: dailyCloseSummaryText(view),
-		Source:    view.Source,
+		Symbol:     stock.Symbol,
+		TradeDate:  tradeDate,
+		AISummary:  dailyCloseSummaryText(view),
+		AIOverview: strings.TrimSpace(view.Overview),
+		Source:     view.Source,
 	}
 	if ok, err := s.dailyCloses.AttachAnalysis(ctx, analysis); err != nil {
 		log.Printf("daily close analysis %s %s: %v", stock.Symbol, tradeDate, err)
@@ -923,3 +917,11 @@ var kstZone = func() *time.Location {
 // batch runner stretches it further when token pacing demands it (see
 // batchSpacing).
 const llmRefreshSpacing = 6 * time.Second
+
+// SetBackground gives the service its long-lived context without starting the scheduler —
+// api 역할(SERVER_ROLE=api)은 사용자의 수동 재생성만 돌리고 예약 회차는 worker-content가 돈다.
+func (s *StockSummaryService) SetBackground(ctx context.Context) {
+	s.mu.Lock()
+	s.bgCtx = ctx
+	s.mu.Unlock()
+}

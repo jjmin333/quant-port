@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // RateLimitStatus is the budget Toss reports for the rate-limit bucket a
@@ -63,6 +64,7 @@ func logRateLimitStatus(method, path, key string, status int, rl RateLimitStatus
 	if !rl.Present {
 		return
 	}
+	logFirstSeenLimit(rateLimitGroup(path), key, rl.Limit)
 	if status == http.StatusTooManyRequests {
 		log.Printf(
 			"toss api rate-limit exceeded: %s %s key=%s limit=%d remaining=%d resetSec=%d retryAfterSec=%d",
@@ -76,4 +78,24 @@ func logRateLimitStatus(method, path, key string, status int, rl RateLimitStatus
 			method, path, key, rl.Limit, rl.Remaining, rl.ResetSec,
 		)
 	}
+}
+
+/*
+logFirstSeenLimit — 그룹마다 한도를 **처음 본 순간 한 번** 남긴다.
+
+Toss는 어떤 그룹에도 한도 숫자를 공표하지 않는다(헤더에만 있다). 새 버킷을 쓰기 시작할
+때(2026-09-24 STOCK_TRADING_TREND) 「그 버킷의 한도가 얼마인가」를 로그 한 줄로 알 수 있게
+한다 — 같은 그룹의 한도가 달라지면 그때 한 번 더 찍힌다.
+*/
+var seenLimits sync.Map // group|key → limit
+
+func logFirstSeenLimit(group, key string, limit int) {
+	if limit <= 0 {
+		return
+	}
+	if prev, loaded := seenLimits.LoadOrStore(group+"|"+key, limit); loaded && prev.(int) == limit {
+		return
+	}
+	seenLimits.Store(group+"|"+key, limit)
+	log.Printf("toss api rate-limit observed: group=%s key=%s limit=%d", group, key, limit)
 }

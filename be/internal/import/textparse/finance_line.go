@@ -437,7 +437,3 @@ func (b *pendingBlock) toParsedLine() ParsedLine {
 	}
 	return line
 }
-
-func (b *pendingBlock) ready() bool {
-	return b.name != "" && b.qty > 0
-}

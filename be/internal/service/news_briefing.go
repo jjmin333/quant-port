@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
@@ -150,25 +151,66 @@ func (s *NewsBriefingService) Latest(ctx context.Context, market string) (*model
 	return s.repo.Latest(ctx, market)
 }
 
-// Generate builds one briefing and stores it. skipWhenQuiet makes the
-// scheduled path skip markets where no article has arrived since the last run —
-// a quiet night must not spend a call restating the same headlines. The admin
-// trigger passes false so a manual run always produces something.
-func (s *NewsBriefingService) Generate(ctx context.Context, market string, skipWhenQuiet bool) (*model.NewsMarketBriefing, bool, error) {
+// briefingGenOptions steers one generate call.
+type briefingGenOptions struct {
+	skipWhenQuiet bool
+	// upgradeOnly is the in-slot retry: store the result **only** when it
+	// carries a fresh AI narrative. A retry that fails again would otherwise
+	// write the same rules/carry row every 15 minutes for the length of an
+	// outage and push real history out of briefingKeep.
+	upgradeOnly bool
+}
+
+// briefingRun is what one generate call did.
+type briefingRun struct {
+	briefing  *model.NewsMarketBriefing
+	generated bool
+	// narrativeErr is why this run has no fresh AI narrative (nil when it has
+	// one, or when the LLM was never asked). The scheduler reads it to decide
+	// whether a retry inside the slot is worth making.
+	narrativeErr error
+	// model is the model that wrote the narrative — primary or 503 fallback.
+	model string
+}
+
+// needsRetry reports whether the slot should be tried again before it ends:
+// the LLM was asked and failed for a reason a later attempt can survive.
+// 한도 초과는 제외 — 다시 물어도 같은 대답이고, 통과하면 쓰지 않기로 한 예산이다.
+func (r briefingRun) needsRetry() bool {
+	return r.narrativeErr != nil && !llm.IsBudgetExhausted(r.narrativeErr)
+}
+
+var (
+	errBriefingEmptySummary = errors.New("llm returned an empty summary")
+	errBriefingPromptBuild  = errors.New("briefing prompt build failed")
+)
+
+func (s *NewsBriefingService) generate(ctx context.Context, market string, opts briefingGenOptions) (briefingRun, error) {
 	if s == nil || s.news == nil {
-		return nil, false, nil
+		return briefingRun{}, nil
 	}
 
 	facts := s.buildFacts(ctx, market)
 	if facts.ArticleCount == 0 {
-		return nil, false, nil
+		return briefingRun{}, nil
 	}
 
-	if skipWhenQuiet {
-		if prev, err := s.repo.Latest(ctx, market); err == nil && prev != nil {
+	client := s.llm.For(market)
+
+	/*
+		조용한 슬롯을 건너뛰는 것은 **직전 행이 AI 문장일 때만**이다.
+
+		직전 행이 규칙·승계 문장이면 「새 기사가 없다」는 건너뛸 이유가 아니라 다시
+		물어볼 이유다 — 예전에는 503으로 규칙이 된 뒤 기사가 뜸한 새벽이면 그 규칙
+		문장이 다음 기사가 올 때까지 슬롯마다 그대로 남았다. LLM이 꺼져 있으면
+		다시 만들어도 같은 규칙이라 그때는 예전처럼 건너뛴다.
+	*/
+	if opts.skipWhenQuiet {
+		if prev, err := s.repo.Latest(ctx, market); err == nil && prev != nil &&
+			(prev.Source == model.BriefingSourceLLM || !client.Enabled()) {
 			if !facts.LatestPublishedAt.IsZero() &&
 				!facts.LatestPublishedAt.After(prev.Facts.LatestPublishedAt) {
-				return prev, false, nil
+				return briefingRun{briefing: prev}, nil
 			}
 		}
 	}
@@ -179,8 +221,8 @@ func (s *NewsBriefingService) Generate(ctx context.Context, market string, skipW
 		Source:      model.BriefingSourceRules,
 		Facts:       facts,
 	}
+	run := briefingRun{briefing: &briefing}
 
-	client := s.llm.For(market)
 	if client.Enabled() {
 		history, _ := s.repo.History(ctx, market, briefingHistoryCount, briefingHistoryChars)
 		earnings := s.briefingEarnings(ctx, market)
@@ -190,17 +232,28 @@ func (s *NewsBriefingService) Generate(ctx context.Context, market string, skipW
 		}
 		factsJSON, err := s.promptJSON(market, facts, history, earnings, flow)
 		if err == nil {
-			if out := s.briefingNarrative(ctx, client, market, factsJSON); out != nil {
+			out, nerr := s.briefingNarrative(ctx, client, market, factsJSON)
+			if out != nil {
 				briefing.Source = model.BriefingSourceLLM
 				briefing.Summary = out.Summary
 				briefing.Mood = out.Mood
 				briefing.MoodReason = out.MoodReason
 				briefing.Highlights = out.Highlights
 				briefing.WatchPoints = out.WatchPoints
+				run.model = out.Model
+				if out.Model != "" && out.Model != client.Model() {
+					log.Printf("news briefing %s: primary model unavailable, narrative by fallback %s", market, out.Model)
+				}
 			}
+			run.narrativeErr = nerr
 		} else {
 			log.Printf("news briefing %s: prompt build failed: %v", market, err)
+			run.narrativeErr = fmt.Errorf("%w: %v", errBriefingPromptBuild, err)
 		}
+	}
+
+	if opts.upgradeOnly && briefing.Source != model.BriefingSourceLLM {
+		return briefingRun{narrativeErr: run.narrativeErr}, nil
 	}
 
 	// 문장을 못 얻었을 때의 차선은 **직전 AI 문장을 물려받는 것**이고, 그마저
@@ -212,13 +265,14 @@ func (s *NewsBriefingService) Generate(ctx context.Context, market string, skipW
 
 	if s.repo != nil {
 		if err := s.repo.Insert(ctx, briefing); err != nil {
-			return nil, false, err
+			return briefingRun{}, err
 		}
 		if err := s.repo.Prune(ctx, market, briefingKeep); err != nil {
 			log.Printf("news briefing %s: prune failed: %v", market, err)
 		}
 	}
-	return &briefing, true, nil
+	run.generated = true
+	return run, nil
 }
 
 const (
@@ -231,20 +285,25 @@ const (
 	// briefingCarryWindow is how stale an inherited narrative may be. Past
 	// this the sentences are describing a different session than the numbers
 	// printed beside them, and a plain rules paragraph is the honest answer.
+	// 국내 장 밖(마감 뒤~다음 개장 준비 전)끼리는 이 창을 쓰지 않는다 —
+	// briefingCarryAllowed 참고.
 	briefingCarryWindow = 3 * time.Hour
-	// briefingCarryDepth is how far back to look for one. Slots are 30–60
-	// minutes, so this comfortably covers the window above.
-	briefingCarryDepth = 8
+	// briefingCarryDepth is how far back to look for one. The in-slot retry
+	// only writes a row when it succeeds, so an hourly night of failures
+	// leaves one row per hour — 16 covers 마감 뒤 16:00 → 다음 날 08:00.
+	briefingCarryDepth = 16
 )
 
 // briefingNarrative asks the model for this slot's prose, with **one** extra
-// attempt when the first failure is the kind a second try could survive.
+// attempt when the first failure is the kind a second try could survive. It
+// returns the last failure alongside a nil output so the scheduler can decide
+// whether to try again later in the slot.
 //
-// Not retried:
+// Not retried here:
 //   - 한도 초과(llm.IsBudgetExhausted) — 다시 물어도 같은 대답이고, 통과한다면
 //     쓰지 않기로 정한 예산을 쓰는 것이다.
-//   - 503 — chatCompletion이 이미 한 번 다시 걸었다. 여기서 또 걸면 한 슬롯에
-//     네 번이 된다.
+//   - 503 — 클라이언트가 이미 한 번 다시 걸었다(대체 모델로). 여기서 또 걸면 한
+//     슬롯에 네 번이 된다. 503은 대신 슬롯 안 재시도(runDueMarkets)가 받는다.
 //
 // Retried: MinInterval 거절, 타임아웃, 그 밖의 5xx, JSON 파싱 실패, 그리고
 // **빈 summary**. 마지막 것이 특히 중요하다 — 모델이 형식만 맞는 빈 응답을 준
@@ -255,35 +314,38 @@ func (s *NewsBriefingService) briefingNarrative(
 	client *llm.Client,
 	market string,
 	factsJSON string,
-) *llm.NewsBriefingLLMOutput {
+) (*llm.NewsBriefingLLMOutput, error) {
+	var lastErr error
 	for attempt := 1; attempt <= 2; attempt++ {
 		out, err := client.GenerateNewsBriefing(ctx, factsJSON)
 		switch {
 		case err != nil:
+			lastErr = err
 			if attempt == 1 && !llm.IsBudgetExhausted(err) && !llm.IsUnavailable(err) {
 				log.Printf("news briefing %s: llm failed (%v) — retrying once", market, err)
 				if !s.waitBeforeBriefingRetry(ctx, client) {
-					return nil
+					return nil, err
 				}
 				continue
 			}
-			log.Printf("news briefing %s: llm failed, no narrative this slot: %v", market, err)
-			return nil
+			log.Printf("news briefing %s: llm failed, no narrative this attempt: %v", market, err)
+			return nil, err
 		case strings.TrimSpace(out.Summary) == "":
+			lastErr = errBriefingEmptySummary
 			if attempt == 1 {
 				log.Printf("news briefing %s: llm returned an empty summary — retrying once", market)
 				if !s.waitBeforeBriefingRetry(ctx, client) {
-					return nil
+					return nil, lastErr
 				}
 				continue
 			}
 			log.Printf("news briefing %s: llm returned an empty summary twice", market)
-			return nil
+			return nil, lastErr
 		default:
-			return out
+			return out, nil
 		}
 	}
-	return nil
+	return nil, lastErr
 }
 
 // waitBeforeBriefingRetry sleeps out the retry pause, or reports false when the
@@ -311,7 +373,7 @@ func (s *NewsBriefingService) waitBeforeBriefingRetry(ctx context.Context, clien
 // them would make a working screen look stuck for an hour. What the card owes
 // the reader instead is CarriedFrom: 「문장은 몇 시 것인가」.
 //
-// Chained carries keep pointing at the *original* slot, so the 3-hour window is
+// Chained carries keep pointing at the *original* slot, so the window is
 // measured from when the sentences were actually written and a long outage
 // cannot walk a morning briefing into the evening one slot at a time.
 func (s *NewsBriefingService) carryBriefingNarrative(ctx context.Context, b *model.NewsMarketBriefing) bool {
@@ -334,7 +396,7 @@ func (s *NewsBriefingService) carryBriefingNarrative(ctx context.Context, b *mod
 		if prev.CarriedFrom != nil {
 			origin = *prev.CarriedFrom
 		}
-		if !briefingCarryAllowed(origin, b.GeneratedAt) {
+		if !briefingCarryAllowed(b.Market, origin, b.GeneratedAt) {
 			return false
 		}
 
@@ -352,32 +414,63 @@ func (s *NewsBriefingService) carryBriefingNarrative(ctx context.Context, b *mod
 	return false
 }
 
-// briefingCarryAllowed reports whether a narrative written at origin may still
-// stand beside facts counted at now.
-//
-// Two limits, and the second is not implied by the first: 3시간이 지나면 문장이
-// 옆의 숫자와 다른 장을 말하고, **날이 바뀌면** 3시간 이내여도 다른 날 이야기다
-// (어제 18:00 장 마감 문장 옆에 오늘 08:00 개장 전 숫자).
-func briefingCarryAllowed(origin, now time.Time) bool {
+/*
+briefingCarryAllowed reports whether a narrative written at origin may still
+stand beside facts counted at now, for one market.
+
+두 가지를 본다.
+
+ 1. **같은 브리핑 날이어야 한다.** 날의 경계는 자정이 아니라 **그 시장의 개장 준비
+    시각**(개장 − briefingPreOpenLead: 국내 08:00 KST, 미국 08:30 ET)이다.
+    예전에는 서울 자정으로 끊었는데, 자정은 어느 시장의 경계도 아니다 — 국내는
+    이미 마감한 뒤이고 미국은 장이 한창이다. 그 규칙 때문에 모델이 503으로 막힌
+    밤 00:00부터 두 시장 모두 규칙 문장으로 떨어졌다(09-24 · 09-25 실측). 막으려던
+    것 — 「어제 장 마감 문장 옆에 오늘 개장 전 숫자」 — 은 이 경계가 그대로 막는다.
+ 2. **3시간 창.** 단, 국내에서 origin과 now가 **둘 다 장 밖**(마감 뒤 ~ 다음 개장
+    준비 전)이면 창을 쓰지 않는다. 그 사이 국내 지수는 움직이지 않아 문장이 옆
+    숫자와 어긋날 일이 없고, 카드는 「몇 시 문장」인지 밝힌다. 미국은 밤새 장이
+    열려 숫자가 움직이므로 3시간 그대로다.
+*/
+func briefingCarryAllowed(market string, origin, now time.Time) bool {
 	if origin.IsZero() || now.Before(origin) {
 		return false
 	}
-	if now.Sub(origin) > briefingCarryWindow {
+	if !briefingDay(market, origin).Equal(briefingDay(market, now)) {
 		return false
 	}
-	seoul := seoulLocation()
-	o, n := origin.In(seoul), now.In(seoul)
-	return o.Year() == n.Year() && o.YearDay() == n.YearDay()
+	if now.Sub(origin) <= briefingCarryWindow {
+		return true
+	}
+	if market == "us" {
+		return false
+	}
+	schedule := briefingScheduleFor(market)
+	return !calendar.InRegularSessionWithLead(schedule, origin, briefingPreOpenLead) &&
+		!calendar.InRegularSessionWithLead(schedule, now, briefingPreOpenLead)
+}
+
+// briefingDay is the market-local date a moment's briefing belongs to: the day
+// turns over at the pre-open lead (국내 08:00 KST, 미국 08:30 ET), not midnight.
+func briefingDay(market string, t time.Time) time.Time {
+	schedule := briefingScheduleFor(market)
+	loc := calendar.LocationFor(schedule)
+	local := t.In(loc)
+	turn := calendar.SessionOpenAt(schedule, local).In(loc).Add(-briefingPreOpenLead)
+	if local.Before(turn) {
+		local = local.AddDate(0, 0, -1)
+	}
+	return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc)
 }
 
 // RunBatchNow is the 배치 관리 manual trigger. Unlike the schedule it never
 // skips a quiet market — an admin pressing 실행 wants a new briefing, and being
 // told "nothing changed" would look like a failure.
 func (s *NewsBriefingService) RunBatchNow(ctx context.Context, market string) (map[string]any, string, error) {
-	briefing, generated, err := s.Generate(ctx, market, false)
+	run, err := s.generate(ctx, market, briefingGenOptions{})
 	if err != nil {
 		return nil, "", err
 	}
+	briefing := run.briefing
 	if briefing == nil {
 		return nil, "", fmt.Errorf("%s 뉴스 기사가 없어 브리핑을 만들 수 없습니다", briefingMarketLabel(market))
 	}
@@ -388,7 +481,10 @@ func (s *NewsBriefingService) RunBatchNow(ctx context.Context, market string) (m
 		"articleCount":  briefing.Facts.ArticleCount,
 		"breakingCount": briefing.Facts.BreakingCount,
 		"summaryChars":  len([]rune(briefing.Summary)),
-		"generated":     generated,
+		"generated":     run.generated,
+	}
+	if run.model != "" {
+		result["model"] = run.model
 	}
 	if briefing.CarriedFrom != nil {
 		result["carriedFrom"] = briefing.CarriedFrom.In(seoulLocation()).Format("15:04")

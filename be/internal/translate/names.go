@@ -89,6 +89,58 @@ func namePlaceholder(i int) string {
 }
 
 /*
+builtinNamePairs — **카탈로그에 없는데 자주 나오는 이름들** (2026-09-15).
+
+이름 잠그기는 지금까지 「그 기사에 붙은 종목」만 봤다(`namePairsFor`). 그래서
+상장사가 아닌 이름은 모델에게 맡겨졌고, 모델은 그것을 **낱말로 읽는다** — 실측:
+
+	Perplexity local agent platform → 「**당혹감** 현지 에이전트 플랫폼」
+	Anthropic's Amodei             → 「**인간학**의 아모디」
+	… - Yahoo Finance              → 「… - 야후 **재정**」
+
+도메인을 잠그는 이유와 같은 문제다(아래 MaskNames의 도메인 머리글) — 다만
+`- Yahoo Finance`는 도메인이 아니라 낱말이라 그 그물에 안 걸린다. 30일 실측에서
+헤드라인 꼬리의 출처 표기는 **Yahoo Finance만 1,374건**이었다.
+
+목록을 늘리는 규칙: **실측으로 자주 나오는 것만.** 여기 있는 이름은 번역문에서
+통째로 치환되므로, 드물게 나오는 이름을 넣으면 얻는 것 없이 오탐 위험만 는다.
+`.com`으로 끝나는 출처(Investing.com·Bloomberg.com·fool.com)는 이미 도메인
+그물이 걷어 가므로 넣지 않는다.
+*/
+var builtinNamePairs = []NamePair{
+	// 비상장 AI 기업 — 낱말로 읽히는 것이 확인된 것들.
+	{English: "Anthropic", Korean: "앤스로픽"},
+	{English: "Perplexity", Korean: "퍼플렉시티"},
+	{English: "OpenAI", Korean: "오픈AI"},
+
+	// 헤드라인 꼬리에 붙는 출처. 30일 실측 상위에서 **낱말로 번역될 수 있는
+	// 것**만 골랐다 — CNBC·WSJ 같은 약어는 모델이 그대로 둔다.
+	// 지역판이 따로 온다 — 긴 것부터 잠기므로(길이순 정렬) 셋을 다 적어 둔다.
+	// 실측 30일: Yahoo Finance 1,374 · UK 128 · Canada 82.
+	{English: "Yahoo! Finance Canada", Korean: "야후 파이낸스 캐나다"},
+	{English: "Yahoo Finance UK", Korean: "야후 파이낸스 UK"},
+	{English: "Yahoo Finance", Korean: "야후 파이낸스"},
+	{English: "Seeking Alpha", Korean: "시킹알파"},
+	{English: "MarketWatch", Korean: "마켓워치"},
+	{English: "Investor's Business Daily", Korean: "인베스터스 비즈니스 데일리"},
+	{English: "Morningstar", Korean: "모닝스타"},
+	{English: "TradingView", Korean: "트레이딩뷰"},
+	{English: "TipRanks", Korean: "팁랭크스"},
+	{English: "Benzinga", Korean: "벤징가"},
+	{English: "Barron's", Korean: "배런스"},
+	{English: "Reuters", Korean: "로이터"},
+	{English: "The Globe and Mail", Korean: "글로브앤메일"},
+
+	/*
+		**그대로 두기 위해** 잠그는 이름도 있다 — 한국어 표기가 없어서 옮기면
+		오히려 못 알아본다. 실측(2026-09-15 드레인): 같은 출처가 한 줄에서는
+		`FJElite`, 다른 줄에서는 「FJ엘리트」로 나왔다. 어느 쪽이 옳고 그르기
+		이전에 **한 화면에서 갈리는 것**이 문제다.
+	*/
+	{English: "FJElite", Korean: "FJElite"},
+}
+
+/*
 MaskNames는 원문에서 아는 회사 이름을 자리표시자로 바꾸고, 되돌릴 이름표를 함께 준다.
 
 **긴 이름부터** 바꾼다. "Alto Ingredients"를 "Alto"보다 먼저 보지 않으면 앞부분만
@@ -97,16 +149,18 @@ MaskNames는 원문에서 아는 회사 이름을 자리표시자로 바꾸고, 
 이름이 하나도 안 걸리면 원문을 그대로 돌려준다 — 그 경우 되돌릴 것도 없다.
 */
 func MaskNames(text string, pairs []NamePair) (string, []string) {
-	if text == "" || len(pairs) == 0 {
+	if text == "" {
 		return text, nil
 	}
-	ordered := make([]NamePair, 0, len(pairs))
+	ordered := make([]NamePair, 0, len(pairs)+len(builtinNamePairs))
 	for _, p := range pairs {
 		if strings.TrimSpace(p.English) == "" || strings.TrimSpace(p.Korean) == "" {
 			continue
 		}
 		ordered = append(ordered, p)
 	}
+	// 카탈로그에 없는 이름도 잠근다 — 아래 목록의 근거는 머리글에 있다.
+	ordered = append(ordered, builtinNamePairs...)
 	sort.SliceStable(ordered, func(i, j int) bool {
 		return len(ordered[i].English) > len(ordered[j].English)
 	})
@@ -188,6 +242,22 @@ func RestoreNames(translated string, restore []string) (string, bool) {
 		if start, end, ok := indexSpaced(out, ph); ok {
 			out = out[:start] + korean + out[end:]
 			continue
+		}
+		/*
+			**달러 기호만 떨어져 나갔을 수 있다** — `$QPZAA` → `QPZAA` (2026-09-15
+			실측: "Fantastic News for Broadcom Stock Investors"가 「QPZAA 주식
+			투자자에게 환상적인 소식」으로 왔다. 20건 중 1건).
+
+			여기까지 느슨하게 가도 되는 이유는 접두사 `QPZ`가 영어 본문·티커
+			어디에도 안 나오도록 고른 세 글자이기 때문이다 — 남은 다섯 글자가
+			그대로면 어느 자리였는지 모호하지 않다. 공백까지 허용하는 위 규칙과
+			달리 여기서는 **글자가 붙어 있어야** 한다.
+		*/
+		if bare := strings.TrimPrefix(ph, "$"); bare != ph {
+			if idx := indexFold(out, bare); idx >= 0 {
+				out = out[:idx] + korean + out[idx+len(bare):]
+				continue
+			}
 		}
 		return translated, false
 	}

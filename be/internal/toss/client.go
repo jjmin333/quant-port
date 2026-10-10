@@ -144,14 +144,6 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, account
 	return c.do(ctx, http.MethodGet, path, query, nil, accountSeq, dest)
 }
 
-func (c *Client) postJSON(ctx context.Context, path string, body any, accountSeq *int64, dest any) error {
-	return c.do(ctx, http.MethodPost, path, nil, body, accountSeq, dest)
-}
-
-func (c *Client) delete(ctx context.Context, path string, accountSeq *int64, dest any) error {
-	return c.do(ctx, http.MethodDelete, path, nil, nil, accountSeq, dest)
-}
-
 func (c *Client) pickAuth(group string) *TokenManager {
 	if c.secondary != nil && c.failover.useSecondary(group) {
 		return c.secondary
@@ -415,10 +407,4 @@ func (c *Client) doOnce(
 		return nil, 0, rl, fmt.Errorf("read body: %w", err)
 	}
 	return raw, resp.StatusCode, rl, nil
-}
-
-// WithAccount is a helper for account-scoped calls.
-func WithAccount(accountSeq int64) *int64 {
-	v := accountSeq
-	return &v
 }

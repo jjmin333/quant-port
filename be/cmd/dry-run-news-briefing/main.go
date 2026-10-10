@@ -54,6 +54,8 @@ func main() {
 		Provider: cfg.LLM.Provider,
 		BaseURL:  cfg.LLM.BaseURL,
 		Model:    cfg.LLM.Model,
+		// 503 대체 모델은 시장 브리핑만 쓴다(chatCompletionWithFallback).
+		FallbackModel: cfg.LLM.FallbackModel,
 	}, cfg.LLM.KeyKR, cfg.LLM.KeyUS, apiBudget)
 
 	stockRepo := repository.NewStockRepo(mysql.DB())

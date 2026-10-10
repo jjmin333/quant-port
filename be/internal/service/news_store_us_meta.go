@@ -50,18 +50,61 @@ func (st *NewsStore) lookupUSSymbolByName(ctx context.Context, name string) stri
 		st.mu.RUnlock()
 		return sym
 	}
+	gen := st.usNameIndexGen
+	memo, memoOK := st.usNameLookupMemo[nameLower]
 	st.mu.RUnlock()
 
 	if st.stocks == nil {
 		return ""
 	}
+	/*
+		DB 검색 결과를 이름별로 기억한다 — **못 찾은 것까지.**
+
+		이 함수는 목록을 만들 때 **기사마다** 불린다(resolveUSNewsPreviewImage). 인덱스에
+		없는 소유격 주어("Fed's", "BoC's" …)는 매번 여기까지 내려와 stocks.Search를
+		쳤다. 실측(09-25, 해외 목록 100건): 7건이 DB로 가서 **267ms**(건당 ~38ms) —
+		그 목록 재구성 시간의 약 40%였고, 답은 거의 늘 「없음」이었다.
+		결과는 이름과 종목 마스터에만 달렸으므로 이름 인덱스와 **같은 세대**로 묶는다
+		(재구성하면 비운다). 조회 오류는 기억하지 않는다 — 다음 번에 다시 묻는다.
+	*/
+	if memoOK && memo.gen == gen {
+		if len(memo.symbols) == 0 {
+			return ""
+		}
+		return memo.symbols[0]
+	}
+	sym, ok := st.searchUSSymbolByName(ctx, name, nameLower)
+	if ok {
+		st.rememberUSNameLookup(nameLower, gen, sym)
+	}
+	return sym
+}
+
+func (st *NewsStore) rememberUSNameLookup(nameLower string, gen uint64, sym string) {
+	var symbols []string
+	if sym != "" {
+		symbols = []string{sym}
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if st.usNameLookupMemo == nil || len(st.usNameLookupMemo) >= usSymbolMemoMaxEntries {
+		st.usNameLookupMemo = make(map[string]usSymbolMemoEntry)
+	}
+	st.usNameLookupMemo[nameLower] = usSymbolMemoEntry{gen: gen, symbols: symbols}
+}
+
+// searchUSSymbolByName — ok=false면 조회 자체가 실패한 것(기억하지 않는다).
+func (st *NewsStore) searchUSSymbolByName(ctx context.Context, name, nameLower string) (string, bool) {
 	results, err := st.stocks.Search(ctx, model.StockSearchParams{
 		Query:  name,
 		Market: "us",
 		Limit:  5,
 	})
-	if err != nil || len(results) == 0 {
-		return ""
+	if err != nil {
+		return "", false
+	}
+	if len(results) == 0 {
+		return "", true
 	}
 	/*
 		**정확히 일치할 때만 받는다.**
@@ -87,10 +130,10 @@ func (st *NewsStore) lookupUSSymbolByName(ctx context.Context, name string) stri
 		if strings.EqualFold(sym, nameLower) ||
 			strings.EqualFold(strings.TrimSpace(s.EnglishName), nameLower) ||
 			strings.EqualFold(strings.TrimSpace(s.Name), nameLower) {
-			return sym
+			return sym, true
 		}
 	}
-	return ""
+	return "", true
 }
 
 func pickPrimaryUSSymbol(symbols []string, headline string, nameIndex map[string]string) string {

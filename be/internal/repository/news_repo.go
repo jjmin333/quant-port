@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/enact/quant-port/be/internal/marketdata"
+	"github.com/enact/quant-port/be/internal/model"
 )
 
 type NewsArticleRecord struct {
@@ -34,6 +35,8 @@ type NewsArticleRecord struct {
 	ViewCount     int
 	Highlighted   bool
 	UpdatedAt     time.Time
+	Topic         string // "" = stock
+	AssetTags     []model.NewsAssetTag
 }
 
 type NewsListParams struct {
@@ -42,6 +45,7 @@ type NewsListParams struct {
 	Sort     string
 	Query    string
 	Symbol   string
+	Topic    string // "" = 전부
 	Limit    int
 }
 
@@ -89,6 +93,15 @@ func (r *NewsRepo) Upsert(ctx context.Context, rec NewsArticleRecord) error {
 		previewMode = "summary"
 	}
 	publishedAt := NormalizeNewsPublishedAt(rec.PublishedAt)
+	topic := rec.Topic
+	if topic == "" {
+		topic = model.NewsTopicStock
+	}
+	var assetTags any // NULL — 칩이 없는 기사가 대부분이다
+	if len(rec.AssetTags) > 0 {
+		b, _ := json.Marshal(rec.AssetTags)
+		assetTags = string(b)
+	}
 
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO news_articles (
@@ -96,8 +109,8 @@ func (r *NewsRepo) Upsert(ctx context.Context, rec NewsArticleRecord) error {
 			headline, headline_ko, summary, summary_ko, image_url, preview_mode,
 			source_id, publisher_id, publisher_name,
 			tags_json, symbols_json, keywords_json,
-			published_at, view_count, highlighted
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			published_at, view_count, highlighted, topic, asset_tags_json
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			headline = VALUES(headline),
 			headline_ko = IF(VALUES(headline_ko) != '', VALUES(headline_ko), headline_ko),
@@ -111,6 +124,8 @@ func (r *NewsRepo) Upsert(ctx context.Context, rec NewsArticleRecord) error {
 			preview_mode = IF(VALUES(preview_mode) != 'summary', VALUES(preview_mode), preview_mode),
 			tags_json = VALUES(tags_json),
 			symbols_json = VALUES(symbols_json),
+			topic = VALUES(topic),
+			asset_tags_json = VALUES(asset_tags_json),
 			keywords_json = IF(JSON_LENGTH(VALUES(keywords_json)) > 0, VALUES(keywords_json), keywords_json),
 			published_at = CASE
 				WHEN VALUES(published_at) IS NULL OR VALUES(published_at) < '2000-01-01' THEN published_at
@@ -124,7 +139,7 @@ func (r *NewsRepo) Upsert(ctx context.Context, rec NewsArticleRecord) error {
 		rec.Headline, nullIfEmpty(rec.HeadlineKo), nullIfEmpty(rec.Summary), nullIfEmpty(rec.SummaryKo),
 		nullIfEmpty(rec.ImageURL), previewMode,
 		rec.SourceID, nullIfEmpty(rec.PublisherID), nullIfEmpty(rec.PublisherName),
-		tags, symbols, keywords, publishedAt, rec.ViewCount, rec.Highlighted)
+		tags, symbols, keywords, publishedAt, rec.ViewCount, rec.Highlighted, topic, assetTags)
 	return err
 }
 
@@ -137,18 +152,6 @@ func (r *NewsRepo) ExistsByURLHash(ctx context.Context, urlHash string) (bool, e
 		return false, err
 	}
 	return n > 0, nil
-}
-
-func normalizeNewsHeadlineKey(headline string) string {
-	return marketdata.NormalizeNewsHeadlineKey(headline)
-}
-
-func (r *NewsRepo) ExistsRecentHeadline(
-	ctx context.Context,
-	market, sourceID, headline string,
-	within time.Duration,
-) (bool, error) {
-	return r.ExistsRecentHeadlineMatch(ctx, market, headline, "", within, sourceID)
 }
 
 func (r *NewsRepo) ExistsRecentHeadlineMatch(
@@ -292,24 +295,6 @@ func (r *NewsRepo) UpdateTranslation(ctx context.Context, id, headlineKo, summar
 	return err
 }
 
-func (r *NewsRepo) GetByID(ctx context.Context, id string) (*NewsArticleRecord, error) {
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return nil, sql.ErrNoRows
-	}
-	row := r.db.QueryRowContext(ctx, `
-		SELECT id, market, url_hash, url, COALESCE(original_url, ''), COALESCE(portal_url, ''),
-			headline, COALESCE(headline_ko, ''), COALESCE(summary, ''), COALESCE(summary_ko, ''),
-			COALESCE(image_url, ''), COALESCE(preview_mode, 'summary'),
-			source_id, COALESCE(publisher_id, ''), COALESCE(publisher_name, ''),
-			tags_json, symbols_json, keywords_json, published_at, view_count, highlighted, updated_at
-		FROM news_articles
-		WHERE id = ?
-		LIMIT 1
-	`, id)
-	return scanNewsRow(row)
-}
-
 /*
 translationMaxAttempts — 한 제목을 몇 번까지 다시 옮겨 볼 것인가.
 
@@ -327,28 +312,43 @@ translationWindowDays — 얼마나 지난 기사까지 옮길 것인가.
 
 두 가지를 한꺼번에 한다.
 
-  · **비용** — 무료 등급은 월 200만 자다. 실측 신규 해외 기사가 하루 500~1,900건
-    (평균 제목 68자)이라 전량은 월 2.5M자로 한도를 넘는다. 오래된 기사를 빼는 것이
-    가장 덜 아픈 축소다 — 목록은 최신부터 읽히고, 3주 지난 제목을 여는 사람은 거의
-    없다.
-  · **질의 비용** — 재시도 상한이 생기면서 「상한에 닿은 행」이 쌓인다. 창이 없으면
-    이 질의가 매 회차 그 무덤을 지나 24건을 찾아 뒤로 계속 걸어간다. 창을 두면
-    `idx_news_market_published`의 범위 훑기로 끝난다.
+	· **비용** — 무료 등급은 월 200만 자다. 실측 신규 해외 기사가 하루 500~1,900건
+	  (평균 제목 68자)이라 전량은 월 2.5M자로 한도를 넘는다. 오래된 기사를 빼는 것이
+	  가장 덜 아픈 축소다 — 목록은 최신부터 읽히고, 3주 지난 제목을 여는 사람은 거의
+	  없다.
+	· **질의 비용** — 재시도 상한이 생기면서 「상한에 닿은 행」이 쌓인다. 창이 없으면
+	  이 질의가 매 회차 그 무덤을 지나 24건을 찾아 뒤로 계속 걸어간다. 창을 두면
+	  `idx_news_market_published`의 범위 훑기로 끝난다.
 
 되돌리려면(전량 번역으로 가려면) 이 값을 늘리고 `translate_attempts`를 0으로 되돌린다.
 */
 const translationWindowDays = 7
 
 func (r *NewsRepo) ListMissingTranslation(ctx context.Context, market string, limit int) ([]NewsArticleRecord, error) {
+	return r.ListMissingTranslationWindow(ctx, market, limit, translationWindowDays)
+}
+
+/*
+ListMissingTranslationWindow는 창을 **부르는 쪽이 정하는** 판이다.
+
+창은 원래 **문자에 돈이 붙는 엔진**을 전제로 한 절약이다(위 머리글). 자체 모델로
+도는 동안에는 지킬 것이 없으므로, 한 번 비우는 일(`cmd/backfill-translations`)은
+창을 통째로 열어 밀린 것을 전부 가져간다 — 2026-09-15 기준 7일 창 **밖**에만
+578건이 남아 있었고, 그 행들은 창이 있는 한 영원히 안 걸린다.
+
+주기 경로(`ListMissingTranslation`)의 기본값은 그대로 7일이다.
+*/
+func (r *NewsRepo) ListMissingTranslationWindow(
+	ctx context.Context, market string, limit, windowDays int,
+) ([]NewsArticleRecord, error) {
 	if limit <= 0 {
 		limit = 20
 	}
+	if windowDays <= 0 {
+		windowDays = translationWindowDays
+	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, market, url_hash, url, COALESCE(original_url, ''), COALESCE(portal_url, ''),
-			headline, COALESCE(headline_ko, ''), COALESCE(summary, ''), COALESCE(summary_ko, ''),
-			COALESCE(image_url, ''), COALESCE(preview_mode, 'summary'),
-			source_id, COALESCE(publisher_id, ''), COALESCE(publisher_name, ''),
-			tags_json, symbols_json, keywords_json, published_at, view_count, highlighted, updated_at
+		SELECT `+newsSelectCols+`
 		FROM news_articles
 		WHERE market = ?
 		  AND published_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
@@ -357,7 +357,7 @@ func (r *NewsRepo) ListMissingTranslation(ctx context.Context, market string, li
 		  AND translate_attempts < ?
 		ORDER BY published_at DESC
 		LIMIT ?
-	`, market, translationWindowDays, translationMaxAttempts, limit)
+	`, market, windowDays, translationMaxAttempts, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -390,11 +390,7 @@ func (r *NewsRepo) ListMissingImages(ctx context.Context, market string, limit i
 		limit = 200
 	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, market, url_hash, url, COALESCE(original_url, ''), COALESCE(portal_url, ''),
-			headline, COALESCE(headline_ko, ''), COALESCE(summary, ''), COALESCE(summary_ko, ''),
-			COALESCE(image_url, ''), COALESCE(preview_mode, 'summary'),
-			source_id, COALESCE(publisher_id, ''), COALESCE(publisher_name, ''),
-			tags_json, symbols_json, keywords_json, published_at, view_count, highlighted, updated_at
+		SELECT `+newsSelectCols+`
 		FROM news_articles
 		WHERE market = ? AND (image_url IS NULL OR image_url = '')
 		ORDER BY published_at DESC
@@ -412,11 +408,7 @@ func (r *NewsRepo) ListRecentForImageReprobe(ctx context.Context, market string,
 		limit = 100
 	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, market, url_hash, url, COALESCE(original_url, ''), COALESCE(portal_url, ''),
-			headline, COALESCE(headline_ko, ''), COALESCE(summary, ''), COALESCE(summary_ko, ''),
-			COALESCE(image_url, ''), COALESCE(preview_mode, 'summary'),
-			source_id, COALESCE(publisher_id, ''), COALESCE(publisher_name, ''),
-			tags_json, symbols_json, keywords_json, published_at, view_count, highlighted, updated_at
+		SELECT `+newsSelectCols+`
 		FROM news_articles
 		WHERE market = ? AND COALESCE(original_url, '') != ''
 		ORDER BY published_at DESC
@@ -457,11 +449,7 @@ func (r *NewsRepo) List(ctx context.Context, params NewsListParams) ([]NewsArtic
 	}
 
 	query := `
-		SELECT id, market, url_hash, url, COALESCE(original_url, ''), COALESCE(portal_url, ''),
-			headline, COALESCE(headline_ko, ''), COALESCE(summary, ''), COALESCE(summary_ko, ''),
-			COALESCE(image_url, ''), COALESCE(preview_mode, 'summary'),
-			source_id, COALESCE(publisher_id, ''), COALESCE(publisher_name, ''),
-			tags_json, symbols_json, keywords_json, published_at, view_count, highlighted, updated_at
+		SELECT `+newsSelectCols+`
 		FROM news_articles
 		WHERE market = ?
 	`
@@ -480,6 +468,10 @@ func (r *NewsRepo) List(ctx context.Context, params NewsListParams) ([]NewsArtic
 		// JSON_CONTAINS는 같은 결과를 주지만 인덱스를 못 쓴다(061 마이그레이션 참조).
 		query += ` AND ? MEMBER OF (symbols_json->'$')`
 		args = append(args, sym)
+	}
+	if topic := strings.TrimSpace(params.Topic); topic != "" {
+		query += " AND topic = ?"
+		args = append(args, topic)
 	}
 	if q := strings.TrimSpace(params.Query); q != "" {
 		like := "%" + q + "%"
@@ -534,11 +526,7 @@ func (r *NewsRepo) ListPage(ctx context.Context, market string, offset, limit in
 		offset = 0
 	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, market, url_hash, url, COALESCE(original_url, ''), COALESCE(portal_url, ''),
-			headline, COALESCE(headline_ko, ''), COALESCE(summary, ''), COALESCE(summary_ko, ''),
-			COALESCE(image_url, ''), COALESCE(preview_mode, 'summary'),
-			source_id, COALESCE(publisher_id, ''), COALESCE(publisher_name, ''),
-			tags_json, symbols_json, keywords_json, published_at, view_count, highlighted, updated_at
+		SELECT `+newsSelectCols+`
 		FROM news_articles
 		WHERE market = ?
 		ORDER BY id
@@ -623,6 +611,15 @@ func (r *NewsRepo) DeleteByIDs(ctx context.Context, ids []string) (int64, error)
 	return total, nil
 }
 
+// newsSelectCols — scanNewsRow와 짝인 열 목록. 조회마다 같은 목록을 따로 적으면 열을 하나 더할 때 어긋난다
+// (2026-10-09: topic · asset_tags_json을 더하며 다섯 벌을 하나로).
+const newsSelectCols = `id, market, url_hash, url, COALESCE(original_url, ''), COALESCE(portal_url, ''),
+			headline, COALESCE(headline_ko, ''), COALESCE(summary, ''), COALESCE(summary_ko, ''),
+			COALESCE(image_url, ''), COALESCE(preview_mode, 'summary'),
+			source_id, COALESCE(publisher_id, ''), COALESCE(publisher_name, ''),
+			tags_json, symbols_json, keywords_json, published_at, view_count, highlighted, updated_at,
+			topic, asset_tags_json`
+
 func scanNewsRows(rows *sql.Rows) ([]NewsArticleRecord, error) {
 	var out []NewsArticleRecord
 	for rows.Next() {
@@ -639,18 +636,188 @@ func scanNewsRow(scanner interface {
 	Scan(dest ...any) error
 }) (*NewsArticleRecord, error) {
 	var rec NewsArticleRecord
-	var tagsRaw, symbolsRaw, keywordsRaw []byte
+	var tagsRaw, symbolsRaw, keywordsRaw, assetTagsRaw []byte
 	if err := scanner.Scan(
 		&rec.ID, &rec.Market, &rec.URLHash, &rec.URL, &rec.OriginalURL, &rec.PortalURL,
 		&rec.Headline, &rec.HeadlineKo, &rec.Summary, &rec.SummaryKo, &rec.ImageURL, &rec.PreviewMode,
 		&rec.SourceID, &rec.PublisherID, &rec.PublisherName,
 		&tagsRaw, &symbolsRaw, &keywordsRaw, &rec.PublishedAt, &rec.ViewCount, &rec.Highlighted, &rec.UpdatedAt,
+		&rec.Topic, &assetTagsRaw,
 	); err != nil {
 		return nil, err
 	}
+	_ = json.Unmarshal(assetTagsRaw, &rec.AssetTags)
 	_ = json.Unmarshal(tagsRaw, &rec.Tags)
 	_ = json.Unmarshal(symbolsRaw, &rec.Symbols)
 	_ = json.Unmarshal(keywordsRaw, &rec.Keywords)
 	rec.PublishedAt = NormalizeNewsPublishedAt(rec.PublishedAt)
 	return &rec, nil
+}
+
+/*
+KeywordArticleCounts — 검색어별로 **실제로 들어온 기사 수**를 센다.
+
+수집은 검색어를 돌아가며 부른다(`service.NewsStore.nextKeywords`). 그 큐에는
+「코스피」처럼 하루 수십 건을 내는 말과, 7일 동안 한 건도 못 낸 보유 종목이 **같은
+자리**를 차지하고 있었다. 큐가 225개라 한 바퀴가 25분이고, 그래서 시장 뉴스가 평균
+12.5분 늦게 들어왔다(실측 2026-09-17: naver 수집 지연 평균 723초).
+
+그래서 차선을 가르는 데 쓸 값이 필요하다 — **무엇이 뉴스를 내는 말인가.** 그 답은
+추측할 것이 아니라 이미 우리 표에 있다.
+
+`keywords_json`의 **첫 칸**만 센다. 수집 경로가 기사를 넣을 때 자기 검색어를 그
+자리에 적기 때문이다(`ingestItem(ctx, item, []string{kw.Text}, …)`). 뒤 칸은 나중에
+붙는 추출 키워드라 「이 검색어가 낸 기사」와는 다른 뜻이다.
+
+기준은 `published_at`이다 — `(market, published_at)` 인덱스를 그대로 타고, 이 값이
+묻는 것은 「그 말이 얼마나 자주 기사를 만드는가」라 발행 시각이 더 맞다.
+*/
+func (r *NewsRepo) KeywordArticleCounts(
+	ctx context.Context,
+	market string,
+	since time.Time,
+) (map[string]int, error) {
+	if r == nil || r.db == nil {
+		return nil, nil
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT JSON_UNQUOTE(JSON_EXTRACT(keywords_json, '$[0]')) AS kw, COUNT(*)
+		FROM news_articles
+		WHERE market = ? AND published_at >= ? AND keywords_json IS NOT NULL
+		GROUP BY kw
+	`, market, since.UTC())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := map[string]int{}
+	for rows.Next() {
+		var kw sql.NullString
+		var n int
+		if err := rows.Scan(&kw, &n); err != nil {
+			return nil, err
+		}
+		key := strings.ToLower(strings.TrimSpace(kw.String))
+		if key == "" {
+			continue
+		}
+		out[key] += n
+	}
+	return out, rows.Err()
+}
+
+// NewsTopicRow is the slice of an article the topic retag needs.
+type NewsTopicRow struct {
+	ID, Headline, Summary, Topic string
+	AssetTags                    []model.NewsAssetTag
+}
+
+// TopicRetagCandidates — 국내 · 종목 없음 기사 전부(주제 포함 — 분류 규칙이 바뀌면 되돌리기도 한다, 2026-10-09).
+func (r *NewsRepo) TopicRetagCandidates(ctx context.Context, since time.Time, limit int) ([]NewsTopicRow, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, headline, COALESCE(summary, ''), topic, asset_tags_json
+		  FROM news_articles
+		 WHERE market = 'domestic' AND published_at >= ?
+		   AND (symbols_json IS NULL OR JSON_LENGTH(symbols_json) = 0)
+		 ORDER BY published_at DESC
+		 LIMIT ?`, since, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []NewsTopicRow
+	for rows.Next() {
+		var x NewsTopicRow
+		var tags []byte
+		if err := rows.Scan(&x.ID, &x.Headline, &x.Summary, &x.Topic, &tags); err != nil {
+			return nil, err
+		}
+		_ = json.Unmarshal(tags, &x.AssetTags)
+		out = append(out, x)
+	}
+	return out, rows.Err()
+}
+
+// UpdateTopic sets one article's topic and asset chips.
+func (r *NewsRepo) UpdateTopic(ctx context.Context, id, topic string, tags []model.NewsAssetTag) error {
+	var raw any
+	if len(tags) > 0 {
+		b, _ := json.Marshal(tags)
+		raw = string(b)
+	}
+	_, err := r.db.ExecContext(ctx, `UPDATE news_articles SET topic = ?, asset_tags_json = ? WHERE id = ?`, topic, raw, id)
+	return err
+}
+
+// TopicHeadlines — 국내 주제 기사 최근 제목(최신순). 같은 사건이 여러 매체로 오므로 앞 18자가 같으면 하나만,
+// 60자에서 자른다 — LLM 입력 토큰 관리(2026-10-09 요청 5).
+func (r *NewsRepo) TopicHeadlines(ctx context.Context, topics []string, since time.Time, limit int) ([]string, error) {
+	if len(topics) == 0 || limit <= 0 {
+		return nil, nil
+	}
+	args := []any{since}
+	for _, t := range topics {
+		args = append(args, t)
+	}
+	args = append(args, limit*4)
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT headline FROM news_articles
+		 WHERE market = 'domestic' AND published_at >= ? AND topic IN (?`+strings.Repeat(",?", len(topics)-1)+`)
+		 ORDER BY published_at DESC LIMIT ?`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	seen := map[string]bool{}
+	var out []string
+	for rows.Next() {
+		var h string
+		if err := rows.Scan(&h); err != nil {
+			return nil, err
+		}
+		h = strings.TrimSpace(h)
+		rs := []rune(strings.Join(strings.Fields(h), ""))
+		key := string(rs[:min(18, len(rs))])
+		if h == "" || seen[key] || len(out) >= limit {
+			continue
+		}
+		seen[key] = true
+		if hr := []rune(h); len(hr) > 60 {
+			h = string(hr[:60]) + "…"
+		}
+		out = append(out, h)
+	}
+	return out, rows.Err()
+}
+
+// RegionNews is one 시군구's recent topic coverage (자산 칩 기준).
+type RegionNews struct {
+	Count  int
+	Latest string
+}
+
+// RegionNewsStats — 시군구(자산 칩 region)별 기사 수와 최신 제목. 부동산 점수의 「근거」 칸(2026-10-09 결정 A — 점수식은 그대로).
+func (r *NewsRepo) RegionNewsStats(ctx context.Context, since time.Time) (map[string]RegionNews, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT jt.k, COUNT(*),
+		       SUBSTRING_INDEX(GROUP_CONCAT(n.headline ORDER BY n.published_at DESC SEPARATOR '\n'), '\n', 1)
+		  FROM news_articles n
+		  JOIN JSON_TABLE(n.asset_tags_json, '$[*]' COLUMNS (kind VARCHAR(10) PATH '$.kind', k VARCHAR(20) PATH '$.key')) jt
+		 WHERE n.market = 'domestic' AND n.topic <> 'stock' AND n.published_at >= ? AND jt.kind = 'region'
+		 GROUP BY jt.k`, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]RegionNews{}
+	for rows.Next() {
+		var k string
+		var v RegionNews
+		if err := rows.Scan(&k, &v.Count, &v.Latest); err != nil {
+			return nil, err
+		}
+		out[k] = v
+	}
+	return out, rows.Err()
 }

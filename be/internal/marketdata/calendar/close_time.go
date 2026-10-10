@@ -12,6 +12,24 @@ func LastSessionCloseAt(schedule ScheduleID, now time.Time) time.Time {
 	return Default().lastSessionCloseAt(schedule, now)
 }
 
+// SessionOpenAt returns the regular session open for the given calendar day
+// (UTC), whether or not the exchange trades that day.
+func SessionOpenAt(schedule ScheduleID, day time.Time) time.Time {
+	return Default().sessionOpenAt(schedule, day)
+}
+
+func (c *Calendar) sessionOpenAt(schedule ScheduleID, day time.Time) time.Time {
+	s, ok := c.sessions[schedule]
+	if !ok || s == nil {
+		return day.UTC()
+	}
+	local := day.In(s.loc)
+	return time.Date(
+		local.Year(), local.Month(), local.Day(),
+		s.openHour, s.openMinute, 0, 0, s.loc,
+	).UTC()
+}
+
 func (c *Calendar) sessionCloseAt(schedule ScheduleID, day time.Time) time.Time {
 	s, ok := c.sessions[schedule]
 	if !ok || s == nil {

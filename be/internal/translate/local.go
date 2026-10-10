@@ -93,27 +93,69 @@ func (l *Local) TranslateENtoKO(ctx context.Context, texts []string) ([]string, 
 	}
 
 	sem := make(chan struct{}, l.slots)
-	var wg sync.WaitGroup
+	var (
+		wg       sync.WaitGroup
+		mu       sync.Mutex
+		sent     int
+		failed   int
+		firstErr error
+	)
 	for i, text := range texts {
 		if strings.TrimSpace(text) == "" {
 			continue
 		}
+		sent++
 		wg.Add(1)
 		go func(i int, text string) {
 			defer wg.Done()
 			select {
 			case sem <- struct{}{}:
 			case <-ctx.Done():
+				mu.Lock()
+				failed++
+				if firstErr == nil {
+					firstErr = ctx.Err()
+				}
+				mu.Unlock()
 				return
 			}
 			defer func() { <-sem }()
-			if ko, err := l.translateOne(ctx, text); err == nil {
-				out[i] = ko
+			ko, err := l.translateOne(ctx, text)
+			if err != nil {
+				mu.Lock()
+				failed++
+				if firstErr == nil {
+					firstErr = err
+				}
+				mu.Unlock()
+				return
 			}
+			out[i] = ko
 		}(i, text)
 	}
 	wg.Wait()
-	return out, ctx.Err()
+
+	/*
+		**서버가 통째로 안 되는 것과 제목 하나가 안 되는 것을 구분한다
+		(2026-09-16).**
+
+		예전에는 요청 실패를 조용히 삼키고 `nil`을 돌려줬다. 그러면 부르는 쪽
+		(`runUSTranslationBatch`)이 「대답은 왔는데 쓸 수 없다」로 읽고
+		`translate_attempts`를 올린다 — 그리고 세 번이면 그 제목은 **영원히
+		영어로 남는다.** 실측: 드레인 도중 번역기를 재시작했더니 그 몇 초에
+		615건이 상한에 닿아 큐에서 사라졌다. `translateHeadlines` 머리글이 그
+		규칙을 이미 적어 두었다 — 「못 보낸 회차는 세지 않는다」.
+
+		한 건만 실패한 것은 그대로 부분 성공이다(머리글). 오류로 올리는 것은
+		**보낸 것이 전부 실패했을 때**뿐이고, 그때가 정확히 「서버가 죽었다」다.
+	*/
+	if err := ctx.Err(); err != nil {
+		return out, err
+	}
+	if sent > 0 && failed == sent {
+		return out, firstErr
+	}
+	return out, nil
 }
 
 type chatRequest struct {

@@ -156,13 +156,3 @@ func normalizeQuoteListName(raw string) string {
 	}
 	return NormalizeDisplayName(name)
 }
-
-// StripHoldingsMetrics clears qty/finance when the screenshot is quote-only.
-func StripHoldingsMetrics(line ParsedLine) ParsedLine {
-	line.Quantity = 0
-	line.MarketValue = nil
-	line.ProfitLoss = nil
-	line.ReturnRate = nil
-	line.Currency = ""
-	return line
-}
