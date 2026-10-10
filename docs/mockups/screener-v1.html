@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>종목 스크리너 — 배치 선택용 목업 v1</title>
+<style>
+:root {
+  --radius:.625rem;
+  --background:oklch(.97 0 0); --foreground:oklch(.145 0 0);
+  --card:oklch(1 0 0); --muted:oklch(.97 0 0);
+  --muted-foreground:oklch(.52 0 0); --accent:oklch(.93 0 0);
+  --border:oklch(.87 0 0);
+  --brand:#2563EB; --brand-muted:rgba(37,99,235,.1);
+  --profit:#DC2626; --loss:#2563EB;
+  --score-high:#15803D; --score-mid:#C2410C; --score-low:#B91C1C;
+  --surface-elevated:var(--accent); --text-muted:oklch(.545 0 0);
+}
+[data-theme="dark"]{
+  --background:oklch(.145 0 0); --foreground:oklch(.985 0 0);
+  --card:oklch(.205 0 0); --muted:oklch(.269 0 0);
+  --muted-foreground:oklch(.708 0 0); --accent:oklch(.269 0 0);
+  --border:oklch(1 0 0/16%);
+  --brand:#60A5FA; --brand-muted:rgba(96,165,250,.15);
+  --profit:#F87171; --loss:#60A5FA;
+  --score-high:#4ADE80; --score-mid:#FB923C; --score-low:#F87171;
+  --text-muted:oklch(.6 0 0);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--background);color:var(--foreground);
+  font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  font-size:12px;line-height:1.5;padding:24px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1400px;margin:0 auto}
+h1{font-size:20px;font-weight:700;letter-spacing:-.01em}
+h2{font-size:15px;font-weight:600} h3{font-size:13px;font-weight:600}
+.sub{color:var(--muted-foreground);font-size:12px}
+.up{color:var(--profit)} .down{color:var(--loss)} .n{font-variant-numeric:tabular-nums}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding-bottom:16px;margin-bottom:20px;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:var(--background);z-index:5}
+button.tgl{font:inherit;cursor:pointer;border:1px solid var(--border);background:var(--card);
+  color:var(--foreground);border-radius:8px;padding:5px 12px}
+.lead{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:22px}
+.lead p{margin-bottom:8px}.lead p:last-child{margin-bottom:0}
+.note{color:var(--muted-foreground);font-size:11px;margin-top:8px}
+.opt{margin-bottom:34px}
+.opt-head{display:flex;align-items:baseline;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.tag{font-size:11px;font-weight:700;background:var(--brand-muted);color:var(--brand);border-radius:6px;padding:2px 7px}
+.tag.rec{background:rgba(21,128,61,.12);color:var(--score-high)}
+.tag.warn{background:rgba(194,65,12,.12);color:var(--score-mid)}
+.tag.bad{background:rgba(185,28,28,.12);color:var(--score-low)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;background:var(--surface-elevated);border-radius:4px;padding:1px 4px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.body{padding:12px 14px}
+.hd{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-bottom:10px}
+.hd .t{font-size:13px;font-weight:700}
+.hd .s{font-size:11px;color:var(--text-muted)}
+.cols{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 400px;min-width:330px}
+
+/* 조건 그룹 */
+.grp{border-bottom:1px solid var(--border);padding:8px 0}
+.grp:last-child{border-bottom:0}
+.grp-h{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.grp-h b{font-size:11.5px}
+.cov{font-size:10px;border-radius:999px;padding:1px 6px;font-weight:700;white-space:nowrap}
+.cov.hi{background:rgba(21,128,61,.12);color:var(--score-high)}
+.cov.mid{background:rgba(194,65,12,.12);color:var(--score-mid)}
+.cov.lo{background:rgba(185,28,28,.12);color:var(--score-low)}
+.cond{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11.5px;flex-wrap:wrap}
+.cond .lb{min-width:88px;color:var(--text-muted)}
+.pill{border:1px solid var(--border);border-radius:7px;padding:2px 8px;background:var(--card);
+  font-variant-numeric:tabular-nums;font-size:11.5px}
+.pill.on{border-color:var(--brand);color:var(--brand);font-weight:700;background:var(--brand-muted)}
+.x{margin-left:auto;color:var(--text-muted);cursor:pointer;font-size:13px;line-height:1}
+.addbtn{font-size:11px;border:1px dashed var(--border);border-radius:7px;padding:3px 9px;
+  color:var(--text-muted);background:transparent;cursor:pointer;font-family:inherit}
+
+/* 깔때기 */
+.funnel{display:flex;align-items:stretch;gap:0;margin:2px 0 10px;flex-wrap:wrap}
+.fstep{flex:1 1 0;min-width:96px;padding:7px 10px;border:1px solid var(--border);border-right:0;background:var(--card)}
+.fstep:last-child{border-right:1px solid var(--border);border-radius:0 8px 8px 0}
+.fstep:first-child{border-radius:8px 0 0 8px}
+.fstep .k{font-size:10px;color:var(--text-muted);display:block;margin-bottom:1px}
+.fstep .v{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+.fstep.drop{background:rgba(194,65,12,.07)}
+.fstep.drop .v{color:var(--score-mid)}
+.fstep.final{background:var(--brand-muted)}
+.fstep.final .v{color:var(--brand)}
+.fstep .d{font-size:10px;color:var(--text-muted);font-variant-numeric:tabular-nums}
+
+/* 결과표 */
+table.res{width:100%;border-collapse:collapse;font-size:11.5px}
+table.res th{text-align:right;font-weight:600;color:var(--text-muted);font-size:10.5px;
+  padding:4px 6px;border-bottom:1px solid var(--border)}
+table.res th:first-child{text-align:left}
+table.res td{text-align:right;padding:5px 6px;border-bottom:1px solid var(--border);
+  font-variant-numeric:tabular-nums}
+table.res td:first-child{text-align:left;font-weight:600}
+table.res tr:last-child td{border-bottom:0}
+table.res td small{font-weight:400;color:var(--text-muted);margin-left:5px}
+.sc{font-weight:700}
+.sc.h{color:var(--score-high)} .sc.m{color:var(--score-mid)}
+
+/* 빈 결과 */
+.empty{border:1px solid var(--border);border-radius:8px;padding:12px 14px;background:var(--card)}
+.empty .big{font-size:12.5px;font-weight:700;margin-bottom:6px}
+.blame{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:11.5px;border-bottom:1px solid var(--border)}
+.blame:last-of-type{border-bottom:0}
+.blame .nm{min-width:120px}
+.blame .bar{flex:1;height:6px;background:var(--muted);border-radius:3px;overflow:hidden;min-width:60px}
+.blame .bar i{display:block;height:100%;background:var(--score-mid);border-radius:3px}
+.blame .pc{font-variant-numeric:tabular-nums;min-width:96px;text-align:right;color:var(--text-muted);font-size:11px}
+
+/* 프리셋 */
+.preset{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:11.5px}
+.preset:last-child{border-bottom:0}
+.preset .nm{font-weight:600}
+.preset .meta{margin-left:auto;color:var(--text-muted);font-size:11px;font-variant-numeric:tabular-nums}
+
+/* 배치 */
+.page{display:grid;grid-template-columns:1fr 300px;gap:12px;background:var(--muted);
+  border:1px solid var(--border);border-radius:12px;padding:12px}
+.page.one{grid-template-columns:1fr}
+.slot{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 11px;
+  font-size:11px;color:var(--muted-foreground);margin-bottom:8px}
+.slot:last-child{margin-bottom:0}
+.slot.here{border-color:var(--brand);border-width:2px;color:var(--brand);font-weight:700;background:var(--brand-muted)}
+.slot.tall{padding-top:26px;padding-bottom:26px}
+.phone{width:375px;border:1px solid var(--border);border-radius:14px;padding:10px;background:var(--muted);flex:0 0 375px}
+.phone .plabel{font-size:10.5px;color:var(--muted-foreground);margin-bottom:6px;text-align:center}
+.phone .funnel{flex-wrap:nowrap;overflow:hidden}
+.phone .fstep{min-width:0;padding:6px 6px}
+.phone .fstep .v{font-size:13px}
+.phone table.res th:nth-child(4),.phone table.res td:nth-child(4){display:none}
+table.cmp{width:100%;border-collapse:collapse;font-size:11.5px}
+table.cmp th,table.cmp td{border:1px solid var(--border);padding:6px 8px;text-align:left;vertical-align:top}
+table.cmp th{background:var(--muted);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div>
+    <h1>종목 스크리너 — 배치 선택용 목업 v1</h1>
+    <div class="sub">V2 요구 4 · 아래 숫자는 전부 <b>2026-09-17 실제 DB 측정값</b>입니다</div>
+  </div>
+  <button class="tgl" id="themeBtn">다크 모드</button>
+</div>
+
+<div class="lead">
+  <p><b>무엇이 생기나요.</b> AI 점수 · 재무 · 가치 · 가격/기술 · 수급 조건을 직접 조합해 종목을 찾고, 그 조합을 <b>이름 붙여 저장</b>합니다.</p>
+  <p><b>새 표도 새 배치도 필요 없습니다.</b> 조건에 쓰는 값이 이미 <code>stock_scores.inputs</code> 안에 전부 들어 있습니다 — 시가총액 · PER · PBR · ROE · 부채비율 · RSI · 52주 신고가 대비 · 이동평균까지. 실측 <b>0.16초</b>(프로세스 기동 포함, 인덱스 범위 스캔 1,610행).</p>
+  <p><b>그런데 이 화면의 진짜 문제는 속도가 아닙니다.</b> 조건마다 <b>측정된 종목 수가 극단적으로 다릅니다.</b> 그대로 만들면 사용자는 「조건에 맞는 종목이 없다」를 「시장에 그런 종목이 없다」로 읽게 됩니다. 실제로는 <b>애초에 재보지 못한 것</b>입니다.</p>
+</div>
+
+<!-- ========================= 커버리지 실측 ========================= -->
+<div class="opt">
+  <div class="opt-head"><h2>먼저 보셔야 할 것 — 조건마다 볼 수 있는 종목이 다릅니다</h2><span class="tag warn">설계의 출발점</span></div>
+  <div class="cols">
+    <div class="col" style="flex:1 1 560px">
+      <div class="card"><div class="body">
+        <div class="hd"><span class="t">전체 17,919종목 중 각 조건이 측정된 종목</span><span class="s">2026-09-17</span></div>
+        <div class="blame"><span class="nm">RSI · 신고가 대비 · 이평</span><span class="bar"><i style="width:91%;background:var(--score-high)"></i></span><span class="pc">16,247 · 91%</span></div>
+        <div class="blame"><span class="nm">ROE · 매출 성장</span><span class="bar"><i style="width:35%"></i></span><span class="pc">6,216 · 35%</span></div>
+        <div class="blame"><span class="nm">부채비율</span><span class="bar"><i style="width:32%"></i></span><span class="pc">5,790 · 32%</span></div>
+        <div class="blame"><span class="nm">시가총액</span><span class="bar"><i style="width:24%"></i></span><span class="pc">4,268 · 24%</span></div>
+        <div class="blame"><span class="nm">PBR</span><span class="bar"><i style="width:15%"></i></span><span class="pc">2,607 · 15%</span></div>
+        <div class="blame"><span class="nm">PER</span><span class="bar"><i style="width:9%;background:var(--score-low)"></i></span><span class="pc">1,599 · 9%</span></div>
+        <div class="blame"><span class="nm">심리 · 수급</span><span class="bar"><i style="width:3%;background:var(--score-low)"></i></span><span class="pc">571 · 3%</span></div>
+      </div></div>
+      <div class="note">이 표가 스크리너의 성격을 정합니다. 「PER 10 이하」를 걸면 <b>91%의 종목이 조건을 틀려서가 아니라 잴 수 없어서</b> 사라집니다. 그 둘을 구분해 말하는 것이 이 화면이 경쟁 서비스와 달라지는 지점입니다.</div>
+    </div>
+
+    <div class="col">
+      <h3 style="margin-bottom:6px">실제로 일어나는 일 <span class="tag bad">실측</span></h3>
+      <div class="empty">
+        <div class="big">「국내 · 점수 60+ · 신고가 대비 −30% 이하 · RSI 40 이하」 → <span class="n">5종목</span></div>
+        <div class="sub" style="margin-bottom:8px">여기에 <b>심리·수급 60점 이상</b>을 더하면…</div>
+        <div class="big" style="color:var(--score-low)">→ <span class="n">0종목</span></div>
+        <div class="note" style="margin-top:6px">보통의 스크리너는 여기서 <b>「조건에 맞는 종목이 없습니다」</b>로 끝냅니다. 사용자는 시장을 탓하게 됩니다.<br><br>사실은 국내 4,412종목 중 심리·수급이 측정된 것이 <b>247종목(5.6%)</b>뿐이고, 앞 단계를 통과한 5종목 중에는 <b>하나도 없었습니다.</b> 조건을 틀린 게 아니라 <b>재본 적이 없는</b> 것입니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========================= 화면 본체 ========================= -->
+<div class="opt">
+  <div class="opt-head"><h2>화면 본체</h2><span class="tag">조건 · 깔때기 · 결과</span></div>
+  <div class="cols">
+
+    <div class="col" style="flex:0 0 340px">
+      <div class="card"><div class="body">
+        <div class="hd"><span class="t">조건</span><span class="s">국내</span></div>
+
+        <div class="grp">
+          <div class="grp-h"><b>AI 점수</b><span class="cov hi">91% 측정</span></div>
+          <div class="cond"><span class="lb">종합 점수</span><span class="pill on">70 이상</span><span class="x">×</span></div>
+          <div class="cond"><span class="lb">성장</span><span class="pill">조건 없음</span></div>
+          <div class="cond"><span class="lb">가치</span><span class="pill">조건 없음</span><span class="cov lo">15%</span></div>
+          <div class="cond"><span class="lb">심리·수급</span><span class="pill">조건 없음</span><span class="cov lo">3%</span></div>
+        </div>
+
+        <div class="grp">
+          <div class="grp-h"><b>재무</b><span class="cov mid">35% 측정</span></div>
+          <div class="cond"><span class="lb">ROE</span><span class="pill on">15% 이상</span><span class="x">×</span></div>
+          <div class="cond"><span class="lb">부채비율</span><span class="pill on">100% 이하</span><span class="x">×</span></div>
+          <div class="cond"><span class="lb">매출 성장</span><span class="pill">조건 없음</span></div>
+        </div>
+
+        <div class="grp">
+          <div class="grp-h"><b>가치</b><span class="cov lo">9~15% 측정</span></div>
+          <div class="cond"><span class="lb">PER</span><span class="pill">조건 없음</span><span class="cov lo">9%</span></div>
+          <div class="cond"><span class="lb">PBR</span><span class="pill">조건 없음</span><span class="cov lo">15%</span></div>
+        </div>
+
+        <div class="grp">
+          <div class="grp-h"><b>가격 · 기술</b><span class="cov hi">91% 측정</span></div>
+          <div class="cond"><span class="lb">신고가 대비</span><span class="pill">조건 없음</span></div>
+          <div class="cond"><span class="lb">RSI</span><span class="pill">조건 없음</span></div>
+          <div class="cond"><span class="lb">시가총액</span><span class="pill">조건 없음</span><span class="cov mid">24%</span></div>
+        </div>
+
+        <div style="padding-top:8px"><button class="addbtn">+ 조건 더 보기</button></div>
+      </div></div>
+      <div class="note">조건 옆 회색 칸이 <b>그 조건으로 잴 수 있는 종목 비중</b>입니다. 누르기 전에 보입니다 — 결과가 0이 되고 나서 알려 주면 늦습니다.</div>
+    </div>
+
+    <div class="col">
+      <div class="card"><div class="body">
+        <div class="hd"><span class="t">결과</span><span class="s">09-17 점수 기준 · 0.16초</span></div>
+
+        <div class="funnel">
+          <div class="fstep"><span class="k">전체</span><span class="v n">17,919</span></div>
+          <div class="fstep"><span class="k">국내</span><span class="v n">4,412</span><span class="d">−13,507</span></div>
+          <div class="fstep drop"><span class="k">잴 수 있음</span><span class="v n">2,544</span><span class="d">−1,868 측정 안 됨</span></div>
+          <div class="fstep final"><span class="k">조건 통과</span><span class="v n">29</span><span class="d">−2,515</span></div>
+        </div>
+
+        <table class="res">
+          <tr><th>종목</th><th>점수</th><th>ROE</th><th>부채</th><th>신고가 대비</th><th>시총</th></tr>
+          <tr><td>파미셀 <small>005690</small></td><td class="sc h">82</td><td>38.3%</td><td>26.9%</td><td class="down">−45.3%</td><td>0.7조</td></tr>
+          <tr><td>SK하이닉스 <small>000660</small></td><td class="sc h">80</td><td>44.1%</td><td>45.9%</td><td class="down">−41.7%</td><td>1,279조</td></tr>
+          <tr><td>SNT에너지 <small>100840</small></td><td class="sc h">80</td><td>25.1%</td><td>61.7%</td><td class="down">−51.1%</td><td>0.8조</td></tr>
+          <tr><td>글로벌텍스프리 <small>204620</small></td><td class="sc h">77</td><td>26.4%</td><td>31.6%</td><td class="down">−17.8%</td><td>0.4조</td></tr>
+          <tr><td>마이크로컨텍솔 <small>098120</small></td><td class="sc h">77</td><td>23.2%</td><td>19.0%</td><td class="down">−6.6%</td><td>0.4조</td></tr>
+          <tr><td>셀바이오휴먼텍 <small>318160</small></td><td class="sc h">77</td><td>16.5%</td><td>49.9%</td><td class="down">−38.0%</td><td>0.1조</td></tr>
+          <tr><td>세명전기 <small>017510</small></td><td class="sc h">77</td><td>15.1%</td><td>18.5%</td><td class="down">−57.2%</td><td>0.1조</td></tr>
+        </table>
+        <div class="note" style="border-top:1px solid var(--border);padding-top:7px">
+          <b>−1,868종목은 조건을 틀린 것이 아니라 ROE·부채비율이 없습니다.</b> 국내 4,412종목 중 재무가 계산된 것은 2,544종목입니다.
+        </div>
+      </div></div>
+      <div class="note">깔때기 셋째 칸이 이 화면의 핵심입니다. 없으면 사용자는 4,412종목을 걸렀다고 믿지만 실제로는 <b>2,544종목</b>만 걸렀습니다.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ========================= 저장 ========================= -->
+<div class="opt">
+  <div class="opt-head"><h2>조건 저장</h2><span class="sub">요구 4의 「저장 가능」입니다. 표 하나(<code>user_screens</code>)만 추가됩니다.</span></div>
+  <div class="cols">
+    <div class="col">
+      <div class="card"><div class="body">
+        <div class="hd"><span class="t">내 조건</span><span class="s">3개</span></div>
+        <div class="preset"><span class="nm">우량 성장주</span><span class="sub">종합 70+ · ROE 15+ · 부채 100−</span><span class="meta">29종목</span></div>
+        <div class="preset"><span class="nm">낙폭과대 반등</span><span class="sub">종합 60+ · 신고가 −30%− · RSI 40−</span><span class="meta">5종목</span></div>
+        <div class="preset"><span class="nm">대형 저평가</span><span class="sub">시총 1조+ · PBR 1−</span><span class="meta">0종목 · <span style="color:var(--score-mid)">측정 15%</span></span></div>
+      </div></div>
+      <div class="note">저장한 조건에도 <b>결과 수와 커버리지가 같이 붙습니다</b> — 「대형 저평가」가 0종목인 이유가 시장이 아니라 PBR 데이터라는 것이 목록에서 바로 보입니다.</div>
+    </div>
+    <div class="col">
+      <h3 style="margin-bottom:6px">추가되는 것</h3>
+      <table class="cmp">
+        <tr><th style="width:150px">항목</th><th>내용</th></tr>
+        <tr><td>새 표</td><td><code>user_screens</code> 1개 — 사용자별 조건 JSON. 사용자당 20개 제한</td></tr>
+        <tr><td>새 API</td><td>조회 <code>POST /stocks/screen</code> · 저장 <code>GET/POST/DELETE /user/screens</code></td></tr>
+        <tr><td>새 배치</td><td><b>없음</b></td></tr>
+        <tr><td>새 수집</td><td><b>없음</b> — 전부 <code>stock_scores.inputs</code>에 이미 있음</td></tr>
+        <tr><td>LLM 호출</td><td><b>없음</b></td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ========================= 모바일 ========================= -->
+<div class="opt">
+  <div class="opt-head"><h2>모바일 375px</h2><span class="tag rec">가독성 확인</span></div>
+  <div class="cols">
+    <div class="phone">
+      <div class="plabel">결과 — 기본 화면</div>
+      <div class="card"><div class="body">
+        <div class="hd"><span class="t">우량 성장주</span><span class="s">29종목</span></div>
+        <div class="funnel">
+          <div class="fstep"><span class="k">국내</span><span class="v n">4,412</span></div>
+          <div class="fstep drop"><span class="k">잴 수 있음</span><span class="v n">2,544</span></div>
+          <div class="fstep final"><span class="k">통과</span><span class="v n">29</span></div>
+        </div>
+        <table class="res">
+          <tr><th>종목</th><th>점수</th><th>ROE</th><th>부채</th></tr>
+          <tr><td>파미셀</td><td class="sc h">82</td><td>38.3%</td><td>26.9%</td></tr>
+          <tr><td>SK하이닉스</td><td class="sc h">80</td><td>44.1%</td><td>45.9%</td></tr>
+          <tr><td>SNT에너지</td><td class="sc h">80</td><td>25.1%</td><td>61.7%</td></tr>
+          <tr><td>글로벌텍스프리</td><td class="sc h">77</td><td>26.4%</td><td>31.6%</td></tr>
+          <tr><td>마이크로컨텍솔</td><td class="sc h">77</td><td>23.2%</td><td>19.0%</td></tr>
+        </table>
+        <div class="note">−1,868종목은 재무가 없어 빠졌습니다</div>
+      </div></div>
+      <div class="note">깔때기는 <b>세 칸으로 줄입니다</b>(전체는 접습니다). 표는 <b>네 열 고정</b> — 조건에 쓴 열만 보여 주고 나머지는 종목을 눌러 봅니다.</div>
+    </div>
+
+    <div class="phone">
+      <div class="plabel">조건 — 눌러서 펼침</div>
+      <div class="card"><div class="body">
+        <div class="hd"><span class="t">조건</span><span class="s">3개 적용</span></div>
+        <div class="grp">
+          <div class="grp-h"><b>AI 점수</b><span class="cov hi">91%</span></div>
+          <div class="cond"><span class="lb">종합</span><span class="pill on">70 이상</span><span class="x">×</span></div>
+        </div>
+        <div class="grp">
+          <div class="grp-h"><b>재무</b><span class="cov mid">35%</span></div>
+          <div class="cond"><span class="lb">ROE</span><span class="pill on">15% 이상</span><span class="x">×</span></div>
+          <div class="cond"><span class="lb">부채비율</span><span class="pill on">100% 이하</span><span class="x">×</span></div>
+        </div>
+        <div class="grp">
+          <div class="grp-h"><b>가치</b><span class="cov lo">9~15%</span></div>
+          <div class="cond"><span class="lb">PER</span><span class="pill">조건 없음</span></div>
+        </div>
+        <div style="padding-top:8px"><button class="addbtn">+ 조건 더 보기</button></div>
+      </div></div>
+      <div class="note">모바일에서는 <b>적용한 조건만</b> 펼쳐 두고 나머지 그룹은 접습니다. 커버리지 칸은 <b>접힌 상태에서도</b> 보입니다.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ========================= 배치 ========================= -->
+<div class="opt">
+  <div class="opt-head"><h2>어디에 놓을까요</h2><span class="sub">파란 칸이 새로 생기는 것입니다.</span></div>
+  <div class="cols">
+
+    <div class="col">
+      <h3 style="margin-bottom:6px">A · 새 메뉴 <code>/screener</code> <span class="tag rec">권장</span></h3>
+      <div class="page">
+        <div>
+          <div class="slot here">조건 패널 + 깔때기</div>
+          <div class="slot tall here">결과 목록</div>
+        </div>
+        <div>
+          <div class="slot here">내 조건 (저장 목록)</div>
+          <div class="slot tall">종목 상세</div>
+        </div>
+      </div>
+      <div class="note">사이드바 「AI 추천 랭킹」 <b>바로 아래</b>에 「종목 스크리너」가 붙습니다. 조건 패널·저장 목록이 자기 자리를 갖고, 결과를 누르면 기존 종목 작업창이 그대로 열립니다. 메뉴가 하나 늘어납니다.</div>
+    </div>
+
+    <div class="col">
+      <h3 style="margin-bottom:6px">B · <code>/analysis</code> 툴바에 서랍 하나 더</h3>
+      <div class="page">
+        <div>
+          <div class="slot">시장 탭 · 축 · 기간</div>
+          <div class="slot">백테스트 (접힌 줄) — 이미 있음</div>
+          <div class="slot here">스크리너 (접힌 줄)</div>
+          <div class="slot tall">랭킹 목록</div>
+        </div>
+        <div><div class="slot tall">종목 작업창</div></div>
+      </div>
+      <div class="note">메뉴가 안 늘고 결과 목록을 그대로 씁니다. 다만 <b>같은 자리에 접힌 문이 둘이 됩니다</b> — 백테스트를 그 자리에 둔 게 이번 주였고, 하나 더 쌓으면 무엇이 무엇인지 묻게 됩니다. 저장한 조건을 둘 자리도 마땅치 않습니다.</div>
+    </div>
+
+    <div class="col">
+      <h3 style="margin-bottom:6px">C · 랭킹의 축 선택을 조건으로 확장</h3>
+      <div class="page">
+        <div>
+          <div class="slot here">시장 탭 · <b>조건</b>(축·기간 자리를 대체)</div>
+          <div class="slot tall">랭킹 목록 = 결과 목록</div>
+        </div>
+        <div><div class="slot tall">종목 작업창</div></div>
+      </div>
+      <div class="note">새 화면이 아예 없습니다 — 지금 랭킹도 사실 「시장+축+기간」 세 조건의 스크리너라, 조건을 사용자가 고르게 하는 것이 자연스러운 확장입니다. 다만 <b>기존 랭킹 사용법이 바뀝니다</b>: 지금 축 여섯 개를 누르던 사람이 조건 편집기를 만나게 됩니다.</div>
+    </div>
+  </div>
+
+  <table class="cmp" style="margin-top:14px">
+    <tr><th style="width:110px">기준</th><th>A · 새 메뉴</th><th>B · 서랍 추가</th><th>C · 랭킹 확장</th></tr>
+    <tr><td>기존 화면 영향</td><td>없음</td><td>툴바에 접힌 줄 2개</td><td><b>랭킹 사용법이 바뀜</b></td></tr>
+    <tr><td>조건 패널 자리</td><td>넉넉함</td><td>좁음 (접힌 줄 안)</td><td>좁음 (툴바)</td></tr>
+    <tr><td>저장 목록 자리</td><td>레일</td><td>마땅치 않음</td><td>마땅치 않음</td></tr>
+    <tr><td>메뉴 증가</td><td>+1</td><td>없음</td><td>없음</td></tr>
+    <tr><td>모바일</td><td>독립 화면</td><td>오버레이</td><td>툴바 오버레이</td></tr>
+  </table>
+</div>
+
+<div class="lead">
+  <p><b>정해 주실 것은 세 가지입니다.</b></p>
+  <p>① 배치 <b>A · B · C</b> 중 하나.</p>
+  <p>② <b>커버리지가 낮은 조건을 어떻게 다룰까요.</b> (가) 지금처럼 비중만 옆에 적고 그대로 걸 수 있게 둡니다 <b>(권장)</b> · (나) PER·심리·수급처럼 15% 미만인 조건은 <b>경고를 띄우고</b> 확인을 받습니다 · (다) 아예 조건 목록에서 <b>숨깁니다</b>.</p>
+  <p>③ <b>「잴 수 없음」 종목을 결과에 포함할 선택지를 줄까요.</b> 지금 설계는 언제나 제외합니다. 「ROE 조건은 걸되 ROE가 없는 종목도 보여 달라」는 요구가 있을 수 있는데, 그러면 통과의 뜻이 흐려집니다. 지금은 <b>주지 않는 쪽</b>을 권합니다.</p>
+</div>
+
+</div>
+<script>
+document.getElementById("themeBtn").addEventListener("click", function () {
+  var el = document.documentElement;
+  el.dataset.theme = el.dataset.theme === "dark" ? "light" : "dark";
+});
+</script>
+</body>
+</html>

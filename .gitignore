@@ -13,6 +13,8 @@ be/.next/
 be/.cookies*
 # 로컬 개발용 업로드 이미지 저장소 (MEDIA_DIR 기본값)
 be/var/
+# worker-growth의 Google 서비스 계정 JSON 등 — 깃에도 이미지에도 넣지 않는다(be/.dockerignore).
+be/secrets/
 *.exe
 
 # Dependencies / tooling

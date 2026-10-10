@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>종목 타임라인 — 배치 선택용 목업 v1</title>
+<style>
+:root {
+  --radius:.625rem;
+  --background:oklch(.97 0 0); --foreground:oklch(.145 0 0);
+  --card:oklch(1 0 0); --muted:oklch(.97 0 0);
+  --muted-foreground:oklch(.52 0 0); --accent:oklch(.93 0 0);
+  --border:oklch(.87 0 0);
+  --brand:#2563EB; --brand-muted:rgba(37,99,235,.1);
+  --profit:#DC2626; --loss:#2563EB;
+  --score-high:#15803D; --score-mid:#C2410C; --score-low:#B91C1C;
+  --surface-elevated:var(--accent); --text-muted:oklch(.545 0 0);
+}
+[data-theme="dark"]{
+  --background:oklch(.145 0 0); --foreground:oklch(.985 0 0);
+  --card:oklch(.205 0 0); --muted:oklch(.269 0 0);
+  --muted-foreground:oklch(.708 0 0); --accent:oklch(.269 0 0);
+  --border:oklch(1 0 0/16%);
+  --brand:#60A5FA; --brand-muted:rgba(96,165,250,.15);
+  --profit:#F87171; --loss:#60A5FA;
+  --score-high:#4ADE80; --score-mid:#FB923C; --score-low:#F87171;
+  --text-muted:oklch(.6 0 0);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--background);color:var(--foreground);
+  font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  font-size:12px;line-height:1.5;padding:24px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1400px;margin:0 auto}
+h1{font-size:20px;font-weight:700;letter-spacing:-.01em}
+h2{font-size:15px;font-weight:600} h3{font-size:13px;font-weight:600}
+.sub{color:var(--muted-foreground);font-size:12px}
+.up{color:var(--profit)} .down{color:var(--loss)} .n{font-variant-numeric:tabular-nums}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding-bottom:16px;margin-bottom:20px;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:var(--background);z-index:5}
+button.tgl{font:inherit;cursor:pointer;border:1px solid var(--border);background:var(--card);
+  color:var(--foreground);border-radius:8px;padding:5px 12px}
+.lead{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:22px}
+.lead p{margin-bottom:8px}.lead p:last-child{margin-bottom:0}
+.note{color:var(--muted-foreground);font-size:11px;margin-top:8px}
+.opt{margin-bottom:30px}
+.opt-head{display:flex;align-items:baseline;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.tag{font-size:11px;font-weight:700;background:var(--brand-muted);color:var(--brand);border-radius:6px;padding:2px 7px}
+.tag.rec{background:rgba(21,128,61,.12);color:var(--score-high)}
+.tag.warn{background:rgba(194,65,12,.12);color:var(--score-mid)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;background:var(--surface-elevated);border-radius:4px;padding:1px 4px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.tabbar{display:flex;gap:2px;overflow-x:auto;border-bottom:1px solid var(--border);background:var(--card);font-size:11.5px}
+.tabbar span{padding:7px 10px;white-space:nowrap;color:var(--muted-foreground);border-bottom:2px solid transparent}
+.tabbar span.on{color:var(--foreground);border-bottom-color:var(--foreground);font-weight:600}
+.tabbar span.new{color:var(--brand);border-bottom-color:var(--brand);font-weight:600}
+.body{padding:12px 14px}
+.hd{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 10px;margin-bottom:8px}
+.hd .t{font-size:13px;font-weight:700}
+.hd .s{font-size:11px;color:var(--text-muted)}
+.seg{display:inline-flex;gap:2px;background:var(--muted);border-radius:8px;padding:2px;margin-left:auto}
+.seg button{font:inherit;font-size:11px;cursor:pointer;border:0;background:transparent;color:var(--muted-foreground);border-radius:6px;padding:2px 8px}
+.seg button.on{background:var(--card);color:var(--foreground);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.lanes{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 6px}
+.lane{font-size:10px;border:1px solid var(--border);border-radius:999px;padding:2px 8px;color:var(--text-muted)}
+.lane b{color:var(--foreground);font-weight:600}
+.lane.partial{border-color:var(--score-mid);color:var(--score-mid)}
+.lane.none{border-style:dashed}
+.evrow{display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:11.5px}
+.evrow:last-child{border-bottom:0}
+.evrow .date{width:74px;flex:none;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.evrow .rate{width:58px;flex:none;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.evrow .mid{flex:1;min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:3px}
+.chip{font-size:10px;border-radius:5px;padding:1px 6px;background:var(--surface-elevated);color:var(--text-muted)}
+.chip.mv{background:rgba(220,38,38,.12);color:var(--profit);font-weight:600}
+.chip.mvd{background:rgba(37,99,235,.12);color:var(--loss);font-weight:600}
+.chip.earn{background:rgba(21,128,61,.12);color:var(--score-high);font-weight:600}
+.chip.sc{background:rgba(37,99,235,.08);color:var(--brand)}
+.evrow .why{font-size:10.5px;color:var(--text-muted);margin-top:2px}
+.warn{display:flex;gap:8px;border-left:3px solid var(--score-mid);background:rgba(194,65,12,.06);
+  border-radius:0 8px 8px 0;padding:7px 10px;font-size:11px;margin-top:10px}
+.warn b{color:var(--score-mid)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;align-items:start}
+.grid2>figure{margin:0;min-width:0}
+.grid2 figcaption{font-size:11px;font-weight:700;margin-bottom:6px}
+.now figcaption{color:var(--muted-foreground)} .next figcaption{color:var(--brand)}
+.phone{width:375px;max-width:100%}
+.decide{border:1px dashed var(--border);border-radius:10px;padding:12px 14px;background:var(--card)}
+.decide ul{margin:8px 0 0 18px}.decide li{margin-bottom:6px}
+table.t{width:100%;border-collapse:collapse;font-size:11.5px}
+table.t th,table.t td{text-align:right;padding:4px 10px 4px 0;border-bottom:1px solid var(--border);white-space:nowrap}
+table.t th:first-child,table.t td:first-child{text-align:left}
+table.t th{color:var(--muted-foreground);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div>
+    <h1>종목 타임라인 — 배치 선택용 목업 v1</h1>
+    <p class="sub">2026-09-18 · 차트·사건·레인 <b>전부 실제 API 응답</b> (005930, 90일, 0.42초 · 16.7KB)</p>
+  </div>
+  <button class="tgl" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">라이트 / 다크</button>
+</div>
+
+<div class="lead">
+  <p><b>백엔드는 배포돼 있습니다.</b> <code>GET /stocks/{symbol}/timeline?days=90</code> — 새 표도 새 수집도 없습니다. 다섯 표(종가·점수·실적·뉴스·내부자·공시)를 같은 날짜 축에 세울 뿐입니다. 뉴스는 <b>SQL이 날짜로 접어</b> 돌려줍니다(삼성전자는 하루 평균 180건이라 행으로 가져오면 15,232건입니다).</p>
+  <p><b>이 화면의 제1 규칙 — 레인마다 시작일이 다릅니다.</b> 종가는 2024-12-16부터인데 공시는 2026-08-20부터입니다. 1년을 그리면 공시 레인이 열 달 비는데 그건 <b>「아무 일 없었다」가 아니라 「수집 전」</b>입니다.</p>
+  <p><b>골라낸 것 — 90일 중 39일.</b> 급등락 문턱은 종목마다 다릅니다(그 창의 표준편차 ×1.5, 2~10%로 가둠). 005930은 변동성 5.82%라 <b>±8.73%</b>가 문턱이었고, 7일이 걸렸습니다. 뉴스 건수만 많은 날은 <b>세우지 않습니다</b> — 그걸로 고르면 거의 모든 날이 남습니다.</p>
+  <table class="t">
+    <tr><th>날짜</th><th>등락</th><th>같은 날 있었던 일</th></tr>
+    <tr><td>2026-07-31</td><td class="up"><b>+21.31%</b></td><td style="text-align:left">뉴스 732건 · 내부자 2건</td></tr>
+    <tr><td>2026-07-28</td><td class="down">−14.51%</td><td style="text-align:left">뉴스 990건</td></tr>
+    <tr><td>2026-07-07</td><td class="down">−9.06%</td><td style="text-align:left"><b>실적 발표</b></td></tr>
+    <tr><td>2026-07-13</td><td class="down">−10.12%</td><td style="text-align:left"><b>뉴스 1건</b> — 우리 데이터로 설명이 안 되는 날</td></tr>
+  </table>
+  <p class="note">마지막 줄을 <b>그대로 보여 주는 것</b>이 이 기능의 정직성입니다. 설명이 없으면 없다고 해야 합니다.</p>
+</div>
+
+<!-- ===================== 옵션 B (권장) ===================== -->
+<section class="opt">
+  <div class="opt-head"><span class="tag rec">배치 B · 권장</span><h2>AI 분석 탭 — 「점수 근거」 아래</h2></div>
+  <p class="sub">그 탭은 이미 <b>「왜」를 다루는 자리</b>입니다(점수 근거가 거기 있습니다). 탭을 늘리지 않고, 「이 점수가 왜 이런가」 다음에 「주가는 왜 움직였나」가 옵니다.</p>
+
+  <div class="card" style="margin-top:12px">
+    <div class="tabbar"><span>개요</span><span class="on">AI 분석</span><span>차트·시세</span><span>기업 정보</span><span>밸류에이션</span><span>재무제표</span><span>실적</span><span>내부자 거래</span><span>뉴스</span></div>
+    <div class="body">
+      <div style="opacity:.45;font-size:11px;border:1px dashed var(--border);border-radius:8px;padding:8px 10px;margin-bottom:10px">
+        AI 핵심 요약 … <span style="margin-left:12px">점수 근거 — 구성 · 전일 대비 · 축별 근거 …</span> <span style="float:right">(기존)</span>
+      </div>
+
+      <div class="hd">
+        <span class="t">주가가 왜 움직였나</span>
+        <span class="s" id="hdr"></span>
+        <span class="seg"><button class="on">90일</button><button>180일</button><button>1년</button></span>
+      </div>
+
+      <svg id="chart" viewBox="0 0 900 170" width="100%" height="170" preserveAspectRatio="none" style="display:block"></svg>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:10px;color:var(--text-muted);margin-top:4px">
+        <span><i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--profit);margin-right:4px"></i>급등</span>
+        <span><i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--loss);margin-right:4px"></i>급락</span>
+        <span><i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--score-high);margin-right:4px"></i>실적 발표</span>
+        <span><i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--text-muted);opacity:.45;margin-right:4px"></i>공시 · 내부자 · 점수 변화</span>
+      </div>
+      <div class="lanes" id="lanes"></div>
+
+      <div id="events"></div>
+
+      <div class="warn"><div><b>레인마다 기록 시작일이 다릅니다.</b> 위 칩의 주황색은 이 창의 일부만 덮는다는 뜻이고, 그 앞 구간은 「사건이 없었다」가 아니라 <b>「아직 수집하기 전」</b>입니다.</div></div>
+    </div>
+  </div>
+  <p class="note"><b>비용</b> — 이 탭을 열 때 요청 1회(0.42초 · 16.7KB). 탭은 지연 로딩이라 종목만 열어 본 사람은 이 요청을 내지 않습니다.</p>
+</section>
+
+<!-- ===================== 옵션 A ===================== -->
+<section class="opt">
+  <div class="opt-head"><span class="tag warn">배치 A</span><h2>새 탭 「타임라인」</h2></div>
+  <p class="sub">개념적으로는 가장 깔끔하지만 <b>탭이 열 개째</b>가 됩니다.</p>
+  <div class="card" style="margin-top:12px">
+    <div class="tabbar"><span>개요</span><span>AI 분석</span><span class="new">타임라인</span><span>차트·시세</span><span>기업 정보</span><span>밸류에이션</span><span>재무제표</span><span>실적</span><span>내부자 거래</span><span>뉴스</span></div>
+    <div class="body" style="color:var(--text-muted);font-size:11.5px">내용은 B와 같습니다.</div>
+  </div>
+  <p class="note"><b>비용</b> — 코드 주석에 이미 적혀 있습니다: 「아홉 탭은 폰 폭의 탭바를 넘친다」(<code>stock-workspace-tab-bar.tsx</code>). 열 개가 되면 뒤쪽 탭(내부자 거래·뉴스)이 더 깊이 숨습니다.</p>
+</section>
+
+<!-- ===================== 옵션 C ===================== -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">배치 C</span><h2>개요 탭 차트에 「차트 / 타임라인」 토글</h2></div>
+  <p class="sub">개요의 일봉 차트가 이미 쓰는 자리를 나눠 씁니다. 종목을 열자마자 보이지만, 개요는 <b>「한눈에」가 목적</b>이라 39줄짜리 목록이 앉을 자리는 아닙니다.</p>
+  <div class="card" style="margin-top:12px;max-width:520px">
+    <div class="body">
+      <div style="opacity:.45;font-size:11px;border:1px dashed var(--border);border-radius:8px;padding:6px 10px;margin-bottom:8px">종합 점수 카드 · AI 핵심 요약 <span style="float:right">(기존)</span></div>
+      <div class="hd"><span class="t">일봉 차트</span><span class="seg"><button class="on">차트</button><button>타임라인</button></span></div>
+      <svg id="chart2" viewBox="0 0 520 120" width="100%" height="120" preserveAspectRatio="none" style="display:block"></svg>
+      <p class="note">토글을 「타임라인」으로 두면 같은 자리에 사건 목록이 옵니다 — 개요가 길어집니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 모바일 ===================== -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">모바일</span><h2>375px에서</h2></div>
+  <div class="grid2" style="margin-top:12px">
+    <figure class="next">
+      <figcaption>같은 내용, 한 칸으로</figcaption>
+      <div class="phone card">
+        <div class="body" style="padding:10px 12px">
+          <div class="hd"><span class="t" style="font-size:12px">주가가 왜 움직였나</span><span class="seg"><button class="on">90일</button><button>1년</button></span></div>
+          <svg id="chart3" viewBox="0 0 340 110" width="100%" height="110" preserveAspectRatio="none" style="display:block"></svg>
+          <div class="lanes" id="lanes3"></div>
+          <div id="events3"></div>
+        </div>
+      </div>
+      <p class="note">날짜·등락률은 고정 폭, 사건 칩이 접힙니다. 「왜」 한 줄은 넘치면 잘립니다 — 그 줄을 누르면 그날 뉴스 목록이 열립니다.</p>
+    </figure>
+  </div>
+</section>
+
+<div class="decide">
+  <h3>결정해 주실 것</h3>
+  <ul>
+    <li><b>배치</b> — B(AI 분석 탭 하단, 권장) · A(새 탭) · C(개요 차트 토글)</li>
+    <li><b>기본 창</b> — 90일(분기 하나, 실적이 한 번은 들어옴) · 180일 · 1년. 길수록 「수집 전」 구간이 넓어집니다.</li>
+    <li><b>뉴스를 어디까지</b> — 지금은 <b>건수만</b> 냅니다. 제목을 함께 내려면 응답이 커지고(하루 180건), 기사별 감성은 <b>저장돼 있지 않습니다</b>(요약 파이프라인이 그때그때 계산). 날짜를 누르면 기존 뉴스 목록 API로 여는 쪽을 권합니다.</li>
+  </ul>
+</div>
+
+</div>
+<script>
+const TL = {"dates":["2026-06-22","2026-06-23","2026-06-24","2026-06-25","2026-06-26","2026-06-29","2026-06-30","2026-07-01","2026-07-02","2026-07-03","2026-07-06","2026-07-07","2026-07-08","2026-07-09","2026-07-10","2026-07-13","2026-07-14","2026-07-15","2026-07-16","2026-07-20","2026-07-21","2026-07-22","2026-07-23","2026-07-24","2026-07-27","2026-07-28","2026-07-29","2026-07-30","2026-07-31","2026-08-03","2026-08-04","2026-08-05","2026-08-06","2026-08-07","2026-08-10","2026-08-11","2026-08-12","2026-08-13","2026-08-14","2026-08-18","2026-08-19","2026-08-20","2026-08-21","2026-08-24","2026-08-25","2026-08-26","2026-08-27","2026-08-28","2026-08-31","2026-09-01","2026-09-02","2026-09-03","2026-09-04","2026-09-07","2026-09-08","2026-09-09","2026-09-10","2026-09-11","2026-09-14","2026-09-15","2026-09-16","2026-09-17"],"closes":[356500,310500,339500,359500,339000,325000,333000,316000,290500,314500,320000,291000,267000,282500,286500,257500,268000,273500,253500,251500,263500,260000,273000,252500,255000,218000,214000,213500,259000,233500,242000,242000,230000,235000,231500,241000,258000,263000,274500,263500,257500,273000,270000,256000,261000,259500,267000,256500,258000,255000,248500,248000,257000,269500,272000,267500,266500,262000,248500,250500,253500,253500],"threshold":8.73,"volatility":5.82,"lanes":[{"id":"close","label":"주가","availableFrom":"2024-12-16","count":62,"coversWindow":true},{"id":"score","label":"AI 점수","availableFrom":"2026-08-07","count":27,"coversWindow":false},{"id":"earnings","label":"실적","availableFrom":"2025-07-08","count":1,"coversWindow":true},{"id":"news","label":"뉴스","availableFrom":"2026-01-14","count":15232,"coversWindow":true},{"id":"insider","label":"내부자 거래","availableFrom":"2026-07-21","count":25,"coversWindow":false},{"id":"disclosure","label":"공시","availableFrom":"2026-08-20","count":18,"coversWindow":false}],"days":[{"d":"2026-09-17","r":0,"reasons":["공시 1건","내부자 거래 1건"],"news":182,"score":46,"delta":0,"driver":"가치 23.2 → 24.8","ins":210,"insCount":1,"disc":["임원ㆍ주요주주특정증권등소유상황보고서"],"earn":null},{"d":"2026-09-15","r":0.8048289738430584,"reasons":["AI 점수 -12"],"news":172,"score":46,"delta":-12,"driver":"추세 71.2 → 19.2","ins":null,"insCount":0,"disc":[],"earn":null},{"d":"2026-09-14","r":-5.152671755725191,"reasons":["공시 1건","내부자 거래 1건","AI 점수 +3"],"news":273,"score":58,"delta":3,"driver":"추세 64.2 → 71.2","ins":-36,"insCount":1,"disc":["임원ㆍ주요주주특정증권등소유상황보고서"],"earn":null},{"d":"2026-09-11","r":-1.6885553470919326,"reasons":["AI 점수 -7"],"news":132,"score":55,"delta":-7,"driver":"추세 80.8 → 64.2","ins":null,"insCount":0,"disc":[],"earn":null},{"d":"2026-09-10","r":-0.3738317757009346,"reasons":["AI 점수 +3"],"news":253,"score":62,"delta":3,"driver":"추세 67.3 → 80.8","ins":null,"insCount":0,"disc":[],"earn":null},{"d":"2026-09-09","r":-1.6544117647058825,"reasons":["공시 2건","내부자 거래 1건","AI 점수 -11"],"news":252,"score":59,"delta":-11,"driver":"추세 91.5 → 67.3","ins":-1164,"insCount":1,"disc":["임원ㆍ주요주주특정증권등소유상황보고서","임원ㆍ주요주주특정증권등거래계획보고서"],"earn":null},{"d":"2026-09-08","r":0.927643784786642,"reasons":["공시 1건","AI 점수 +10"],"news":261,"score":70,"delta":10,"driver":"추세 77.8 → 91.5","ins":null,"insCount":0,"disc":["최대주주등소유주식변동신고서"],"earn":null},{"d":"2026-09-04","r":3.6290322580645165,"reasons":["AI 점수 +4"],"news":270,"score":59,"delta":4,"driver":"추세 43.8 → 58.3","ins":null,"insCount":0,"disc":[],"earn":null},{"d":"2026-09-02","r":-2.549019607843137,"reasons":["AI 점수 -15"],"news":180,"score":57,"delta":-15,"driver":"추세 90.5 → 55.1","ins":null,"insCount":0,"disc":[],"earn":null},{"d":"2026-08-31","r":0.5847953216374269,"reasons":["공시 2건","내부자 거래 1건","AI 점수 -10"],"news":329,"score":72,"delta":-10,"driver":"가치 축이 새로 반영되었습니다","ins":-80,"insCount":1,"disc":["임원ㆍ주요주주특정증권등소유상황보고서","대규모기업집단현황공시[분기별공시(대표회사용)]"],"earn":null},{"d":"2026-08-28","r":-3.932584269662921,"reasons":["공시 2건","내부자 거래 1건","AI 점수 +12"],"news":244,"score":82,"delta":12,"driver":"가치 축이 빠졌습니다","ins":530,"insCount":1,"disc":["임원ㆍ주요주주특정증권등소유상황보고서","주식등의대량보유상황보고서(일반)"],"earn":null},{"d":"2026-08-27","r":2.8901734104046244,"reasons":["AI 점수 -7"],"news":225,"score":70,"delta":-7,"driver":"가치 축이 새로 반영되었습니다","ins":null,"insCount":0,"disc":[],"earn":null},{"d":"2026-08-26","r":-0.5747126436781609,"reasons":["공시 2건","내부자 거래 2건"],"news":330,"score":77,"delta":-1,"driver":"추세 86.3 → 83.8","ins":-93,"insCount":2,"disc":["[기재정정]임원ㆍ주요주주특정증권등소유상황보고서","임원ㆍ주요주주특정증권등소유상황보고서"],"earn":null},{"d":"2026-08-25","r":1.953125,"reasons":["AI 점수 -5"],"news":356,"score":78,"delta":-5,"driver":"추세 96.9 → 86.3","ins":null,"insCount":0,"disc":[],"earn":null},{"d":"2026-08-24","r":-5.185185185185185,"reasons":["공시 1건","내부자 거래 1건","AI 점수 +11"],"news":439,"score":83,"delta":11,"driver":"가치 축이 빠졌습니다","ins":-544,"insCount":1,"disc":["임원ㆍ주요주주특정증권등소유상황보고서"],"earn":null},{"d":"2026-08-21","r":-1.098901098901099,"reasons":["공시 4건","내부자 거래 1건","AI 점수 -5"],"news":471,"score":72,"delta":-5,"driver":"가치 43.5 → 24.9","ins":-100,"insCount":1,"disc":["임원ㆍ주요주주특정증권등소유상황보고서","수시공시의무관련사항(공정공시)","주요사항보고서(자기주식취득결정)","기타경영사항(자율공시)"],"earn":null},{"d":"2026-08-20","r":6.019417475728155,"reasons":["공시 2건","내부자 거래 2건"],"news":421,"score":null,"delta":null,"driver":"","ins":-410,"insCount":2,"disc":["임원ㆍ주요주주특정증권등소유상황보고서","임원ㆍ주요주주특정증권등소유상황보고서"],"earn":null},{"d":"2026-08-19","r":-2.2770398481973433,"reasons":["AI 점수 +7"],"news":319,"score":77,"delta":7,"driver":"가치 11.8 → 43.5","ins":null,"insCount":0,"disc":[],"earn":null},{"d":"2026-08-18","r":-4.007285974499089,"reasons":["AI 점수 -5"],"news":197,"score":70,"delta":-5,"driver":"가치 30.2 → 11.8","ins":null,"insCount":0,"disc":[],"earn":null},{"d":"2026-08-14","r":4.3726235741444865,"reasons":["내부자 거래 4건","AI 점수 -3"],"news":209,"score":75,"delta":-3,"driver":"가치 49.9 → 30.2","ins":1040,"insCount":4,"disc":[],"earn":null},{"d":"2026-08-11","r":4.103671706263499,"reasons":["내부자 거래 2건","AI 점수 +3"],"news":275,"score":76,"delta":3,"driver":"추세 83.1 → 95.1","ins":-1700,"insCount":2,"disc":[],"earn":null},{"d":"2026-08-10","r":-1.4893617021276597,"reasons":["내부자 거래 4건","AI 점수 +14"],"news":303,"score":73,"delta":14,"driver":"추세 62.0 → 83.1","ins":-2700,"insCount":4,"disc":[],"earn":null},{"d":"2026-08-07","r":2.1739130434782608,"reasons":["내부자 거래 5건"],"news":170,"score":59,"delta":null,"driver":"","ins":-6150,"insCount":5,"disc":[],"earn":null},{"d":"2026-08-06","r":-4.958677685950414,"reasons":["내부자 거래 4건"],"news":289,"score":null,"delta":null,"driver":"","ins":-910,"insCount":4,"disc":[],"earn":null},{"d":"2026-08-05","r":0,"reasons":["내부자 거래 4건"],"news":35,"score":null,"delta":null,"driver":"","ins":-4354,"insCount":4,"disc":[],"earn":null},{"d":"2026-08-04","r":3.640256959314775,"reasons":["내부자 거래 3건"],"news":360,"score":null,"delta":null,"driver":"","ins":-2528,"insCount":3,"disc":[],"earn":null},{"d":"2026-08-03","r":-9.845559845559846,"reasons":["급락","내부자 거래 3건"],"news":392,"score":null,"delta":null,"driver":"","ins":-1350,"insCount":3,"disc":[],"earn":null},{"d":"2026-07-31","r":21.311475409836063,"reasons":["급등","내부자 거래 2건"],"news":732,"score":null,"delta":null,"driver":"","ins":2664,"insCount":2,"disc":[],"earn":null},{"d":"2026-07-30","r":-0.23364485981308408,"reasons":["내부자 거래 1건"],"news":1660,"score":null,"delta":null,"driver":"","ins":-230,"insCount":1,"disc":[],"earn":null},{"d":"2026-07-29","r":-1.834862385321101,"reasons":["내부자 거래 3건"],"news":767,"score":null,"delta":null,"driver":"","ins":-2150,"insCount":3,"disc":[],"earn":null},{"d":"2026-07-28","r":-14.50980392156863,"reasons":["급락","내부자 거래 1건"],"news":990,"score":null,"delta":null,"driver":"","ins":562,"insCount":1,"disc":[],"earn":null},{"d":"2026-07-27","r":0.9900990099009901,"reasons":["내부자 거래 1건"],"news":889,"score":null,"delta":null,"driver":"","ins":13,"insCount":1,"disc":[],"earn":null},{"d":"2026-07-23","r":5,"reasons":["내부자 거래 1건"],"news":0,"score":null,"delta":null,"driver":"","ins":-1080,"insCount":1,"disc":[],"earn":null},{"d":"2026-07-22","r":-1.3282732447817838,"reasons":["내부자 거래 2건"],"news":1,"score":null,"delta":null,"driver":"","ins":-905,"insCount":2,"disc":[],"earn":null},{"d":"2026-07-21","r":4.7713717693836974,"reasons":["내부자 거래 60건"],"news":1,"score":null,"delta":null,"driver":"","ins":47133,"insCount":60,"disc":[],"earn":null},{"d":"2026-07-13","r":-10.12216404886562,"reasons":["급락"],"news":1,"score":null,"delta":null,"driver":"","ins":null,"insCount":0,"disc":[],"earn":null},{"d":"2026-07-07","r":-9.0625,"reasons":["급락","실적 발표"],"news":0,"score":null,"delta":null,"driver":"","ins":null,"insCount":0,"disc":[],"earn":"2026 2Q"},{"d":"2026-06-24","r":9.339774557165862,"reasons":["급등"],"news":0,"score":null,"delta":null,"driver":"","ins":null,"insCount":0,"disc":[],"earn":null},{"d":"2026-06-23","r":-12.903225806451612,"reasons":["급락"],"news":0,"score":null,"delta":null,"driver":"","ins":null,"insCount":0,"disc":[],"earn":null}]};
+
+function drawChart(id, w, h, markSize) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const lo = Math.min(...TL.closes) * 0.98, hi = Math.max(...TL.closes) * 1.02;
+  const x = i => (i / (TL.closes.length - 1)) * (w - 8) + 4;
+  const y = v => h - 6 - ((v - lo) / (hi - lo)) * (h - 12);
+  const pts = TL.closes.map((v, i) => x(i).toFixed(1) + ',' + y(v).toFixed(1)).join(' ');
+  let svg = `<polyline points="${pts}" fill="none" stroke="var(--text-muted)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>`;
+  const idx = Object.fromEntries(TL.dates.map((d, i) => [d, i]));
+  for (const day of TL.days) {
+    const i = idx[day.d]; if (i == null) continue;
+    const big = day.reasons.includes('급등') || day.reasons.includes('급락');
+    const earn = day.reasons.includes('실적 발표');
+    const color = earn ? 'var(--score-high)' : big ? (day.r > 0 ? 'var(--profit)' : 'var(--loss)') : 'var(--text-muted)';
+    const r = earn ? markSize + 1 : big ? markSize : markSize - 1.2;
+    const op = (big || earn) ? 1 : .45;
+    svg += `<circle cx="${x(i).toFixed(1)}" cy="${y(TL.closes[i]).toFixed(1)}" r="${r}" fill="${color}" opacity="${op}"><title>${day.d} ${day.reasons.join(' · ')}</title></circle>`;
+  }
+  el.innerHTML = svg;
+}
+
+function renderLanes(id) {
+  const el = document.getElementById(id); if (!el) return;
+  el.innerHTML = TL.lanes.map(l => {
+    if (!l.availableFrom) return `<span class="lane none">${l.label} · 자료 없음</span>`;
+    const cls = l.coversWindow ? 'lane' : 'lane partial';
+    const tail = l.coversWindow ? '' : ` · ${l.availableFrom}부터`;
+    return `<span class="${cls}">${l.label} <b>${l.count.toLocaleString()}</b>${tail}</span>`;
+  }).join('');
+}
+
+function renderEvents(id, limit) {
+  const el = document.getElementById(id); if (!el) return;
+  el.innerHTML = TL.days.slice(0, limit).map(day => {
+    const rate = day.r == null ? '—'
+      : Math.abs(day.r) < 0.005 ? '0.00%'
+      : (day.r > 0 ? '+' : '−') + Math.abs(day.r).toFixed(2) + '%';
+    const tone = day.r == null ? '' : day.r > 0 ? 'up' : 'down';
+    const chips = day.reasons.map(r => {
+      if (r === '급등') return '<span class="chip mv">급등</span>';
+      if (r === '급락') return '<span class="chip mvd">급락</span>';
+      if (r === '실적 발표') return '<span class="chip earn">실적 발표</span>';
+      if (r.startsWith('AI 점수')) return `<span class="chip sc">${r}</span>`;
+      return `<span class="chip">${r}</span>`;
+    }).join('');
+    const extra = [];
+    if (day.news) extra.push(`뉴스 ${day.news.toLocaleString()}건`);
+    if (day.ins != null && day.ins !== 0) extra.push(`내부자 순${day.ins > 0 ? '+' : '−'}${Math.abs(day.ins).toLocaleString()}주`);
+    if (day.disc.length) extra.push(day.disc[0].slice(0, 22));
+    const why = day.driver ? `${day.driver} · ${extra.join(' · ')}` : extra.join(' · ');
+    return `<div class="evrow">
+      <span class="date">${day.d.slice(5)}</span>
+      <span class="rate ${tone}">${rate}</span>
+      <span class="mid"><span class="chips">${chips}</span>${why ? `<div class="why">${why}</div>` : ''}</span>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('hdr').textContent =
+  `삼성전자 · ${TL.dates[0]} ~ ${TL.dates[TL.dates.length-1]} · 표시 ${TL.days.length}일 · 급등락 문턱 ±${TL.threshold}% (변동성 ${TL.volatility}%)`;
+drawChart('chart', 900, 170, 3.4);
+drawChart('chart2', 520, 120, 2.6);
+drawChart('chart3', 340, 110, 2.4);
+renderLanes('lanes'); renderLanes('lanes3');
+renderEvents('events', 10); renderEvents('events3', 6);
+</script>
+</body>
+</html>

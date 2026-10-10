@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>W4 종목 화면·홈 첫 화면 — 제안 v1</title>
+<style>
+:root{
+  --bg:#F5F5F5; --card:#fff; --fg:#171717; --muted:#737373; --border:#E5E5E5;
+  --brand:#2563EB; --brand-bg:rgba(37,99,235,.08); --up:#DC2626; --down:#2563EB;
+  --hi:#15803D; --mid:#C2410C; --lo:#B91C1C; --amber:#B45309; --amber-bg:#FEF3C7;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font-family:Pretendard,-apple-system,"Segoe UI",system-ui,sans-serif;font-size:13px;line-height:1.55;padding:24px 16px}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:20px;margin-bottom:4px} h2{font-size:16px;margin:28px 0 8px} h3{font-size:13px;margin-bottom:6px}
+.lead{color:var(--muted);margin-bottom:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:860px){.grid2{grid-template-columns:1fr}}
+.frame{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.frame .cap{padding:8px 12px;border-bottom:1px solid var(--border);font-weight:600;display:flex;justify-content:space-between}
+.tag{font-size:11px;padding:1px 8px;border-radius:999px;background:var(--brand-bg);color:var(--brand)}
+.tag.cur{background:#eee;color:var(--muted)}
+.pad{padding:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.muted{color:var(--muted)} .small{font-size:11px}
+.price{font-size:24px;font-weight:700}
+.dn{color:var(--down)} .up{color:var(--up)}
+.why{margin-top:6px;padding:6px 8px;background:var(--brand-bg);border-radius:8px}
+.box{border:1px solid var(--border);border-radius:10px;padding:10px;margin-top:10px}
+.score{display:flex;gap:14px;align-items:center}
+.big{font-size:40px;font-weight:800;line-height:1}
+.bar{height:6px;border-radius:3px;background:#eee;flex:1;position:relative}
+.bar i{position:absolute;inset:0 auto 0 0;border-radius:3px}
+.axes div{display:flex;gap:6px;align-items:center;font-size:11px;margin:2px 0}
+.axes span:first-child{width:48px;color:var(--muted)}
+.chips span{display:inline-block;border:1px solid var(--border);border-radius:999px;padding:1px 8px;margin:2px 2px 0 0;font-size:11px}
+.cta{margin-top:10px;padding:10px;border:1px dashed var(--brand);border-radius:10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.btn{background:var(--brand);color:#fff;border-radius:8px;padding:6px 12px;font-weight:600;font-size:12px;white-space:nowrap}
+.tabs{display:flex;gap:14px;border-bottom:1px solid var(--border);margin-top:10px;padding-bottom:4px;font-size:12px;color:var(--muted)}
+.tabs b{color:var(--fg);border-bottom:2px solid var(--fg)}
+.surp{display:flex;gap:4px;align-items:flex-end;height:36px}
+.surp i{width:16px;border-radius:3px 3px 0 0}
+.note{background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:8px 10px;margin-top:8px}
+.list li{list-style:none;display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)}
+.q{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:16px}
+.q ol{padding-left:18px} .q li{margin:4px 0}
+.dim{opacity:.55}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>W4 — 종목 화면 · 홈 첫 화면 재배치 제안 v1</h1>
+<p class="lead">근거: <code>docs/BUSINESS_REVIEW.md</code> §2.2·§2.3·§4.4. 숫자는 10-08 실측값(삼성전자·HSBC·AZN)과 예시를 섞은 것입니다. 고르실 것은 맨 아래 질문 넷입니다.</p>
+
+<h2>① 종목 화면 첫 화면 (데스크톱 오른쪽 본문 · 모바일은 같은 순서로 세로)</h2>
+<div class="grid2">
+  <div class="frame">
+    <div class="cap">지금 <span class="tag cur">현재</span></div>
+    <div class="pad">
+      <div class="row"><b>삼성전자</b><span class="muted small">005930 · KOSPI</span></div>
+      <div class="row"><span class="price">263,500원</span><span class="dn">-2.04%</span></div>
+      <div class="muted small">10.08 오후 08:00 기준 · 시간외(NXT) 포함 최종가</div>
+      <div class="tabs"><b>개요</b><span>AI 분석</span><span>기업·재무</span><span>실적</span><span>내부자 거래</span><span>뉴스</span></div>
+      <div class="box"><h3>AI 핵심 요약</h3><p class="muted small">ROE는 상위 17%로 우수한 수익성을 … (10줄 문단)</p></div>
+      <div class="box"><h3>종합 점수 56 / B</h3><div class="muted small">다섯 막대 · 동종 상위 35%</div></div>
+      <div class="box"><h3>90일 시나리오</h3><div class="muted small">163,174 ~ 422,288</div></div>
+      <div class="box dim"><h3>질문 칩 · 애널리스트 · 일봉 차트 …</h3></div>
+      <p class="note small">첫 화면에 「이 서비스만의 것」(점수·근거·성적)이 문단 아래로 밀려 있고, 모든 카드가 같은 무게입니다.</p>
+    </div>
+  </div>
+
+  <div class="frame">
+    <div class="cap">제안 A <span class="tag">권장</span></div>
+    <div class="pad">
+      <div class="row"><b>삼성전자</b><span class="muted small">005930 · KOSPI · IT</span></div>
+      <div class="row"><span class="price">263,500원</span><span class="dn">-2.04%</span><span class="muted small">시간외 포함 · 정규장 262,500</span></div>
+      <div class="why small"><b>왜 움직였나</b> · 10/8 실적 · 3분기 영업익 107조 잠정 발표 <span class="muted">— 기사 311건 · 근거 보기</span></div>
+
+      <div class="box">
+        <div class="score">
+          <svg width="120" height="120" viewBox="0 0 120 120" aria-label="5축 레이더">
+            <polygon points="60,8 109,44 90,101 30,101 11,44" fill="none" stroke="#E5E5E5"/>
+            <polygon points="60,31 99,47 79,86 51,72 34,52" fill="rgba(37,99,235,.25)" stroke="#2563EB" stroke-width="2"/>
+          </svg>
+          <div style="flex:1">
+            <div class="row"><span class="big">56</span><span class="muted">/100 · B</span></div>
+            <div class="small"><b>IT 섹터 412개 중 143위</b> <span class="muted">(상위 35%)</span></div>
+            <div class="small muted">어제 −1 · 심리·수급 변화 · <u>이 점수의 성적 보기</u></div>
+            <div class="axes" style="margin-top:6px">
+              <div><span>수익성</span><div class="bar"><i style="width:76%;background:var(--hi)"></i></div><span>76</span></div>
+              <div><span>가치</span><div class="bar"><i style="width:19%;background:var(--lo)"></i></div><span>19</span></div>
+            </div>
+          </div>
+        </div>
+        <p class="small muted" style="margin-top:6px">가장 강한 축·가장 약한 축 둘만 막대로, 나머지는 레이더가 말한다.</p>
+      </div>
+
+      <div class="grid2" style="gap:8px">
+        <div class="box"><h3>다음 실적 · D-14</h3><div class="small muted">10/24 3Q 확정치(추정)</div>
+          <div class="surp" title="지난 4분기 영업이익 서프라이즈"><i style="height:20px;background:var(--hi)"></i><i style="height:12px;background:var(--hi)"></i><i style="height:8px;background:var(--lo)"></i><i style="height:30px;background:var(--hi)"></i></div>
+          <div class="small muted">지난 4분기 서프라이즈</div></div>
+        <div class="box"><h3>애널리스트 · 90일 범위</h3><div class="small">평균 목표가 495,227원 <span class="muted">(+87.9%)</span></div><div class="small muted">90일 163,174 ~ 422,288 (범위 폭 99%)</div></div>
+      </div>
+
+      <div class="cta"><span><b>관심 종목에 담으면</b> 점수가 바뀌거나 실적 발표가 다가올 때 사이드바 「변화」에 표시합니다.</span><span class="btn">☆ 관심 등록</span></div>
+      <div class="tabs"><b>개요</b><span>AI 분석</span><span>기업·재무</span><span>실적</span><span>내부자 거래</span><span>뉴스</span></div>
+      <div class="box dim small">AI 핵심 요약(3줄로 접고 「더 보기」) · 질문 칩 · 일봉 차트 …</div>
+    </div>
+  </div>
+</div>
+
+<div class="grid2" style="margin-top:16px">
+  <div class="frame">
+    <div class="cap">제안 B — 점수 상자를 오른쪽에 고정 <span class="tag">Seeking Alpha식</span></div>
+    <div class="pad small">
+      <p>데스크톱에서 본문 오른쪽 260px에 <b>점수 상자</b>(레이더·종합·섹터 순위·요인 다섯 줄·성적 링크)를 고정하고, 본문은 지금 순서(요약 → 시나리오 …)를 유지합니다. 모바일은 A와 같아집니다.</p>
+      <p class="muted" style="margin-top:6px">장점: 지금 화면을 덜 흔듭니다. 단점: 이미 왼쪽에 시세 레일(240px)이 있어 1280px 아래에서는 본문이 좁아집니다.</p>
+    </div>
+  </div>
+  <div class="frame">
+    <div class="cap">공유 카드(이미 배포) <span class="tag">10-10</span></div>
+    <div class="pad small">
+      <p>카톡·텔레그램에 종목 링크를 붙이면 <b>5축 레이더 카드</b>가 뜹니다(<code>/stocks/005930/opengraph-image</code>). 제안 A의 레이더가 같은 모양이라 공유 카드와 화면이 한 그림이 됩니다.</p>
+    </div>
+  </div>
+</div>
+
+<h2>② 홈 첫 화면 — 처음 온 사람에게 (비로그인만)</h2>
+<div class="grid2">
+  <div class="frame">
+    <div class="cap">지금 <span class="tag cur">현재</span></div>
+    <div class="pad small">
+      <p>지수 띠 → 시장 브리핑(문단) → 뉴스. 모바일 첫 화면은 브리핑·뉴스 스켈레톤(클라이언트에서 API 22개로 채움). 「이 서비스가 무엇인지」 한 줄이 없습니다.</p>
+    </div>
+  </div>
+  <div class="frame">
+    <div class="cap">제안 <span class="tag">권장</span></div>
+    <div class="pad">
+      <div class="box" style="margin-top:0">
+        <div style="font-size:16px;font-weight:700">국내·미국 전 종목 AI 점수 — 근거와 성적까지 공개합니다</div>
+        <div class="small muted">재무·가격·수급·뉴스 다섯 축 · 같은 업종 안에서 비교 · 매일 00:25 갱신 · 투자 권유 아님</div>
+        <ul class="list small" style="margin-top:8px">
+          <li><span><b>오늘 점수가 가장 크게 바뀐 종목</b> <span class="muted">(데이터 공백으로 생긴 변동 제외)</span></span><span class="muted">10-08</span></li>
+          <li><span>HSBC 홀딩스 <span class="muted">· 가치 축 하락</span></span><span class="dn">70 → 49</span></li>
+          <li><span>아스트라제네카 <span class="muted">· 추세 축 하락</span></span><span class="dn">60 → 40</span></li>
+          <li><span>(예시 종목) <span class="muted">· 성장 축 상승</span></span><span class="up">66 → 81</span></li>
+        </ul>
+        <div class="row" style="margin-top:8px"><span class="btn">AI 점수 순위 보기</span><span class="small muted">종목을 검색해 점수 확인 →</span></div>
+      </div>
+      <p class="small muted" style="margin-top:6px">서버가 그린다(크롤러·첫 화면 모두 즉시). 로그인한 사람에게는 이 자리에 지금의 「내 종목」 카드가 선다. 아래는 지금 홈 그대로.</p>
+    </div>
+  </div>
+</div>
+
+<div class="q">
+  <h3>고르실 것</h3>
+  <ol>
+    <li><b>종목 화면</b> — 제안 A(첫 화면 재배치, 권장) / 제안 B(오른쪽 점수 상자만 추가) / 지금 유지</li>
+    <li><b>AI 핵심 요약</b> — A안에서 3줄로 접고 「더 보기」(권장) / 지금처럼 다 펼침</li>
+    <li><b>홈</b> — 비로그인 첫 화면에 가치 제안 + 「오늘 점수가 가장 크게 바뀐 종목」(권장) / 지금 유지</li>
+    <li><b>알림 문구</b> — 관심 등록 단추 옆 약속을 「사이드바 표시」(지금 있는 것, 권장)로 / 이메일·텔레그램 알림이 생긴 뒤로 미룸</li>
+  </ol>
+</div>
+</div>
+</body>
+</html>

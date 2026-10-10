@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>홈 첫 화면(비로그인) — 제안 v2</title>
+<style>
+:root{--bg:#F4F5F7;--card:#fff;--fg:#111827;--muted:#6B7280;--line:#E5E7EB;--brand:#2563EB;--brand-bg:rgba(37,99,235,.08);
+--hi:#15803D;--mid:#C2410C;--lo:#B91C1C;--up:#DC2626;--down:#2563EB;--ink:#0F172A}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font-family:Pretendard,-apple-system,"Segoe UI",system-ui,sans-serif;font-size:13px;line-height:1.55;padding:24px 16px}
+.wrap{max-width:1200px;margin:0 auto}
+h1{font-size:20px} h2{font-size:16px;margin:32px 0 6px} .lead{color:var(--muted);margin:4px 0 16px}
+.label{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--brand-bg);color:var(--brand);margin-right:6px}
+.frame{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:14px;overflow:hidden}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.muted{color:var(--muted)} .s{font-size:11px} .b{font-weight:700}
+.hero{background:linear-gradient(135deg,#0F172A 0%,#1E3A8A 100%);color:#fff;border-radius:14px;padding:26px 28px;display:grid;grid-template-columns:1.1fr .9fr;gap:24px;align-items:center}
+.hero h3{font-size:26px;line-height:1.3;letter-spacing:-.5px}
+.hero p{color:#CBD5E1;margin-top:8px}
+.search{margin-top:16px;background:#fff;border-radius:10px;padding:11px 14px;color:#6B7280;display:flex;justify-content:space-between}
+.search b{background:var(--brand);color:#fff;border-radius:7px;padding:2px 10px;font-size:12px}
+.chips{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}.chips span{border:1px solid rgba(255,255,255,.3);border-radius:999px;padding:2px 10px;font-size:12px;color:#E2E8F0}
+.heroCard{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:14px;display:flex;gap:12px;align-items:center}
+.heroCard .big{font-size:44px;font-weight:800;line-height:1}
+.strip{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:12px}
+.mini{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
+.mini .row{display:flex;justify-content:space-between;align-items:baseline}
+.mini .sc{font-size:22px;font-weight:800}
+.grid2{display:grid;grid-template-columns:1.2fr .8fr;gap:12px;margin-top:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
+.tabs{display:flex;gap:4px;background:#F3F4F6;border-radius:8px;padding:2px;font-size:12px}.tabs span{padding:2px 10px;border-radius:6px}.tabs .on{background:#fff;font-weight:700}
+table{width:100%;border-collapse:collapse;margin-top:8px}td{padding:7px 4px;border-top:1px solid var(--line);font-size:12px}
+.delta{font-weight:700;text-align:right;white-space:nowrap}.pos{color:var(--hi)}.neg{color:var(--lo)}
+.axis{font-size:11px;border-radius:6px;padding:1px 6px;background:#F3F4F6;color:var(--muted)}
+.dday{font-size:11px;font-weight:700;color:var(--brand);background:var(--brand-bg);border-radius:6px;padding:1px 6px}
+.why .ico{width:28px;height:28px;border-radius:8px;background:var(--brand-bg);color:var(--brand);display:flex;align-items:center;justify-content:center;font-weight:800;margin-bottom:8px}
+.dim{opacity:.45}
+.heat{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:8px}.heat div{border-radius:6px;padding:8px;color:#fff;font-size:11px}
+.note{background:#FEF3C7;color:#92400E;border-radius:8px;padding:8px 10px;margin-top:10px}
+.q{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:24px}.q ol{padding-left:18px}.q li{margin:5px 0}
+.phone{width:375px;margin:0 auto;background:var(--bg);border:8px solid #111;border-radius:28px;padding:10px;overflow:hidden}
+.phone .hero{grid-template-columns:1fr;padding:18px}.phone .hero h3{font-size:20px}
+.phone .strip{grid-template-columns:repeat(6,140px);overflow:hidden}
+@media (max-width:900px){.hero,.grid2,.grid3{grid-template-columns:1fr}.strip{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>홈 첫 화면 — 비로그인 방문자용 제안 v2</h1>
+<p class="lead">v1(소개 한 줄 + 점수 변화 3줄)이 부족하다는 피드백 반영. 숫자는 <b>10-08 실제 값</b>(점수·점수 급변·실적 일정)이고, B안의 섹터 지도 수치만 예시다.
+비로그인에게만 보이고, 로그인하면 지금 홈(내 종목 → 브리핑 …) 그대로다. 이 블록 아래로는 지금 홈이 이어진다.</p>
+
+<h2><span class="label">A안 · 권장</span>「제품을 바로 써 보게」 — 검색 + 대표 종목 점수 카드</h2>
+<div class="frame">
+  <div class="hero">
+    <div>
+      <div class="s" style="color:#93C5FD;font-weight:700">국내·미국 전 종목 · 매일 00:25 갱신</div>
+      <h3>이 종목, 같은 업종 안에서<br>몇 등일까요?</h3>
+      <p>재무·성장·가치·추세·수급 다섯 축으로 매긴 AI 점수와 그 근거를 보여 드립니다. 점수가 바뀌면 왜 바뀌었는지도.</p>
+      <div class="search"><span>종목명 또는 티커 — 예: 삼성전자, NVDA</span><b>점수 보기</b></div>
+      <div class="chips"><span>삼성전자</span><span>SK하이닉스</span><span>엔비디아</span><span>테슬라</span><span>애플</span></div>
+    </div>
+    <div class="heroCard">
+      <svg id="heroRadar" width="150" height="150" viewBox="0 0 180 180"></svg>
+      <div>
+        <div class="s" style="color:#93C5FD">엔비디아 · NVDA</div>
+        <div><span class="big">70</span> <span style="color:#93C5FD;font-weight:700">A</span></div>
+        <div class="s" style="color:#CBD5E1;margin-top:4px">미국 대형주 중 상위 5%</div>
+        <div class="s" style="color:#CBD5E1">가장 강한 축 <b style="color:#fff">수익성 83</b><br>가장 약한 축 <b style="color:#fff">가치 21</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="strip" id="strip"></div>
+
+  <div class="grid2">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><b>오늘 점수가 크게 바뀐 종목</b> <span class="s muted">10-08 · 데이터 공백으로 생긴 변동은 뺐습니다</span></div>
+        <div class="tabs"><span class="on">국내</span><span>해외</span></div>
+      </div>
+      <table>
+        <tr><td><b>HDC</b></td><td><span class="axis">추세 20→45</span></td><td class="muted">53 → 63</td><td class="delta pos">+10</td></tr>
+        <tr><td><b>쿠쿠홀딩스</b></td><td><span class="axis">추세 35→58</span></td><td class="muted">55 → 64</td><td class="delta pos">+9</td></tr>
+        <tr><td><b>한국타이어앤테크놀로지</b></td><td><span class="axis">추세 52→71</span></td><td class="muted">58 → 66</td><td class="delta pos">+8</td></tr>
+        <tr><td><b>LIG디펜스앤에어로스페이스</b></td><td><span class="axis">추세 49→18</span></td><td class="muted">50 → 41</td><td class="delta neg">−9</td></tr>
+        <tr><td><b>오스코텍</b></td><td><span class="axis">추세 86→58</span></td><td class="muted">77 → 69</td><td class="delta neg">−8</td></tr>
+      </table>
+      <p class="s muted" style="margin-top:6px">회색 칸 = 변화 분해(잔차 0 귀인)에서 가장 크게 움직인 축(실측 `/scores/changes`). 10-08 상위 5건이 모두 <b>추세</b>였다 — 점수 급변의 상당수가 가격 움직임이라는 뜻이고, 이 목록이 「주가 급등락 목록」처럼 보일 위험이 있다(재무 축 변화만 따로 거르는 탭을 둘 수 있다).</p>
+    </div>
+    <div class="card">
+      <b>이번 주·다음 주 실적 발표</b>
+      <table>
+        <tr><td><span class="dday">D-4</span></td><td><b>제이피모건 체이스</b></td><td class="muted s">3Q · 점수 42</td></tr>
+        <tr><td><span class="dday">D-4</span></td><td><b>존슨 앤 존슨</b></td><td class="muted s">3Q · 점수 47</td></tr>
+        <tr><td><span class="dday">D-12</span></td><td><b>테슬라</b></td><td class="muted s">3Q · 점수 49</td></tr>
+        <tr><td><span class="dday">D-13</span></td><td><b>인텔</b></td><td class="muted s">3Q · 점수 51</td></tr>
+      </table>
+      <p class="s muted" style="margin-top:6px">지난 4번 서프라이즈 막대를 행에 붙이는 안도 가능(종목 화면의 「다음 실적」 카드와 같은 부품).</p>
+    </div>
+  </div>
+
+  <div class="grid3">
+    <div class="card why"><div class="ico">1</div><b>같은 업종 안에서 비교</b><p class="s muted" style="margin-top:4px">반도체는 반도체끼리, 은행은 은행끼리. 「PER 낮음」이 업종 탓인지 회사 탓인지 가립니다.</p></div>
+    <div class="card why"><div class="ico">2</div><b>점수가 바뀐 이유를 분해</b><p class="s muted" style="margin-top:4px">어제 대비 변화를 축별로 나눠 남김없이 설명합니다. 데이터가 비어서 생긴 변동은 사건으로 올리지 않습니다.</p></div>
+    <div class="card why"><div class="ico">3</div><b>점수의 과거 성적 공개</b><p class="s muted" style="margin-top:4px">상위 종목을 샀다면 어땠는지 지수와 비교해 그대로 보여 줍니다 — 좋을 때도, 나쁠 때도. <u>성적 보기 →</u></p></div>
+  </div>
+  <p class="s muted" style="margin-top:10px">↓ 여기부터 지금 홈(오늘의 시장 · 브리핑 · 뉴스 · AI 점수 순위 TOP …)</p>
+</div>
+
+<h2>A안 모바일 (375px)</h2>
+<div class="phone">
+  <div class="hero">
+    <div>
+      <div class="s" style="color:#93C5FD;font-weight:700">국내·미국 전 종목 AI 점수</div>
+      <h3>이 종목, 같은 업종 안에서 몇 등일까요?</h3>
+      <div class="search"><span>종목명 또는 티커</span><b>보기</b></div>
+      <div class="chips"><span>삼성전자</span><span>엔비디아</span><span>테슬라</span></div>
+    </div>
+  </div>
+  <div class="strip" id="stripM"></div>
+  <div class="card" style="margin-top:10px"><b>오늘 점수가 크게 바뀐 종목</b><table>
+    <tr><td><b>HDC</b> <span class="axis">추세</span></td><td class="delta pos">+10</td></tr><tr><td><b>LIG디펜스앤에어로스페이스</b></td><td class="delta neg">−9</td></tr><tr><td><b>쿠쿠홀딩스</b></td><td class="delta pos">+9</td></tr></table></div>
+  <p class="s muted" style="margin-top:8px">대표 종목 카드는 가로로 밀어 본다. 세 장 설명 타일은 모바일에서 한 줄 요약으로 접는다.</p>
+</div>
+
+<h2><span class="label" style="background:#F3F4F6;color:#374151">B안</span>「오늘의 점수 지도」 — 시장을 점수로 읽는 데일리 리포트</h2>
+<div class="frame">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between"><b>오늘의 점수 지도 · 10-08</b><div class="tabs"><span class="on">국내</span><span>미국</span></div></div>
+    <p class="s muted">섹터별 평균 점수 변화(칸 크기 = 시가총액). 섹터를 누르면 그 섹터 점수 순위로.</p>
+    <div class="heat">
+      <div style="background:#15803D;grid-row:span 2">IT<br><b>+1.8</b></div><div style="background:#4D7C0F">산업재 +0.9</div><div style="background:#9CA3AF">금융 +0.1</div><div style="background:#B91C1C">헬스케어 −1.2</div>
+      <div style="background:#65A30D">소재 +0.6</div><div style="background:#DC2626">커뮤니케이션 −0.8</div><div style="background:#9CA3AF">필수소비 0.0</div>
+    </div>
+    <p class="s muted" style="margin-top:6px">위 수치는 예시 — 섹터 평균 변화는 아직 집계하지 않는다(배치에 한 줄 추가로 가능).</p>
+  </div>
+  <div class="grid2"><div class="card dim">오늘 점수가 크게 바뀐 종목 (A안과 같음)</div><div class="card dim">이번 주 실적 발표 (A안과 같음)</div></div>
+  <p class="note s">B안은 재방문(매일 보는 이유)에 강하고, A안은 처음 온 사람이 「무엇을 하는 서비스인지」 3초 안에 알게 하는 데 강하다. 지금 문제는 신규 유입·가입 0이라 <b>A안 권장</b>, B안의 지도는 나중에 A안 아래 한 칸으로 붙일 수 있다.</p>
+</div>
+
+<div class="q">
+  <b>고르실 것</b>
+  <ol>
+    <li><b>홈 비로그인 블록</b> — A안(검색 + 대표 종목 점수 카드 + 점수 급변 + 실적 + 세 가지 차이, 권장) / B안(점수 지도 데일리) / A+B</li>
+    <li><b>대표 종목 카드 6장</b> — 고정(삼성전자·SK하이닉스·엔비디아·애플·테슬라·마이크로소프트) / 매일 거래대금 상위 6</li>
+    <li><b>「과거 성적」 타일</b> — 지금 성적이 지수보다 약간 낮다(KOSPI 대비 −0.45%p). 그대로 공개(권장 — 차별점이 「정직한 공개」) / 성적 링크만 두고 숫자는 홈에 안 씀</li>
+  </ol>
+</div>
+</div>
+
+<script>
+const AX=["추세","수익성","성장","가치","심리·수급"];
+const KEYS=["technical","quality","growth","valuation","sentiment"];
+const DATA=[
+ ["삼성전자","005930",56,"B",{technical:56,quality:76,growth:63,valuation:19,sentiment:51}],
+ ["SK하이닉스","000660",52,"B",{technical:27,quality:80,growth:87,valuation:13,sentiment:46}],
+ ["엔비디아","NVDA",70,"A",{technical:83,quality:83,growth:82,valuation:21,sentiment:43}],
+ ["애플","AAPL",58,"B",{technical:85,quality:61,growth:49,valuation:19,sentiment:50}],
+ ["테슬라","TSLA",49,"C+",{technical:70,quality:65,growth:26,valuation:4,sentiment:56}],
+ ["마이크로소프트","MSFT",67,"B+",{technical:89,quality:72,growth:63,valuation:31,sentiment:55}],
+];
+function radar(vals,size,labels,dark){
+  const C=90,R=58,p=(i,r)=>{const a=-Math.PI/2+i*2*Math.PI/5;return[C+Math.cos(a)*R*r,C+Math.sin(a)*R*r]};
+  const poly=rs=>rs.map((r,i)=>p(i,r).map(v=>v.toFixed(1)).join(",")).join(" ");
+  const grid=dark?"rgba(255,255,255,.25)":"#E5E7EB", txt=dark?"#CBD5E1":"#6B7280", val=dark?"#fff":"#111827";
+  let s=[.5,1].map(r=>`<polygon points="${poly([r,r,r,r,r])}" fill="none" stroke="${grid}"/>`).join("");
+  s+=[0,1,2,3,4].map(i=>{const[x,y]=p(i,1);return`<line x1="90" y1="90" x2="${x}" y2="${y}" stroke="${grid}"/>`}).join("");
+  s+=`<polygon points="${poly(vals.map(v=>Math.max(.04,v/100)))}" fill="rgba(96,165,250,.35)" stroke="#60A5FA" stroke-width="2"/>`;
+  if(labels) s+=AX.map((l,i)=>{const[x,y]=p(i,1.42);return`<text x="${x}" y="${y}" text-anchor="middle" font-size="11" fill="${txt}"><tspan x="${x}" dy="-.2em">${l}</tspan><tspan x="${x}" dy="1.15em" font-weight="700" fill="${val}">${Math.round(vals[i])}</tspan></text>`}).join("");
+  return s;
+}
+document.getElementById("heroRadar").innerHTML=radar(KEYS.map(k=>DATA[2][4][k]),150,true,true);
+const cards=DATA.map(([n,sym,sc,g,ax])=>{const vals=KEYS.map(k=>ax[k]);const tone=sc>=65?"var(--hi)":sc>=35?"var(--mid)":"var(--lo)";
+  const best=KEYS[vals.indexOf(Math.max(...vals))],worst=KEYS[vals.indexOf(Math.min(...vals))];
+  return `<div class="mini"><div class="row"><b>${n}</b><span class="s muted">${sym}</span></div>
+  <div class="row"><span class="sc" style="color:${tone}">${sc}</span><span class="s b" style="color:${tone}">${g}</span></div>
+  <svg viewBox="0 0 180 180" width="100%" height="96">${radar(vals,96,false,false)}</svg>
+  <div class="s muted">강 ${AX[KEYS.indexOf(best)]} · 약 ${AX[KEYS.indexOf(worst)]}</div></div>`}).join("");
+document.getElementById("strip").innerHTML=cards; document.getElementById("stripM").innerHTML=cards;
+</script>
+</body>
+</html>

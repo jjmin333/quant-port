@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { TEST_EMAIL_DOMAIN, TEST_EMAIL_PREFIX } from "./env";
+import { TEST_LOGIN_PREFIX } from "./env";
 
 /**
  * 테스트가 쓰는 고정 데이터.
@@ -76,28 +76,30 @@ export const TRADES = {
   },
 } as const;
 
-export const PASSWORD = "e2e-quant-port-2026";
+/** 비밀번호는 8~15자 (2026-09-27 가입 규칙). */
+export const PASSWORD = "e2e-qp-2026!";
 
 /**
- * 계정 이메일. UUID를 붙여 **동시 실행되는 워커끼리도 절대 겹치지 않게** 한다.
- * 타임스탬프만 쓰면 같은 초에 시작한 두 워커가 같은 이메일을 만들어 한쪽이
- * 409(email already registered)로 죽는다.
+ * 계정 아이디. 가입이 이메일 → 아이디로 바뀌었다(2026-09-27 요청 3): 영문 소문자로
+ * 시작하는 소문자·숫자 4~20자. 예약 접두사 `qae2e` + UUID 16진수 15자 = 20자로
+ * **동시 실행되는 워커끼리도 겹치지 않게** 한다(타임스탬프만 쓰면 같은 초에 시작한
+ * 두 워커가 같은 아이디를 만들어 한쪽이 409로 죽는다). 형식이 좁아 태그는 싣지 못한다.
  */
-export function uniqueEmail(tag: string): string {
-  const slug = tag.replace(/[^a-z0-9]+/gi, "-").toLowerCase().slice(0, 24);
-  return `${TEST_EMAIL_PREFIX}${slug}-${randomUUID()}@${TEST_EMAIL_DOMAIN}`;
+export function uniqueLoginId(_tag?: string): string {
+  return `${TEST_LOGIN_PREFIX}${randomUUID().replace(/-/g, "").slice(0, 20 - TEST_LOGIN_PREFIX.length)}`;
+}
+
+/** 한글 음절 n개 — 닉네임 글자 수 경계를 한글로 시험할 때(중복 불가라 매번 달라야 한다). */
+export function randomHangul(n: number): string {
+  let out = "";
+  for (let i = 0; i < n; i++) out += String.fromCharCode(0xac00 + Math.floor(Math.random() * 11172));
+  return out;
 }
 
 /**
- * 표시명은 **짧은 ASCII**로 만든다.
- *
- * 테스트 제목(한글)을 그대로 쓰면 가입이 400으로 막힌다. BE의
- * `validateDisplayName`이 하한은 **글자 수**로, 상한은 **바이트 수**로 재기
- * 때문이다(`len([]rune(name)) < 2 || len(name) > 100`). 한글은 글자당 3바이트라
- * 34자만 넘어도 거부되는데, FE 입력칸은 `maxLength={100}`으로 100자를 받는다.
- * 픽스처가 그 구멍을 피해 가는 것이지, 그 동작이 옳다는 뜻은 아니다.
+ * 닉네임은 2~10자이고 **다른 회원과 겹칠 수 없다**(2026-09-27). `QA` + UUID 8자 = 10자.
+ * 태그는 싣지 못한다 — 10자 안에 겹치지 않을 만큼의 난수를 넣는 편이 중요하다.
  */
-export function uniqueDisplayName(tag: string): string {
-  const slug = tag.replace(/[^a-z0-9]+/gi, "").toLowerCase().slice(0, 12);
-  return `QA-${slug || "user"}-${randomUUID().slice(0, 8)}`;
+export function uniqueDisplayName(_tag?: string): string {
+  return `QA${randomUUID().replace(/-/g, "").slice(0, 8)}`;
 }

@@ -44,7 +44,7 @@
 | `/market` | ✅ | `/market` | `page.tsx`가 클라이언트라 `layout.tsx`가 메타를 든다 |
 | `/analysis` | ✅ | **`/analysis` 고정** | `?symbol=`이 붙어도 canonical은 항상 쿼리 없는 주소 |
 | `/reports`, `/reports/[id]` | ✅ | 목록만 명시 | 상세는 self-canonical (아래 후속 참조) |
-| `/stocks/[symbol]` | ❌ | — | 수천 URL × 클라이언트 렌더 = 빈 문서 대량 색인 |
+| `/stocks/[symbol]` | **상위 1,000만 ✅** (나머지 ❌) | 자기 자신(대문자 심볼) | 2026-09-24 사용자 결정. 최근 20거래일 거래대금 상위 1,000종목(BE `/seo/stocks`, 1시간 캐시)만 index + 사이트맵. 서버가 요약 한 줄(이름·시장·섹터·점수·종가·최근 변화)을 **보이게** 그리고 메타 설명도 같은 문장. 시가총액이 아니라 거래대금인 이유: 저장된 시가총액이 ADR 등에서 부풀어 있었다(아카리 9,250억 달러) |
 | `/holdings` `/watchlist` `/journal` `/predictions` `/stamps` `/targets` `/settings` | ❌ | — | 개인 데이터 |
 | `/login` `/signup` | ❌ | — | `(auth)/layout.tsx` |
 | `/reports/new`, `/reports/authors/[userId]` | ❌ | — | |

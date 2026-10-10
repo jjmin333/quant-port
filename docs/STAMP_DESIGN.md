@@ -2,7 +2,7 @@
 
 > 상태: **1차 구현 완료** (2026-08-09) — 마이그레이션 `035_stamps.sql`, `StampService`,
 > `/api/v1/stamps*`, `/stamps` 화면, 종목 헤더 도장 버튼.
-> 관련: `docs/STOCK_SCORE_DESIGN.md`, `docs/DAILY_CLOSE_DESIGN.md`, `docs/AGENT_STATE.md`
+> 관련: `docs/STOCK_SCORE_DESIGN.md`, `docs/DAILY_CLOSE_DESIGN.md`, `docs/PRINCIPLES.md`
 
 ## 1. 한 줄 정의
 

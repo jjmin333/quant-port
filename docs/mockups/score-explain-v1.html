@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI 점수 설명 — 노출 범위 선택용 목업 v1</title>
+<style>
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.97 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.93 0 0);
+  --border: oklch(0.87 0 0);
+  --brand: #2563EB;
+  --brand-muted: rgba(37, 99, 235, 0.1);
+  --profit: #DC2626;
+  --loss: #2563EB;
+  --score-high: #15803D;
+  --score-mid: #C2410C;
+  --score-low: #B91C1C;
+  --surface-elevated: var(--accent);
+  --text-primary: var(--foreground);
+  --text-muted: oklch(0.545 0 0);
+}
+[data-theme="dark"] {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 16%);
+  --brand: #60A5FA;
+  --brand-muted: rgba(96, 165, 250, 0.15);
+  --profit: #F87171;
+  --loss: #60A5FA;
+  --score-high: #4ADE80;
+  --score-mid: #FB923C;
+  --score-low: #F87171;
+  --text-muted: oklch(0.6 0 0);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 12px; line-height: 1.5; padding: 24px;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1240px; margin: 0 auto; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 15px; font-weight: 600; }
+h3 { font-size: 13px; font-weight: 600; }
+.sub { color: var(--muted-foreground); font-size: 12px; }
+.mono, .num { font-variant-numeric: tabular-nums; }
+.up { color: var(--profit); } .down { color: var(--loss); }
+.hi { color: var(--score-high); } .mid { color: var(--score-mid); } .lo { color: var(--score-low); }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-bottom: 16px; margin-bottom: 20px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--background); z-index: 5;
+}
+button.tgl {
+  font: inherit; cursor: pointer; border: 1px solid var(--border);
+  background: var(--card); color: var(--foreground);
+  border-radius: 8px; padding: 5px 12px;
+}
+button.tgl:hover { background: var(--accent); }
+
+.lead { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 26px; }
+.lead p { margin-bottom: 8px; }
+.lead p:last-child { margin-bottom: 0; }
+.lead table { border-collapse: collapse; margin: 10px 0 4px; font-size: 11.5px; }
+.lead th, .lead td { text-align: left; padding: 3px 14px 3px 0; border-bottom: 1px solid var(--border); }
+
+.opt { margin-bottom: 34px; }
+.opt-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.tag { font-size: 11px; font-weight: 700; letter-spacing: .02em; background: var(--brand-muted); color: var(--brand); border-radius: 6px; padding: 2px 7px; }
+.tag.warn { background: rgba(194,65,12,.12); color: var(--score-mid); }
+.note { color: var(--muted-foreground); font-size: 11px; margin-top: 8px; }
+
+.ba { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 16px; align-items: start; }
+.ba > figure { margin: 0; min-width: 0; }
+.ba figcaption { font-size: 11px; font-weight: 700; margin-bottom: 6px; letter-spacing: .02em; }
+.ba .now figcaption { color: var(--muted-foreground); }
+.ba .next figcaption { color: var(--brand); }
+
+.phone { width: 375px; max-width: 100%; }
+
+/* ---- app-like card primitives ---- */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.card-body { padding: 8px 12px; }
+.ttl { font-size: 12px; font-weight: 600; }
+.big { font-size: 24px; font-weight: 700; line-height: 1; }
+.per100 { font-size: 10px; color: var(--text-muted); }
+.badge { border: 1px solid currentColor; border-radius: 6px; padding: 1px 6px; font-size: 10px; font-weight: 600; line-height: 1.4; }
+.right { margin-left: auto; font-size: 10px; color: var(--text-muted); }
+
+.axis { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.axis .lbl { display: block; width: 56px; flex: none; font-size: 12px; color: var(--text-muted); }
+.axis .track { display: block; flex: 1; min-width: 0; height: 6px; border-radius: 999px; background: var(--surface-elevated); overflow: hidden; }
+.axis .fill { display: block; height: 100%; border-radius: 999px; }
+.axis .val { display: block; width: 28px; flex: none; text-align: right; font-size: 12px; }
+.f-hi { background: var(--score-high); } .f-mid { background: var(--score-mid); } .f-lo { background: var(--score-low); }
+
+/* ---- new: delta line ---- */
+.delta-line {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 6px 12px; border-top: 1px solid var(--border);
+  font-size: 11px; cursor: pointer; background: transparent;
+  width: 100%; border-left: 0; border-right: 0; border-bottom: 0; text-align: left; color: inherit; font-family: inherit;
+}
+.delta-line:hover { background: var(--surface-elevated); }
+.chev { margin-left: auto; color: var(--text-muted); }
+
+/* ---- new: explain panel ---- */
+.panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
+.psec { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.psec:last-child { border-bottom: 0; }
+.psec > h3 { margin-bottom: 8px; }
+.psec .hint { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+
+.stack { display: flex; height: 26px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+.stack > div { display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: #fff; white-space: nowrap; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 11px; }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+
+/* waterfall */
+.wf { display: grid; grid-template-columns: 116px 1fr 58px; gap: 2px 8px; align-items: center; font-size: 11px; }
+.wf .bar-cell { position: relative; height: 16px; background: linear-gradient(to right, transparent calc(50% - 0.5px), var(--border) calc(50% - 0.5px), var(--border) calc(50% + 0.5px), transparent calc(50% + 0.5px)); }
+.wf .bar { position: absolute; top: 3px; height: 10px; border-radius: 2px; }
+.wf .bar.pos { background: var(--profit); left: 50%; }
+.wf .bar.neg { background: var(--loss); }
+.wf .bar.neutral { background: var(--text-muted); opacity: .55; }
+.wf .amt { text-align: right; }
+.wf .anchor { font-weight: 700; }
+
+table.ev { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+table.ev th { text-align: left; font-weight: 600; color: var(--text-muted); padding: 4px 8px 4px 0; border-bottom: 1px solid var(--border); font-size: 11px; }
+table.ev td { padding: 4px 8px 4px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+table.ev td.n { text-align: right; }
+table.ev tr:last-child td { border-bottom: 0; }
+.axhead { display: flex; align-items: baseline; gap: 6px; margin: 10px 0 4px; }
+.axhead:first-child { margin-top: 0; }
+.axhead .w { font-size: 10px; color: var(--text-muted); }
+
+.pill { display: inline-block; border-radius: 5px; padding: 1px 6px; font-size: 10px; font-weight: 600; }
+.pill.none { background: var(--surface-elevated); color: var(--text-muted); }
+.pill.na { background: rgba(37,99,235,.1); color: var(--brand); }
+.pill.bad { background: rgba(185,28,28,.12); color: var(--score-low); }
+.pill.actual { background: rgba(21,128,61,.12); color: var(--score-high); }
+.pill.partial { background: rgba(194,65,12,.12); color: var(--score-mid); }
+
+.stamp { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--text-muted); }
+
+/* list rows */
+.row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border); }
+.row:last-child { border-bottom: 0; }
+.row .nm { font-size: 12px; font-weight: 600; min-width: 74px; }
+.row .sc { font-size: 12px; font-weight: 700; width: 26px; text-align: right; }
+.row .why { font-size: 10.5px; color: var(--text-muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .pr { font-size: 11px; width: 66px; text-align: right; }
+
+.cost { border-left: 3px solid var(--score-mid); background: var(--card); border-radius: 0 8px 8px 0; padding: 8px 12px; font-size: 11px; margin-top: 10px; }
+.decide { border: 1px dashed var(--border); border-radius: 10px; padding: 12px 14px; margin-top: 26px; background: var(--card); }
+.decide ul { margin: 8px 0 0 18px; }
+.decide li { margin-bottom: 5px; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; background: var(--surface-elevated); border-radius: 4px; padding: 1px 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div>
+    <h1>AI 점수 설명 — 노출 범위 선택용 목업 v1</h1>
+    <p class="sub">2026-09-17 · 숫자는 전부 <b>운영 DB 실측값</b>(005930·AAPL·035720, 2026-09-16 회차)</p>
+  </div>
+  <button class="tgl" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme==='dark'?'light':'dark'">라이트 / 다크</button>
+</div>
+
+<div class="lead">
+  <p><b>백엔드는 이미 배포돼 있다.</b> <code>GET /stocks/{symbol}/score/explain</code> — 저장된 배치 산출물만 읽어 조립한다(실측 0.23초 · 15KB · 쿼리 1회 · LLM 0회 · 외부 호출 0회). 이 문서는 <b>그 응답을 화면 어디까지 내보낼지</b>를 고르기 위한 것이다.</p>
+  <p><b>왜 필요한가 — 설명을 만들고 나서야 보인 것.</b> 점수의 하루 변동은 시장이 아니라 <b>평가 축의 유무</b>가 만들고 있었다:</p>
+  <table>
+    <tr><th>종목</th><th>전일 점수 변화</th><th>그중 「축이 생기거나 사라져서」</th></tr>
+    <tr><td>AAPL</td><td class="up">+11</td><td class="up"><b>+10.75</b> — 가치 축 소멸</td></tr>
+    <tr><td>005930 삼성전자</td><td class="up">+2</td><td class="down">−0.65 — 심리·수급 축 소멸</td></tr>
+    <tr><td>035720 카카오</td><td class="down">−2</td><td class="down">−1.62 — 심리·수급 축 소멸</td></tr>
+  </table>
+  <p>AAPL의 어제 +11점은 <b>회사에 아무 일도 없었고</b> 가치 축 데이터가 빠져 분모가 줄었을 뿐이다. 지금 화면은 이걸 「점수가 올랐다」로만 보여 준다.</p>
+</div>
+
+<!-- ======================= 선택지 A ======================= -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">선택지 A</span><h2>개요 점수 카드에 「변화 사유」 한 줄</h2></div>
+  <p class="sub">종목을 열면 가장 먼저 보이는 카드. 모바일 개요 최상단이라 <b>높이가 곧 비용</b>이므로 한 줄로 제한하고, 누르면 AI 분석 탭의 전체 패널로 간다.</p>
+
+  <div class="ba" style="margin-top:12px">
+    <figure class="now">
+      <figcaption>현재</figcaption>
+      <div class="phone card">
+        <div class="card-head">
+          <span class="ttl">종합 점수</span>
+          <span class="big mid">48</span><span class="per100">/ 100</span>
+          <span class="badge mid">C+</span>
+          <span class="right">동종 상위 50%</span>
+        </div>
+        <div class="card-body">
+          <div class="axis"><span class="lbl">추세</span><span class="track"><span class="fill f-lo" style="width:27%"></span></span><span class="val lo">27</span></div>
+          <div class="axis"><span class="lbl">수익성</span><span class="track"><span class="fill f-hi" style="width:76%"></span></span><span class="val hi">76</span></div>
+          <div class="axis"><span class="lbl">성장</span><span class="track"><span class="fill f-mid" style="width:62%"></span></span><span class="val mid">62</span></div>
+          <div class="axis"><span class="lbl">가치</span><span class="track"><span class="fill f-lo" style="width:23%"></span></span><span class="val lo">23</span></div>
+          <div class="axis"><span class="lbl">심리·수급</span><span class="track"></span><span class="val" style="color:var(--text-muted)">-</span></div>
+        </div>
+      </div>
+      <p class="note">어제 46점이었다는 것도, 심리·수급이 <b>왜</b> 비었는지도 알 수 없다. 빈 축은 「-」 하나다.</p>
+    </figure>
+
+    <figure class="next">
+      <figcaption>제안 — 한 줄 추가 (+28px)</figcaption>
+      <div class="phone card">
+        <div class="card-head">
+          <span class="ttl">종합 점수</span>
+          <span class="big mid">48</span><span class="per100">/ 100</span>
+          <span class="badge mid">C+</span>
+          <span class="right">동종 상위 50%</span>
+        </div>
+        <div class="card-body">
+          <div class="axis"><span class="lbl">추세</span><span class="track"><span class="fill f-lo" style="width:27%"></span></span><span class="val lo">27</span></div>
+          <div class="axis"><span class="lbl">수익성</span><span class="track"><span class="fill f-hi" style="width:76%"></span></span><span class="val hi">76</span></div>
+          <div class="axis"><span class="lbl">성장</span><span class="track"><span class="fill f-mid" style="width:62%"></span></span><span class="val mid">62</span></div>
+          <div class="axis"><span class="lbl">가치</span><span class="track"><span class="fill f-lo" style="width:23%"></span></span><span class="val lo">23</span></div>
+          <div class="axis"><span class="lbl">심리·수급</span><span class="track"></span><span class="val" style="color:var(--text-muted)">-</span><span class="pill none" style="margin-left:4px">데이터 없음</span></div>
+        </div>
+        <button class="delta-line">
+          <span>전일 <b class="up">+2</b></span>
+          <span style="color:var(--text-muted)">·</span>
+          <span>대부분 <b>추세</b> <span class="up num">+2.3</span></span>
+          <span class="chev">근거 보기 ›</span>
+        </button>
+      </div>
+
+      <p class="note" style="margin-top:14px"><b>같은 줄, 다른 종목 (AAPL)</b> — 축 소멸이 주원인이면 그렇게 말한다:</p>
+      <div class="phone card" style="margin-top:6px">
+        <button class="delta-line" style="border-top:0">
+          <span>전일 <b class="up">+11</b></span>
+          <span style="color:var(--text-muted)">·</span>
+          <span>대부분 <b>가치 축이 빠져서</b> <span class="up num">+10.8</span></span>
+          <span class="chev">근거 보기 ›</span>
+        </button>
+      </div>
+      <p class="note"><b>규칙</b>: 가장 큰 드라이버 <b>하나만</b> 쓴다. 둘을 쓰면 줄이 접히고, 접히면 개요 최상단이 두 층이 된다.</p>
+    </figure>
+  </div>
+</section>
+
+<!-- ======================= 선택지 B ======================= -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">선택지 B</span><h2>AI 분석 탭 — 전체 설명 패널 (신규)</h2></div>
+  <p class="sub">한 종목을 펼쳤을 때 한 번 부르는 자리(15KB). <b>현재 이 탭에는 LLM 요약(전체 17,916종목 중 744종목 = 4%에만 있다)과 점수 추이선뿐</b>이라, 점수가 있는 나머지 96%에게는 사실상 빈 탭이다.</p>
+
+  <div class="ba" style="margin-top:12px">
+    <figure class="now">
+      <figcaption>현재 — 005930에서 보이는 것</figcaption>
+      <div class="panel">
+        <div class="psec">
+          <h3>AI 요약</h3>
+          <p class="hint">이 종목에는 요약이 아직 없습니다. (744/17,916종목만 보유)</p>
+        </div>
+        <div class="psec">
+          <h3>점수 추이</h3>
+          <p class="hint" style="margin-top:0">26거래일 선 그래프 — 48 · 46 · 58 · 55 · 62 · 59 · 70 …</p>
+          <p class="hint">그래프는 <b>점수가 오르내린 사실</b>만 말한다. 09-14의 58이 09-15에 46으로 12점 빠진 이유는 화면 어디에도 없다.</p>
+        </div>
+      </div>
+      <p class="note">지금 사용자가 「왜 48점인가」를 알 수 있는 경로는 없다.</p>
+    </figure>
+
+    <figure class="next">
+      <figcaption>제안 — 설명 패널 (5개 층)</figcaption>
+      <div class="panel">
+
+        <div class="psec">
+          <h3>① 이 점수는 이렇게 만들어졌다</h3>
+          <div class="stack">
+            <div class="f-lo" style="width:18.8%" title="추세 8.97">추세 9.0</div>
+            <div class="f-hi" style="width:44.3%" title="수익성 21.09">수익성 21.1</div>
+            <div class="f-mid" style="width:28.8%" title="성장 13.71">성장 13.7</div>
+            <div class="f-lo" style="width:8.1%; opacity:.72" title="가치 3.87">3.9</div>
+          </div>
+          <div class="legend">
+            <span><i class="f-lo"></i>추세 8.97 <span style="color:var(--text-muted)">(비중 33.3%)</span></span>
+            <span><i class="f-hi"></i>수익성 21.09 <span style="color:var(--text-muted)">(27.8%)</span></span>
+            <span><i class="f-mid"></i>성장 13.71 <span style="color:var(--text-muted)">(22.2%)</span></span>
+            <span><i class="f-lo"></i>가치 3.87 <span style="color:var(--text-muted)">(16.7%)</span></span>
+          </div>
+          <p class="hint">합 <b class="num">47.64</b> → 표시 <b class="num">48</b>점. 심리·수급(설정 가중치 10%)은 <span class="pill none">데이터 없음</span>이라 빠졌고, <b>남은 네 축의 비중이 100%로 다시 나뉘었다</b> — 설정값 30/25/20/15가 아니라 33.3/27.8/22.2/16.7로 실제 작동한 이유다.</p>
+        </div>
+
+        <div class="psec">
+          <h3>② 어제와 무엇이 달라졌나 <span class="w" style="font-weight:400;font-size:11px;color:var(--text-muted)">09-15 → 09-16</span></h3>
+          <div class="wf">
+            <div class="anchor">09-15 종합</div><div class="bar-cell"></div><div class="amt anchor num">46</div>
+            <div>추세 19.2 → 26.9</div><div class="bar-cell"><span class="bar pos" style="width:21%"></span></div><div class="amt up num">+2.31</div>
+            <div>심리·수급 축 소멸</div><div class="bar-cell"><span class="bar neg" style="width:6%; left:44%"></span></div><div class="amt down num">−0.65</div>
+            <div>가치 26.4 → 23.2</div><div class="bar-cell"><span class="bar neg" style="width:4.4%; left:45.6%"></span></div><div class="amt down num">−0.48</div>
+            <div style="color:var(--text-muted)">표시 반올림</div><div class="bar-cell"><span class="bar neutral" style="width:7.5%; left:50%"></span></div><div class="amt num" style="color:var(--text-muted)">+0.82</div>
+            <div class="anchor">09-16 종합</div><div class="bar-cell"></div><div class="amt anchor num">48</div>
+          </div>
+          <p class="hint"><b>막대의 합은 정확히 2점이다</b> — 추정이 아니라 분해다. 「표시 반올림」까지 적는 이유: 실제 변화는 <span class="num">+1.18</span>이고 표시는 <span class="num">+2</span>라, 그 차이를 감추면 막대 합과 머리줄 숫자가 어긋나 보인다.</p>
+        </div>
+
+        <div class="psec">
+          <h3>③ 축별 근거</h3>
+
+          <div class="axhead"><b class="lo">추세 26.9</b><span class="w">비중 33.3% · 기여 +8.97</span></div>
+          <table class="ev">
+            <tr><th>지표</th><th class="n">값</th><th class="n">동종 순위</th><th>비교 집단</th></tr>
+            <tr><td>기술적 종합</td><td class="n num">51.0</td><td class="n num lo">상위 73%</td><td>KOSPI 대형주</td></tr>
+          </table>
+          <p class="hint">구성 커브: RSI <span class="num">47.1</span> · MACD 히스토그램 <span class="num">−698</span> · 20일선 <span class="num">259,975</span> 대비 종가 <span class="num">253,500</span> · 52주 고점 대비 <span class="num">−33.3%</span></p>
+
+          <div class="axhead"><b class="hi">수익성 75.9</b><span class="w">비중 27.8% · 기여 +21.09</span></div>
+          <table class="ev">
+            <tr><th>지표</th><th class="n">값</th><th class="n">동종 순위</th><th>비교 집단</th></tr>
+            <tr><td>ROE</td><td class="n num">10.78%</td><td class="n num">상위 38%</td><td>KOSPI 대형주</td></tr>
+            <tr><td>영업이익률</td><td class="n num">13.07%</td><td class="n num">상위 29%</td><td>KOSPI 대형주</td></tr>
+            <tr><td>순이익률</td><td class="n num">13.55%</td><td class="n num">상위 29%</td><td>KOSPI 대형주</td></tr>
+            <tr><td>부채비율 <span style="color:var(--text-muted)">(낮을수록 좋음)</span></td><td class="n num">29.94%</td><td class="n num hi">상위 13%</td><td>KOSPI 대형주</td></tr>
+            <tr><td>유동비율</td><td class="n num">2.33배</td><td class="n num hi">상위 12%</td><td>KOSPI 대형주</td></tr>
+          </table>
+
+          <div class="axhead"><b class="lo">가치 23.2</b><span class="w">비중 16.7% · 기여 +3.87</span></div>
+          <table class="ev">
+            <tr><th>지표</th><th class="n">값</th><th class="n">동종 순위</th><th>비교 집단</th></tr>
+            <tr><td>PER <span style="color:var(--text-muted)">(낮을수록 좋음)</span></td><td class="n num">38.39배</td><td class="n num lo">상위 76%</td><td>KOSPI 대형주</td></tr>
+            <tr><td>PBR <span style="color:var(--text-muted)">(낮을수록 좋음)</span></td><td class="n num">3.40배</td><td class="n num lo">상위 75%</td><td>KOSPI 대형주</td></tr>
+            <tr><td>PSR <span style="color:var(--text-muted)">(낮을수록 좋음)</span></td><td class="n num">4.44배</td><td class="n num lo">상위 79%</td><td>KOSPI 대형주</td></tr>
+          </table>
+          <p class="hint"><b>「비교 집단」이 이 표의 핵심이다.</b> 놀라운 순위는 거의 항상 이 칸이 설명한다 — 같은 ROE라도 KOSPI 대형주에서 잰 것과 전체 시장에서 잰 것은 다른 숫자가 된다.</p>
+        </div>
+
+        <div class="psec">
+          <h3>④ 쓰이지 않은 값</h3>
+          <p class="hint" style="margin-top:0">005930에는 없다. <b>035720 카카오</b>의 실제 예:</p>
+          <table class="ev" style="margin-top:6px">
+            <tr><th>지표</th><th class="n">보고된 값</th><th>신뢰 구간</th><th>결과</th></tr>
+            <tr><td>EPS 성장률(YoY)</td><td class="n num">+1,170.9%</td><td class="num">−1,000 ~ 1,000</td><td><span class="pill bad">구간 밖 — 제외</span></td></tr>
+          </table>
+          <p class="hint">기저효과가 만든 값이라 순위에 넣으면 <b>성장률 1위</b>가 된다. 제외했고, 그래서 카카오의 성장 축은 매출 성장률 하나로 <span class="num">25점</span>이다. <b>버린 값을 숨기면 「성장 점수가 왜 이런가」에 답할 수 없다.</b></p>
+        </div>
+
+        <div class="psec">
+          <h3>⑤ 이 숫자를 어디까지 믿을까</h3>
+          <div class="stamp">
+            <span>기준일 <b>2026-09-16 종가</b></span>
+            <span>산출 <b>09-17 00:25</b></span>
+            <span><span class="pill partial">일부 축 결측 90/100</span></span>
+          </div>
+          <p class="hint">출처 — 일별 종가(<code>stock_daily_closes</code>) · 분기 재무(<code>financial_periods</code>) · 시가총액(<code>stocks</code>). 추정치 없음.</p>
+          <p class="hint"><b>ETF는 다르게 말한다</b> (SPY 실측): 「재무제표가 없는 종목이라 추세 축만으로 평가했다 · 커버리지 30% → 점수를 중립으로 당김(65.8 → 58)」. 지금은 네 축이 그냥 빈칸이라 <b>「아직 없다」와 「원래 없다」가 구분되지 않는다.</b></p>
+        </div>
+
+      </div>
+    </figure>
+  </div>
+</section>
+
+<!-- ======================= 선택지 C ======================= -->
+<section class="opt">
+  <div class="opt-head"><span class="tag warn">선택지 C</span><h2>보유 / 관심 목록 행에도 변화 사유</h2></div>
+  <p class="sub">목록에서 바로 「무엇이 달라졌나」를 본다. <b>비용이 붙는 선택지</b>라 아래에 실측 근거를 적었다.</p>
+
+  <div class="ba" style="margin-top:12px">
+    <figure class="now">
+      <figcaption>현재 — 보유 목록</figcaption>
+      <div class="card">
+        <div class="row"><span class="nm">삼성전자</span><span class="sc mid">48</span><span class="why">—</span><span class="pr up num">+2.22%</span></div>
+        <div class="row"><span class="nm">애플</span><span class="sc hi">72</span><span class="why">—</span><span class="pr up num">+0.84%</span></div>
+        <div class="row"><span class="nm">카카오</span><span class="sc lo">29</span><span class="why">—</span><span class="pr down num">−1.13%</span></div>
+      </div>
+      <p class="note">점수는 보이지만 <b>어제와 달라졌는지</b>도, 그 이유도 없다.</p>
+    </figure>
+
+    <figure class="next">
+      <figcaption>제안 — 점수 옆 변화 + 사유 요약</figcaption>
+      <div class="card">
+        <div class="row"><span class="nm">삼성전자</span><span class="sc mid">48</span><span class="why"><b class="up">+2</b> · 추세 개선</span><span class="pr up num">+2.22%</span></div>
+        <div class="row"><span class="nm">애플</span><span class="sc hi">72</span><span class="why"><b class="up">+11</b> · <span style="color:var(--score-mid)">가치 축 결측</span></span><span class="pr up num">+0.84%</span></div>
+        <div class="row"><span class="nm">카카오</span><span class="sc lo">29</span><span class="why"><b class="down">−2</b> · 심리·수급 결측</span><span class="pr down num">−1.13%</span></div>
+      </div>
+      <div class="cost">
+        <b>비용</b> — 이 화면의 원칙은 「항목당 I/O 금지」다(AGENT_STATE 응답 속도 원칙 ①). 행마다 <code>/score/explain</code>(15KB)을 부르면 20종목에 <b>300KB · 20쿼리</b>가 된다.<br>
+        <b>그래서 따로 만든다</b>: <code>GET /stocks/scores/changes?symbols=…</code> — 종목당 <b>델타 1개 + 최대 드라이버 1개</b>만(행당 약 60B, 20종목 1.2KB, <b>쿼리 1회</b>). 기존 <code>/stocks/scores/batch</code>와 같은 모양이라 화면은 이미 이 패턴을 쓴다.
+      </div>
+      <p class="note"><b>주의</b> — 점수 배치는 하루 한 번이라 이 줄은 <b>하루 종일 같은 문장</b>이다. 시세처럼 움직이는 자리 옆에 두면 「멈춘 값」으로 오해될 수 있어, 기준일(09-16)을 목록 머리에 한 번 적는 것을 함께 제안한다.</p>
+    </figure>
+  </div>
+</section>
+
+<!-- ======================= 선택지 D ======================= -->
+<section class="opt">
+  <div class="opt-head"><span class="tag">선택지 D</span><h2>관리자 점수 화면(<code>/admin/score</code>)에서 재계산 전후 대조</h2></div>
+  <p class="sub">가중치를 바꾸거나 재계산을 돌린 뒤 <b>무엇이 왜 움직였는지</b>를 같은 패널로 본다. 사용자에게는 안 보이는 화면이라 위험이 가장 낮다.</p>
+
+  <div class="ba" style="margin-top:12px">
+    <figure class="now">
+      <figcaption>현재</figcaption>
+      <div class="card"><div class="card-body">
+        <p style="font-size:12px">재계산 결과: 총 17,906 · 점수 있음 16,402 · 평균 50.2 · 표준편차 12.4 · 보류 1,504</p>
+        <p class="note" style="margin-top:8px">분포만 본다. 가중치를 바꾼 뒤 <b>어떤 종목이 왜 움직였는지</b>는 DB 콘솔에서 직접 봐야 한다.</p>
+      </div></div>
+    </figure>
+    <figure class="next">
+      <figcaption>제안 — 종목 하나를 찍어 같은 패널로</figcaption>
+      <div class="card">
+        <div class="card-head"><span class="ttl">005930 삼성전자</span><span class="right">재계산 전후</span></div>
+        <div class="card-body">
+          <div class="wf">
+            <div class="anchor">변경 전</div><div class="bar-cell"></div><div class="amt anchor num">48</div>
+            <div>가중치 추세 30 → 20</div><div class="bar-cell"><span class="bar pos" style="width:14%"></span></div><div class="amt up num">+2.62</div>
+            <div>가중치 가치 15 → 25</div><div class="bar-cell"><span class="bar neg" style="width:11%; left:39%"></span></div><div class="amt down num">−2.01</div>
+            <div class="anchor">변경 후</div><div class="bar-cell"></div><div class="amt anchor num">49</div>
+          </div>
+          <p class="note">※ 가중치 변경 축은 <b>추가 구현이 필요하다</b> — 지금 API는 「축 값 · 축 유무 · 커버리지」 셋만 가른다. 가중치는 행에 저장되지 않아 점 단위 이력이 없다(현재는 조회 시점 설정값을 쓴다).</p>
+        </div>
+      </div>
+    </figure>
+  </div>
+</section>
+
+<div class="decide">
+  <h3>결정해 주실 것</h3>
+  <ul>
+    <li><b>A (개요 한 줄)</b> — 위험 낮음. 카드 높이 +28px. 모바일 개요 최상단이라 이 높이가 유일한 비용.</li>
+    <li><b>B (AI 분석 탭 패널)</b> — <b>권장.</b> 새 컴포넌트 하나(<code>score-explain-panel.tsx</code>), 기존 화면을 건드리지 않는다. 96%의 종목에서 빈 탭이던 자리가 채워진다.</li>
+    <li><b>C (목록 행)</b> — 새 요약 API 하나가 더 필요하다(<code>/scores/changes</code>). 여기까지 하시려면 A·B 다음 회차로 미루는 편을 권한다.</li>
+    <li><b>D (관리자)</b> — 위험 최저. 다만 「가중치 변경」 귀인은 BE 추가 작업이 있다.</li>
+  </ul>
+  <p class="note" style="margin-top:10px">CSS 회귀 이력이 있어(메모리) 어떤 선택이든 <b>모바일 375 · PC 1280 실측 전후 캡처</b>를 붙여 보고하겠습니다. FE는 컨테이너 모드라 배포에 재빌드가 필요합니다.</p>
+</div>
+
+</div>
+</body>
+</html>

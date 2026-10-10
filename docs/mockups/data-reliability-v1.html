@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>신뢰도 표기 — 범위 선택용 목업 v1</title>
+<style>
+:root{
+  --radius:.625rem;
+  --background:oklch(.97 0 0); --foreground:oklch(.145 0 0);
+  --card:oklch(1 0 0); --muted:oklch(.97 0 0);
+  --muted-foreground:oklch(.52 0 0); --accent:oklch(.93 0 0);
+  --border:oklch(.87 0 0);
+  --brand:#2563EB; --brand-muted:rgba(37,99,235,.1);
+  --profit:#DC2626; --loss:#2563EB;
+  --score-high:#15803D; --score-mid:#C2410C; --score-low:#B91C1C;
+  --surface-elevated:var(--accent); --text-muted:oklch(.545 0 0);
+}
+[data-theme="dark"]{
+  --background:oklch(.145 0 0); --foreground:oklch(.985 0 0);
+  --card:oklch(.205 0 0); --muted:oklch(.269 0 0);
+  --muted-foreground:oklch(.708 0 0); --accent:oklch(.269 0 0);
+  --border:oklch(1 0 0/16%);
+  --brand:#60A5FA; --brand-muted:rgba(96,165,250,.15);
+  --profit:#F87171; --loss:#60A5FA;
+  --score-high:#4ADE80; --score-mid:#FB923C; --score-low:#F87171;
+  --text-muted:oklch(.6 0 0);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--background);color:var(--foreground);
+  font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  font-size:12px;line-height:1.5;padding:22px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:20px;font-weight:700;letter-spacing:-.01em}
+h2{font-size:15px;font-weight:600} h3{font-size:13px;font-weight:600}
+.sub{color:var(--muted-foreground);font-size:12px}
+.up{color:var(--profit)} .down{color:var(--loss)} .n{font-variant-numeric:tabular-nums}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding-bottom:16px;margin-bottom:20px;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:var(--background);z-index:20}
+button.tgl{font:inherit;cursor:pointer;border:1px solid var(--border);background:var(--card);
+  color:var(--foreground);border-radius:8px;padding:5px 12px}
+.lead{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:22px}
+.lead p{margin-bottom:8px}.lead p:last-child{margin-bottom:0}
+.note{color:var(--muted-foreground);font-size:11px;margin-top:8px}
+.opt{margin-bottom:34px}
+.opt-head{display:flex;align-items:baseline;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.tag{font-size:11px;font-weight:700;background:var(--brand-muted);color:var(--brand);border-radius:6px;padding:2px 7px}
+.tag.rec{background:rgba(21,128,61,.12);color:var(--score-high)}
+.tag.warn{background:rgba(194,65,12,.12);color:var(--score-mid)}
+.tag.bad{background:rgba(185,28,28,.12);color:var(--score-low)}
+.tag.now{background:var(--muted);color:var(--muted-foreground)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;background:var(--surface-elevated);border-radius:4px;padding:1px 4px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.body{padding:12px 14px}
+.hd{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-bottom:10px}
+.hd .t{font-size:13px;font-weight:700}
+.hd .s{font-size:11px;color:var(--text-muted)}
+.cols{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 400px;min-width:330px}
+
+table.t{width:100%;border-collapse:collapse;font-size:11.5px}
+table.t th,table.t td{border:1px solid var(--border);padding:6px 8px;text-align:right;vertical-align:top}
+table.t th:first-child,table.t td:first-child{text-align:left}
+table.t th{background:var(--muted);font-weight:600}
+table.t td.y{color:var(--score-high);font-weight:700}
+table.t td.n{color:var(--score-low);font-weight:700}
+table.t tr.rec td{background:rgba(21,128,61,.06)}
+table.t small{color:var(--text-muted);font-weight:400}
+
+/* 표기 견본 */
+.mark{display:inline-flex;align-items:baseline;gap:3px;font-variant-numeric:tabular-nums}
+.dash{color:var(--text-muted)}
+.why{font-size:9.5px;font-weight:700;border-radius:3px;padding:0 3px;line-height:1.5;white-space:nowrap}
+.why.soon{background:var(--brand-muted);color:var(--brand)}
+.why.closed{background:var(--muted);color:var(--muted-foreground)}
+.why.failed{background:rgba(185,28,28,.12);color:var(--score-low)}
+.why.est{background:rgba(194,65,12,.12);color:var(--score-mid)}
+.retry{font-size:9.5px;border:1px solid var(--score-low);color:var(--score-low);
+  border-radius:4px;padding:0 4px;cursor:pointer;background:transparent;font-family:inherit}
+
+.stamp{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--text-muted);
+  border:1px solid var(--border);border-radius:999px;padding:1px 7px}
+.stamp b{color:var(--foreground);font-weight:600}
+
+.before,.after{border:1px solid var(--border);border-radius:8px;padding:9px 11px;background:var(--card)}
+.before{border-style:dashed}
+.lbl{font-size:10px;font-weight:700;border-radius:4px;padding:1px 6px;margin-bottom:6px;display:inline-block}
+.lbl.b{background:var(--muted);color:var(--muted-foreground)}
+.lbl.a{background:var(--brand-muted);color:var(--brand)}
+.phone{width:375px;border:1px solid var(--border);border-radius:14px;padding:10px;background:var(--muted);flex:0 0 375px}
+.phone .plabel{font-size:10.5px;color:var(--muted-foreground);margin-bottom:6px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div>
+    <h1>신뢰도 표기 — 범위 선택용 목업 v1</h1>
+    <div class="sub">V2 요구 8 · 숫자는 전부 <b>2026-09-19 실제 DB 측정값</b>입니다</div>
+  </div>
+  <button class="tgl" id="themeBtn">다크 모드</button>
+</div>
+
+<div class="lead">
+  <p><b>앞서 정해 주신 것을 지키는 범위로 설계했습니다.</b> 「데이터 없음과 <code>-</code>의 의미가 같으니 텍스트를 추가할 필요 없다」고 하셨습니다. 그래서 <b>「—」는 그대로 둡니다</b> — 그게 「데이터 없음」의 기본 표기입니다.</p>
+  <p><b>고칠 것은 「—」가 데이터 없음이 <u>아닌</u> 경우입니다.</b> 지금은 네 가지 다른 사실이 같은 기호로 나옵니다. 실측(<code>earnings_events</code> 19,159건):</p>
+  <table class="t" style="margin:8px 0">
+    <tr><th style="width:240px">「—」의 실제 뜻</th><th>건수</th><th>비중</th><th style="text-align:left">지금 화면</th></tr>
+    <tr><td>아직 발표 전 <small>(예상만 있음)</small></td><td class="n">3,601</td><td class="n">18.8%</td><td style="text-align:left">「—」</td></tr>
+    <tr><td>기록 없음</td><td class="n">4,189</td><td class="n">21.9%</td><td style="text-align:left">「—」</td></tr>
+    <tr><td>비교할 예상 없음 <small>(확정만 있음)</small></td><td class="n">134</td><td class="n">0.7%</td><td style="text-align:left">「—」</td></tr>
+    <tr><td>날짜조차 미확정 <small>(scheduled)</small></td><td class="n">4,905</td><td class="n">25.6%</td><td style="text-align:left">확정일처럼 보임</td></tr>
+  </table>
+  <p><b>그리고 로드 실패가 「없음」으로 둔갑합니다.</b> 화면 코드에서 오류를 조용히 빈 값으로 바꾸는 자리가 <b>98곳</b>입니다(<code>.catch(() =&gt; …)</code>). 사용자는 우리가 고장 난 것을 「원래 없는 것」으로 읽습니다.</p>
+</div>
+
+<!-- ══════════ 표기 규칙 ══════════ -->
+<div class="opt">
+  <div class="opt-head"><h2>표기 규칙 — 다섯 가지뿐입니다</h2><span class="tag rec">권장</span></div>
+  <div class="cols">
+    <div class="col" style="flex:1 1 560px">
+      <table class="t">
+        <tr><th style="width:150px">상태</th><th style="width:120px">표기</th><th style="text-align:left">언제</th></tr>
+        <tr><td>데이터 없음</td><td><span class="mark"><span class="dash">—</span></span></td>
+            <td style="text-align:left"><b>지금 그대로입니다.</b> 기본값이고 가장 흔하므로 아무 장식도 붙이지 않습니다.</td></tr>
+        <tr><td>아직 발표 전</td><td><span class="mark"><span class="dash">—</span><span class="why soon">10-14</span></span></td>
+            <td style="text-align:left">예정일을 압니다. 날짜를 적으면 「없다」가 아니라 <b>「언제 온다」</b>가 됩니다.</td></tr>
+        <tr><td>휴장</td><td><span class="mark"><span class="dash">—</span><span class="why closed">휴장</span></span></td>
+            <td style="text-align:left">날짜 축이 있는 자리에서만. <code>calendar.IsTradingDay</code>가 이미 답합니다.</td></tr>
+        <tr><td>불러오지 못함</td><td><span class="mark"><span class="dash">—</span><button class="retry">다시</button></span></td>
+            <td style="text-align:left"><b>유일하게 사용자가 할 일이 있는 상태</b>입니다. 그래서 유일하게 누를 것을 답니다.</td></tr>
+        <tr><td>추정치</td><td><span class="mark">1,250<span class="why est">추정</span></span></td>
+            <td style="text-align:left">값이 <b>있는</b> 경우의 표기입니다. 확정치와 섞이면 정확도가 과장됩니다.</td></tr>
+      </table>
+      <div class="note">다섯 개를 넘기지 않습니다. 사유가 늘수록 화면은 정직해지는 게 아니라 읽히지 않게 됩니다 — 「기록 없음」과 「수집 전」을 굳이 가르지 않는 이유입니다.</div>
+    </div>
+    <div class="col">
+      <h3 style="margin-bottom:6px">기준시각·출처 도장</h3>
+      <p class="sub" style="margin-bottom:8px">핵심 카드 머리에 한 줄. Phase 1의 <code>ScoreProvenance</code>를 그대로 일반화합니다.</p>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start">
+        <span class="stamp">기준 <b>09-18 종가</b> · 출처 <b>DART</b></span>
+        <span class="stamp">기준 <b>09-18</b> · 출처 <b>토스</b> · <b>추정 포함</b></span>
+        <span class="stamp">기준 <b>09-17</b> · 출처 <b>EDGAR</b></span>
+      </div>
+      <div class="note">이미 쓰는 자리가 있습니다 — 「09-18 종가 기준」(시나리오 카드)·「2026-09-17 기준」(랭킹). <b>새 문구가 아니라 같은 모양으로 맞추는 일</b>입니다.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 전후 ══════════ -->
+<div class="opt">
+  <div class="opt-head"><h2>전후 — 실제 화면</h2></div>
+  <div class="cols">
+    <div class="col">
+      <h3 style="margin-bottom:6px">실적 탭</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <div class="before" style="flex:1 1 200px">
+          <span class="lbl b">지금</span>
+          <table class="t">
+            <tr><th>분기</th><th>예상</th><th>확정</th></tr>
+            <tr><td>2026 3Q</td><td class="n">1,250</td><td class="dash">—</td></tr>
+            <tr><td>2026 2Q</td><td class="dash">—</td><td class="n">1,802</td></tr>
+            <tr><td>2026 1Q</td><td class="dash">—</td><td class="dash">—</td></tr>
+          </table>
+          <div class="note">세 줄의 「—」가 <b>서로 다른 뜻</b>인데 구분이 없습니다.</div>
+        </div>
+        <div class="after" style="flex:1 1 200px">
+          <span class="lbl a">바뀐 뒤</span>
+          <table class="t">
+            <tr><th>분기</th><th>예상</th><th>확정</th></tr>
+            <tr><td>2026 3Q</td><td class="n">1,250</td><td><span class="mark"><span class="dash">—</span><span class="why soon">10-14</span></span></td></tr>
+            <tr><td>2026 2Q</td><td class="dash">—</td><td class="n">1,802</td></tr>
+            <tr><td>2026 1Q</td><td class="dash">—</td><td class="dash">—</td></tr>
+          </table>
+          <div class="note">발표 예정일이 있는 칸만 바뀝니다. 나머지 「—」는 <b>그대로</b>입니다.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <h3 style="margin-bottom:6px">일별 시세 · 불러오기 실패</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <div class="before" style="flex:1 1 200px">
+          <span class="lbl b">지금</span>
+          <table class="t">
+            <tr><th>날짜</th><th>종가</th></tr>
+            <tr><td>09-19</td><td class="dash">—</td></tr>
+            <tr><td>09-18</td><td class="n">260,500</td></tr>
+            <tr><td>09-13</td><td class="dash">—</td></tr>
+            <tr><td>09-12</td><td class="dash">—</td></tr>
+          </table>
+          <div class="note">주말(09-12·13)과 오늘(09-19)이 같아 보입니다.</div>
+        </div>
+        <div class="after" style="flex:1 1 200px">
+          <span class="lbl a">바뀐 뒤</span>
+          <table class="t">
+            <tr><th>날짜</th><th>종가</th></tr>
+            <tr><td>09-19</td><td><span class="mark"><span class="dash">—</span><span class="why closed">휴장</span></span></td></tr>
+            <tr><td>09-18</td><td class="n">260,500</td></tr>
+            <tr><td>09-13</td><td><span class="mark"><span class="dash">—</span><span class="why closed">휴장</span></span></td></tr>
+            <tr><td>09-12</td><td><span class="mark"><span class="dash">—</span><span class="why closed">휴장</span></span></td></tr>
+          </table>
+          <div class="note">실측: 09-12·13·19은 종가 <b>0행</b>이고 14~18은 14,420~14,433행입니다.</div>
+        </div>
+      </div>
+      <div class="after" style="margin-top:10px">
+        <span class="lbl a">로드 실패</span>
+        <table class="t">
+          <tr><th>지표</th><th>값</th></tr>
+          <tr><td>PER</td><td class="n">39.3배</td></tr>
+          <tr><td>ROE</td><td><span class="mark"><span class="dash">—</span><button class="retry">다시</button></span></td></tr>
+        </table>
+        <div class="note">「없음」과 <b>다른 모양</b>이어야 사용자가 다시 눌러 볼 생각을 합니다. 98곳 중 <b>핵심 경로만</b> 손댑니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 범위 ══════════ -->
+<div class="opt">
+  <div class="opt-head"><h2>어디까지 적용할까요</h2><span class="sub">「—」는 화면 코드에 210곳, 오류 삼킴은 98곳입니다.</span></div>
+  <table class="t">
+    <tr><th style="width:190px">범위</th><th style="width:110px">손대는 곳</th><th style="text-align:left">얻는 것 / 대가</th></tr>
+    <tr class="rec">
+      <td><b>가 · 핵심 경로만</b> <span class="tag rec">권장</span></td><td class="n">약 20곳</td>
+      <td style="text-align:left">공용 부품(<code>DataMark</code>·<code>Provenance</code>)을 만들고 <b>시세·실적·재무·점수·수급</b> 다섯 곳에만 적용합니다. 나머지는 지금 그대로 두되 <b>새 코드는 부품을 쓰게</b> 됩니다. 한 번에 검증 가능한 크기입니다.</td></tr>
+    <tr><td>나 · 부품만</td><td class="n">0곳</td>
+      <td style="text-align:left">규약과 부품만 만들고 기존 화면은 안 건드립니다. 위험이 0이지만 <b>오늘 사용자에게 달라지는 것도 0</b>입니다.</td></tr>
+    <tr><td>다 · 전면</td><td class="n n">210곳</td>
+      <td style="text-align:left">가장 철저하지만 <b>대부분의 「—」는 이미 옳습니다</b>(데이터 없음). 옳은 것을 210번 건드리면서 얻는 것보다 잃을 위험이 큽니다.</td></tr>
+  </table>
+  <div class="note">「가」를 권하는 이유는 <b>고칠 것이 210곳이 아니라 「—가 데이터 없음이 아닌 곳」뿐</b>이기 때문입니다. 실측으로 그 자리는 실적(발표 예정일)·시세(휴장)·로드 실패 셋으로 모입니다.</div>
+</div>
+
+<!-- ══════════ 모바일 ══════════ -->
+<div class="opt">
+  <div class="opt-head"><h2>모바일 375px</h2><span class="tag rec">가독성이 관건입니다</span></div>
+  <div class="cols">
+    <div class="phone">
+      <div class="plabel">표기가 폭을 먹지 않아야 합니다</div>
+      <div class="card"><div class="body">
+        <div class="hd"><span class="t">실적</span><span class="s">삼성전자</span></div>
+        <table class="t">
+          <tr><th>분기</th><th>예상</th><th>확정</th></tr>
+          <tr><td>26 3Q</td><td class="n">1,250</td><td><span class="mark"><span class="dash">—</span><span class="why soon">10-14</span></span></td></tr>
+          <tr><td>26 2Q</td><td class="dash">—</td><td class="n">1,802</td></tr>
+          <tr><td>26 1Q</td><td class="dash">—</td><td class="dash">—</td></tr>
+          <tr><td>25 4Q</td><td class="n">2,750</td><td class="n">2,881</td></tr>
+        </table>
+        <div style="margin-top:8px"><span class="stamp">기준 <b>09-18</b> · 출처 <b>DART</b></span></div>
+      </div></div>
+      <div class="note">사유 표식은 <b>5자 이내</b>입니다(「휴장」·「10-14」·「추정」). 그보다 길면 표가 깨져, 긴 설명은 카드 머리의 도장 한 줄로 몹니다.</div>
+    </div>
+    <div class="col" style="flex:1 1 320px">
+      <h3 style="margin-bottom:6px">지키는 규칙</h3>
+      <p class="sub" style="margin-bottom:8px"><b>「—」에 아무것도 안 붙이는 것이 기본입니다.</b> 표식이 붙는 칸이 흔해지면 표가 표식으로 덮여 정작 값이 안 읽힙니다. 실측상 표식이 붙는 칸은 실적 표에서 <b>분기당 많아야 하나</b>입니다.</p>
+      <p class="sub"><b>도장은 카드마다 하나입니다.</b> 값마다 출처를 달면 같은 문구가 표 전체에 반복됩니다 — 카드 안의 값이 전부 같은 출처·같은 기준시각이라서입니다.</p>
+    </div>
+  </div>
+</div>
+
+<div class="lead">
+  <p><b>정해 주실 것은 하나입니다 — 범위.</b></p>
+  <p>가 · <b>핵심 경로 약 20곳</b>(권장) · 나 · 부품만 만들고 적용 안 함 · 다 · 전면 210곳.</p>
+  <p class="sub">어느 쪽이든 <b>「—」 자체는 안 건드립니다</b> — 앞서 정해 주신 대로입니다.</p>
+</div>
+
+</div>
+<script>
+document.getElementById("themeBtn").addEventListener("click", function () {
+  var el = document.documentElement;
+  el.dataset.theme = el.dataset.theme === "dark" ? "light" : "dark";
+});
+</script>
+</body>
+</html>

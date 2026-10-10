@@ -59,47 +59,58 @@ x-worker: &worker
     resources:
       limits:
         cpus: "1.0"
-        memory: 256M
+        memory: 512M
       reservations:
         memory: 32M
 
 services:
-  worker-close-domestic:
+  # 2026-10-01: 잡을 성격별 컨테이너 넷으로 묶었다(예전 9개). ./worker 가 WORKER_ROLES 의 역할을 한 프로세스에서 돈다.
+  worker-market:
     <<: *worker
-    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-close-domestic
-    command: ["./worker-close-domestic"]
+    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-market
+    command: ["./worker"]
+    environment:
+      <<: *worker-env
+      WORKER_ROLES: "close-domestic,close-overseas,fetch,index"
+      MYSQL_MAX_OPEN_CONNS: "6"
 
-  worker-close-overseas:
+  # 검색 유입 감시(growth)는 서비스 계정 JSON을 be/secrets/에 둔다(없으면 크롤 + DB 지표만).
+  worker-stock:
     <<: *worker
-    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-close-overseas
-    command: ["./worker-close-overseas"]
+    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-stock
+    command: ["./worker"]
+    environment:
+      # environment 키를 적으면 *worker의 것이 통째로 덮인다(YAML 병합은 얕다) — 다시 펼친다.
+      <<: *worker-env
+      WORKER_ROLES: "scores,filings,earnings,research,growth"
+      MYSQL_MAX_OPEN_CONNS: "8"
+      GROWTH_GOOGLE_CREDENTIALS_FILE: /run/growth-secrets/google-service-account.json
+      GROWTH_REPORT_DIR: /var/lib/quant-port/growth
+    volumes:
+      - ./be/secrets:/run/growth-secrets:ro
+      - ./be/var/growth-reports:/var/lib/quant-port/growth
 
-  worker-scores:
+  worker-asset:
     <<: *worker
-    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-scores
-    command: ["./worker-scores"]
+    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-asset
+    command: ["./worker"]
+    environment:
+      <<: *worker-env
+      WORKER_ROLES: "asset"
 
-  worker-index:
+  # LLM 배치 9개 — api 바이너리의 batch 역할(실시간 루프·마이그레이션 없음).
+  worker-content:
     <<: *worker
-    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-index
-    command: ["./worker-index"]
-
-  worker-fetch:
-    <<: *worker
-    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-fetch
-    command: ["./worker-fetch"]
-
-  worker-research:
-    <<: *worker
-    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-research
-    command: ["./worker-research"]
-
-  worker-earnings:
-    <<: *worker
-    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-earnings
-    command: ["./worker-earnings"]
-
-  worker-filings:
-    <<: *worker
-    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-filings
-    command: ["./worker-filings"]
+    container_name: ${CONTAINER_PREFIX:-quant-port}-worker-content
+    command: ["./api"]
+    environment:
+      <<: *worker-env
+      SERVER_ROLE: "batch"
+      MYSQL_MAX_OPEN_CONNS: "8"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+        reservations:
+          memory: 64M

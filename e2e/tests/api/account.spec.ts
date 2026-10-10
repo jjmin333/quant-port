@@ -1,7 +1,7 @@
 import { expect, test } from "@/fixtures";
 import { newApiContext } from "@/test-user";
 import { Api } from "@/api-client";
-import { PASSWORD } from "@/data";
+import { PASSWORD, uniqueDisplayName } from "@/data";
 import type { AuthSession, WatchlistItem } from "@/types";
 
 /**
@@ -17,7 +17,8 @@ import type { AuthSession, WatchlistItem } from "@/types";
  * 다른 스펙과 달리 계정 행이 쌓이지 않는다.
  */
 
-const NEW_PASSWORD = "e2e-changed-2026";
+// 8~15자 (2026-09-27 가입 규칙).
+const NEW_PASSWORD = "e2e-chg-2026!";
 
 test.describe("계정 관리", () => {
   test("현재 비밀번호가 틀리면 바꿔 주지 않는다", async ({ user }) => {
@@ -28,12 +29,14 @@ test.describe("계정 관리", () => {
     expect(res.status(), "틀린 비밀번호로 바꿀 수 있으면 계정 탈취 경로가 된다").toBe(401);
   });
 
-  test("짧은 비밀번호는 거부한다", async ({ user }) => {
-    const res = await user.api.send("POST", "/auth/password", {
-      currentPassword: PASSWORD,
-      newPassword: "short",
-    });
-    expect(res.status()).toBe(400);
+  test("8~15자 밖의 새 비밀번호는 거부한다", async ({ user }) => {
+    for (const newPassword of ["short", "a".repeat(16)]) {
+      const res = await user.api.send("POST", "/auth/password", {
+        currentPassword: PASSWORD,
+        newPassword,
+      });
+      expect(res.status(), `새 비밀번호 ${newPassword.length}자`).toBe(400);
+    }
   });
 
   test("비밀번호를 바꾸면 옛 비밀번호로는 못 들어온다", async ({ user }) => {
@@ -61,10 +64,15 @@ test.describe("계정 관리", () => {
     const tooShort = await user.api.send("POST", "/auth/display-name", { displayName: "가" });
     expect(tooShort.status()).toBe(400);
 
+    const tooLong = await user.api.send("POST", "/auth/display-name", { displayName: "가".repeat(11) });
+    expect(tooLong.status(), "닉네임 상한은 10자").toBe(400);
+
+    // 닉네임은 겹칠 수 없으므로 매번 새 이름으로 바꾼다.
+    const renamed = uniqueDisplayName("renamed");
     const session = await user.api.post<AuthSession>("/auth/display-name", {
-      displayName: "QA-renamed",
+      displayName: renamed,
     });
-    expect(session.user.displayName).toBe("QA-renamed");
+    expect(session.user.displayName).toBe(renamed);
   });
 
   test("탈퇴는 비밀번호를 확인하고, 소유 데이터를 함께 지운다", async ({ user }) => {

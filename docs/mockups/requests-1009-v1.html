@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>10-09 요청 6건 — 실적 AI 요약 · 스크리너 · 오늘의 변화 · 뉴스 카테고리 · 금융상품 — 제안 v1</title>
+<style>
+:root{
+  --radius:.625rem;
+  --background:oklch(.97 0 0); --foreground:oklch(.145 0 0);
+  --card:oklch(1 0 0); --muted:oklch(.97 0 0);
+  --muted-foreground:oklch(.52 0 0); --border:oklch(.87 0 0);
+  --brand:#2563EB; --brand-muted:rgba(37,99,235,.1);
+  --profit:#DC2626; --loss:#2563EB;
+  --score-high:#15803D; --score-mid:#C2410C; --score-low:#B91C1C;
+  --amber:#B45309; --amber-bg:rgba(245,158,11,.15);
+  --text-muted:oklch(.545 0 0);
+}
+[data-theme="dark"]{
+  --background:oklch(.145 0 0); --foreground:oklch(.985 0 0);
+  --card:oklch(.205 0 0); --muted:oklch(.269 0 0);
+  --muted-foreground:oklch(.708 0 0); --border:oklch(1 0 0/16%);
+  --brand:#60A5FA; --brand-muted:rgba(96,165,250,.15);
+  --profit:#F87171; --loss:#60A5FA;
+  --score-high:#4ADE80; --score-mid:#FB923C; --score-low:#F87171;
+  --amber:#FBBF24; --amber-bg:rgba(251,191,36,.15);
+  --text-muted:oklch(.6 0 0);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--background);color:var(--foreground);
+  font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  font-size:12px;line-height:1.55;padding:22px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:20px;font-weight:700}
+h2{font-size:16px;font-weight:700;margin:34px 0 10px;padding-top:14px;border-top:2px solid var(--border)}
+h3{font-size:13px;font-weight:600;margin:14px 0 6px}
+.sub,.muted{color:var(--muted-foreground)}
+.up{color:var(--profit)} .down{color:var(--loss)} .n{font-variant-numeric:tabular-nums}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:14px;margin-bottom:16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--background);z-index:20}
+button.tgl{font:inherit;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--foreground);border-radius:8px;padding:5px 12px}
+.lead{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+.lead li{margin-left:18px;margin-bottom:3px}
+.tag{font-size:11px;font-weight:700;background:var(--brand-muted);color:var(--brand);border-radius:6px;padding:2px 7px;white-space:nowrap}
+.tag.rec{background:rgba(21,128,61,.12);color:var(--score-high)}
+.tag.q{background:var(--amber-bg);color:var(--amber)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.pad{padding:12px 14px}
+.cols{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 440px;min-width:300px}
+.lbl{font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;display:block}
+.note{color:var(--muted-foreground);font-size:11px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;border:1px solid var(--border);border-radius:999px;padding:1px 7px;color:var(--muted-foreground);background:var(--card);white-space:nowrap}
+.chip.b{border-color:transparent;background:var(--brand-muted);color:var(--brand);font-weight:600}
+table.t{width:100%;border-collapse:collapse;font-size:11.5px}
+table.t th,table.t td{border:1px solid var(--border);padding:6px 8px;text-align:left;vertical-align:top}
+table.t th{background:var(--muted);font-weight:600}
+code{font-family:ui-monospace,Consolas,monospace;font-size:11px;background:var(--muted);border-radius:4px;padding:0 4px}
+.qbox{border:1px dashed var(--amber);background:var(--amber-bg);border-radius:10px;padding:10px 12px;margin-top:10px}
+.qbox b{color:var(--amber)}
+/* 인라인 태그 렌더 */
+.mention{display:inline-flex;align-items:baseline;gap:4px;border-radius:6px;padding:0 5px;background:var(--brand-muted);color:var(--brand);font-weight:600;white-space:nowrap}
+.mention .px{font-weight:500;font-size:11px}
+.val{display:inline-flex;align-items:baseline;gap:3px;border-bottom:1.5px dotted var(--brand);font-weight:700;white-space:nowrap}
+.val small{font-weight:500;color:var(--muted-foreground);font-size:10.5px}
+.embed{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--card);margin:8px 0}
+.body{font-size:13.5px;line-height:1.75}
+.ed{border:1px solid var(--border);border-radius:10px;background:var(--card)}
+.ed .bar{display:flex;gap:6px;padding:6px 8px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.ed .bar span{font-size:11px;border:1px solid var(--border);border-radius:6px;padding:2px 8px}
+.ed .bar span.on{border-color:var(--brand);color:var(--brand);font-weight:600}
+.ed .txt{padding:10px 12px;font-size:13px;min-height:90px;position:relative;font-family:inherit}
+.pop{position:absolute;left:84px;top:34px;width:240px;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);font-size:12px;overflow:hidden}
+.pop div{padding:5px 9px;display:flex;justify-content:space-between;gap:8px}
+.pop div.sel{background:var(--brand-muted)}
+.caret{display:inline-block;width:1px;height:14px;background:var(--foreground);vertical-align:middle;animation:b 1s steps(1) infinite}
+@keyframes b{50%{opacity:0}}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);overflow-x:auto}
+.tabs span{padding:7px 10px;font-size:12px;white-space:nowrap;color:var(--muted-foreground)}
+.tabs span.on{color:var(--foreground);font-weight:700;border-bottom:2px solid var(--foreground)}
+.tabs span.new{color:var(--brand);font-weight:700}
+.li{display:flex;gap:8px;align-items:center;padding:8px 12px;border-top:1px solid var(--border)}
+.li:first-child{border-top:0}
+.cond{display:flex;align-items:center;gap:6px;padding:4px 0}
+.cond .name{width:5.2rem;color:var(--muted-foreground);display:flex;align-items:center;gap:3px}
+.box{width:58px;border:1px solid var(--border);border-radius:6px;padding:1px 6px;font-size:12px;display:flex;justify-content:space-between;align-items:center;color:var(--muted-foreground);background:var(--card)}
+.box.on{border-color:var(--brand);color:var(--brand);font-weight:700}
+.spin{font-size:8px;line-height:7px;color:var(--muted-foreground);display:flex;flex-direction:column}
+.hint{font-size:10.5px;color:var(--muted-foreground);white-space:nowrap}
+.ref{font-size:10.5px;border-radius:999px;padding:0 7px;background:var(--brand-muted);color:var(--brand);font-weight:600;white-space:nowrap}
+.i{display:inline-flex;width:13px;height:13px;border-radius:50%;border:1px solid var(--border);font-size:9px;align-items:center;justify-content:center}
+.tip{background:var(--foreground);color:var(--background);border-radius:8px;padding:8px 10px;font-size:11px;max-width:280px;margin:4px 0 6px 5.6rem}
+.btn{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--brand);color:var(--brand);border-radius:8px;padding:4px 10px;font-weight:600;font-size:12px;background:var(--card)}
+.mood{font-size:10.5px;font-weight:700;border-radius:6px;padding:1px 7px}
+.mood.up{background:rgba(220,38,38,.1)}
+.src{font-size:10px;color:var(--muted-foreground);border:1px solid var(--border);border-radius:5px;padding:0 5px;font-weight:500}
+.mini{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.mini .card{font-size:11px}
+.mini h4{font-size:11.5px;font-weight:700;margin-bottom:4px}
+.row{display:flex;justify-content:space-between;gap:6px}
+.ai{font-size:10.5px;color:var(--muted-foreground);margin-top:4px}
+.hero{font-size:13px;line-height:1.7}
+.pts li{margin-left:16px;font-size:12px;margin-bottom:2px}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;font-size:11px}
+.seg span{padding:2px 9px}.seg span.on{background:var(--foreground);color:var(--background);font-weight:600}
+.modal{border:1px solid var(--border);border-radius:12px;background:var(--card);box-shadow:0 10px 30px rgba(0,0,0,.15);max-width:360px;padding:14px}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
+.kv div{background:var(--muted);border-radius:6px;padding:5px 7px}
+.kv small{display:block;color:var(--muted-foreground);font-size:10px}
+.yes{color:var(--score-high);font-weight:700}.no{color:var(--muted-foreground)}.mid{color:var(--amber);font-weight:700}
+@media (max-width:700px){.mini{grid-template-columns:1fr 1fr}}
+/* 10-09 추가 */
+.ba{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+@media (max-width:900px){.ba{grid-template-columns:1fr}}
+.rk{display:inline-flex;min-width:22px;justify-content:center;font-weight:800;font-variant-numeric:tabular-nums;color:var(--muted-foreground)}
+.rk.top{color:var(--brand)}
+.cap{font-size:10.5px;color:var(--muted-foreground);font-variant-numeric:tabular-nums}
+.ev{font-size:11px;display:flex;gap:5px;align-items:flex-start;margin-top:2px}
+.ev .k{border:1px solid var(--border);border-radius:4px;padding:0 4px;font-size:10px;white-space:nowrap}
+.ev .k.up{border-color:rgba(220,38,38,.4)} .ev .k.down{border-color:rgba(37,99,235,.4)}
+.preset{min-width:168px;border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--card)}
+.preset.on{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-muted)}
+.preset b{font-size:12.5px;display:block}
+.preset .d{font-size:10.5px;color:var(--muted-foreground);margin:2px 0 6px}
+.preset .c{font-size:11px;font-weight:700;color:var(--brand)}
+.hs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.pill{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--brand);background:var(--brand-muted);color:var(--brand);border-radius:999px;padding:3px 10px;font-weight:600;font-size:11.5px;white-space:nowrap}
+.pill.add{border-style:dashed;background:transparent}
+.rt{width:100%;border-collapse:collapse;font-size:12px}
+.rt th{font-size:10.5px;color:var(--muted-foreground);font-weight:600;text-align:right;padding:6px 10px;border-bottom:1px solid var(--border)}
+.rt th:first-child,.rt td:first-child{text-align:left}
+.rt td{padding:11px 10px;border-bottom:1px solid var(--border);text-align:right;font-variant-numeric:tabular-nums}
+.rt td.hit{color:var(--brand);font-weight:700}
+.score{display:inline-flex;min-width:30px;justify-content:center;border-radius:6px;padding:1px 6px;font-weight:800;font-size:11px;background:rgba(21,128,61,.12);color:var(--score-high)}
+.dense{font-size:10px;line-height:1.3}
+.dense td,.dense th{padding:2px 4px!important}
+.aicard{border:1px solid var(--border);border-radius:12px;background:linear-gradient(180deg,var(--brand-muted),transparent 70%),var(--card);padding:14px 16px}
+.aicard .h{font-size:14px;font-weight:700;margin:4px 0 6px}
+.badge{font-size:10px;font-weight:700;border-radius:5px;padding:1px 6px;background:var(--brand-muted);color:var(--brand)}
+.stat{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stat div{border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:var(--card)}
+.stat small{display:block;color:var(--muted-foreground);font-size:10.5px}
+.stat b{font-size:15px;font-variant-numeric:tabular-nums}
+@media (max-width:700px){.stat{grid-template-columns:1fr 1fr}}
+.bar{height:6px;border-radius:3px;background:var(--muted);position:relative;margin-top:4px}
+.bar i{position:absolute;top:-2px;width:10px;height:10px;border-radius:50%;background:var(--brand);transform:translateX(-50%)}
+.bar s{position:absolute;top:0;bottom:0;background:rgba(37,99,235,.25);border-radius:3px}
+.phone{width:375px;max-width:100%;border:1px solid var(--border);border-radius:18px;padding:10px;background:var(--background)}
+.strike{text-decoration:line-through;color:var(--muted-foreground)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="topbar">
+  <div>
+    <h1>10-09 요청 6건 — 현재 vs 제안 v1</h1>
+    <div class="sub">2026-10-09 · <span class="tag q">결정</span> 표시가 고를 곳(나머지는 그린 대로 만든다) · 숫자는 10-08~09 운영 DB 실측값</div>
+  </div>
+  <button class="tgl" onclick="const h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark'">라이트/다크</button>
+</div>
+
+<div class="lead">
+  <b>조사하며 확인한 사실</b>
+  <ul style="margin-top:6px">
+    <li><b>실적</b>: 이번 주(10/5~18) 국내 확정 3건(삼성전자·LG엔솔·LG전자), 해외 165건(확정 12). 종목별 AI 「관전 포인트」(<code>llm_feat_earnings</code> 하루 60콜)는 이미 있지만 <b>화면 전체를 요약하는 글은 없다</b>.</li>
+    <li><b>스크리너</b>: 조건 31개(점수 6 · 재무 7 · 가치 3 · 가격 7 · 신호 7)로 재료는 충분. 문제는 배치 — 왼쪽에 숫자 칸 30여 개가 세로로 늘어서고, 결과표는 12px 촘촘한 줄. 처음 온 사람이 <b>무엇부터 눌러야 할지</b> 모른다.</li>
+    <li><b>오늘의 변화</b>: 10-08 하루 580줄 · 449종목. 정렬이 「중요도」(종류마다 다른 문턱 대비 배수)라 <b>대형주와 이름 모를 소형주가 섞여</b> 읽는 순서가 없다. 시가총액은 점수 행에 이미 있다 — <b>지난 11일치 전부</b> 같은 날 점수 행과 이어진다(누락 0).</li>
+    <li><b>뉴스</b>: 국내 하루 3,062건 · 해외 2,249건. 수집 필터(<code>passesStockRelevance</code>)가 <b>종목과 무관한 기사를 버리므로</b> 부동산·금리·예적금 기사는 지금 구조로는 들어올 수 없다. 네이버 호출은 일 13,250 / 한도 24,000.</li>
+    <li><b>금융상품</b>: 예금 432 · 적금 335 · 주담대 112 · 전세 58 · 신용 112. 12개월 예금 최고금리 평균 은행 3.52% · 저축은행 3.77%. 우대조건 AI 구조화 270건과 상품 점수(<code>asset_scores</code>)는 이미 있는데 <b>화면은 비교 체크박스 · 계산기 중심</b>.</li>
+  </ul>
+</div>
+
+<!-- ───────────── ① 실적 AI 요약 ───────────── -->
+<h2>① 국내·해외 실적 일정 — 맨 위 「AI 실적 요약」</h2>
+<div class="ba">
+  <div>
+    <span class="lbl">현재 — 지표 5칸 + 달력이 첫 화면. 「그래서 이번 주 무슨 일이 있었나」는 사용자가 줄을 읽고 스스로 만든다</span>
+    <div class="card pad">
+      <div class="stat" style="grid-template-columns:repeat(5,1fr)">
+        <div><small>이번 주 발표</small><b>2</b></div><div><small>예상 상회</small><b>100%</b></div><div><small>평균 서프라이즈</small><b class="up">+66.5%</b></div><div><small>최대 상회</small><b style="font-size:12px">LG에너지솔루션</b></div><div><small>다음 발표</small><b style="font-size:12px">삼성전자</b></div>
+      </div>
+      <div class="muted" style="margin-top:10px;height:90px;border:1px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center">월 달력 · 일별 표 · 우측 레일</div>
+    </div>
+  </div>
+  <div>
+    <span class="lbl">제안 — 지표 칸 위에 AI 요약 카드 1장(뉴스 시장 브리핑과 같은 모양: 헤드라인 · 요점 3 · 지켜볼 것)</span>
+    <div class="aicard">
+      <div style="display:flex;justify-content:space-between;gap:8px"><span class="badge">✨ AI 실적 요약 · 국내</span><span class="cap">10월 9일 08:10 · 하루 2회 갱신</span></div>
+      <div class="h">삼성전자 영업익 10.74조로 예상 소폭 상회, LG에너지솔루션은 예상의 2.3배 — LG전자만 24% 하회</div>
+      <ul class="pts">
+        <li>이번 주 발표 3곳 중 2곳이 컨센서스를 넘었습니다(평균 +36%).</li>
+        <li>LG에너지솔루션 7,560억(예상 3,264억)은 일회성 여부 확인이 필요합니다.</li>
+        <li>LG전자는 7,818억으로 예상 1.03조를 밑돌았습니다.</li>
+      </ul>
+      <div style="margin-top:8px;font-size:11.5px"><b>지켜볼 것</b> · 다음 주 발표 예정(확정·추정) 시가총액 상위 3곳 — 10월 중순부터 시즌 본격화</div>
+      <div class="cap" style="margin-top:8px">근거: 저장된 실적 표만 사용 · 투자 권유 아님 · <u>근거 숫자 보기</u></div>
+    </div>
+    <p class="note">해외 탭은 같은 카드에 「이번 주 S&amp;P 대형주 발표 · EPS 상회율 · 다음 주 빅테크」를 쓴다.</p>
+  </div>
+</div>
+<table class="t" style="margin-top:10px">
+  <tr><th>항목</th><th>설계</th></tr>
+  <tr><td>호출 시점</td><td>국내 <b>08:10 · 18:50</b>(18:30 수집 직후) · 해외 <b>07:30</b>(장 마감 실적 반영) · <b>21:30</b>(장 전 실적 반영, Gemini 밤 503 창 22시 전) → 시장당 하루 최대 2콜</td></tr>
+  <tr><td>입력</td><td>규칙으로 만든 사실표만(발표 종목 · 예상/실제 · 서프라이즈 % · 다음 7일 시총 상위 예정) — 상한 1,200토큰. <b>사실표 해시가 같으면 호출 생략</b>(시즌 밖엔 하루 0~1콜)</td></tr>
+  <tr><td>출력</td><td>JSON {headline, points[3], watch} 상한 350토큰 · 숫자는 사실표에 있는 것만(검증 실패 시 규칙 문장)</td></tr>
+  <tr><td>저장/한도</td><td>새 표 <code>earnings_digests</code>(시장별 최신 1행 + 이력 14일) · 기능 버킷 <code>llm_feat_earnings</code>(60콜) 공유 — 하루 최대 +4콜 · 조회는 표만 읽음(LLM 0)</td></tr>
+  <tr><td>비용</td><td>BE 서비스 1 · 배치 잡 1 · API 1 · FE 카드 1(뉴스 브리핑 카드 재사용) · 높이 +약 150px</td></tr>
+</table>
+
+<!-- ───────────── ② 스크리너 ───────────── -->
+<h2>② 종목 스크리너 — 「고르는 화면」에서 「골라 주는 화면」으로</h2>
+<div class="lead" style="margin-bottom:10px">
+  <b>타 서비스에서 흡수할 장점 / 고칠 단점</b>
+  <table class="t" style="margin-top:6px">
+    <tr><th>서비스</th><th>흡수</th><th>그대로 가져오지 않을 것</th></tr>
+    <tr><td>토스증권 「주식 골라보기」</td><td>목적형 프리셋 카드(「저평가 우량주」 등) 한 번 눌러 바로 결과</td><td>조건 근거·값이 안 보임 — 왜 걸렸는지 모름</td></tr>
+    <tr><td>TradingView</td><td>상단 가로 <b>조건 칩</b>(누르면 팝오버로 범위 수정) · 결과표 <b>보기 탭</b>(개요/가치/수익성…)</td><td>영문 지표명 · 칸 수 과다</td></tr>
+    <tr><td>Finviz</td><td>드롭다운 범위 선택(숫자 타이핑 없이) · 시그널 프리셋</td><td>극단적 밀도 · 초보에게 불친절</td></tr>
+    <tr><td>Yahoo / Simply Wall St</td><td>프리셋 설명 한 줄 · 종목별 한눈 점수</td><td>결과 수 많아도 정렬 기준 불명확</td></tr>
+  </table>
+  <p class="note">우리만의 차별점: 결과마다 <b>「걸린 조건 값」을 파랗게</b> 표시 + AI 점수 + 기존 「닮은꼴 찾기」·문장 검색 유지.</p>
+</div>
+<div class="ba">
+  <div>
+    <span class="lbl">현재 (1440px) — 왼쪽 조건 칸 30여 개 세로, 오른쪽 12px 표</span>
+    <div class="card pad" style="display:flex;gap:10px">
+      <div style="width:150px" class="dense">
+        <div class="muted">AI 점수</div>
+        <div class="cond"><span class="name">종합</span><span class="box on">70</span><span class="box">최대</span></div>
+        <div class="cond"><span class="name">추세</span><span class="box">최소</span><span class="box">최대</span></div>
+        <div class="cond"><span class="name">수익성</span><span class="box">최소</span><span class="box">최대</span></div>
+        <div class="cond"><span class="name">성장</span><span class="box">최소</span><span class="box">최대</span></div>
+        <div class="muted">재무</div>
+        <div class="cond"><span class="name">ROE</span><span class="box">최소</span><span class="box">최대</span></div>
+        <div class="cond"><span class="name">영업이익률</span><span class="box">최소</span><span class="box">최대</span></div>
+        <div class="muted">… 24칸 더</div>
+      </div>
+      <table class="t dense" style="flex:1"><tr><th>종목</th><th>종합</th><th>현재가</th><th>등락</th></tr>
+        <tr><td>솔브레인홀딩스</td><td>83</td><td>49,750</td><td class="up">+4.19%</td></tr>
+        <tr><td>디바이스</td><td>81</td><td>15,930</td><td class="up">+19.24%</td></tr>
+        <tr><td>한국공항</td><td>78</td><td>95,100</td><td class="down">-0.11%</td></tr>
+        <tr><td>…</td><td></td><td></td><td></td></tr></table>
+    </div>
+  </div>
+  <div>
+    <span class="lbl">제안 A — 프리셋 카드 → 조건 칩 → 보기 탭이 있는 넉넉한 결과표</span>
+    <div class="card pad">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+        <div style="flex:1;border:1px solid var(--border);border-radius:10px;padding:7px 10px" class="muted">🔎 문장으로 찾기 — 「부채 적고 배당 주는 저평가 반도체」</div>
+        <span class="seg"><span class="on">국내</span><span>해외</span></span>
+      </div>
+      <div class="hs">
+        <div class="preset on"><b>💎 저평가 우량주</b><div class="d">ROE ≥10 · PER ≤12 · 부채 ≤100%</div><span class="c">77종목</span></div>
+        <div class="preset"><b>🚀 실적 성장주</b><div class="d">매출 ≥20% · EPS ≥20% 성장</div><span class="c">157종목</span></div>
+        <div class="preset"><b>🎯 목표가 여력</b><div class="d">목표가 +30% · 종합 ≥60</div><span class="c">75종목</span></div>
+        <div class="preset" style="opacity:.55"><b>📅 실적 발표 임박</b><div class="d">7일 이내</div><span class="c">1종목 · 시즌 전</span></div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0">
+        <span class="pill">ROE ≥ 10% ✕</span><span class="pill">PER ≤ 12배 ✕</span><span class="pill">부채비율 ≤ 100% ✕</span><span class="pill add">+ 조건 추가</span>
+        <span style="margin-left:auto" class="muted">77종목 · 저장 · 초기화</span>
+      </div>
+      <div class="tabs" style="margin-bottom:4px"><span class="on">개요</span><span>가치</span><span>수익성</span><span>성장</span><span>수급·신호</span></div>
+      <table class="rt">
+        <tr><th>종목</th><th>AI</th><th>현재가</th><th>ROE</th><th>PER</th><th>부채비율</th></tr>
+        <tr><td><b>솔브레인홀딩스</b> <span class="cap">036830</span></td><td><span class="score">83</span></td><td>49,750 <small class="up">+4.19%</small></td><td class="hit">28.8%</td><td class="hit">2.1배</td><td class="hit">36.5%</td></tr>
+        <tr><td><b>디바이스</b> <span class="cap">187870</span></td><td><span class="score">81</span></td><td>15,930 <small class="up">+19.24%</small></td><td class="hit">11.1%</td><td class="hit">6.1배</td><td class="hit">35.5%</td></tr>
+        <tr><td><b>한국공항</b> <span class="cap">005430</span></td><td><span class="score">78</span></td><td>95,100 <small class="down">-0.11%</small></td><td class="hit">10.5%</td><td class="hit">7.2배</td><td class="hit">30.7%</td></tr>
+      </table>
+      <p class="note">줄 높이 34→48px · 글자 12→13px · 칸은 보기 탭당 최대 6개 · 걸린 조건 값은 파랑 · 행 클릭은 지금처럼 오른쪽 종목 패널.</p>
+    </div>
+  </div>
+</div>
+<div class="cols" style="margin-top:12px">
+  <div class="col">
+    <span class="lbl">「+ 조건 추가」 팝오버 — 숫자를 타이핑하지 않아도 된다</span>
+    <div class="modal" style="max-width:none">
+      <div class="tabs" style="margin-bottom:8px"><span class="on">AI 점수</span><span>재무</span><span>가치</span><span>가격</span><span>신호</span></div>
+      <b>PER (주가수익비율)</b> <span class="i">i</span>
+      <div class="muted" style="font-size:11px">이익 대비 주가. 낮을수록 싸다 · 보통 8~21배(국내 p25~p75)</div>
+      <div style="display:flex;gap:6px;margin:8px 0"><span class="chip">≤ 8배</span><span class="chip b">≤ 12배</span><span class="chip">≤ 15배</span><span class="chip">≤ 20배</span><span class="chip">직접 입력</span></div>
+      <div class="bar"><s style="left:20%;width:35%"></s><i style="left:30%"></i></div>
+      <p class="note">적용 시 결과 수 미리보기: <b>N → M종목</b>(칩을 바꾸면 그 자리에서 다시 셈)</p>
+    </div>
+  </div>
+  <div class="col">
+    <span class="lbl">모바일(375px) — 프리셋 가로 스크롤 · 결과는 카드</span>
+    <div class="phone">
+      <div class="hs"><div class="preset on" style="min-width:140px"><b>💎 저평가 우량주</b><span class="c">77종목</span></div><div class="preset" style="min-width:140px"><b>🚀 실적 성장주</b><span class="c">157종목</span></div></div>
+      <div style="display:flex;gap:5px;overflow:hidden;margin:8px 0"><span class="pill">ROE ≥ 10% ✕</span><span class="pill">PER ≤ 12배 ✕</span><span class="pill add">+</span></div>
+      <div class="card pad"><div class="row"><b>솔브레인홀딩스</b><span class="score">83</span></div><div class="row muted"><span>49,750 <small class="up">+4.19%</small></span><span>ROE <b style="color:var(--brand)">28.8%</b> · PER <b style="color:var(--brand)">2.1배</b></span></div></div>
+    </div>
+  </div>
+</div>
+<p class="note">프리셋 8종(초안, 10-08 국내 실측 결과 수): 저평가 우량주 77 · 실적 성장주 157 · 목표가 여력 75 · 실적 발표 임박 1(시즌 전) · 외국인·기관 순매수(+0.5%·20일 수익 ≥0) 270 · 과매도 반등 후보(RSI ≤30·종합 ≥60) 0 · 52주 신고가 근접(−3% 이내) 9 · AI 점수 급등(+8) 10. 0~1개인 프리셋은 흐리게 두고 「지금은 해당 종목이 적습니다」로 알린다. 결과 수는 같은 배치값으로 서버가 하루 1회 미리 셈(조회 시 계산 0). 비용: FE 스크리너 3개 파일 재작성(조건 상태·저장·닮은꼴·문장 검색 로직은 그대로 재사용) · BE 프리셋 목록 API 1개.</p>
+<div class="qbox"><b>결정 1 — 스크리너 방향</b> · <b>A(추천)</b> 프리셋 카드 + 조건 칩 + 보기 탭(위 그림) · <b>B</b> 단계형(목적 고르기 → 조건 다듬기 → 결과, 3단계 화면) · <b>C</b> 현재 배치 유지 + 밀도·글자만 완화</div>
+
+<!-- ───────────── ③ 오늘의 변화 ───────────── -->
+<h2>③ 오늘의 변화 — 국내/해외 시가총액 순위</h2>
+<div class="ba">
+  <div>
+    <span class="lbl">현재 — 전체/국내/해외 · 「중요도」 순(10-08 전체 첫 화면: LG디스플레이 → 어플라이드 디지털 → 펠로톤…)</span>
+    <div class="card pad">
+      <div style="margin-bottom:8px"><span class="seg"><span class="on">전체</span><span>국내</span><span>해외</span></span></div>
+      <div class="li" style="padding:6px 0"><div><b>LG디스플레이</b> <span class="cap">034220</span><div class="ev"><span class="k up">실적</span>잠정 영업이익 +121.0%</div></div></div>
+      <div class="li" style="padding:6px 0"><div><b>어플라이드 디지털</b> <span class="cap">APLD</span><div class="ev"><span class="k down">실적</span>EPS 예상 하회 -145.3%</div></div></div>
+      <div class="li" style="padding:6px 0"><div><b>펠로톤 인터랙티브</b> <span class="cap">PTON</span><div class="ev"><span class="k up">급등락</span>+13.4%</div></div></div>
+    </div>
+  </div>
+  <div>
+    <span class="lbl">제안 — 국내/해외 둘만(기본 국내) · 시가총액 순 순위 번호 + 시총 표기</span>
+    <div class="card pad">
+      <div style="margin-bottom:8px;display:flex;justify-content:space-between"><span class="seg"><span class="on">국내</span><span>해외</span></span><span class="cap">시가총액 순 · 10-08 국내 222종목</span></div>
+      <div class="li" style="padding:7px 0;align-items:flex-start"><span class="rk top">1</span><div style="flex:1"><b>삼성전자</b> <span class="cap">005930 · 시총 1,537.6조</span><div class="ev"><span class="k up">실적</span>잠정 영업이익 10.74조, 예상 +1.3%</div><div class="ev"><span class="k">공시</span>… 외 3건</div></div></div>
+      <div class="li" style="padding:7px 0;align-items:flex-start"><span class="rk top">2</span><div style="flex:1"><b>SK하이닉스</b> <span class="cap">000660 · 시총 1,232.3조</span><div class="ev"><span class="k up">급등락</span>…</div></div></div>
+      <div class="li" style="padding:7px 0;align-items:flex-start"><span class="rk top">3</span><div style="flex:1"><b>LG에너지솔루션</b> <span class="cap">373220 · 시총 93.8조</span><div class="ev"><span class="k up">실적</span>잠정 영업이익 7,560억, 예상 +131.6%</div></div></div>
+      <div class="li" style="padding:7px 0;align-items:flex-start"><span class="rk">4</span><div style="flex:1"><b>현대차</b> <span class="cap">005380 · 시총 66.0조</span></div></div>
+    </div>
+    <p class="note">순위 = 그 날 · 그 시장 · 고른 필터 안에서의 시가총액 순번(필터를 걸면 1부터 다시). 「설명 불가」 배지·종류 칩·내 종목만은 그대로.</p>
+  </div>
+</div>
+<p class="note">데이터: <code>stock_change_events</code>에 <code>market_cap</code> 열 추가 → <b>지난 11일치(6,190행) 전부를 같은 날 점수 행의 시가총액으로 채우는 이관</b>(실측 누락 0) → 감지 배치가 이후 매일 같이 기록. 조회 정렬 <code>market_cap DESC</code>. <code>/changes?market=</code>가 비면 국내로 본다(400 대신 — 예전 링크 보호).</p>
+
+<!-- ───────────── ④ 뉴스 ───────────── -->
+<h2>④ 뉴스 — 부동산·금리·예적금·대출 기사 + 카테고리 필터 + 자산 키워드 모달</h2>
+<div class="ba">
+  <div>
+    <span class="lbl">현재 — 메뉴 「국내 주식」·「해외 주식」, 종목 칩만 누를 수 있음</span>
+    <div class="card pad">
+      <div class="muted" style="margin-bottom:6px">사이드바: 뉴스 › <b>국내 주식</b> · <b>해외 주식</b></div>
+      <div class="li" style="padding:6px 0"><div><b>삼성전자, 3분기 영업익 10.7조…</b><div style="margin-top:3px"><span class="chip b">삼성전자 -0.3%</span> <span class="chip">반도체</span></div></div></div>
+    </div>
+  </div>
+  <div>
+    <span class="lbl">제안 — 메뉴 「실시간 국내 뉴스」·「실시간 해외 뉴스」 · 국내에만 카테고리 칩</span>
+    <div class="card pad">
+      <div class="muted" style="margin-bottom:6px">사이드바: 뉴스 › <b>실시간 국내 뉴스</b> · <b>실시간 해외 뉴스</b></div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px"><span class="chip b">전체</span><span class="chip">주식</span><span class="chip">부동산</span><span class="chip">금리</span><span class="chip">예·적금</span><span class="chip">대출</span></div>
+      <div class="li" style="padding:6px 0"><div><span class="src">부동산</span> <b>송파 잠실 아파트값 6주 연속 상승…</b><div style="margin-top:3px"><span class="mention">🏢 서울 송파구</span> <span class="mention">📈 주담대 금리</span></div></div></div>
+      <div class="li" style="padding:6px 0"><div><span class="src">금리</span> <b>한은 기준금리 동결…</b><div style="margin-top:3px"><span class="mention">％ 기준금리 2.50%</span> <span class="mention">％ 국고채 3년 3.93%</span></div></div></div>
+    </div>
+    <p class="note">파란 칩을 누르면 글 태그(10-03)와 같은 <b>자산 퀵룩 모달</b>(지역: 지수 1·4·12주·거래량·AI 해설 / 금리: 현재·1주·3개월 전·1년 선 / 상품: 기본·최고 금리·우대조건)이 뜬다.</p>
+  </div>
+</div>
+<div class="cols" style="margin-top:12px">
+  <div class="col">
+    <span class="lbl">홈 뉴스 카드</span>
+    <div class="card pad">
+      <div class="row"><b>뉴스</b><span class="seg"><span class="on">국내</span><span>해외</span></span></div>
+      <div style="display:flex;gap:5px;margin:8px 0"><span class="chip b">전체</span><span class="chip">주식</span><span class="chip">부동산</span><span class="chip">금리</span><span class="chip">예·적금</span><span class="chip">대출</span></div>
+      <div class="muted">해외 탭을 누르면 이 줄이 사라진다(해외는 주식만).</div>
+    </div>
+  </div>
+  <div class="col">
+    <span class="lbl">수집 설계</span>
+    <table class="t">
+      <tr><th>카테고리</th><th>검색어(초안, 관리자 화면에서 수정)</th></tr>
+      <tr><td>부동산</td><td>아파트 매매 · 아파트 전세 · 부동산 시장 · 청약 · 재건축 · 주택 공급</td></tr>
+      <tr><td>금리</td><td>기준금리 · 한국은행 금리 · 국고채 금리 · 미 연준 금리</td></tr>
+      <tr><td>예·적금</td><td>예금 금리 · 적금 특판 · 파킹통장 · 정기예금</td></tr>
+      <tr><td>대출</td><td>주담대 금리 · 전세대출 · 신용대출 금리 · DSR</td></tr>
+    </table>
+    <p class="note">새 「주제」 차선(틱당 2개, 네이버 +약 1,400콜/일 → 일 14,650 / 24,000) · 제목에 주제어가 있어야 통과(종목 필터 대신) · <code>news_articles.topic</code> 열 + 기존 국내 기사도 제목 규칙으로 재분류(이관) · 자산 칩은 수집 때 한 번 추출해 저장(조회 때 스캔 0).</p>
+  </div>
+</div>
+<div class="qbox"><b>결정 2 — 카테고리 구성</b> · <b>A(추천)</b> 전체 · 주식 · 부동산 · 금리 · 예·적금 · 대출(6칩) · <b>B</b> 전체 · 주식 · 부동산 · 금융상품(금리+예적금+대출 묶음, 4칩)</div>
+
+<!-- ───────────── ⑤ LLM 활용 ───────────── -->
+<h2>⑤ 새 기사를 각 LLM에 — 토큰 관리 포함</h2>
+<table class="t">
+  <tr><th>카테고리</th><th>받는 LLM</th><th>넣는 양</th><th>점수 반영</th></tr>
+  <tr><td>부동산</td><td>홈 「부동산·금리 브리핑」 · 시군구 AI 해설</td><td>제목만 · 브리핑 ≤8건 · 시군구는 그 이름이 제목에 있는 기사 ≤2건</td><td>시군구 점수 근거에 「최근 30일 기사 N건 · 최신 제목」 표시</td></tr>
+  <tr><td>금리</td><td>금리 브리핑 · 국내 뉴스 시장 브리핑 · 예·적금/대출 AI 분석(⑥)</td><td>제목만 ≤5건</td><td>—</td></tr>
+  <tr><td>예·적금 · 대출</td><td>⑥ 예·적금 / 대출 AI 분석</td><td>제목만 ≤5건</td><td>—</td></tr>
+  <tr><td>주식</td><td>지금과 같음</td><td>변화 없음</td><td>변화 없음</td></tr>
+</table>
+<p class="note"><b>토큰 관리</b>: ① 본문 대신 제목(60자 절단) ② 같은 사건 중복 제거(기존 <code>news_dedupe</code>) ③ 입력 해시가 같으면 호출 생략 ④ 기능별 상한(새 기사 블록 ≤400토큰) ⑤ 새 버킷 없이 기존 <code>llm_feat_asset</code>(250콜) 안에서 — 추가 콜은 ⑥의 하루 2콜뿐 ⑥ 관리자 LLM 화면에 기능별 입력·출력 토큰 표시. 예상 증가: 하루 약 +6천 입력 토큰(현재 일 한도 100만의 0.6%).</p>
+<div class="qbox"><b>결정 3 — 부동산 점수에 뉴스 반영</b> · <b>A(추천)</b> 근거 표시만(점수식은 그대로 — 기사 수는 지역 크기·언론 관심에 치우쳐 가격 신호로 검증 전) · <b>B</b> 시군구 점수에 「뉴스 흐름」 성분 10% 추가</div>
+
+<!-- ───────────── ⑥ 금융상품 ───────────── -->
+<h2>⑥ 금융상품 — 비교·계산기에서 「정보 + AI 분석」으로</h2>
+<div class="ba">
+  <div>
+    <span class="lbl">현재 — 금액·기간·권역 필터 10여 개 → 세후 이자 순위 + 비교 체크박스 · 메뉴 4개</span>
+    <div class="card pad">
+      <div class="muted" style="margin-bottom:6px">금융상품 › 예·적금 비교 · 대출 금리 비교 · 금리 동향 · <span class="strike">금융 계산기</span></div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap" class="dense"><span class="chip">1,000만원</span><span class="chip">12개월</span><span class="chip">은행</span><span class="chip">저축은행</span><span class="chip">비대면</span><span class="chip">우대조건…</span><span class="chip">세금우대</span></div>
+      <div class="li" style="padding:6px 0"><span>☐ 1.</span><div style="flex:1"><b>OK e-안심정기예금</b><div class="cap">최고 4.10% · 세후 +346,960원</div></div><span class="cap">비교에 담기</span></div>
+      <div class="li" style="padding:6px 0"><span>☐ 2.</span><div style="flex:1"><b>…정기예금</b><div class="cap">최고 4.06% · 세후 +342,476원</div></div><span class="cap">비교에 담기</span></div>
+    </div>
+  </div>
+  <div>
+    <span class="lbl">제안 — AI 시장 분석 → 시장 지표 → 정보형 상품 카드(AI 한 줄) · 메뉴 3개</span>
+    <div class="card pad">
+      <div class="muted" style="margin-bottom:6px">금융상품 분석 › <b>예·적금 분석</b> · <b>대출 분석</b> · <b>금리 동향</b></div>
+      <div class="aicard" style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between"><span class="badge">✨ AI 예·적금 분석</span><span class="cap">10월 9일 · 하루 1회</span></div>
+        <div class="h" style="font-size:13px">은행 예금 최고금리 평균 3.52%, 저축은행과 차이 0.25%p로 좁아져</div>
+        <ul class="pts"><li>12개월 예금 상위 10%는 4.0% 이상 — 대부분 저축은행 비대면.</li><li>적금 고금리(7%대)는 우대조건 충족이 어려운 상품이 다수.</li><li>기준금리 동결 기사 이후 신규 특판은 줄어드는 흐름.</li></ul>
+      </div>
+      <div class="stat"><div><small>예금 평균(은행)</small><b>3.52%</b></div><div><small>예금 평균(저축)</small><b>3.77%</b></div><div><small>적금 최고(은행)</small><b>7.00%</b></div><div><small>새 상품(30일)</small><b>6</b></div></div>
+      <div class="li" style="padding:8px 0;margin-top:6px;align-items:flex-start"><div style="flex:1"><b>OK e-안심정기예금</b> <span class="cap">OK저축은행</span>
+        <div style="display:flex;gap:10px;margin-top:2px"><span>기본 <b>4.00%</b></span><span>최고 <b>4.10%</b></span><span class="score">A</span></div>
+        <div class="bar" style="width:200px"><s style="left:0;width:100%"></s><i style="left:92%"></i></div><div class="cap">시장 상위 8% · 우대조건 쉬움(비대면 가입만)</div>
+        <div class="ai">✨ 조건 없이 4%대 — 목돈을 1년 묶을 수 있는 사람에게. 예금자보호 5천만원 한도 확인.</div></div><span class="cap">☆</span></div>
+    </div>
+  </div>
+</div>
+<table class="t" style="margin-top:10px">
+  <tr><th>바뀌는 것</th><th>내용</th></tr>
+  <tr><td>메뉴</td><td>「금융 계산기」 삭제(주소는 예·적금 분석으로 이동) · 예상 수령액은 상품 상세 안 한 줄로 흡수</td></tr>
+  <tr><td>목록</td><td>비교 체크박스·비교 서랍 제거 → 정보 카드(기본·최고 금리 · 시장 내 위치 막대 · 점수 등급 · 우대조건 난이도 · AI 한 줄) · 필터는 기간·권역·가입방법 3개로 축소 · 정렬은 최고금리/기본금리/AI 점수</td></tr>
+  <tr><td>상단</td><td>AI 시장 분석(하루 1회, 입력 = 금리 분포 요약 + 기준금리 + 금리·예적금/대출 기사 제목 ≤5) + 시장 지표 4칸</td></tr>
+  <tr><td>상세</td><td>AI 분석(장점 · 주의할 점 · 이런 분께) · 시장 대비 위치 · 공시월별 금리 이력 · 우대조건 구조화 — 기존 「내 대출과 비교」(F3)는 유지</td></tr>
+  <tr><td>LLM</td><td>시장 분석 하루 2콜(예·적금 1 · 대출 1) · 상품 AI 한 줄은 이미 있는 우대조건 구조화 배치에 한 칸 추가(콜 수 그대로) · 버킷 <code>llm_feat_asset</code></td></tr>
+</table>
+<div class="qbox"><b>결정 4 — 메뉴 이름</b> · <b>A(추천)</b> 그룹 「금융상품 분석」: 예·적금 분석 · 대출 분석 · 금리 동향 · <b>B</b> 그룹 「금융상품」: 예·적금 시장 · 대출 시장 · 금리 동향 · <b>C</b> 그룹 「금융 인사이트」: 예·적금 인사이트 · 대출 인사이트 · 금리 인사이트</div>
+
+<h2>함께 고칠 것(작업 중 발견 — 별도 결정 없이 진행)</h2>
+<ul class="pts">
+  <li>오늘의 변화 <code>List</code>가 종목 묶음이 아니라 <b>이벤트 줄 300개</b>에서 잘려, 한 종목의 일부 줄만 오는 경우가 있다 → 시총 순 정렬로 바꾸면서 종목 단위로 자르도록 수정.</li>
+  <li>사이드바·SEO·빵부스러기 이름이 세 곳(<code>sidebar.tsx</code> · <code>page-meta-routes.ts</code> · 각 page.tsx)에 따로 적혀 있어 메뉴명 변경 시 어긋난다 → 이번 변경 범위에서 한 곳으로.</li>
+</ul>
+
+</div>
+</body>
+</html>

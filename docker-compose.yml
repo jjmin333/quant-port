@@ -36,6 +36,15 @@ x-worker-deploy: &worker-deploy
 # 워커 8개 공통 런타임. 각 서비스에서 `<<: *worker-runtime` 으로 병합한다.
 # (서비스에 같은 키를 직접 쓰면 그쪽이 이긴다 — 기존 블록의 restart/healthcheck/
 #  extra_hosts 는 그대로 유효하다.)
+# 여러 역할을 묶은 워커(2026-10-01, 9→4 컨테이너) — 예전 상한 0.5 CPU·256M을 역할 수만큼 합친 것보다 작게.
+x-worker-deploy-wide: &worker-deploy-wide
+  resources:
+    limits:
+      cpus: "1.00"
+      memory: 512M
+    reservations:
+      memory: 48M
+
 x-worker-runtime: &worker-runtime
   logging: *logging
   # CPU 가중치 — **상한이 아니라 경합 시의 배분율**이다.
@@ -157,6 +166,8 @@ services:
       # 없이 번역만 0건이 됐다(2026-09-13 실측 `engines=local`).
       TRANSLATE_PROVIDER: "${TRANSLATE_PROVIDER:-azure}"
       TRANSLATE_LOCAL_URL: "${TRANSLATE_LOCAL_URL:-http://translator:8100}"
+      # HTTP·실시간 루프만. 배치(LLM 9개)는 worker-content(SERVER_ROLE=batch)가 돈다.
+      SERVER_ROLE: "api"
     volumes:
       # 사용자 업로드 이미지(리포트 본문 등)는 **영구 보관**이라 named volume이어야
       # 한다 — writable layer에 두면 재기동(recreate)마다 지워진다.
@@ -218,12 +229,19 @@ services:
   #
   # Azure 쪽이 며칠 안정적으로 돌면 이 블록과 quant_port_llama_models 볼륨을 지운다.
   translator:
-    image: ghcr.io/ggml-org/llama.cpp:server
+    # **CPU 전용에서 CUDA로 옮겼다 (2026-09-15).** 이 컨테이너를 내렸던 이유 셋은
+    # 전부 「CPU 전용」이라는 전제에서 나온 것이었다(azure.go 머리글: 제목 한 건
+    # 0.9~2.8초 · 상시 1.5코어 · 모델 적재 중 그 주기가 통째로 영어). 이 기계에는
+    # RTX 4070(12GB)이 있고 Docker Desktop이 nvidia 런타임을 이미 갖고 있다
+    # (`docker info`의 Runtimes에 nvidia가 있다). 전제가 바뀌면 결론도 바뀐다.
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
     container_name: quant-port-translator
     profiles: ["legacy-translator"]
     restart: unless-stopped
     logging: *logging
     # API·워커보다 낮게 둔다. 번역은 배치라 늦어도 되고, 늦어서 잃는 것이 없다.
+    # GPU로 옮긴 뒤로 이 컨테이너의 CPU는 토큰을 만드는 자리가 아니라 요청을
+    # 받아 넘기는 자리다 — 경합 자체가 거의 없다.
     cpu_shares: 512
     stop_grace_period: 15s
     ports:
@@ -234,368 +252,257 @@ services:
     # 모델을 바꾸는 일이 이미지를 다시 만드는 일이 되지 않게 하기 위해서다 —
     # TRANSLATE_MODEL만 바꾸고 재기동하면 된다.
     command: >
-      -hf ${TRANSLATE_MODEL:-mradermacher/LMT-60-1.7B-GGUF:Q4_K_M}
+      -hf ${TRANSLATE_MODEL:-mradermacher/LMT-60-4B-GGUF:Q8_0}
       --host 0.0.0.0 --port 8100
-      --ctx-size ${TRANSLATE_CTX:-2048}
-      --parallel ${TRANSLATE_SLOTS:-2}
-      --threads ${TRANSLATE_THREADS:-2}
+      -ngl ${TRANSLATE_NGL:-99}
+      --ctx-size ${TRANSLATE_CTX:-4096}
+      --parallel ${TRANSLATE_SLOTS:-4}
+      --threads ${TRANSLATE_THREADS:-4}
       --no-webui
     volumes:
-      - quant_port_llama_models:/root/.cache/llama.cpp
+      # **`/root/.cache/llama.cpp`가 아니라 `/root/.cache`다 (2026-09-15).**
+      # 요즘 llama.cpp의 `-hf`는 모델을 HF 캐시 규약(`/root/.cache/huggingface/hub`)에
+      # 받는다. 예전 경로에 볼륨을 걸면 **마운트 밖으로 받아지고**, 컨테이너를 다시
+      # 만들 때마다 4.3GB를 또 내려받는다(실측: 볼륨은 비어 있는데 컨테이너 안에는
+      # 받다 만 파일이 있었다). 캐시 뿌리를 통째로 걸면 경로가 또 바뀌어도 안 깨진다.
+      - quant_port_llama_models:/root/.cache
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8100/health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
-      # 첫 기동은 모델을 내려받는다(0.6B Q5_K_M ≈ 470MB). 넉넉히 준다.
-      start_period: 300s
+      # 첫 기동은 모델을 내려받는다(4B Q8_0 ≈ 4.3GB). 넉넉히 준다.
+      start_period: 900s
     deploy:
       resources:
         limits:
-          # **0.6B가 아니라 1.7B다.** 설계서는 0.6B로 시작한다고 적었는데 실측에서
-          # 회사 이름을 지어냈다 — "Nvidia stock slips…"가 「에버넷의 주가가 하락」이
-          # 되고 "Fed holds rates steady"가 「금리 인상」으로 뜻이 뒤집혔다.
-          # 1.7B는 같은 문장을 옳게 옮겼고 속도는 오히려 비슷했다(실측 856~1,158ms
-          # 대 988~1,615ms). 배치라 초 단위 차이는 값이 아니고, 틀린 번역이 값이다.
-          # Q4_K_M 가중치 1.1GB + KV → RSS 약 1.6GB.
-          cpus: "${TRANSLATE_CPUS:-1.5}"
-          memory: ${TRANSLATE_MEMORY:-2G}
+          # **1.7B가 아니라 4B이고, Q4_K_M이 아니라 Q8_0이다 (2026-09-15).**
+          # 1.7B로 올린 이유(0.6B가 회사 이름을 지어냈다)와 같은 축에서 한 칸 더
+          # 간다 — 남은 실패도 낱말·고유명사였다. GPU에 전층을 얹으면 4B와 1.7B의
+          # 지연 차이가 배치 기준으로 값이 아니고, VRAM 12GB에 Q8_0(약 4.3GB)이
+          # 남아도는데 양자화 손실을 감수할 이유가 없다.
+          #
+          # 여기 cpus·memory는 이제 **추론이 아니라 여유**다. 예전 2G는 실측 RSS
+          # 1.6GB에 여유가 0.4GB뿐이라 OOM 킬 → 재기동 → 모델 재적재(그동안 번역
+          # 0건)의 가장 유력한 자리였다. 가중치는 GPU에 있고 호스트 쪽은 mmap
+          # 페이지 캐시라 회수 가능하지만, 그 경계에 다시 붙지 않도록 넉넉히 둔다.
+          #
+          # **6G도 모자랐다 (실측 2026-09-16).** GPU에 전층을 올렸는데도 호스트
+          # 쪽 `anon`이 6.2GB였다 — WSL2의 CUDA는 VRAM 할당을 호스트 익명
+          # 메모리로 잡아 두고, 그건 페이지 캐시와 달리 **회수되지 않는다**.
+          # 상한 6G에서 `memory.events`의 max가 100,937회였고(=계속 회수 압력)
+          # VM이 스왑 3GB를 쓰며 드레인 속도가 6.8건/초 → 1.5건/초로 떨어졌다.
+          # oom_kill은 아직 0이었지만 그건 운이다.
+          #
+          # VM이 15.9GB이고 나머지 컨테이너 열둘을 합쳐 300MB 남짓이라 10G는
+          # 넉넉히 들어간다. 더 줄이고 싶으면 상한이 아니라 **양자화**를 낮춰라
+          # (Q6_K 3.4GB · Q5_K_M 2.9GB) — 상한을 조이는 쪽은 죽는 쪽이다.
+          cpus: "${TRANSLATE_CPUS:-3.0}"
+          memory: ${TRANSLATE_MEMORY:-10G}
         reservations:
           memory: 128M
+          # GPU 예약. compose가 이 블록을 nvidia 런타임으로 옮겨 준다 —
+          # `docker run --gpus all`과 같은 뜻이고, swarm이 아니어도 동작한다.
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # ---- 뉴스 감성 분류기 ---------------------------------------------------
+  #
+  # 종목이 붙은 기사 제목에 감성(−1..1)을 매긴다. 한국어 snunlp/KR-FinBert-SC ·
+  # 영어 ProsusAI/finbert(2026-09-23 사용자 결정) — 이유와 안전장치는 be/sentiment/app.py.
+  # 이 라벨로 점수 배치가 **전 종목** 심리 축을 계산한다(예전에는 AI 요약이 다녀간
+  # 종목에만 붙어 하루 9종목이었다).
+  #
+  # **CPU 전용이다.** 운영 이전 대상(OCI)에 GPU가 없다. 번역기와 달리 프로파일에
+  # 숨기지 않는다 — 기본 기동에 들어간다. 없으면 라벨 배치가 건너뛰고 심리 축은
+  # 「없음」으로 남을 뿐이다(틀린 값이 아니다).
+  sentiment:
+    build:
+      context: ./be/sentiment
+      dockerfile: Dockerfile
+    container_name: quant-port-sentiment
+    restart: unless-stopped
+    logging: *logging
+    # 배치가 부르는 자리라 늦어도 된다 — API·워커보다 낮게.
+    cpu_shares: 512
+    ports:
+      - "127.0.0.1:8200:8200"
+    volumes:
+      # 모델 두 개(약 850MB)를 첫 기동 때 받아 둔다. 다시 만들어도 다시 받지 않는다.
+      - quant_port_sentiment_models:/root/.cache
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8200/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # 첫 기동은 모델을 내려받는다.
+      start_period: 600s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          # BERT-base 두 개 ≈ 900MB + torch 런타임. 여유를 둔다.
+          memory: 2G
+        reservations:
+          memory: 256M
 
   # ---- 배치 워커 --------------------------------------------------------
-  # 잡별로 별도 컨테이너로 분리: 한 배치가 멈추거나 자원을 과점해도 API나
-  # 다른 배치에 영향을 주지 않는다. 이미지는 api와 동일(멀티스테이지 빌드에서
-  # 워커 바이너리도 함께 만들어짐), command로 실행할 바이너리만 바꾼다.
-  # 자세한 배경은 docs/AGENT_STATE.md "배치 잡을 독립 워커 프로세스로 분리" 참조.
+  # 2026-10-01 사용자 결정: 잡은 **성격별 컨테이너**로 묶는다(예전 9개 → 4개). 이미지는 api와 같고,
+  # `./worker`가 WORKER_ROLES의 역할들을 한 프로세스에서 돌린다(be/cmd/worker). 역할 하나가 예전
+  # 단독 워커 하나와 같은 일을 같은 방식으로 한다 — 부트스트랩과 종료 신호만 한 번으로 모았다.
+  # LLM 배치 9개(종목 요약·뉴스 브리핑·실적 관전·스크리너 사전·Reddit 요약·리포트 검토)는 의존
+  # 그래프가 api와 같아 api 바이너리를 SERVER_ROLE=batch로 띄운다(worker-content).
+  # api 컨테이너는 HTTP와 실시간 루프만(SERVER_ROLE=api).
 
-  worker-close-domestic:
-    build:
-      context: ./be
-      dockerfile: Dockerfile
-    container_name: quant-port-worker-close-domestic
+  # 시세·종가·지수 — KRX/US 종가 투영, 일봉 채우기, 지수 백필
+  worker-market:
+    # api가 빌드한 이미지 그대로(2026-10-02) — 서비스마다 build를 두면 이미지 태그가 따로라
+    # API만 다시 빌드했을 때 워커가 옛 코드로 남았다(restart.ps1 -ApiOnly 뒤 --no-build 재생성).
+    image: quant-port-api:latest
+    pull_policy: never
+    container_name: quant-port-worker-market
     <<: *worker-runtime
-    command: ["./worker-close-domestic"]
+    command: ["./worker"]
     restart: unless-stopped
     env_file:
       - ./be/.env
     environment:
+      WORKER_ROLES: "close-domestic,close-overseas,fetch,index"
       REDIS_URL: ${REDIS_URL_CONTAINER:-redis://redis:6379/0}
       MYSQL_DSN: ${MYSQL_DSN:-quantport:quantport@tcp(host.docker.internal:3306)/quantport?parseTime=true&charset=utf8mb4&loc=Asia%2FSeoul}
-      # 워커는 잡을 하나씩 순차로 돌린다(배치 코드에 동시성 풀이 없다). 그런데
-      # repository.NewMySQL의 기본값은 API 기준인 50이라, 이 컨테이너 8개가
-      # 그대로 뜨면 워커만으로 최대 400 커넥션을 연다 — MySQL 기본
-      # max_connections는 151이다. 배정 총합은 api 24 + 워커 8x4 = 56 (37%)로,
-      # 예전 114(76%)에서 낮췄다 — 실측 풀 사용이 상한의 10%였고 대기는 0건이었다.
-      # 재배포처럼 9개 프로세스가 동시에 기동하는
-      # 순간 커넥션이 고갈돼 전부 기동에 실패한다.
-      #
-      # 8이면 트랜잭션 하나(커넥션 1개 점유)에 여유를 더한 값이고,
-      # 8×8=64 + API 50 = 114로 기본 한도 안에 들어온다.
-      MYSQL_MAX_OPEN_CONNS: "4"
-      MYSQL_MAX_IDLE_CONNS: "2"
+      # 역할 넷이 한 풀을 나눠 쓴다(예전 4×4=16 → 6). 잡은 대부분 순차라 동시 사용은 2~3.
+      MYSQL_MAX_OPEN_CONNS: "6"
+      MYSQL_MAX_IDLE_CONNS: "3"
+      GOMEMLIMIT: "400MiB"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       redis:
         condition: service_healthy
-      # 마이그레이터는 api 하나뿐이다. 워커는 api가 healthy가 된 뒤에야 뜬다 —
-      # /health가 응답한다는 것은 server.New()가 EnsureSchema를 끝냈다는 뜻이다.
-      # (워커 쪽 코드도 repository.VerifySchema로 스키마를 기다리므로, 기동
-      # 순서를 보장하기 어려운 환경에서도 안전하다.)
+      # 마이그레이터는 api 하나뿐이다 — /health 는 EnsureSchema가 끝났다는 뜻.
       api:
         condition: service_healthy
     healthcheck:
       disable: true
-    deploy: *worker-deploy
+    deploy: *worker-deploy-wide
 
-  worker-close-overseas:
-    build:
-      context: ./be
-      dockerfile: Dockerfile
-    container_name: quant-port-worker-close-overseas
+  # 주식 데이터·점수·감시 — 점수/변화/감성/지수해설, 공시·재무·내부자·경고·수급·섹터·외부 신호,
+  # 실적 일정, 리서치 판정, 검색 유입 감시(growth)
+  worker-stock:
+    # api가 빌드한 이미지 그대로(2026-10-02) — 서비스마다 build를 두면 이미지 태그가 따로라
+    # API만 다시 빌드했을 때 워커가 옛 코드로 남았다(restart.ps1 -ApiOnly 뒤 --no-build 재생성).
+    image: quant-port-api:latest
+    pull_policy: never
+    container_name: quant-port-worker-stock
     <<: *worker-runtime
-    command: ["./worker-close-overseas"]
+    command: ["./worker"]
     restart: unless-stopped
     env_file:
       - ./be/.env
     environment:
+      WORKER_ROLES: "scores,filings,earnings,research,growth"
       REDIS_URL: ${REDIS_URL_CONTAINER:-redis://redis:6379/0}
       MYSQL_DSN: ${MYSQL_DSN:-quantport:quantport@tcp(host.docker.internal:3306)/quantport?parseTime=true&charset=utf8mb4&loc=Asia%2FSeoul}
-      # 워커는 잡을 하나씩 순차로 돌린다(배치 코드에 동시성 풀이 없다). 그런데
-      # repository.NewMySQL의 기본값은 API 기준인 50이라, 이 컨테이너 8개가
-      # 그대로 뜨면 워커만으로 최대 400 커넥션을 연다 — MySQL 기본
-      # max_connections는 151이다. 배정 총합은 api 24 + 워커 8x4 = 56 (37%)로,
-      # 예전 114(76%)에서 낮췄다 — 실측 풀 사용이 상한의 10%였고 대기는 0건이었다.
-      # 재배포처럼 9개 프로세스가 동시에 기동하는
-      # 순간 커넥션이 고갈돼 전부 기동에 실패한다.
-      #
-      # 8이면 트랜잭션 하나(커넥션 1개 점유)에 여유를 더한 값이고,
-      # 8×8=64 + API 50 = 114로 기본 한도 안에 들어온다.
-      MYSQL_MAX_OPEN_CONNS: "4"
-      MYSQL_MAX_IDLE_CONNS: "2"
+      MYSQL_MAX_OPEN_CONNS: "8"
+      MYSQL_MAX_IDLE_CONNS: "4"
+      GOMEMLIMIT: "400MiB"
+      # 뉴스 감성(로컬 모델) — scores 역할.
+      SENTIMENT_URL: ${SENTIMENT_URL:-http://sentiment:8200}
+      # Reddit 인기 글 제목·앞부분 번역(social_posts, filings 역할) — api와 같은 엔진.
+      TRANSLATE_PROVIDER: "${TRANSLATE_PROVIDER:-azure}"
+      TRANSLATE_LOCAL_URL: "${TRANSLATE_LOCAL_URL:-http://translator:8100}"
+      # growth 역할 — 서비스 계정 JSON은 be/secrets/에 둔다(깃·이미지 밖). 없으면 Google 소스는 「미설정」.
+      GROWTH_GOOGLE_CREDENTIALS_FILE: /run/growth-secrets/google-service-account.json
+      GROWTH_REPORT_DIR: /var/lib/quant-port/growth
+      GROWTH_CRAWL_ORIGIN: http://nginx
+    volumes:
+      - ./be/secrets:/run/growth-secrets:ro
+      - ./be/var/growth-reports:/var/lib/quant-port/growth
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       redis:
         condition: service_healthy
-      # 마이그레이터는 api 하나뿐이다. 워커는 api가 healthy가 된 뒤에야 뜬다 —
-      # /health가 응답한다는 것은 server.New()가 EnsureSchema를 끝냈다는 뜻이다.
-      # (워커 쪽 코드도 repository.VerifySchema로 스키마를 기다리므로, 기동
-      # 순서를 보장하기 어려운 환경에서도 안전하다.)
+      # 분류기는 없어도 뜬다(required:false) — 감성 잡만 「분류기 없음」으로 건너뛴다.
+      sentiment:
+        condition: service_started
+        required: false
       api:
         condition: service_healthy
     healthcheck:
       disable: true
-    deploy: *worker-deploy
+    deploy: *worker-deploy-wide
 
-  worker-scores:
-    build:
-      context: ./be
-      dockerfile: Dockerfile
-    container_name: quant-port-worker-scores
+  # 자산 — 부동산 실거래·지수·공매, 금리, 금융상품 + 그 점수·AI 해설(자산 전용 LLM 키)
+  worker-asset:
+    # api가 빌드한 이미지 그대로(2026-10-02) — 서비스마다 build를 두면 이미지 태그가 따로라
+    # API만 다시 빌드했을 때 워커가 옛 코드로 남았다(restart.ps1 -ApiOnly 뒤 --no-build 재생성).
+    image: quant-port-api:latest
+    pull_policy: never
+    container_name: quant-port-worker-asset
     <<: *worker-runtime
-    command: ["./worker-scores"]
+    command: ["./worker"]
     restart: unless-stopped
     env_file:
       - ./be/.env
     environment:
+      WORKER_ROLES: "asset"
       REDIS_URL: ${REDIS_URL_CONTAINER:-redis://redis:6379/0}
       MYSQL_DSN: ${MYSQL_DSN:-quantport:quantport@tcp(host.docker.internal:3306)/quantport?parseTime=true&charset=utf8mb4&loc=Asia%2FSeoul}
-      # 워커는 잡을 하나씩 순차로 돌린다(배치 코드에 동시성 풀이 없다). 그런데
-      # repository.NewMySQL의 기본값은 API 기준인 50이라, 이 컨테이너 8개가
-      # 그대로 뜨면 워커만으로 최대 400 커넥션을 연다 — MySQL 기본
-      # max_connections는 151이다. 배정 총합은 api 24 + 워커 8x4 = 56 (37%)로,
-      # 예전 114(76%)에서 낮췄다 — 실측 풀 사용이 상한의 10%였고 대기는 0건이었다.
-      # 재배포처럼 9개 프로세스가 동시에 기동하는
-      # 순간 커넥션이 고갈돼 전부 기동에 실패한다.
-      #
-      # 8이면 트랜잭션 하나(커넥션 1개 점유)에 여유를 더한 값이고,
-      # 8×8=64 + API 50 = 114로 기본 한도 안에 들어온다.
       MYSQL_MAX_OPEN_CONNS: "4"
       MYSQL_MAX_IDLE_CONNS: "2"
+      GOMEMLIMIT: "400MiB"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       redis:
         condition: service_healthy
-      # 마이그레이터는 api 하나뿐이다. 워커는 api가 healthy가 된 뒤에야 뜬다 —
-      # /health가 응답한다는 것은 server.New()가 EnsureSchema를 끝냈다는 뜻이다.
-      # (워커 쪽 코드도 repository.VerifySchema로 스키마를 기다리므로, 기동
-      # 순서를 보장하기 어려운 환경에서도 안전하다.)
       api:
         condition: service_healthy
     healthcheck:
       disable: true
-    deploy: *worker-deploy
+    deploy: *worker-deploy-wide
 
-  worker-index:
-    build:
-      context: ./be
-      dockerfile: Dockerfile
-    container_name: quant-port-worker-index
+  # AI 콘텐츠 — api 바이너리의 batch 역할(LLM 배치 9개). 실시간 루프·마이그레이션은 안 한다.
+  worker-content:
+    # api가 빌드한 이미지 그대로(2026-10-02) — 서비스마다 build를 두면 이미지 태그가 따로라
+    # API만 다시 빌드했을 때 워커가 옛 코드로 남았다(restart.ps1 -ApiOnly 뒤 --no-build 재생성).
+    image: quant-port-api:latest
+    pull_policy: never
+    container_name: quant-port-worker-content
     <<: *worker-runtime
-    command: ["./worker-index"]
+    command: ["./api"]
     restart: unless-stopped
     env_file:
       - ./be/.env
     environment:
+      SERVER_ROLE: "batch"
       REDIS_URL: ${REDIS_URL_CONTAINER:-redis://redis:6379/0}
       MYSQL_DSN: ${MYSQL_DSN:-quantport:quantport@tcp(host.docker.internal:3306)/quantport?parseTime=true&charset=utf8mb4&loc=Asia%2FSeoul}
-      # 워커는 잡을 하나씩 순차로 돌린다(배치 코드에 동시성 풀이 없다). 그런데
-      # repository.NewMySQL의 기본값은 API 기준인 50이라, 이 컨테이너 8개가
-      # 그대로 뜨면 워커만으로 최대 400 커넥션을 연다 — MySQL 기본
-      # max_connections는 151이다. 배정 총합은 api 24 + 워커 8x4 = 56 (37%)로,
-      # 예전 114(76%)에서 낮췄다 — 실측 풀 사용이 상한의 10%였고 대기는 0건이었다.
-      # 재배포처럼 9개 프로세스가 동시에 기동하는
-      # 순간 커넥션이 고갈돼 전부 기동에 실패한다.
-      #
-      # 8이면 트랜잭션 하나(커넥션 1개 점유)에 여유를 더한 값이고,
-      # 8×8=64 + API 50 = 114로 기본 한도 안에 들어온다.
-      MYSQL_MAX_OPEN_CONNS: "4"
-      MYSQL_MAX_IDLE_CONNS: "2"
+      MYSQL_MAX_OPEN_CONNS: "8"
+      MYSQL_MAX_IDLE_CONNS: "4"
+      GOMEMLIMIT: "600MiB"
+      LOGO_MANIFEST_PATH: /app/logos/manifest.json
+      TRANSLATE_PROVIDER: "${TRANSLATE_PROVIDER:-azure}"
+      TRANSLATE_LOCAL_URL: "${TRANSLATE_LOCAL_URL:-http://translator:8100}"
+    volumes:
+      - ./fe/public/logos/manifest.json:/app/logos/manifest.json:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       redis:
         condition: service_healthy
-      # 마이그레이터는 api 하나뿐이다. 워커는 api가 healthy가 된 뒤에야 뜬다 —
-      # /health가 응답한다는 것은 server.New()가 EnsureSchema를 끝냈다는 뜻이다.
-      # (워커 쪽 코드도 repository.VerifySchema로 스키마를 기다리므로, 기동
-      # 순서를 보장하기 어려운 환경에서도 안전하다.)
       api:
         condition: service_healthy
-    healthcheck:
-      disable: true
-    deploy: *worker-deploy
-
-  worker-fetch:
-    build:
-      context: ./be
-      dockerfile: Dockerfile
-    container_name: quant-port-worker-fetch
-    <<: *worker-runtime
-    command: ["./worker-fetch"]
-    restart: unless-stopped
-    env_file:
-      - ./be/.env
-    environment:
-      REDIS_URL: ${REDIS_URL_CONTAINER:-redis://redis:6379/0}
-      MYSQL_DSN: ${MYSQL_DSN:-quantport:quantport@tcp(host.docker.internal:3306)/quantport?parseTime=true&charset=utf8mb4&loc=Asia%2FSeoul}
-      # 워커는 잡을 하나씩 순차로 돌린다(배치 코드에 동시성 풀이 없다). 그런데
-      # repository.NewMySQL의 기본값은 API 기준인 50이라, 이 컨테이너 8개가
-      # 그대로 뜨면 워커만으로 최대 400 커넥션을 연다 — MySQL 기본
-      # max_connections는 151이다. 배정 총합은 api 24 + 워커 8x4 = 56 (37%)로,
-      # 예전 114(76%)에서 낮췄다 — 실측 풀 사용이 상한의 10%였고 대기는 0건이었다.
-      # 재배포처럼 9개 프로세스가 동시에 기동하는
-      # 순간 커넥션이 고갈돼 전부 기동에 실패한다.
-      #
-      # 8이면 트랜잭션 하나(커넥션 1개 점유)에 여유를 더한 값이고,
-      # 8×8=64 + API 50 = 114로 기본 한도 안에 들어온다.
-      MYSQL_MAX_OPEN_CONNS: "4"
-      MYSQL_MAX_IDLE_CONNS: "2"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      redis:
-        condition: service_healthy
-      # 마이그레이터는 api 하나뿐이다. 워커는 api가 healthy가 된 뒤에야 뜬다 —
-      # /health가 응답한다는 것은 server.New()가 EnsureSchema를 끝냈다는 뜻이다.
-      # (워커 쪽 코드도 repository.VerifySchema로 스키마를 기다리므로, 기동
-      # 순서를 보장하기 어려운 환경에서도 안전하다.)
-      api:
-        condition: service_healthy
-    healthcheck:
-      disable: true
-    deploy: *worker-deploy
-
-  # 리서치 콜 판정 — 저장된 종가만 읽는 DB 전용 잡이라 외부 한도를 쓰지 않는다.
-  # 다만 순서가 중요해서 종가 워커들보다 뒤(07:00 KST)에 돈다.
-  worker-research:
-    build:
-      context: ./be
-      dockerfile: Dockerfile
-    container_name: quant-port-worker-research
-    <<: *worker-runtime
-    command: ["./worker-research"]
-    restart: unless-stopped
-    env_file:
-      - ./be/.env
-    environment:
-      REDIS_URL: ${REDIS_URL_CONTAINER:-redis://redis:6379/0}
-      MYSQL_DSN: ${MYSQL_DSN:-quantport:quantport@tcp(host.docker.internal:3306)/quantport?parseTime=true&charset=utf8mb4&loc=Asia%2FSeoul}
-      # 워커는 잡을 하나씩 순차로 돌린다(배치 코드에 동시성 풀이 없다). 그런데
-      # repository.NewMySQL의 기본값은 API 기준인 50이라, 이 컨테이너 8개가
-      # 그대로 뜨면 워커만으로 최대 400 커넥션을 연다 — MySQL 기본
-      # max_connections는 151이다. 배정 총합은 api 24 + 워커 8x4 = 56 (37%)로,
-      # 예전 114(76%)에서 낮췄다 — 실측 풀 사용이 상한의 10%였고 대기는 0건이었다.
-      # 재배포처럼 9개 프로세스가 동시에 기동하는
-      # 순간 커넥션이 고갈돼 전부 기동에 실패한다.
-      #
-      # 8이면 트랜잭션 하나(커넥션 1개 점유)에 여유를 더한 값이고,
-      # 8×8=64 + API 50 = 114로 기본 한도 안에 들어온다.
-      MYSQL_MAX_OPEN_CONNS: "4"
-      MYSQL_MAX_IDLE_CONNS: "2"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      redis:
-        condition: service_healthy
-      # 마이그레이터는 api 하나뿐이다. 워커는 api가 healthy가 된 뒤에야 뜬다 —
-      # /health가 응답한다는 것은 server.New()가 EnsureSchema를 끝냈다는 뜻이다.
-      # (워커 쪽 코드도 repository.VerifySchema로 스키마를 기다리므로, 기동
-      # 순서를 보장하기 어려운 환경에서도 안전하다.)
-      api:
-        condition: service_healthy
-    healthcheck:
-      disable: true
-    deploy: *worker-deploy
-
-  # 실적 발표 적재 (FnGuide 국내 시즌 10–20시/2h · 비시즌 18:30 · Finnhub 해외 06:00 KST).
-  # 남의 사이트를 두 곳 부르는 유일한 워커라, 느려지거나 429를 받는 동안
-  # api 컨테이너가 함께 멈추지 않도록 분리해 둔다.
-  worker-earnings:
-    build:
-      context: ./be
-      dockerfile: Dockerfile
-    container_name: quant-port-worker-earnings
-    <<: *worker-runtime
-    command: ["./worker-earnings"]
-    restart: unless-stopped
-    env_file:
-      - ./be/.env
-    environment:
-      REDIS_URL: ${REDIS_URL_CONTAINER:-redis://redis:6379/0}
-      MYSQL_DSN: ${MYSQL_DSN:-quantport:quantport@tcp(host.docker.internal:3306)/quantport?parseTime=true&charset=utf8mb4&loc=Asia%2FSeoul}
-      # 워커는 잡을 하나씩 순차로 돌린다(배치 코드에 동시성 풀이 없다). 그런데
-      # repository.NewMySQL의 기본값은 API 기준인 50이라, 이 컨테이너 8개가
-      # 그대로 뜨면 워커만으로 최대 400 커넥션을 연다 — MySQL 기본
-      # max_connections는 151이다. 배정 총합은 api 24 + 워커 8x4 = 56 (37%)로,
-      # 예전 114(76%)에서 낮췄다 — 실측 풀 사용이 상한의 10%였고 대기는 0건이었다.
-      # 재배포처럼 9개 프로세스가 동시에 기동하는
-      # 순간 커넥션이 고갈돼 전부 기동에 실패한다.
-      #
-      # 8이면 트랜잭션 하나(커넥션 1개 점유)에 여유를 더한 값이고,
-      # 8×8=64 + API 50 = 114로 기본 한도 안에 들어온다.
-      MYSQL_MAX_OPEN_CONNS: "4"
-      MYSQL_MAX_IDLE_CONNS: "2"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      redis:
-        condition: service_healthy
-      # 마이그레이터는 api 하나뿐이다. 워커는 api가 healthy가 된 뒤에야 뜬다 —
-      # /health가 응답한다는 것은 server.New()가 EnsureSchema를 끝냈다는 뜻이다.
-      # (워커 쪽 코드도 repository.VerifySchema로 스키마를 기다리므로, 기동
-      # 순서를 보장하기 어려운 환경에서도 안전하다.)
-      api:
-        condition: service_healthy
-    healthcheck:
-      disable: true
-    deploy: *worker-deploy
-
-  # 공시 기반 적재 — 내부자 거래(DART 소유보고 · SEC Form 4).
-  # 해외 07:00 · 국내 20:00 KST. 시각을 실적 배치(06:00 · 18:30)와 벌려 둔 것은
-  # 같은 시각에 두 워커가 네트워크·DB를 두고 겹치지 않게 하기 위해서다.
-  worker-filings:
-    build:
-      context: ./be
-      dockerfile: Dockerfile
-    container_name: quant-port-worker-filings
-    <<: *worker-runtime
-    command: ["./worker-filings"]
-    restart: unless-stopped
-    env_file:
-      - ./be/.env
-    environment:
-      REDIS_URL: ${REDIS_URL_CONTAINER:-redis://redis:6379/0}
-      MYSQL_DSN: ${MYSQL_DSN:-quantport:quantport@tcp(host.docker.internal:3306)/quantport?parseTime=true&charset=utf8mb4&loc=Asia%2FSeoul}
-      # 워커는 잡을 하나씩 순차로 돌린다(배치 코드에 동시성 풀이 없다). 그런데
-      # repository.NewMySQL의 기본값은 API 기준인 50이라, 이 컨테이너 8개가
-      # 그대로 뜨면 워커만으로 최대 400 커넥션을 연다 — MySQL 기본
-      # max_connections는 151이다. 배정 총합은 api 24 + 워커 8x4 = 56 (37%)로,
-      # 예전 114(76%)에서 낮췄다 — 실측 풀 사용이 상한의 10%였고 대기는 0건이었다.
-      # 재배포처럼 9개 프로세스가 동시에 기동하는
-      # 순간 커넥션이 고갈돼 전부 기동에 실패한다.
-      #
-      # 8이면 트랜잭션 하나(커넥션 1개 점유)에 여유를 더한 값이고,
-      # 8×8=64 + API 50 = 114로 기본 한도 안에 들어온다.
-      MYSQL_MAX_OPEN_CONNS: "4"
-      MYSQL_MAX_IDLE_CONNS: "2"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      redis:
-        condition: service_healthy
-      # 마이그레이터는 api 하나뿐이다. 워커는 api가 healthy가 된 뒤에야 뜬다 —
-      # /health가 응답한다는 것은 server.New()가 EnsureSchema를 끝냈다는 뜻이다.
-      # (워커 쪽 코드도 repository.VerifySchema로 스키마를 기다리므로, 기동
-      # 순서를 보장하기 어려운 환경에서도 안전하다.)
-      api:
-        condition: service_healthy
-    healthcheck:
-      disable: true
-    deploy: *worker-deploy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 768M
+        reservations:
+          memory: 64M
 
   # ---- 배포 토폴로지 (프로파일 prod) ------------------------------------
   # 기본 `docker compose up -d`와 be/scripts/restart.ps1은 이 둘을 띄우지 않는다.
@@ -709,4 +616,6 @@ volumes:
   # 번역 모델 캐시. named volume이라 컨테이너를 지웠다 다시 만들어도 470MB를
   # 다시 받지 않는다.
   quant_port_llama_models:
+  # 뉴스 감성 모델 캐시(KR-FinBert-SC · FinBERT, 약 850MB).
+  quant_port_sentiment_models:
   quant_port_media:

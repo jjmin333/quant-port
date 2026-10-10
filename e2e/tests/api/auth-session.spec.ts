@@ -1,6 +1,6 @@
 import { Api } from "@/api-client";
 import { ACCESS_COOKIE, REFRESH_COOKIE, cookieNamed, getWithBearer, refreshWithToken } from "@/cookies";
-import { PASSWORD, uniqueDisplayName, uniqueEmail } from "@/data";
+import { PASSWORD, randomHangul, uniqueDisplayName, uniqueLoginId } from "@/data";
 import { expect, test } from "@/fixtures";
 import { newApiContext } from "@/test-user";
 import type { AuthSession } from "@/types";
@@ -17,10 +17,10 @@ test.describe("가입 · 로그인", () => {
   test("가입하면 201과 함께 두 쿠키가 심기고, 기본 권한은 일반 사용자다", async () => {
     const ctx = await newApiContext();
     const api = new Api(ctx, "signup");
-    const email = uniqueEmail("signup");
+    const email = uniqueLoginId("signup");
 
     const res = await api.send("POST", "/auth/signup", {
-      email,
+      loginId: email,
       password: PASSWORD,
       displayName: uniqueDisplayName("signup"),
     });
@@ -63,7 +63,7 @@ test.describe("가입 · 로그인", () => {
       password: `${PASSWORD}-wrong`,
     });
     const unknownAccount = await anon.send("POST", "/auth/login", {
-      email: uniqueEmail("nobody"),
+      email: uniqueLoginId("nobody"),
       password: PASSWORD,
     });
 
@@ -75,46 +75,66 @@ test.describe("가입 · 로그인", () => {
     ).toBe((await wrongPassword.json()).error);
   });
 
-  test("8자 미만 비밀번호는 계정을 만들지 않는다", async ({ anon }) => {
-    const email = uniqueEmail("weak");
-    const message = await anon.expectFailure("POST", "/auth/signup", 400, {
-      email,
-      password: "short",
-      displayName: "QA weak",
-    });
-    expect(message).toContain("8");
-
-    // 거부됐다면 그 이메일로 로그인도 안 돼야 한다 — 계정이 안 생겼다는 증거.
-    await anon.expectFailure("POST", "/auth/login", 401, { email, password: "short" });
+  test("8~15자 밖의 비밀번호는 계정을 만들지 않는다 (2026-09-27 규칙)", async ({ anon }) => {
+    for (const password of ["short", "a".repeat(16)]) {
+      const loginId = uniqueLoginId("weak");
+      const message = await anon.expectFailure("POST", "/auth/signup", 400, {
+        loginId,
+        password,
+        displayName: uniqueDisplayName(),
+      });
+      expect(message).toContain("8-15");
+      // 거부됐다면 그 아이디로 로그인도 안 돼야 한다 — 계정이 안 생겼다는 증거.
+      await anon.expectFailure("POST", "/auth/login", 401, { loginId, password });
+    }
   });
 
-  test("같은 이메일로 두 번 가입할 수 없다", async ({ anon, user }) => {
+  test("같은 아이디로 두 번 가입할 수 없다", async ({ anon, user }) => {
     await anon.expectFailure("POST", "/auth/signup", 409, {
-      email: user.email,
+      loginId: user.email,
       password: PASSWORD,
-      displayName: "QA dup",
+      displayName: uniqueDisplayName(),
     });
+  });
+
+  test("같은 닉네임으로 두 번 가입할 수 없다 — 닉네임은 겹치지 않는다", async ({ anon, user }) => {
+    const message = await anon.expectFailure("POST", "/auth/signup", 409, {
+      loginId: uniqueLoginId(),
+      password: PASSWORD,
+      displayName: user.displayName,
+    });
+    expect(message).toContain("display name");
+  });
+
+  test("아이디는 영문 소문자로 시작하는 소문자·숫자 4~20자다", async ({ anon }) => {
+    for (const bad of ["abc", "Abcdef", "1abcdef", "ab_cdef", "user@mail.com", "a".repeat(21)]) {
+      const res = await anon.send("POST", "/auth/signup", {
+        loginId: bad,
+        password: PASSWORD,
+        displayName: uniqueDisplayName(),
+      });
+      expect(res.status(), `아이디 ${bad} → ${res.status()} (기대 400)`).toBe(400);
+    }
+  });
+
+  test("옛 화면이 보내는 email 키도 아이디로 받는다 — 기존 회원은 이메일이 곧 아이디", async ({ anon, user }) => {
+    const res = await anon.send("POST", "/auth/login", { email: user.email, password: user.password });
+    expect(res.status()).toBe(200);
+    await anon.send("POST", "/auth/logout");
   });
 
   /*
-   * 표시명 길이는 **글자 수**로 잰다 — 인코딩과 무관해야 한다.
-   *
-   * 고쳐진 결함(2026-08-23): `validateDisplayName`이 하한은 rune, 상한은
-   * byte(`len(name) > 100`)로 재고 있었다. 한글은 3바이트라 실질 상한이 33자였고,
-   * 에러 메시지("2-100 characters")와 가입 폼의 `maxLength={100}`은 둘 다 100자를
-   * 약속하고 있었다 — 폼이 받아 준 닉네임을 서버가 이유 없이 거부했다.
-   *
-   * `users.display_name`은 VARCHAR(100)이고 MySQL도 글자 수로 세므로, rune 기준이
-   * 컬럼이 실제로 담는 것과도 일치한다.
+   * 닉네임 길이는 **글자 수**로 잰다 — 인코딩과 무관해야 한다 (2026-08-23 고친 결함의 회귀 시험).
+   * 한때 상한을 바이트로 재서 한글 닉네임의 실제 상한이 1/3이었다.
+   * 2026-09-27부터 범위는 2~10자이고 중복 불가라 이름은 매번 난수로 만든다.
    */
-  test("표시명 길이는 바이트가 아니라 글자 수로 잰다", async ({ anon }) => {
-    // 같은 "100자"가 인코딩과 무관하게 같은 결과여야 한다. 이게 회귀의 핵심.
+  test("닉네임 길이는 바이트가 아니라 글자 수로 잰다", async ({ anon }) => {
     for (const [label, name] of [
-      ["ASCII 100자", "a".repeat(100)],
-      ["한글 100자", "가".repeat(100)],
+      ["ASCII 10자", `q${uniqueDisplayName().slice(3)}`.padEnd(10, "x").slice(0, 10)],
+      ["한글 10자", randomHangul(10)],
     ] as const) {
       const res = await anon.send("POST", "/auth/signup", {
-        email: uniqueEmail("dn-ok"),
+        loginId: uniqueLoginId("dn-ok"),
         password: PASSWORD,
         displayName: name,
       });
@@ -124,42 +144,36 @@ test.describe("가입 · 로그인", () => {
       ).toBe(201);
       expect(
         ((await res.json()) as { data: AuthSession }).data.user.displayName,
-        `${label}가 잘려서 저장됐다 — 검증만 통과시키고 컬럼이 못 담으면 더 나쁘다`,
+        `${label}가 잘려서 저장됐다`,
       ).toBe(name);
     }
   });
 
-  test("긴 표시명이 DB 왕복 후에도 잘리지 않는다", async ({ anon }) => {
-    /*
-     * 위 테스트는 **가입 응답**만 본다. 응답은 서버가 방금 받은 값을 그대로
-     * 되돌려 줄 수도 있으므로, 컬럼이 실제로 담았는지는 다시 읽어야 안다.
-     * `users.display_name`은 VARCHAR(100)이고 MySQL은 글자 수로 세지만,
-     * 상한을 rune으로 푼 변경이 컬럼 폭을 넘기지 않는다는 것은 확인해야 한다.
-     */
-    const name = "가".repeat(100);
-    const email = uniqueEmail("dn-roundtrip");
-    await anon.post<AuthSession>("/auth/signup", { email, password: PASSWORD, displayName: name });
+  test("닉네임이 DB 왕복 후에도 잘리지 않는다", async ({ anon }) => {
+    const name = randomHangul(10);
+    const loginId = uniqueLoginId("dn-roundtrip");
+    await anon.post<AuthSession>("/auth/signup", { loginId, password: PASSWORD, displayName: name });
 
     const me = await anon.get<AuthSession>("/auth/me");
     expect(
       me.user.displayName,
-      `저장된 표시명이 ${[...me.user.displayName].length}자로 잘렸다 (기대 100자)`,
+      `저장된 닉네임이 ${[...me.user.displayName].length}자로 잘렸다 (기대 10자)`,
     ).toBe(name);
 
     await anon.send("POST", "/auth/logout");
   });
 
-  test("표시명 경계는 2자 이상 100자 이하다", async ({ anon }) => {
+  test("닉네임 경계는 2자 이상 10자 이하다", async ({ anon }) => {
     const cases: Array<[label: string, name: string, status: number]> = [
-      ["한글 1자", "가", 400],
-      ["한글 2자", "가나", 201],
-      ["한글 100자", "가".repeat(100), 201],
-      ["한글 101자", "가".repeat(101), 400],
-      ["ASCII 101자", "a".repeat(101), 400],
+      ["한글 1자", randomHangul(1), 400],
+      ["한글 2자", randomHangul(2), 201],
+      ["한글 10자", randomHangul(10), 201],
+      ["한글 11자", randomHangul(11), 400],
+      ["ASCII 11자", "a".repeat(11), 400],
     ];
     for (const [label, name, expected] of cases) {
       const res = await anon.send("POST", "/auth/signup", {
-        email: uniqueEmail("dn-edge"),
+        loginId: uniqueLoginId("dn-edge"),
         password: PASSWORD,
         displayName: name,
       });

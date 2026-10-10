@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>커뮤니티 · 관심 종목 · AI 활용 — 제안 v1</title>
+<style>
+:root{
+  --radius:.625rem;
+  --background:oklch(.97 0 0); --foreground:oklch(.145 0 0);
+  --card:oklch(1 0 0); --muted:oklch(.97 0 0);
+  --muted-foreground:oklch(.52 0 0); --accent:oklch(.93 0 0);
+  --border:oklch(.87 0 0);
+  --brand:#2563EB; --brand-muted:rgba(37,99,235,.1);
+  --profit:#DC2626; --loss:#2563EB;
+  --score-high:#15803D; --score-mid:#C2410C; --score-low:#B91C1C;
+  --amber:#B45309; --amber-bg:rgba(245,158,11,.15);
+  --text-muted:oklch(.545 0 0);
+}
+[data-theme="dark"]{
+  --background:oklch(.145 0 0); --foreground:oklch(.985 0 0);
+  --card:oklch(.205 0 0); --muted:oklch(.269 0 0);
+  --muted-foreground:oklch(.708 0 0); --accent:oklch(.269 0 0);
+  --border:oklch(1 0 0/16%);
+  --brand:#60A5FA; --brand-muted:rgba(96,165,250,.15);
+  --profit:#F87171; --loss:#60A5FA;
+  --score-high:#4ADE80; --score-mid:#FB923C; --score-low:#F87171;
+  --amber:#FBBF24; --amber-bg:rgba(251,191,36,.15);
+  --text-muted:oklch(.6 0 0);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--background);color:var(--foreground);
+  font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  font-size:12px;line-height:1.5;padding:22px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:20px;font-weight:700}
+h2{font-size:16px;font-weight:700;margin:34px 0 10px;padding-top:14px;border-top:2px solid var(--border)}
+h3{font-size:13px;font-weight:600;margin-bottom:6px}
+.sub{color:var(--muted-foreground)}
+.up{color:var(--profit)} .down{color:var(--loss)} .n{font-variant-numeric:tabular-nums}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:14px;margin-bottom:16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--background);z-index:20}
+button.tgl{font:inherit;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--foreground);border-radius:8px;padding:5px 12px}
+.lead{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+.lead li{margin-left:18px;margin-bottom:3px}
+.tag{font-size:11px;font-weight:700;background:var(--brand-muted);color:var(--brand);border-radius:6px;padding:2px 7px;white-space:nowrap}
+.tag.rec{background:rgba(21,128,61,.12);color:var(--score-high)}
+.tag.warn{background:rgba(194,65,12,.12);color:var(--score-mid)}
+.tag.q{background:var(--amber-bg);color:var(--amber)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.pad{padding:12px 14px}
+.cols{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 440px;min-width:320px}
+.lbl{font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;display:block}
+.note{color:var(--muted-foreground);font-size:11px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;border:1px solid var(--border);border-radius:999px;padding:1px 7px;color:var(--muted-foreground);background:var(--card);white-space:nowrap}
+.chip.b{border-color:transparent;background:var(--brand-muted);color:var(--brand);font-weight:600}
+.chip.a{border-color:transparent;background:var(--amber-bg);color:var(--amber);font-weight:600}
+.chip.g{border-color:transparent;background:rgba(21,128,61,.12);color:var(--score-high);font-weight:600}
+.av{width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0}
+.row{display:flex;align-items:center;gap:8px;min-width:0}
+.trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.grow{flex:1 1 auto}
+.muted{color:var(--muted-foreground)}
+.sep{border-top:1px solid var(--border)}
+table.t{width:100%;border-collapse:collapse;font-size:11.5px}
+table.t th,table.t td{border:1px solid var(--border);padding:6px 8px;text-align:left;vertical-align:top}
+table.t th{background:var(--muted);font-weight:600}
+.phone{width:375px;max-width:100%;border:1px solid var(--border);border-radius:18px;background:var(--background);padding:10px;overflow:hidden}
+/* 커뮤니티 목록 */
+.post{padding:12px 14px;display:flex;gap:12px}
+.post + .post{border-top:1px solid var(--border)}
+.post h4{font-size:14px;font-weight:700;margin:2px 0}
+.embed{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--card)}
+.embed + .embed{margin-top:8px}
+.spark{height:34px;width:100%}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:11px}
+.kv dt{color:var(--muted-foreground)}
+.opt{display:flex;gap:8px;align-items:baseline;margin:14px 0 6px;flex-wrap:wrap}
+.qbox{border:1px dashed var(--amber);background:var(--amber-bg);border-radius:10px;padding:10px 12px;margin-top:10px}
+.qbox b{color:var(--amber)}
+.btnrow{display:flex;flex-wrap:wrap;gap:6px}
+.qchip{font-size:11.5px;border:1px solid var(--border);border-radius:999px;padding:4px 10px;background:var(--card)}
+.qchip.new{border-color:var(--brand);color:var(--brand);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="topbar">
+  <div>
+    <h1>커뮤니티 · 관심 종목 · AI 활용 — 제안 v1</h1>
+    <div class="sub">2026-09-27 · 요청 2·4·5 · 결정이 필요한 곳은 <span class="tag q">결정</span> 표시 · 전부 목업(실데이터 아님)</div>
+  </div>
+  <button class="tgl" onclick="const h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark'">라이트/다크</button>
+</div>
+
+<div class="lead">
+  <b>이미 처리한 것(배포됨)</b>
+  <ul style="margin-top:6px">
+    <li><b>요청 1</b> — 목표가 예측·메모장 무한 재적재: 예측/메모가 0건인 계정에서 「예시 자동 켜기」가 켜짐 → 예시 목록을 세서 0건 아님 → 꺼짐 → 다시 0건 → 켜짐을 무한 반복(요청 폭주 → 429 → 다른 화면까지 「요청이 너무 잦습니다」·버튼 무반응). 표는 이제 <b>내 데이터를 실제로 본 순간에만</b> 바뀜. 같은 훅을 쓰는 보유·관심·스탬프도 같이 고침.</li>
+    <li><b>요청 1</b> — 배치 관리: 응답 13KB인데 <b>20초</b>(큰 표 전수 집계 ~10회), 게다가 4초 폴링이 앞 요청을 안 기다려 겹쳐 쌓였음. 커버리지는 3분 캐시 + 뒤에서 한 번만 재집계, 목록은 즉시. 일봉 커버리지 질의를 PK 끝 한 칸 조회로 교체, 폴링은 한 번에 하나·보이는 동안만.</li>
+    <li><b>요청 2(앞부분)</b> — 홈 「내 종목」 뉴스 줄: 행을 grid(minmax(0,1fr)) + overflow 가둠으로 바꿔 Safari에서도 말줄임.</li>
+  </ul>
+</div>
+
+<!-- ───────────────────────── 요청 2 ───────────────────────── -->
+<h2>① 관심 종목 화면 — 홈 카드처럼 「오늘 무슨 일이 있었나」를 한 줄씩</h2>
+<p class="sub" style="margin-bottom:10px">새 API 없음: 홈 카드가 쓰는 <code>/user/today</code>(점수 두 날 차이 · 24h 기사 수 · 오늘 변화 한 줄) + 기존 AI 요약 저장분(관심 종목은 3층 배치 대상이라 주 1회 이상 갱신) + 실적 일정 재사용.</p>
+<div class="cols">
+  <div class="col">
+    <span class="lbl">현재</span>
+    <div class="card">
+      <table class="t" style="border:0">
+        <tr><th>종목</th><th>점수</th><th>52주 위치</th><th>전일</th><th>담은 뒤</th><th>현재가</th></tr>
+        <tr><td>삼성전자</td><td>69</td><td>▮▮▮▮▯ 82%</td><td class="up">+3.24%</td><td class="up">+18%</td><td class="n">286,500</td></tr>
+        <tr><td>엔비디아</td><td>68</td><td>▮▮▮▯▯ 71%</td><td class="up">+0.16%</td><td class="up">+4%</td><td class="n">$224.95</td></tr>
+        <tr><td>카카오</td><td>52</td><td>▮▯▯▯▯ 18%</td><td class="down">−1.10%</td><td class="down">−6%</td><td class="n">38,150</td></tr>
+      </table>
+      <div class="pad note">숫자만 있고 「왜」가 없다 — 오늘 뉴스·변화·실적 임박·AI 판단은 종목을 하나씩 열어야 보인다.</div>
+    </div>
+  </div>
+  <div class="col">
+    <span class="lbl">제안 — 상단 요약 띠 + 행 2줄</span>
+    <div class="card">
+      <div class="pad" style="background:var(--muted)">
+        <div class="row" style="flex-wrap:wrap;gap:6px">
+          <b>오늘 내 관심 6</b><span class="chip">상승 4 · 하락 2</span>
+          <span class="chip g">점수 급등 · 카카오 +6</span><span class="chip a">실적 임박 · 삼성전자 D-17</span><span class="chip b">뉴스 최다 · 삼성전자 165</span>
+        </div>
+      </div>
+      <div class="pad sep">
+        <div class="row"><b class="grow">삼성전자</b><span class="chip b">보유</span><span class="n up" style="width:70px;text-align:right">+3.24%</span><b style="width:54px;text-align:right;color:var(--score-high)">69 <small class="down">▼1</small></b></div>
+        <div class="row muted" style="margin-top:3px;padding-left:2px"><span class="chip a">실적 D-17</span><span>뉴스 165</span><span class="trunc up">주주환원 · 삼성전자우, 본주 두 배 속도로 뛴다…배당·소각 기대</span></div>
+        <div class="row muted" style="margin-top:2px;padding-left:2px"><span class="chip">AI</span><span class="trunc">HBM 증설 기대가 이익 추정 상향으로 이어지는 중 — 밸류 부담은 업종 평균 수준</span></div>
+      </div>
+      <div class="pad sep">
+        <div class="row"><b class="grow">카카오</b><span class="n down" style="width:70px;text-align:right">−1.10%</span><b style="width:54px;text-align:right;color:var(--score-mid)">52 <small class="up">▲6</small></b></div>
+        <div class="row muted" style="margin-top:3px"><span>뉴스 12</span><span class="trunc">점수 급등 · 수급 축 +14 (외국인 5일 연속 순매수)</span></div>
+        <div class="row muted" style="margin-top:2px"><span class="chip">AI</span><span class="trunc">광고 매출 회복 신호, 다만 규제 이슈가 남아 변동성 큼</span></div>
+      </div>
+      <div class="pad note sep">표 열(52주 위치·담은 뒤·현재가)은 넓은 화면에서 그대로 오른쪽에 유지, 좁은 화면은 2줄 카드로.</div>
+    </div>
+  </div>
+</div>
+<div class="qbox"><b>결정 A.</b> 행에 AI 한 줄 요약까지 넣을까요, 뉴스·변화 줄만 넣을까요? (AI 줄은 행 높이 +18px, 요약이 없는 종목은 줄을 생략)</div>
+
+<!-- ───────────────────────── 요청 4 ───────────────────────── -->
+<h2>② 커뮤니티 — 글이 「우리 데이터」를 들고 다닌다</h2>
+<p class="sub">메뉴: 사이드바 「커뮤니티」 그룹 맨 위 <b>커뮤니티</b> → 그 아래 기존 <b>투자 리포트</b>. 리포트의 좋아요·댓글·조회수·이미지 업로드 구조(표·API)를 그대로 본떠 새로 만든다.</p>
+
+<div class="cols" style="margin-top:12px">
+  <div class="col">
+    <span class="lbl">목록 (/community) — 첫 번째 사진의 흐름</span>
+    <div class="card">
+      <div class="pad row" style="justify-content:space-between">
+        <div><b style="font-size:15px">커뮤니티</b><div class="note" style="margin:0">종목·기사를 붙여 쓰면 점수·요약·뉴스가 함께 보입니다</div></div>
+        <span class="chip b" style="padding:4px 10px">✎ 글쓰기</span>
+      </div>
+      <div class="pad row sep" style="gap:6px;flex-wrap:wrap">
+        <span class="chip b">전체</span><span class="chip">인기</span><span class="chip">내 종목 이야기</span><span class="chip">내 활동</span>
+        <span class="chip">＃삼성전자 ✕</span>
+      </div>
+      <div class="post sep">
+        <div class="grow" style="min-width:0">
+          <div class="muted" style="font-size:11px"><span class="up" style="font-weight:700">인기</span> · 34분 전</div>
+          <h4>월요일 코스피 급등이라니까… <span style="color:var(--brand);font-size:11px">💬 12</span></h4>
+          <div class="row" style="gap:6px;margin:4px 0"><span class="chip">📈 SK하이닉스 <b class="up">&nbsp;+1.09%</b>&nbsp;· 68점</span><span class="chip">📰 기사 1</span></div>
+          <div class="row muted" style="font-size:11px;gap:10px">YT47호 <span class="chip g">🌱 주주 · SK하이닉스</span> ♡ 8 · 💬 12 · 👁 94</div>
+        </div>
+      </div>
+      <div class="post">
+        <div class="grow" style="min-width:0">
+          <div class="muted" style="font-size:11px">3시간 전</div>
+          <h4>주말에 타코 나온다고 했죠?</h4>
+          <div class="muted trunc">근데 그 타코를 이란이 했네요 ㅋㅋ 더 좋은데요??</div>
+          <div class="row muted" style="font-size:11px;gap:10px;margin-top:4px">염색병아리 <span class="chip">🔍 눈팅 장인</span> ♡ 2 · 💬 16 · 👁 522</div>
+        </div>
+        <div style="width:64px;height:64px;border-radius:8px;background:var(--accent);flex-shrink:0"></div>
+      </div>
+    </div>
+    <p class="note">종목 칩의 등락률은 <b>지금</b> 값, 점수는 최신 점수일. 태그로 필터(＃삼성전자) — 종목 화면에서 「이 종목 이야기」로 바로 들어오는 입구도 같은 필터.</p>
+  </div>
+
+  <div class="col">
+    <span class="lbl">글 상세 (/community/123) — 두 번째 사진의 흐름 + 우리 데이터</span>
+    <div class="card pad">
+      <div class="row"><span class="av" style="background:#b45309">골</span><div><b>골든리트리버</b> <span class="chip g">🌱 주주 · 삼성전자</span><div class="muted" style="font-size:10.5px">10시간 전 · 👁 312</div></div></div>
+      <p style="margin:12px 0 10px;font-size:13px">낼이 배당 권리 막차? 30조 배당이면 주당 4,500원인데 지금 들어가도 되나요</p>
+
+      <div class="embed">
+        <div class="row"><b>삼성전자</b><span class="muted">005930</span><span class="grow"></span><span class="chip">작성 시 279,000 → 지금 <b class="up">&nbsp;286,500 (+2.7%)</b></span></div>
+        <svg class="spark" viewBox="0 0 300 34" preserveAspectRatio="none"><polyline fill="none" stroke="var(--profit)" stroke-width="1.6" points="0,26 20,24 40,27 60,22 80,23 100,19 120,21 140,17 160,18 180,14 200,15 220,12 240,13 260,9 280,10 300,6"/><line x1="236" x2="236" y1="0" y2="34" stroke="var(--text-muted)" stroke-dasharray="2 2"/></svg>
+        <div class="row" style="gap:6px;flex-wrap:wrap;margin:4px 0 6px">
+          <span class="chip g">AI 점수 69 (▼1)</span><span class="chip">수익성 81 · 추세 74 · 가치 52</span><span class="chip a">실적 D-17</span>
+        </div>
+        <div style="font-size:11.5px"><span class="chip">AI 핵심</span> HBM 증설 기대가 이익 추정 상향으로 — 밸류 부담은 업종 평균 수준</div>
+        <div class="muted" style="font-size:11px;margin-top:6px">최근 뉴스 · 삼성전자우, 본주 두 배 속도로 뛴다 · 3분기 30조 현금배당 예고</div>
+        <div class="note" style="margin-top:6px">누르면 기존 종목 모달(일별 종가·점수 근거·AI 요약·뉴스·일정 전부)이 열린다. 점선 = 글 쓴 시점.</div>
+      </div>
+      <div class="embed">
+        <div class="row"><span class="chip">📰 기사</span><b class="trunc">삼성전자 2026년 3분기 약 30조원 현금배당 예고</b></div>
+        <div class="muted" style="font-size:11px;margin-top:4px">한국경제 · 09-27 · 요약: 배당 기준일 9/28, 주당 약 4,500원 전망 · 태그 종목 삼성전자</div>
+      </div>
+
+      <div class="row sep" style="margin-top:12px;padding-top:10px;gap:14px"><span>👍 2</span><span>💬 1</span><span>🔗 링크복사</span><span class="grow"></span><span class="muted">🚩 신고</span></div>
+      <div style="margin-top:10px"><b>댓글</b>
+        <div class="card pad" style="margin-top:6px;background:var(--muted)"><span class="muted">의견을 남겨 보세요 · 종목 $삼성전자 · 이미지</span></div>
+        <div style="margin-top:8px"><b>핫소스통</b> <span class="muted" style="font-size:10.5px">9시간 전</span><div>오</div><div class="muted" style="font-size:11px">👍 0 · 답글쓰기</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="cols" style="margin-top:14px">
+  <div class="col">
+    <span class="lbl">글쓰기 — 「붙이기」가 이 커뮤니티의 차별점</span>
+    <div class="card pad">
+      <div class="card pad" style="background:var(--muted);min-height:60px"><span class="muted">제목 · 본문…</span></div>
+      <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
+        <span class="chip b">＋ 종목 붙이기</span><span class="chip b">＋ 기사 붙이기</span><span class="chip">＋ 내 예측 붙이기</span><span class="chip">＋ 리포트 붙이기</span><span class="chip">🖼 이미지</span>
+      </div>
+      <p class="note">종목 붙이기 = 종목 검색 → 카드가 본문 아래에 붙고, <b>작성 시점 가격·점수를 스냅샷</b>으로 저장(나중에 「그때 → 지금」 비교). 기사 붙이기 = 뉴스 화면·종목 모달의 기사에서 「커뮤니티에 공유」 버튼으로도 진입.</p>
+    </div>
+  </div>
+  <div class="col">
+    <span class="lbl">뱃지 — 활동 · 데이터 연동 (순위·보상 없음)</span>
+    <table class="t">
+      <tr><th>종류</th><th>예</th><th>근거</th></tr>
+      <tr><td>활동</td><td>🌱 첫 발자국 · ✍ 첫 글 · 💬 수다쟁이(댓글 50) · 🔍 눈팅 장인(읽기 500) · 📅 7일 연속 방문</td><td>커뮤니티 표에서 계산</td></tr>
+      <tr><td>보유 연동</td><td>🌱 <b>주주 · 삼성전자</b> — 그 종목 글·댓글에만 표시</td><td>내 포트폴리오에 보유 중(자기 입력, 「인증」 아님)</td></tr>
+      <tr><td>기록 습관</td><td>🎯 예측 10건 판정 · 📝 메모 30일</td><td>예측·메모장 — <b>적중률·순위는 쓰지 않음</b></td></tr>
+      <tr><td>운영</td><td>🛡 운영자</td><td>관리자</td></tr>
+    </table>
+    <p class="note">리포트에 적용 중인 방침(2026-08-10 「리더보드·보상 없음」)을 커뮤니티에도 그대로 적용한다는 전제 — 적중률 상위 같은 성과 뱃지는 줄 세우기라 제외.</p>
+  </div>
+</div>
+
+<div class="qbox">
+  <b>결정 B.</b> 이번 1차 범위(아래 기본안 기준 · 결정 표로 질문드립니다)
+  <table class="t" style="margin-top:6px;background:var(--card)">
+    <tr><th>항목</th><th>기본안(추천)</th><th>대안</th></tr>
+    <tr><td>게시판 구조</td><td>한 피드 + 종목 태그 필터 + 종목 화면 입구</td><td>종목별 게시판(종토방) 분리</td></tr>
+    <tr><td>붙이기</td><td>종목 · 기사 (1차), 예측 · 리포트는 2차</td><td>넷 다 1차</td></tr>
+    <tr><td>이미지</td><td>1장당 5MB · 글당 4장 (리포트 업로드 재사용)</td><td>텍스트만</td></tr>
+    <tr><td>공개 범위</td><td>읽기는 비로그인 허용, 쓰기·좋아요는 로그인 / 글은 검색엔진 noindex</td><td>글도 색인(SEO 유입↑·관리 부담↑)</td></tr>
+    <tr><td>관리</td><td>신고 3회 자동 숨김 + 관리자 화면 · 금칙어 · 글 1분 1개 제한</td><td>—</td></tr>
+    <tr><td>닉네임</td><td>중복 불가(커뮤니티에서 사람 구분) — 기존 중복은 뒤에 번호</td><td>중복 허용</td></tr>
+  </table>
+</div>
+
+<!-- ───────────────────────── 요청 5 ───────────────────────── -->
+<h2>③ AI 기능을 서비스의 중심으로 — 무엇을 어디에</h2>
+<p class="sub">원칙(기존 결정 유지): LLM은 <b>예약 배치·관리자 수동에서만</b> 부르고, 화면은 저장분만 읽는다 · 실패하면 규칙 문장으로 대체 · 모든 답에 근거(날짜·출처). 방문자가 늘어도 비용이 늘지 않는 구조.</p>
+
+<div class="cols" style="margin-top:10px">
+  <div class="col">
+    <span class="lbl">종목 개요 질문 칩 — 4개 → 10개 (전부 저장된 데이터, LLM 0)</span>
+    <div class="card pad">
+      <div class="btnrow">
+        <span class="qchip">왜 움직였나</span><span class="qchip">점수가 왜 이런가</span><span class="qchip">다음 실적은</span><span class="qchip">비슷한 종목은</span>
+        <span class="qchip new">애널리스트 전망은</span><span class="qchip new">외국인·기관은</span><span class="qchip new">싼가 비싼가</span><span class="qchip new">위험 신호는</span><span class="qchip new">최근 공시는</span><span class="qchip new">내 보유 기준으로</span>
+      </div>
+      <table class="t" style="margin-top:10px">
+        <tr><th>새 질문</th><th>답의 재료(이미 있음)</th></tr>
+        <tr><td>애널리스트 전망은</td><td>추정치 변화(085) — 최근 30일 EPS·매출 추정 상향/하향 폭</td></tr>
+        <tr><td>외국인·기관은</td><td>투자자별 수급(084) — 5·20일 순매수, 연속 일수</td></tr>
+        <tr><td>싼가 비싼가</td><td>PER·PBR vs 같은 업종 중앙값 (스크리너 저장분)</td></tr>
+        <tr><td>위험 신호는</td><td>투자경고·공시·내부자 매도·부채비율 급증</td></tr>
+        <tr><td>최근 공시는</td><td>공시 스윕 저장분 — 최근 30일 공시 제목·종류 (국내)</td></tr>
+        <tr><td>내 보유 기준으로</td><td>평단 대비 손익 · 목표가 진행률 · 담은 뒤 점수 변화</td></tr>
+      </table>
+      <p class="note">질문 수가 늘어도 비용 0. 데이터가 없는 질문(해외 수급 등)은 칩 자체를 숨긴다.</p>
+    </div>
+  </div>
+  <div class="col">
+    <span class="lbl">문장으로 찾기 — 알아듣는 말 늘리기 (조회 시 LLM 0)</span>
+    <div class="card pad">
+      <div class="card pad" style="background:var(--muted)">「<b>실적 발표 앞둔</b> <b>반도체</b> 중 <b>외국인이 사는</b> 저평가」</div>
+      <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
+        <span class="chip b">실적 D-14 이내</span><span class="chip b">업종 = 반도체</span><span class="chip b">외국인 5일 순매수 &gt; 0</span><span class="chip b">PER ≤ 업종 중앙값</span>
+      </div>
+      <p class="note" style="margin-top:8px">지금은 재무 숫자 조건만 알아듣고 「반도체」는 회색(못 알아들음). 추가: 업종·테마 사전, 일정(실적·배당), 수급, 뉴스량, 점수 변화. 행마다 「왜 걸렸나」 한 줄.<br>
+      <b>LLM은 사전을 키우는 데만</b>: 사용자가 친 문장 중 못 알아들은 말을 모아 두고, 주 1회 배치가 LLM으로 「기존 조건 중 무엇에 해당하나」 후보를 만들면 관리자가 승인 → 사전에 추가. 월 수십 콜.</p>
+    </div>
+  </div>
+</div>
+
+<div class="cols" style="margin-top:14px">
+  <div class="col">
+    <span class="lbl">실적 메뉴 — 「이번 주 실적 관전 포인트」 (LLM 배치, 새 기능)</span>
+    <div class="card pad">
+      <div class="row"><b class="grow">이번 주 실적 발표 · 23종목</b><span class="chip">AI 생성 09-27 07:00</span></div>
+      <div class="sep" style="margin-top:8px;padding-top:8px">
+        <div class="row"><b>10/14 삼성전자</b><span class="chip g">69</span><span class="chip">추정치 30일 +4.2%</span><span class="chip">서프라이즈 4분기 중 3</span></div>
+        <div style="margin-top:4px">볼 것: ① HBM 매출 비중이 가이던스(30%대)를 넘었는지 ② 배당 30조 재원 — 잉여현금흐름 ③ 파운드리 적자 폭. <span class="muted">근거: 추정치 변화 · 최근 기사 5 · 서프라이즈 이력</span></div>
+      </div>
+    </div>
+    <p class="note">대상: 향후 7일 발표 × 추천 가능 종목(유동성 하한 통과) + 사용자 보유·관심. 하루 1회(07:00) 새로 발표 목록에 든 종목만 생성, 이미 만든 것은 재사용.</p>
+  </div>
+  <div class="col">
+    <span class="lbl">투자 리포트 — 「AI 검토 노트」 (LLM 배치, 새 기능)</span>
+    <div class="card pad">
+      <div class="row"><span class="chip">AI 검토</span><b>근거와 데이터가 맞는가</b></div>
+      <ul style="margin:6px 0 0 16px">
+        <li>「실적 개선」 주장 ↔ 추정치 30일 <b class="up">+4.2% 상향</b> — 일치</li>
+        <li>「저평가」 주장 ↔ PER 업종 중앙값 대비 <b>+8%</b> — 근거 약함</li>
+        <li>작성 뒤 나온 사건: 10/2 대규모 공급계약 공시</li>
+      </ul>
+      <p class="note">리포트 게시 후 다음 배치 회차(30분 간격)에 1회 생성, 판정 시 1회 갱신. 작성자 줄 세우기와 무관(각 리포트 옆에만).</p>
+    </div>
+  </div>
+</div>
+
+<span class="lbl" style="margin-top:16px">토큰 사전 조치 — 기능별 별도 한도(다른 기능을 굶기지 않게)</span>
+<table class="t">
+  <tr><th>기능</th><th>호출/일 (추정)</th><th>토큰/일 (추정)</th><th>조치</th></tr>
+  <tr><td>실적 관전 포인트</td><td>국내·해외 합 20~60 (새로 들어온 것만)</td><td>입력 ~1.5k + 출력 ~0.3k × 콜 → 4만~11만</td><td rowspan="3">① apibudget에 <b>기능별 일 한도</b>(예: 실적 60콜/12만, 리포트 30콜/6만) — 기존 요약·번역·브리핑 몫을 먼저 보장<br>② 입력은 <b>압축 사실표</b>(숫자·제목 몇 개)만, 기사 본문 X<br>③ 같은 입력이면 재생성 안 함(입력 해시 캐시)<br>④ 22~03시(Gemini 503 시간대) 피해 예약<br>⑤ 관리자 LLM 화면에 기능별 사용량·남은 한도 표시, 초과 시 규칙 문장으로 대체</td></tr>
+  <tr><td>리포트 AI 검토</td><td>게시 수만큼 (현재 하루 0~10)</td><td>~2k × 콜 → 2만 이하</td></tr>
+  <tr><td>스크리너 사전 확장</td><td>주 1회 10~30</td><td>주 3만 이하</td></tr>
+  <tr><td colspan="4" class="muted">현재 한도(메모 기준): 일 500콜 · 100만 토큰, 국내·해외 키 각각. 새 기능 합계는 상한 기준 약 25% — 한도에 넣고 운영하며 조정.</td></tr>
+</table>
+
+<div class="qbox"><b>결정 C.</b> 우선순위: 저는 <b>① 종목 질문 칩 확장(비용 0) → ② 실적 관전 포인트 → ③ 문장 검색 사전 확장 → ④ 리포트 AI 검토</b> 순을 추천합니다. 무엇부터 할지·뺄 것이 있는지 골라 주세요.</div>
+
+<h2>④ 회원가입 — 아이디 · 닉네임 2~10자 · 비밀번호 8~15자 (요청 3)</h2>
+<table class="t">
+  <tr><th></th><th>현재</th><th>변경</th></tr>
+  <tr><td>입력</td><td>이메일 · 닉네임 · 비밀번호</td><td><b>아이디</b> · 닉네임 · 비밀번호</td></tr>
+  <tr><td>기존 회원</td><td>—</td><td>이메일이 그대로 아이디 — <b>DB 마이그레이션 없음</b>(같은 칸을 로그인 아이디로 씀), 로그인 화면 라벨만 「아이디(기존 회원은 이메일)」</td></tr>
+  <tr><td>검증</td><td>닉네임 2~100자 · 비밀번호 8자 이상</td><td>닉네임 2~10자 · 비밀번호 8~15자 — <b>가입·변경 때만</b> 적용(기존 긴 비밀번호로 로그인은 계속 됨)</td></tr>
+  <tr><td>함께 고칠 곳</td><td colspan="2">가입·로그인·설정 화면 문구 · 개인정보처리방침(수집 항목: 이메일 → 아이디) · 관리자 판별이 이메일 기준이면 그대로 동작(기존 계정)</td></tr>
+</table>
+<p class="note">참고: 이메일이 없어지면 비밀번호 찾기·아침 요약 메일(보류 중인 D안) 같은 기능은 신규 회원에게 불가능해집니다. 비밀번호 상한 15자는 보안 권고(64자 이상 허용)보다 짧다는 점도 적어 둡니다 — 요청대로 적용합니다.</p>
+</div>
+</body>
+</html>
