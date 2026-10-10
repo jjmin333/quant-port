@@ -30,3 +30,20 @@ func TestMetricPathIsSymbolIndependent(t *testing.T) {
 		t.Fatalf("심볼이 라벨에 남았다: %q vs %q", a, b)
 	}
 }
+
+// 매매동향은 경로가 /stocks로 시작해도 STOCK이 아니다 — 묶으면 수급 적재의 429가
+// 경고 스윕을 보조 키로 넘긴다.
+func TestStockTradingTrendHasItsOwnGroup(t *testing.T) {
+	cases := map[string]string{
+		"/api/v1/stocks/005930/investor-trading?count=5": groupStockTradingTrend,
+		"/api/v1/stocks/005930/short-selling":            groupStockTradingTrend,
+		"/api/v1/stocks/005930/warnings":                 groupStock,
+		"/api/v1/stocks?symbols=005930":                  groupStock,
+		"/api/v1/stocks/all":                             groupStockAll,
+	}
+	for in, want := range cases {
+		if got := rateLimitGroup(in); got != want {
+			t.Errorf("rateLimitGroup(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

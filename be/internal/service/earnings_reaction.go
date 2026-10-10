@@ -30,7 +30,7 @@ const maxReactionGapDays = 5
 // AttachReactions fills in each confirmed announcement's post-earnings move.
 //
 // 종가 조회는 **한 번**이다 — 목록의 심볼을 모아 한 쿼리로 받고 짝은 메모리에서
-// 맞춘다(항목당 I/O 금지, AGENT_STATE 응답 속도 원칙 #1).
+// 맞춘다(항목당 I/O 금지, PRINCIPLES 응답 속도 원칙 #1).
 func (s *EarningsCalendarService) AttachReactions(ctx context.Context, events []model.EarningsEvent) {
 	if s == nil || s.events == nil || len(events) == 0 {
 		return

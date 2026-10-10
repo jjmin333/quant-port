@@ -258,7 +258,7 @@ func (s *EarningsTabService) domesticQuarterly(ctx context.Context, symbol strin
 //
 // 예전에는 `marketStore.EnsureEarningsForSymbols`를 불러 **조회 중에 Finnhub을**
 // 때렸다(캐시 미스 시). 이제 배치가 같은 데이터를 `earnings_events`에 넣어 두므로
-// 표에서 읽는다 — 조회 경로에서 외부 HTTP를 하지 않는다는 규칙(AGENT_STATE 응답
+// 표에서 읽는다 — 조회 경로에서 외부 HTTP를 하지 않는다는 규칙(PRINCIPLES 응답
 // 속도 원칙 #2)에 맞고, `hour`(장전·장후)와 컨센서스도 함께 온다.
 //
 // 배치가 아직 한 번도 안 돌았을 때만 예전 경로로 되돌아간다.
@@ -323,23 +323,6 @@ func (s *EarningsTabService) storedQuarters(ctx context.Context, symbol, basis s
 			OperatingIncome: row.Period.OperatingIncome,
 			NetIncome:       row.Period.NetIncome,
 			EPSBasic:        row.Period.EPSBasic,
-		})
-	}
-	return out
-}
-
-func snapshotsToQuarters(snaps []model.FinancialSnapshot) []model.EarningsQuarter {
-	out := make([]model.EarningsQuarter, 0, len(snaps))
-	for _, snap := range snaps {
-		out = append(out, model.EarningsQuarter{
-			FiscalYear:      snap.FiscalYear,
-			Period:          snap.FiscalPeriod,
-			ReportCode:      snap.ReportCode,
-			PeriodEnd:       snap.PeriodEnd,
-			Revenue:         snap.Revenue,
-			OperatingIncome: snap.OperatingIncome,
-			NetIncome:       snap.NetIncome,
-			EPSBasic:        snap.EPSBasic,
 		})
 	}
 	return out

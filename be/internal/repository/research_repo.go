@@ -29,7 +29,7 @@ type ResearchRepo struct {
 
 func NewResearchRepo(db *sql.DB) *ResearchRepo { return &ResearchRepo{db: db} }
 
-const researchCols = `c.id, c.user_id, COALESCE(u.display_name, ''), c.symbol, c.symbol_name,
+const researchCols = `c.id, c.user_id, COALESCE(u.display_name, ''), c.topic, c.symbol, c.symbol_name,
 	c.asset_type, c.currency, c.title, c.published_at, c.trade_date, c.benchmark_id,
 	c.direction, c.base_price, c.target_price, c.stop_price, c.horizon_days, c.conviction,
 	c.score_at_pub, c.grade_at_pub, c.contrarian, c.evidence, c.context, c.chart,
@@ -42,6 +42,8 @@ const researchFrom = ` FROM research_calls c LEFT JOIN users u ON u.id = c.user_
 // ResearchListFilter narrows a call list. Zero values mean "no filter".
 type ResearchListFilter struct {
 	UserID int64 // 0 = any author
+	// Topic — 빈 값은 전체(2026-10-09 요청 9).
+	Topic  string
 	Symbol string
 	Status string
 	// Direction filters buy/sell/hold.
@@ -85,7 +87,7 @@ func scanResearch(row interface{ Scan(dest ...any) error }) (model.ResearchCall,
 		updatedAt    time.Time
 	)
 	if err := row.Scan(
-		&c.ID, &c.UserID, &c.AuthorName, &c.Symbol, &c.SymbolName, &assetType, &currency,
+		&c.ID, &c.UserID, &c.AuthorName, &c.Topic, &c.Symbol, &c.SymbolName, &assetType, &currency,
 		&c.Title, &publishedAt, &tradeDate, &c.BenchmarkID, &direction, &c.BasePrice,
 		&targetPrice, &stopPrice, &c.HorizonDays, &c.Conviction, &scoreAtPub, &gradeAtPub,
 		&contrarian, &evidenceJSON, &ctxJSON, &chartJSON, &c.BodyMD, &c.BodyRev, &c.ThumbnailURL, &tagsJSON,
@@ -197,19 +199,19 @@ func (r *ResearchRepo) Create(ctx context.Context, c model.ResearchCall) (model.
 
 	res, err := tx.ExecContext(ctx, `
 		INSERT INTO research_calls (
-			user_id, symbol, symbol_name, asset_type, currency, title, published_at,
+			user_id, topic, symbol, symbol_name, asset_type, currency, title, published_at,
 			trade_date, benchmark_id, direction, base_price, target_price, stop_price,
 			horizon_days, conviction, score_at_pub, grade_at_pub, contrarian,
 			evidence, context, chart, body_md, body_rev, thumbnail_url, tags_json, visibility, status
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
 	`,
-		c.UserID, c.Symbol, c.SymbolName, string(c.AssetType), string(c.Currency), c.Title,
+		researchTopicOrStock(c.Topic), c.UserID, c.Symbol, c.SymbolName, string(c.AssetType), string(c.Currency), c.Title,
 		c.PublishedAt.UTC(), c.TradeDate, c.BenchmarkID, string(c.Direction), c.BasePrice,
 		// nullFloat64 (not nullFloat) — nullFloat drops non-positive values.
 		nullFloat64(c.TargetPrice), nullFloat64(c.StopPrice), c.HorizonDays, c.Conviction,
 		nullIntArg(c.ScoreAtPub), nullString(c.GradeAtPub), c.Contrarian,
 		string(evidence), string(situation), string(chart), c.BodyMD, c.ThumbnailURL, string(tags),
-		string(c.Visibility), string(model.StatusOpen),
+		string(c.Visibility), string(researchStatusOrOpen(c.Status)),
 	)
 	if err != nil {
 		return model.ResearchCall{}, err
@@ -251,12 +253,17 @@ func (r *ResearchRepo) List(ctx context.Context, f ResearchListFilter) ([]model.
 	if f.PublicOnly {
 		query += ` AND c.visibility = 'public'`
 	}
+	if f.Topic != "" {
+		query += ` AND c.topic = ?`
+		args = append(args, f.Topic)
+	}
 	if !f.IncludeHidden {
 		query += ` AND c.hidden_at IS NULL`
 	}
 	if f.Symbol != "" {
-		query += ` AND c.symbol = ?`
-		args = append(args, strings.ToUpper(f.Symbol))
+		// 그 종목 리포트 + 본문에 그 종목을 태그한 리포트(2026-09-28).
+		query += ` AND (c.symbol = ? OR c.id IN (SELECT target_id FROM content_mentions WHERE symbol = ? AND target_type = 'research_call'))`
+		args = append(args, strings.ToUpper(f.Symbol), strings.ToUpper(f.Symbol))
 	}
 	if f.Status != "" {
 		query += ` AND c.status = ?`
@@ -390,6 +397,55 @@ func (r *ResearchRepo) UpdateBody(
 	return r.GetByID(ctx, id)
 }
 
+func researchTopicOrStock(t string) string {
+	if t == "" {
+		return model.TopicStock
+	}
+	return t
+}
+
+func researchStatusOrOpen(s model.ResearchStatus) model.ResearchStatus {
+	if s == "" {
+		return model.StatusOpen
+	}
+	return s
+}
+
+// Delete removes a call and every row hanging off it (no FKs, so by hand).
+// The scorecard reads research_calls, so the call leaves the hit rates too.
+func (r *ResearchRepo) Delete(ctx context.Context, id int64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	stmts := []string{
+		`DELETE FROM research_comment_likes WHERE comment_id IN (SELECT id FROM research_comments WHERE call_id = ?)`,
+		`DELETE FROM research_comments WHERE call_id = ?`,
+		`DELETE FROM research_reactions WHERE call_id = ?`,
+		`DELETE FROM research_ratings WHERE call_id = ?`,
+		`DELETE FROM research_views WHERE call_id = ?`,
+		`DELETE FROM research_reports WHERE call_id = ?`,
+		`DELETE FROM research_revisions WHERE call_id = ?`,
+		`DELETE FROM research_reviews WHERE call_id = ?`,
+		`DELETE FROM content_mentions WHERE target_type = 'research_call' AND target_id = ?`,
+		`DELETE FROM content_asset_mentions WHERE target_type = 'research_call' AND target_id = ?`,
+	}
+	for _, q := range stmts {
+		if _, err := tx.ExecContext(ctx, q, id); err != nil {
+			return err
+		}
+	}
+	res, err := tx.ExecContext(ctx, `DELETE FROM research_calls WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrResearchNotFound
+	}
+	return tx.Commit()
+}
+
 // Retract withdraws a call without deleting it. The row keeps counting toward
 // the author's retract rate.
 func (r *ResearchRepo) Retract(ctx context.Context, userID, id int64) (model.ResearchCall, error) {
@@ -430,12 +486,6 @@ func (r *ResearchRepo) SetVerdict(
 		       verdict_return = ?, verdict_alpha = ?
 		 WHERE id = ? AND status = ?
 	`, string(status), date, nullFloat64(ret), nullFloat64(alpha), id, string(model.StatusOpen))
-	return err
-}
-
-func (r *ResearchRepo) IncrementViews(ctx context.Context, id int64) error {
-	_, err := r.db.ExecContext(ctx,
-		`UPDATE research_calls SET view_count = view_count + 1 WHERE id = ?`, id)
 	return err
 }
 

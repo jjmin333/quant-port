@@ -1,7 +1,6 @@
 package service
 
 import (
-	"database/sql"
 	"testing"
 
 	"github.com/enact/quant-port/be/internal/model"
@@ -89,79 +88,52 @@ func TestInsiderSentimentStaysOffTheExtremes(t *testing.T) {
 	}
 }
 
-/*
-커버리지 보정은 **몇 번을 불러도 같은 값**이어야 한다.
-
-이 축은 요약이 재빌드될 때마다 붙는데, 직전 기여분을 빼지 않으면 부를 때마다
-커버리지가 조금씩 부풀어 결국 얕은 데이터로 매긴 점수가 완전한 점수 행세를 한다.
-*/
-func TestSentimentCoverageIsIdempotent(t *testing.T) {
-	weights := model.DefaultScoreWeights() // sentiment 10 / total 100
-	base := &model.StockScoreView{Coverage: 0.5}
-
-	first := recoverCoverage(base, weights, 1.0)
-	if first <= base.Coverage {
-		t.Fatalf("a fresh sentiment reading should raise coverage, got %.3f", first)
+// 배치 경로(표에서 합친 값)가 요약 경로(행 목록)와 같은 답을 내야 한다 — 같은
+// 종목의 심리가 어느 길로 계산됐는지에 따라 달라지면 안 된다.
+func TestSentimentTallyMatchesListPath(t *testing.T) {
+	news := &model.NewsSentimentSummary{Total: 6, AverageScore: 40}
+	a, ac, _ := newsSentimentComponent(news)
+	b, bc, _ := newsComponentFromTally(6, 0.40)
+	if a != b || ac != bc {
+		t.Fatalf("news: list %.2f/%.2f vs tally %.2f/%.2f", a, ac, b, bc)
 	}
-
-	// 두 번째 호출은 첫 번째가 남긴 기여분을 알고 있다.
-	second := recoverCoverage(&model.StockScoreView{
-		Coverage: first,
-		Inputs:   map[string]any{sentimentInputsConf: 1.0},
-	}, weights, 1.0)
-
-	if diff := second - first; diff > 1e-9 || diff < -1e-9 {
-		t.Fatalf("re-applying the same reading changed coverage: %.4f → %.4f", first, second)
+	v, c, ok := sentimentAxisFromParts(b, bc, true, 0, 0, false)
+	if !ok || v != b || c != bc {
+		t.Fatalf("news-only axis should equal the news part, got %.2f/%.2f", v, c)
 	}
 }
 
-// 축이 붙으면 종합 점수도 그 방향으로 움직여야 한다 — 아니면 이 축은 저장만
-// 되고 아무 일도 하지 않는 셈이다.
-func TestCompositeMovesWithSentiment(t *testing.T) {
-	settings := model.DefaultScoreSettings()
-	weights := model.DefaultScoreWeights()
-	mid := 50.0
-
-	withoutScore, _ := compositeFromBreakdown(model.ScoreBreakdown{
-		Technical: &mid, Quality: &mid, Growth: &mid, Valuation: &mid,
-	}, weights, 0.9, settings)
-
-	high := 90.0
-	withHigh, _ := compositeFromBreakdown(model.ScoreBreakdown{
-		Technical: &mid, Quality: &mid, Growth: &mid, Valuation: &mid, Sentiment: &high,
-	}, weights, 1.0, settings)
-
-	low := 10.0
-	withLow, _ := compositeFromBreakdown(model.ScoreBreakdown{
-		Technical: &mid, Quality: &mid, Growth: &mid, Valuation: &mid, Sentiment: &low,
-	}, weights, 1.0, settings)
-
-	if !withoutScore.Valid || !withHigh.Valid || !withLow.Valid {
-		t.Fatal("expected scores for a fully covered breakdown")
+// 수급 성분: 순매수면 50 위, 순매도면 아래, 표본이 짧으면 없음, 극단은 85/15 안.
+func TestFlowComponent(t *testing.T) {
+	if _, _, ok := flowComponent(1000, 10000, 3); ok {
+		t.Fatal("3일 표본은 성분을 내면 안 된다")
 	}
-	if withHigh.Int64 <= withoutScore.Int64 {
-		t.Fatalf("bullish sentiment (%d) should lift the composite above %d", withHigh.Int64, withoutScore.Int64)
+	if _, _, ok := flowComponent(1000, 0, 20); ok {
+		t.Fatal("거래량 0이면 비율을 낼 수 없다")
 	}
-	if withLow.Int64 >= withoutScore.Int64 {
-		t.Fatalf("bearish sentiment (%d) should pull the composite below %d", withLow.Int64, withoutScore.Int64)
+	up, conf, ok := flowComponent(1000, 10000, 20) // 10% → ≈77
+	if !ok || up < 75 || up > 79 || conf != 1 {
+		t.Fatalf("up = %.2f conf %.2f", up, conf)
+	}
+	down, _, _ := flowComponent(-1000, 10000, 20)
+	if down > 25 || down < 21 {
+		t.Fatalf("down = %.2f", down)
+	}
+	top, _, _ := flowComponent(10000, 10000, 20)
+	if top > 85 {
+		t.Fatalf("극단이 85를 넘었다: %.2f", top)
 	}
 }
 
-// 커버리지 하한 아래는 점수를 내지 않는다 — 배치와 같은 규칙이어야 한다.
-func TestCompositeWithheldBelowCoverageFloor(t *testing.T) {
-	settings := model.DefaultScoreSettings()
-	mid := 50.0
-	score, grade := compositeFromBreakdown(
-		model.ScoreBreakdown{Technical: &mid},
-		model.DefaultScoreWeights(),
-		settings.CoverageFloor/2,
-		settings,
-	)
-	if score.Valid || grade != "" {
-		t.Fatalf("expected a withheld score below the coverage floor, got %v/%q", score, grade)
+// 수급이 없는 종목(미국 전부)은 이 변경으로 점수가 움직이지 않는다.
+func TestFlowAbsentLeavesNewsInsiderMixUnchanged(t *testing.T) {
+	a, ac, _ := sentimentAxisFromParts(70, 1, true, 40, 0.5, true)
+	b, bc, _ := sentimentAxisWithFlow(70, 1, true, 40, 0.5, true, 0, 0, false)
+	if a != b || ac != bc {
+		t.Fatalf("%.4f/%.4f vs %.4f/%.4f", a, ac, b, bc)
 	}
-	var zero sql.NullInt64
-	if score != zero {
-		t.Fatalf("a withheld score must be the zero NullInt64, got %v", score)
+	with, _, _ := sentimentAxisWithFlow(70, 1, true, 40, 0.5, true, 90, 1, true)
+	if with <= a {
+		t.Fatalf("강한 순매수가 축을 올려야 한다: %.2f → %.2f", a, with)
 	}
 }

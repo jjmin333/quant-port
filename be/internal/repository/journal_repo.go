@@ -24,7 +24,7 @@ func NewJournalNoteRepo(db *sql.DB) *JournalNoteRepo {
 	return &JournalNoteRepo{db: db}
 }
 
-const journalNoteCols = `id, title, body, symbol, symbol_name, ` +
+const journalNoteCols = `id, title, topic, body, symbol, symbol_name, ` +
 	`price_at_write, price_currency, price_date, tags_json, pinned, created_at, updated_at`
 
 func scanJournalNote(row interface {
@@ -42,7 +42,7 @@ func scanJournalNote(row interface {
 		updatedAt time.Time
 	)
 	if err := row.Scan(
-		&note.ID, &note.Title, &note.Body, &symbol, &symName,
+		&note.ID, &note.Title, &note.Topic, &note.Body, &symbol, &symName,
 		&price, &priceCur, &priceDate, &tagsJSON,
 		&note.Pinned, &createdAt, &updatedAt,
 	); err != nil {
@@ -71,6 +71,7 @@ func scanJournalNote(row interface {
 // calling it a snapshot.
 type JournalNoteWrite struct {
 	Title      string
+	Topic      string // 빈 값이면 Update가 주제를 그대로 둔다
 	Body       string
 	Symbol     string
 	SymbolName string
@@ -83,10 +84,14 @@ type JournalNoteWrite struct {
 }
 
 // List returns a user's notes, pinned first then most recently updated.
-// symbol filters to one linked stock (exact match); q matches title/body substrings.
-func (r *JournalNoteRepo) List(ctx context.Context, userID int64, symbol, q string) ([]model.JournalNote, error) {
+// symbol filters to one linked stock (exact match); topic to one 주제; q matches title/body substrings.
+func (r *JournalNoteRepo) List(ctx context.Context, userID int64, symbol, topic, q string) ([]model.JournalNote, error) {
 	query := `SELECT ` + journalNoteCols + ` FROM journal_notes WHERE user_id = ?`
 	args := []any{userID}
+	if topic != "" {
+		query += ` AND topic = ?`
+		args = append(args, topic)
+	}
 
 	if symbol != "" {
 		query += ` AND symbol = ?`
@@ -123,11 +128,11 @@ func (r *JournalNoteRepo) Create(ctx context.Context, userID int64, w JournalNot
 	}
 	res, err := r.db.ExecContext(ctx, `
 		INSERT INTO journal_notes
-			(user_id, title, body, symbol, symbol_name,
+			(user_id, title, topic, body, symbol, symbol_name,
 			 price_at_write, price_currency, price_date, tags_json)
-		VALUES (?, ?, ?, NULLIF(?, ''), NULLIF(?, ''),
+		VALUES (?, ?, COALESCE(NULLIF(?, ''), 'stock'), ?, NULLIF(?, ''), NULLIF(?, ''),
 		        NULLIF(?, 0), NULLIF(?, ''), NULLIF(?, ''), ?)
-	`, userID, w.Title, w.Body, w.Symbol, w.SymbolName,
+	`, userID, w.Title, w.Topic, w.Body, w.Symbol, w.SymbolName,
 		w.PriceAtWrite, w.PriceCurrency, w.PriceDate, string(tags))
 	if err != nil {
 		return model.JournalNote{}, err
@@ -149,10 +154,10 @@ func (r *JournalNoteRepo) Update(ctx context.Context, userID, id int64, w Journa
 	}
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE journal_notes
-		   SET title = ?, body = ?, symbol = NULLIF(?, ''), symbol_name = NULLIF(?, ''),
+		   SET title = ?, topic = COALESCE(NULLIF(?, ''), topic), body = ?, symbol = NULLIF(?, ''), symbol_name = NULLIF(?, ''),
 		       tags_json = ?, pinned = ?
 		 WHERE id = ? AND user_id = ?
-	`, w.Title, w.Body, w.Symbol, w.SymbolName, string(tags), w.Pinned, id, userID)
+	`, w.Title, w.Topic, w.Body, w.Symbol, w.SymbolName, string(tags), w.Pinned, id, userID)
 	if err != nil {
 		return model.JournalNote{}, err
 	}

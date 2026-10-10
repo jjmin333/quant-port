@@ -2,7 +2,6 @@ package apibudget
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"strconv"
@@ -438,11 +437,14 @@ AllProviders — 관리자 화면과 운영 점검이 도는 순서.
 func AllProviders() []Provider {
 	return []Provider{
 		ProviderGoldPrice, ProviderFRED, ProviderFinnhub, ProviderFinnhubMigrate, ProviderFinnhubNews,
-		ProviderFinnhubNewsCompany, ProviderKRX,
+		ProviderFinnhubNewsCompany, ProviderKRX, ProviderFinlife,
+		ProviderMolitRTMS, ProviderRone, ProviderEcos, ProviderOnbid, ProviderMoisRegion, ProviderUpbitBoard,
 		ProviderUpbit, ProviderDART, ProviderEdgar, ProviderEdgarBulk,
-		ProviderFinnhubEarnings, ProviderFinnhubBackfill, ProviderFnGuide,
+		ProviderFinnhubEarnings, ProviderFinnhubBackfill, ProviderFinnhubMetrics, ProviderFnGuide,
+		ProviderNaverStock, ProviderApeWisdom, ProviderRedditRSS,
 		ProviderNaver, ProviderKakao, ProviderAzureTranslate,
 		ProviderOpenAI, ProviderLLMKR, ProviderLLMUS,
+		ProviderLLMFeatEarnings, ProviderLLMFeatResearch, ProviderLLMFeatSocial, ProviderLLMSub, ProviderLLMFeatAsset,
 	}
 }
 
@@ -575,10 +577,6 @@ func ParseRetryAfter(raw string) time.Duration {
 		return time.Until(t)
 	}
 	return time.Minute
-}
-
-func MarshalUsage(items []Usage) ([]byte, error) {
-	return json.Marshal(items)
 }
 
 /*

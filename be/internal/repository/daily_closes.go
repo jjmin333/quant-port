@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,16 +17,24 @@ const dailyCloseDateLayout = "2006-01-02"
 
 // StockDailyCloseRow is one persisted row of stock_daily_closes.
 type StockDailyCloseRow struct {
-	Symbol         string
-	TradeDate      time.Time
-	Close          float64
-	PrevClose      sql.NullFloat64
-	ChangeAmount   sql.NullFloat64
-	ChangeRate     sql.NullFloat64
-	Volume         int64
-	Currency       string
-	Score          sql.NullInt64
-	AISummary      string
+	Symbol       string
+	TradeDate    time.Time
+	Close        float64
+	PrevClose    sql.NullFloat64
+	ChangeAmount sql.NullFloat64
+	ChangeRate   sql.NullFloat64
+	Volume       int64
+	Currency     string
+	Score        sql.NullInt64
+	AISummary    string
+	/*
+		그날의 「핵심 요약」 한 문단 (2026-09-15 사용자 요청 1).
+
+		`AISummary`가 네 갈래 본문을 이어붙인 글인 것과 달리, 이쪽은 같은 호출이 그
+		넷을 **전부 근거로 다시 쓴** 한 문단이다. 오늘 배치부터 쌓이므로 과거 행에서는
+		빈 문자열이고, 화면은 그때 예전 방식(본문 앞 두 문장)으로 되돌아간다.
+	*/
+	AIOverview     string
 	AnalysisSource string
 	Source         string
 }
@@ -37,13 +46,6 @@ type StockDailyCloseRepo struct {
 
 func NewStockDailyCloseRepo(db *sql.DB) *StockDailyCloseRepo {
 	return &StockDailyCloseRepo{db: db, table: newTableExistsCache("stock_daily_closes")}
-}
-
-func (r *StockDailyCloseRepo) HasTable(ctx context.Context) bool {
-	if r == nil || r.db == nil {
-		return false
-	}
-	return r.table.Has(ctx, r.db)
 }
 
 // UpsertBatch writes closes for one symbol. Price columns are always restated;
@@ -122,9 +124,9 @@ func (r *StockDailyCloseRepo) UpsertAnalysis(ctx context.Context, a model.DailyC
 	}
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE stock_daily_closes
-		   SET ai_summary = ?, analysis_source = ?, analyzed_at = CURRENT_TIMESTAMP(3)
+		   SET ai_summary = ?, ai_overview = ?, analysis_source = ?, analyzed_at = CURRENT_TIMESTAMP(3)
 		 WHERE symbol = ? AND trade_date = ?`,
-		a.AISummary, a.Source, strings.ToUpper(strings.TrimSpace(a.Symbol)), a.TradeDate,
+		a.AISummary, a.AIOverview, a.Source, strings.ToUpper(strings.TrimSpace(a.Symbol)), a.TradeDate,
 	)
 	if err != nil {
 		return false, err
@@ -158,7 +160,8 @@ func (r *StockDailyCloseRepo) List(ctx context.Context, symbol string, limit int
 	*/
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT d.symbol, d.trade_date, d.close_price, d.prev_close, d.change_amount, d.change_rate,
-		       d.volume, d.currency, COALESCE(sc.score, d.score), d.ai_summary, d.analysis_source, d.source
+		       d.volume, d.currency, COALESCE(sc.score, d.score), d.ai_summary, d.ai_overview,
+		       d.analysis_source, d.source
 		  FROM stock_daily_closes d
 		  LEFT JOIN stock_scores sc
 		         ON sc.symbol = d.symbol AND sc.trade_date = d.trade_date
@@ -176,35 +179,13 @@ func (r *StockDailyCloseRepo) List(ctx context.Context, symbol string, limit int
 		if err := rows.Scan(
 			&row.Symbol, &row.TradeDate, &row.Close, &row.PrevClose, &row.ChangeAmount,
 			&row.ChangeRate, &row.Volume, &row.Currency, &row.Score, &row.AISummary,
-			&row.AnalysisSource, &row.Source,
+			&row.AIOverview, &row.AnalysisSource, &row.Source,
 		); err != nil {
 			return nil, err
 		}
 		out = append(out, row)
 	}
 	return out, rows.Err()
-}
-
-// LastCloseBefore returns the most recent stored close strictly before
-// `date` — the previous-close reference for an incremental EOD write.
-func (r *StockDailyCloseRepo) LastCloseBefore(ctx context.Context, symbol, date string) (float64, bool, error) {
-	if r == nil || r.db == nil {
-		return 0, false, nil
-	}
-	var close float64
-	err := r.db.QueryRowContext(ctx, `
-		SELECT close_price FROM stock_daily_closes
-		 WHERE symbol = ? AND trade_date < ?
-		 ORDER BY trade_date DESC LIMIT 1`,
-		strings.ToUpper(strings.TrimSpace(symbol)), date,
-	).Scan(&close)
-	if err == sql.ErrNoRows {
-		return 0, false, nil
-	}
-	if err != nil {
-		return 0, false, err
-	}
-	return close, true, nil
 }
 
 // Stats reports coverage for operational reporting after a backfill.
@@ -401,5 +382,59 @@ func MigrateDailyClosesIfNeeded(ctx context.Context, db *sql.DB, migrationsDir s
 			return fmt.Errorf("029_daily_closes.sql: %w", err)
 		}
 	}
+	return nil
+}
+
+/*
+MigrateDailyCloseAIOverviewIfNeeded adds the per-day 핵심 요약 column on an
+existing database (2026-09-15 사용자 요청 1).
+
+표가 아니라 **컬럼**을 더하는 마이그레이션이라 `MigrateDailyClosesIfNeeded`에
+얹을 수 없다 — 그쪽은 「표가 있으면 아무것도 안 한다」로 끝나므로, 이미 도는 DB는
+표가 있다는 이유로 이 컬럼을 영영 못 받는다.
+*/
+func MigrateDailyCloseAIOverviewIfNeeded(ctx context.Context, db *sql.DB, migrationsDir string) error {
+	exists, err := tableExists(ctx, db, "stock_daily_closes")
+	if err != nil {
+		return err
+	}
+	// 표 자체가 없으면 029가 만들고, 그 정의에는 이 컬럼이 아직 없다 — 다음 기동에서
+	// 이 함수가 채운다. 여기서 ALTER를 먼저 치면 「없는 표」 오류로 기동이 막힌다.
+	if !exists {
+		return nil
+	}
+	hasCol, err := columnExists(ctx, db, "stock_daily_closes", "ai_overview")
+	if err != nil {
+		return err
+	}
+	if hasCol {
+		return nil
+	}
+	path := filepath.Join(migrationsDir, "073_daily_close_ai_overview.sql")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read 073_daily_close_ai_overview.sql: %w", err)
+	}
+	for _, stmt := range splitSQLStatements(string(body)) {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			/*
+				**「이미 있다」는 실패가 아니다.** 실측에서 두 번 밟았다(2026-09-15 기동):
+
+				  ① API 와 워커 여덟이 동시에 스키마를 맞추므로 하나가 이기고 나머지는
+				     끝난 일을 보러 온다(`isSchemaRaceError` 머리글).
+				  ② 이 표는 커서 ALTER 가 클라이언트 연결보다 오래 산다 — 연결이
+				     끊겨 `invalid connection` 을 받았는데 서버에서는 컬럼이 붙고
+				     있었고, 다음 기동의 `columnExists` 가 아직 false 를 봤다.
+
+				둘 다 「이 컬럼이 있다」로 끝나는 상황이라, 여기서 오류를 내면 기동이
+				막히고 서비스가 통째로 안 뜬다.
+			*/
+			if isSchemaRaceError(err) {
+				continue
+			}
+			return fmt.Errorf("073_daily_close_ai_overview.sql: %w", err)
+		}
+	}
+	log.Println("mysql: applied 073_daily_close_ai_overview.sql")
 	return nil
 }

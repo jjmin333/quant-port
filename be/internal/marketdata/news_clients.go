@@ -197,10 +197,10 @@ func (c *KakaoNewsClient) Search(ctx context.Context, query string, size int) ([
 
 	var payload struct {
 		Documents []struct {
-			Title       string `json:"title"`
-			Contents    string `json:"contents"`
-			URL         string `json:"url"`
-			Datetime    string `json:"datetime"`
+			Title    string `json:"title"`
+			Contents string `json:"contents"`
+			URL      string `json:"url"`
+			Datetime string `json:"datetime"`
 		} `json:"documents"`
 	}
 	if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {

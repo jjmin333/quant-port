@@ -93,7 +93,7 @@ func (s *ResearchService) UpdateComment(
 	if body == "" {
 		return model.ResearchComment{}, errors.New("comment body required")
 	}
-	return s.repo.UpdateComment(ctx, commentID, userID, body)
+	return s.repo.UpdateComment(ctx, commentID, userID, body, authctx.IsAdmin(ctx))
 }
 
 func (s *ResearchService) DeleteComment(ctx context.Context, commentID int64) error {
@@ -101,7 +101,7 @@ func (s *ResearchService) DeleteComment(ctx context.Context, commentID int64) er
 	if err != nil {
 		return err
 	}
-	return s.repo.DeleteComment(ctx, commentID, userID)
+	return s.repo.DeleteComment(ctx, commentID, userID, authctx.IsAdmin(ctx))
 }
 
 /*

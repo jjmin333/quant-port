@@ -106,3 +106,14 @@ func TestAmbiguousUSLocalNames_onlyHoldsWordsParticleRuleCannotSave(t *testing.T
 		}
 	}
 }
+
+func TestUSLocalName_indexNameIsNotTheExchangeOperator(t *testing.T) {
+	// 「나스닥이 1.2% 하락」은 지수다 — NDAQ(Nasdaq, Inc.)으로 붙으면 안 된다(2026-10-10).
+	idx := map[string]string{}
+	addUSNameIndexKeys(idx, nil, "NDAQ", "Nasdaq, Inc.", "나스닥")
+	for _, key := range []string{"나스닥", "nasdaq"} {
+		if sym, ok := idx[key]; ok {
+			t.Fatalf("이름 키 %q → %s 가 색인됐다", key, sym)
+		}
+	}
+}

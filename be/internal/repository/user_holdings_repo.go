@@ -22,9 +22,12 @@ func (r *UserHoldingsRepo) List(ctx context.Context, userID int64) ([]model.User
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT uh.id, uh.symbol, uh.quantity, uh.avg_price, COALESCE(uh.cost_currency, ''),
 		       COALESCE(uh.broker_hint, ''), uh.source, uh.updated_at,
-		       COALESCE(s.name, ''), COALESCE(s.english_name, '')
+		       COALESCE(s.name, ''), COALESCE(s.english_name, ''), COALESCE(ss.sector, ''),
+		       COALESCE(ht.axes, '')
 		FROM user_holdings uh
 		LEFT JOIN stocks s ON s.symbol = uh.symbol
+		LEFT JOIN stock_sectors ss ON ss.symbol = uh.symbol
+		LEFT JOIN holding_theses ht ON ht.user_id = uh.user_id AND ht.symbol = uh.symbol
 		WHERE uh.user_id = ?
 		ORDER BY uh.updated_at DESC, uh.symbol ASC
 	`, userID)
@@ -38,8 +41,8 @@ func (r *UserHoldingsRepo) List(ctx context.Context, userID int64) ([]model.User
 		var h model.UserHolding
 		var qty sql.NullFloat64
 		var avgPrice sql.NullFloat64
-		var costCurrency, brokerHint, source, name, english string
-		if err := rows.Scan(&h.ID, &h.Symbol, &qty, &avgPrice, &costCurrency, &brokerHint, &source, &h.UpdatedAt, &name, &english); err != nil {
+		var costCurrency, brokerHint, source, name, english, sector, thesis string
+		if err := rows.Scan(&h.ID, &h.Symbol, &qty, &avgPrice, &costCurrency, &brokerHint, &source, &h.UpdatedAt, &name, &english, &sector, &thesis); err != nil {
 			return nil, err
 		}
 		if qty.Valid {
@@ -52,6 +55,11 @@ func (r *UserHoldingsRepo) List(ctx context.Context, userID int64) ([]model.User
 		h.CostCurrency = costCurrency
 		h.BrokerHint = brokerHint
 		h.Source = source
+		h.Sector = sector
+		h.SectorLabel = model.Sector(sector).Label()
+		if thesis != "" {
+			h.ThesisAxes = strings.Split(thesis, ",")
+		}
 		if name != "" {
 			h.Name = name
 		} else if english != "" {

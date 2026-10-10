@@ -9,6 +9,7 @@ import (
 
 	"github.com/enact/quant-port/be/internal/marketdata/apibudget"
 	"github.com/enact/quant-port/be/internal/model"
+	"github.com/enact/quant-port/be/internal/repository"
 	"github.com/enact/quant-port/be/internal/translate"
 )
 
@@ -221,7 +222,16 @@ func (st *NewsStore) runUSTranslationBatch(ctx context.Context) {
 	if err != nil || len(recs) == 0 {
 		return
 	}
+	st.translateRecords(ctx, recs)
+}
 
+// translateRecords는 한 묶음을 옮기고 **무엇이 됐는지 세어 돌려준다.**
+//
+// 주기 경로는 세어 봐야 쓸 데가 없지만(로그도 안 찍는다), 한 번에 비우는 쪽은
+// 진행률과 멈출 때를 그 수로 판단한다 — 그래서 셈을 여기 둔다.
+func (st *NewsStore) translateRecords(
+	ctx context.Context, recs []repository.NewsArticleRecord,
+) (done, failedN int, blocked bool) {
 	// 옮길 것이 없는 행(이미 한글이거나 영어가 아닌 것)은 요청에 싣지 않고 바로 채운다.
 	var (
 		todo     []string // 번역기에 실제로 보낸 행의 id — out 과 같은 순서다
@@ -235,6 +245,7 @@ func (st *NewsStore) runUSTranslationBatch(ctx context.Context) {
 				continue
 			}
 			st.patchUSArticleTranslation(rec.ID, rec.Headline, rec.Summary)
+			done++
 			continue
 		}
 		todo = append(todo, rec.ID)
@@ -242,13 +253,13 @@ func (st *NewsStore) runUSTranslationBatch(ctx context.Context) {
 		pairs = append(pairs, st.namePairsFor(ctx, rec.Symbols))
 	}
 	if len(todo) == 0 {
-		return
+		return done, 0, false
 	}
 
 	out, blocked := st.translateHeadlines(ctx, headline, pairs)
 	if blocked {
 		// 이 회차는 나가지도 못했다. 아무것도 세지 않고 다음 주기에 그대로 다시 온다.
-		return
+		return done, 0, true
 	}
 
 	var failed []string
@@ -263,11 +274,67 @@ func (st *NewsStore) runUSTranslationBatch(ctx context.Context) {
 			continue
 		}
 		st.patchUSArticleTranslation(id, out[i], "")
+		done++
 	}
 	if len(failed) > 0 {
 		if err := st.repo.BumpTranslateAttempts(ctx, failed); err != nil {
 			st.logFetchErr("translate_attempts", err)
 		}
+	}
+	return done, len(failed), false
+}
+
+/*
+DrainUSTranslations는 밀린 해외 제목을 **큐가 빌 때까지** 옮긴다.
+
+주기 경로(2분마다 스물넷)는 밀린 것을 비우라고 만든 것이 아니다 — 2026-09-15
+기준 미번역 2,852건이면 네 시간이 걸리고, 그중 578건은 7일 창 **밖**이라 아예
+안 걸린다. 그래서 창과 묶음 크기를 부르는 쪽이 정하고, 한 회차가 끝나면 곧바로
+다음 회차를 간다(`cmd/backfill-translations`).
+
+**멈추는 조건이 셋이다.** 큐가 비거나(정상), 엔진이 묶음을 통째로 못 보냈거나
+(blocked — 예산·네트워크·모델 적재 중), 회차가 아무것도 진전시키지 못하는 일이
+세 번 이어지거나. 마지막 것이 필요한 이유는 「옮기지도 실패로 세지도 못한 행」이
+질의에 그대로 남기 때문이다(UpdateTranslation이 에러를 낸 경우) — 그 행은 다음
+회차에 또 오고, 그것만 보고 돌면 영원히 돈다.
+*/
+func (st *NewsStore) DrainUSTranslations(
+	ctx context.Context, batch, windowDays int, progress func(done, failed int),
+) (done, failedN int, err error) {
+	if st.repo == nil || st.translator == nil || !st.translator.Available() {
+		return 0, 0, errors.New("번역 엔진이 붙어 있지 않다")
+	}
+	if batch <= 0 {
+		batch = usTranslationBatchSize
+	}
+	stalled := 0
+	for {
+		if err := ctx.Err(); err != nil {
+			return done, failedN, err
+		}
+		recs, err := st.repo.ListMissingTranslationWindow(ctx, "us", batch, windowDays)
+		if err != nil {
+			return done, failedN, err
+		}
+		if len(recs) == 0 {
+			return done, failedN, nil
+		}
+		d, f, blocked := st.translateRecords(ctx, recs)
+		done += d
+		failedN += f
+		if progress != nil {
+			progress(done, failedN)
+		}
+		if blocked {
+			return done, failedN, errors.New("번역기가 묶음을 보내지 못했다 — 중단")
+		}
+		if d == 0 && f == 0 {
+			if stalled++; stalled >= 3 {
+				return done, failedN, errors.New("세 회차 동안 아무것도 진전되지 않았다 — 중단")
+			}
+			continue
+		}
+		stalled = 0
 	}
 }
 

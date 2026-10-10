@@ -2,8 +2,10 @@ package service
 
 import (
 	"database/sql"
+	"encoding/json"
 	"math"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/enact/quant-port/be/internal/model"
@@ -388,5 +390,13 @@ func TestPeerPctNeverReportsZero(t *testing.T) {
 		if r.PeerPct.Valid && r.PeerPct.Int64 < 1 {
 			t.Errorf("%s 상위 %d%% — 1 미만이 저장됐다", r.Symbol, r.PeerPct.Int64)
 		}
+	}
+	// 「5개 중 1위」 — 최고 종목의 순위와 그룹 크기가 inputs에 남는다.
+	var in map[string]any
+	if err := json.Unmarshal([]byte(best.Inputs), &in); err != nil || in["peerRank"] != float64(1) || in["peerSize"] != float64(5) {
+		t.Errorf("최고 종목 inputs = %s, want peerRank 1 · peerSize 5", best.Inputs)
+	}
+	if worst := rows[0]; !strings.Contains(worst.Inputs, `"peerRank":5`) {
+		t.Errorf("최하 종목 inputs = %s, want peerRank 5", worst.Inputs)
 	}
 }

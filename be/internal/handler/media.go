@@ -111,3 +111,35 @@ func writeMediaError(w http.ResponseWriter, err error) {
 		response.Error(w, http.StatusInternalServerError, "이미지 저장에 실패했습니다")
 	}
 }
+
+// UploadCommunityImage accepts a larger raw file than UploadImage and stores a
+// compressed copy (≤1MB, 평균 100~200KB — 2026-09-27 사용자 결정).
+func (h *MediaHandler) UploadCommunityImage(w http.ResponseWriter, r *http.Request) {
+	if h.svc == nil {
+		response.Error(w, http.StatusServiceUnavailable, "이미지 저장소가 설정되지 않았습니다")
+		return
+	}
+	max := int64(service.CommunityImageRawMax)
+	r.Body = http.MaxBytesReader(w, r.Body, max+(1<<20))
+	if err := r.ParseMultipartForm(8 << 20); err != nil {
+		response.Error(w, http.StatusRequestEntityTooLarge, "이미지가 너무 큽니다 (최대 15MB)")
+		return
+	}
+	defer func() {
+		if r.MultipartForm != nil {
+			_ = r.MultipartForm.RemoveAll()
+		}
+	}()
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "이미지 파일이 필요합니다")
+		return
+	}
+	defer file.Close()
+	upload, err := h.svc.SaveCompressedImage(r.Context(), file)
+	if err != nil {
+		writeMediaError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusCreated, map[string]any{"data": upload})
+}

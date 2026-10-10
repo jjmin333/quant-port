@@ -53,7 +53,7 @@ func (r *NewsRepo) TopKeywords(
 	err := r.db.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM (
 			SELECT id FROM news_articles
-			 WHERE market = ?
+			 WHERE market = ? AND topic = 'stock' -- 주제 기사(부동산·금리 …)의 검색어는 「오늘의 키워드」가 아니다(2026-10-09)
 			 ORDER BY published_at DESC
 			 LIMIT ?
 		) a`, market, sample).Scan(&sampled)
@@ -68,7 +68,7 @@ func (r *NewsRepo) TopKeywords(
 		SELECT j.kw, COUNT(DISTINCT a.id) AS n
 		  FROM (
 		        SELECT id, keywords_json FROM news_articles
-		         WHERE market = ?
+		         WHERE market = ? AND topic = 'stock'
 		         ORDER BY published_at DESC
 		         LIMIT ?
 		       ) a

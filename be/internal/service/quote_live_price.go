@@ -11,10 +11,6 @@ import (
 	"github.com/enact/quant-port/be/internal/toss"
 )
 
-func latestTradePrice(trades []model.TradeTick) (float64, bool) {
-	return newestTradePrice(trades)
-}
-
 func newestTradePrice(trades []model.TradeTick) (float64, bool) {
 	if len(trades) == 0 {
 		return 0, false
@@ -287,7 +283,19 @@ func (s *QuotesService) EnrichRankingPrices(ctx context.Context, items []toss.Ra
 			if live <= 0 {
 				return
 			}
+			/*
+				기준가는 **종목 화면과 같은 값**(저장된 일봉의 직전 거래일 종가)이 먼저다
+				(2026-09-26 외부 방문자 점검). 토스 순위의 basePrice는 그 세션(NXT 애프터
+				마켓 포함)의 기준가라, 장이 닫힌 뒤에는 같은 종가 286,500원이 순위에서
+				+3.62%(기준 276,500) · 종목 화면에서 +3.24%(기준 277,500)로 갈렸다. 장중
+				오버레이(`RankingPrices` → `LiveChanges`)는 이미 일봉을 먼저 쓴다 — 마감 중인
+				이 경로만 달랐다. 일봉 조회는 종목·날짜 키로 캐시돼 있다(prevCloseFromDailyBars).
+			*/
 			base := parseDecimal(out[idx].Price.BasePrice)
+			if prev, ok := s.prevCloseFromDailyBars(ctx, out[idx].Symbol); ok && prev > 0 {
+				base = prev
+				out[idx].Price.BasePrice = formatRankingPrice(prev)
+			}
 			out[idx].Price.LastPrice = formatRankingPrice(live)
 			if base > 0 {
 				rate := (live - base) / base

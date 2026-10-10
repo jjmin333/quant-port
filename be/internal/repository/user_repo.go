@@ -10,7 +10,20 @@ import (
 )
 
 var ErrUserNotFound = errors.New("user not found")
-var ErrEmailTaken = errors.New("email already registered")
+// ErrEmailTaken — 아이디 칸(`users.email`)이 이미 있다. 이름은 칸 이름을 따른다.
+var ErrEmailTaken = errors.New("login id already registered")
+
+// ErrDisplayNameTaken — 닉네임 중복 (2026-09-27 요청 3 · 유니크 인덱스).
+var ErrDisplayNameTaken = errors.New("display name already taken")
+
+// duplicateUserErr tells which unique key a duplicate-key error hit — 아이디와
+// 닉네임 둘 다 유니크라 「이미 있다」가 어느 쪽인지 사용자에게 말해야 한다.
+func duplicateUserErr(err error) error {
+	if strings.Contains(err.Error(), displayNameUniqueIndex) {
+		return ErrDisplayNameTaken
+	}
+	return ErrEmailTaken
+}
 
 type UserRepo struct {
 	db *sql.DB
@@ -32,7 +45,7 @@ func (r *UserRepo) Create(ctx context.Context, email, displayName, passwordHash 
 	`, email, strings.TrimSpace(displayName), passwordHash, role)
 	if err != nil {
 		if isDuplicateKey(err) {
-			return nil, ErrEmailTaken
+			return nil, duplicateUserErr(err)
 		}
 		return nil, err
 	}
@@ -138,6 +151,9 @@ func (r *UserRepo) UpdateDisplayName(ctx context.Context, userID int64, displayN
 		UPDATE users SET display_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
 	`, strings.TrimSpace(displayName), userID)
 	if err != nil {
+		if isDuplicateKey(err) {
+			return ErrDisplayNameTaken
+		}
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
@@ -185,6 +201,10 @@ func (r *UserRepo) Delete(ctx context.Context, userID int64) error {
 	// 「내 투자」 화면 순서대로. 전부 이 사용자만 소유하는 행이다.
 	owned := []string{
 		`DELETE FROM watchlist_items WHERE user_id = ?`,
+		`DELETE FROM fin_watchlist WHERE user_id = ?`,
+		// 순자산(096): 평가 이력은 user_assets FK CASCADE로 같이 지워진다.
+		`DELETE FROM user_liabilities WHERE user_id = ?`,
+		`DELETE FROM user_assets WHERE user_id = ?`,
 		`DELETE FROM holding_trades WHERE user_id = ?`,
 		`DELETE FROM user_holdings WHERE user_id = ?`,
 		`DELETE FROM user_cash_balances WHERE user_id = ?`,

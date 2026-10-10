@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/repository"
 	"github.com/enact/quant-port/be/internal/sample"
 	"github.com/enact/quant-port/be/pkg/response"
@@ -23,13 +25,21 @@ import (
 // in is what lets 현재가·담은 뒤·전일·전주·전월 be the real numbers instead of
 // constants that go stale.
 type SampleHandler struct {
-	quotes sample.Quotes
-	redis  *repository.Redis
-	flight *sampleFlight
+	quotes  sample.Quotes
+	redis   *repository.Redis
+	flight  *sampleFlight
+	sectors *repository.StockSectorRepo
 }
 
 func NewSampleHandler(quotes sample.Quotes, redis *repository.Redis) *SampleHandler {
 	return &SampleHandler{quotes: quotes, redis: redis, flight: newSampleFlight()}
+}
+
+// WithSectors lets the sample portfolio carry sectors so the 구성 도넛's 섹터 탭
+// looks the same in 예시 모드 as for a signed-in user.
+func (h *SampleHandler) WithSectors(repo *repository.StockSectorRepo) *SampleHandler {
+	h.sectors = repo
+	return h
 }
 
 // cacheFor lets the CDN/browser hold a sample for a while. The rows only change
@@ -62,7 +72,11 @@ func (h *SampleHandler) Watchlist(w http.ResponseWriter, r *http.Request) {
 func (h *SampleHandler) Holdings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	h.write(w, sampleCached(ctx, h.redis, h.flight, "sample:v1:holdings", sample.HoldingSeedCount(),
-		func() []sample.HoldingEntry { return sample.Holdings(ctx, time.Now().UTC(), h.quotes) }))
+		func() []sample.HoldingEntry {
+			rows := sample.Holdings(ctx, time.Now().UTC(), h.quotes)
+			h.attachSectors(ctx, rows)
+			return rows
+		}))
 }
 
 func (h *SampleHandler) Journal(w http.ResponseWriter, r *http.Request) {
@@ -71,4 +85,26 @@ func (h *SampleHandler) Journal(w http.ResponseWriter, r *http.Request) {
 
 func (h *SampleHandler) Targets(w http.ResponseWriter, r *http.Request) {
 	h.write(w, sample.Targets(r.Context(), time.Now().UTC(), h.quotes))
+}
+
+// attachSectors fills Sector/SectorLabel on sample positions. 실패해도 조용히 둔다 —
+// 섹터가 비면 도넛이 「미분류」로 그릴 뿐이고, 예시 화면 전체를 막을 이유가 없다.
+func (h *SampleHandler) attachSectors(ctx context.Context, rows []sample.HoldingEntry) {
+	if h.sectors == nil || len(rows) == 0 {
+		return
+	}
+	symbols := make([]string, 0, len(rows))
+	for _, r := range rows {
+		symbols = append(symbols, r.Symbol)
+	}
+	sectors, err := h.sectors.SectorsFor(ctx, symbols)
+	if err != nil {
+		return
+	}
+	for i := range rows {
+		if sec := sectors[rows[i].Symbol]; sec != "" {
+			rows[i].Sector = sec
+			rows[i].SectorLabel = model.Sector(sec).Label()
+		}
+	}
 }

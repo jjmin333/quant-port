@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -117,5 +118,80 @@ func TestWeekendTickGate(t *testing.T) {
 					g.name, shift, passed, minPasses)
 			}
 		}
+	}
+}
+
+// 적재 직후 예열 대상은 **그 시장의 · 최근에 만든** canonical·종목 목록이다.
+// 자유 검색어나 오래 안 본 키까지 다시 만들면 빈 사이트에 2분마다 DB를 읽는다.
+func TestRecentWarmFilters(t *testing.T) {
+	dash := model.NewsListFilter{Market: "us", SourceID: "all", Sort: "latest", Limit: 100}
+	search := model.NewsListFilter{Market: "us", SourceID: "all", Sort: "latest", Query: "nvda", Limit: 100}
+	old := model.NewsListFilter{Market: "us", SourceID: "all", Sort: "latest", Limit: 20}
+	dom := model.NewsListFilter{Market: "domestic", SourceID: "all", Sort: "latest", Limit: 100}
+
+	st := &NewsStore{}
+	st.rememberList(newsListCacheKey(dash), dash, nil, time.Time{})
+	st.rememberList(newsListCacheKey(search), search, nil, time.Time{})
+	st.rememberList(newsListCacheKey(dom), dom, nil, time.Time{})
+	st.rememberList(newsListCacheKey(old), old, nil, time.Time{})
+	e := st.listCache[newsListCacheKey(old)]
+	e.builtAt = time.Now().Add(-newsListWarmWindow - time.Minute)
+	st.listCache[newsListCacheKey(old)] = e
+
+	aapl := model.NewsListFilter{Market: "us", Sort: "latest", Symbol: "AAPL"}
+	st.rememberList(newsListCacheKey(aapl), aapl, nil, time.Time{})
+
+	got := st.recentWarmFiltersLocked("us")
+	if len(got) != 2 || got[0] != dash || got[1] != aapl {
+		t.Fatalf("want recent canonical + symbol us lists (no search, no stale, no domestic), got %+v", got)
+	}
+
+	// 종목 키는 최근 것부터 상한까지만.
+	for i := 0; i < newsListWarmSymbolMax+5; i++ {
+		f := model.NewsListFilter{Market: "us", Sort: "latest", Symbol: fmt.Sprintf("S%02d", i)}
+		st.rememberList(newsListCacheKey(f), f, nil, time.Time{})
+	}
+	if got := st.recentWarmFiltersLocked("us"); len(got) != 1+newsListWarmSymbolMax {
+		t.Fatalf("symbol keys must be capped: got %d", len(got))
+	}
+}
+
+// 합치기를 잠금 밖으로 뺐으므로, 그 사이 스냅샷 자리에서 고쳐진 값(조회수·이미지·번역)을
+// 결과가 잃지 않아야 한다. 들어온 기사의 새 값은 덮지 않는다.
+func TestCarryInPlaceNewsEdits(t *testing.T) {
+	current := []model.NewsArticle{
+		{ID: "a", ViewCount: 7, ImageURL: "img", HeadlineKo: "번역", SummaryKo: "요약", Highlighted: true},
+		{ID: "gone", ViewCount: 99},
+	}
+	merged := []model.NewsArticle{
+		{ID: "a", ViewCount: 5},
+		{ID: "b", ViewCount: 1, ImageURL: "new"},
+	}
+	carryInPlaceNewsEdits(current, merged)
+	a := merged[0]
+	if a.ViewCount != 7 || a.ImageURL != "img" || a.HeadlineKo != "번역" || a.SummaryKo != "요약" || !a.Highlighted {
+		t.Fatalf("in-place edits lost: %+v", a)
+	}
+	if merged[1].ImageURL != "new" || merged[1].ViewCount != 1 {
+		t.Fatalf("unrelated row changed: %+v", merged[1])
+	}
+
+	// 합친 쪽 값이 이미 있으면 그대로 둔다.
+	merged = []model.NewsArticle{{ID: "a", ViewCount: 9, ImageURL: "fresh", HeadlineKo: "새 번역"}}
+	carryInPlaceNewsEdits(current, merged)
+	if merged[0].ViewCount != 9 || merged[0].ImageURL != "fresh" || merged[0].HeadlineKo != "새 번역" {
+		t.Fatalf("fresher merged values must win: %+v", merged[0])
+	}
+}
+
+func TestSameArticleSlice(t *testing.T) {
+	a := []model.NewsArticle{{ID: "x"}, {ID: "y"}}
+	b := make([]model.NewsArticle, len(a))
+	copy(b, a)
+	if !sameArticleSlice(a, a) || sameArticleSlice(a, b) || sameArticleSlice(a, a[:1]) {
+		t.Fatal("identity check wrong")
+	}
+	if !sameArticleSlice(nil, nil) {
+		t.Fatal("two empty snapshots are the same")
 	}
 }

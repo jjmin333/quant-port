@@ -18,13 +18,32 @@ const (
 	ProviderFinnhubNewsCompany Provider = "finnhub_news_company"
 	ProviderFinnhubEarnings    Provider = "finnhub_earnings"
 	ProviderFinnhubBackfill    Provider = "finnhub_backfill"
-	ProviderKRX                Provider = "krx"
-	ProviderUpbit              Provider = "upbit"
-	ProviderDART               Provider = "dart"
-	ProviderEdgar              Provider = "edgar"
-	ProviderEdgarBulk          Provider = "edgar_bulk"
-	ProviderFnGuide            Provider = "fnguide"
-	ProviderNaver              Provider = "naver"
+	// 2026-09-28 사용자 결정: 해외 지표 보조(/stock/metric) + 애널리스트 추천 추이.
+	ProviderFinnhubMetrics Provider = "finnhub_metrics"
+	// 국내 목표가·투자의견 — m.stock.naver.com(공개 API 아님, Naver API Hub 키 버킷과 별개).
+	ProviderNaverStock Provider = "naver_stock"
+	// Reddit 종목 언급 수 — ApeWisdom 공개 API(키 없음).
+	ProviderApeWisdom Provider = "apewisdom"
+	// Reddit 검색 RSS — 종목 커뮤니티 탭의 글 목록(2026-09-29). 키 없음 · IP당 분당 1회(실측).
+	ProviderRedditRSS Provider = "reddit_rss"
+	ProviderKRX       Provider = "krx"
+	// 금감원 「금융상품 한눈에」 Open API — 예·적금·대출 공시(2026-09-29). 하루 한 번 약 60호출.
+	ProviderFinlife Provider = "fss_finlife"
+	// 자산 확장 공공데이터(2026-10-01) — 배치만. 국토부 실거래가(12종, API마다 일 10,000) · 한국부동산원 R-ONE ·
+	// 한국은행 ECOS · 캠코 온비드(API당 일 1,000) · 행안부 법정동코드.
+	ProviderMolitRTMS  Provider = "molit_rtms"
+	ProviderRone       Provider = "reb_rone"
+	ProviderEcos       Provider = "bok_ecos"
+	ProviderOnbid      Provider = "kamco_onbid"
+	ProviderMoisRegion Provider = "mois_region"
+	// 순자산 코인 평가 — 업비트 원화 마켓 전체 시세(2호출). 사용자 수와 무관하게 1분 캐시 뒤에 있다.
+	ProviderUpbitBoard Provider = "upbit_board"
+	ProviderUpbit      Provider = "upbit"
+	ProviderDART       Provider = "dart"
+	ProviderEdgar      Provider = "edgar"
+	ProviderEdgarBulk  Provider = "edgar_bulk"
+	ProviderFnGuide    Provider = "fnguide"
+	ProviderNaver      Provider = "naver"
 
 	ProviderKakao Provider = "kakao"
 	// ProviderAzureTranslate — 해외 뉴스 제목 EN→KO. 세는 단위가 **문자**다
@@ -36,6 +55,24 @@ const (
 	ProviderOpenAI Provider = "openai"
 	ProviderLLMKR  Provider = "llm_kr"
 	ProviderLLMUS  Provider = "llm_us"
+
+	/*
+		기능별 LLM 한도 (2026-09-27 사용자 결정 C — 「토큰이 많아질 것이므로 사전 조치」).
+
+		키 단위 버킷(llm_kr·llm_us)은 **구글이 세는 것**을 흉내 낸다. 이것들은 그와 별개로
+		**우리가 기능마다 떼어 주는 몫**이다 — 새 기능이 하루 한도를 먼저 다 써서 기존
+		종목 AI 요약·뉴스 브리핑이 굶는 일을 막는다. 호출은 두 버킷을 **모두** 통과해야 한다
+		(키 버킷은 llm.Client가, 기능 버킷은 그 기능의 배치가 본다).
+	*/
+	ProviderLLMFeatEarnings Provider = "llm_feat_earnings"
+	// ProviderLLMFeatResearch — 리포트 AI 검토 노트(2026-09-27 결정 C ④).
+	ProviderLLMFeatResearch Provider = "llm_feat_research"
+	// ProviderLLMFeatSocial — 종목 커뮤니티 탭의 Reddit AI 요약(2026-09-29).
+	ProviderLLMFeatSocial Provider = "llm_feat_social"
+	// ProviderLLMSub — 부동산·금융상품 AI 전용 키(GEMINI_SUB_API_KEY, 2026-10-01). KR/US 키와 따로 센다.
+	ProviderLLMSub Provider = "llm_sub"
+	// ProviderLLMFeatAsset — 자산 AI 기능 버킷(금리 한 줄·지역·단지·우대조건).
+	ProviderLLMFeatAsset Provider = "llm_feat_asset"
 )
 
 // Limits documents enforced quotas. See be/docs/api-quotas.md for sources.
@@ -124,9 +161,10 @@ var DefaultLimits = map[Provider]Limits{
 		PerMinute:   100,
 		MinInterval: 3 * time.Minute,
 	},
+	// 지수 ETF 폴러(QQQ·SOXX) 간격과 같아야 한다 — `index_batches.go` finnhub:us 주석.
 	ProviderFinnhub: {
 		PerMinute:   50,
-		MinInterval: 5 * time.Minute,
+		MinInterval: 2 * time.Minute,
 	},
 	// FinnhubMigrate — batch catalog jobs only (/stock/symbol). Same API key but
 	// separate bucket so migration does not trip operational MinInterval.
@@ -185,6 +223,88 @@ var DefaultLimits = map[Provider]Limits{
 		DailyQuota:  8000,
 		PerMinute:   45,
 		MinInterval: 1500 * time.Millisecond,
+	},
+	/*
+		FinnhubMetrics — 해외 지표·추천 로테이션(종목당 2호출). 같은 키의 다른 경로(회사 뉴스 30/분 ·
+		ETF 폴러 · 실적 라이브)와 합쳐 무료 한도 60/분 아래에 두려고 **20/분(3초)**. 하루 5,000은
+		로테이션 2,000종목 × 2호출 + 재실행 여유.
+	*/
+	ProviderFinnhubMetrics: {
+		DailyQuota:  5000,
+		PerMinute:   25, // 상한 > 정상 속도(3초 = 20/분). 같으면 분 경계에서 걸린다
+		MinInterval: 3 * time.Second,
+	},
+	// NaverStock — 공개 API가 아니라 한도를 스스로 낮게 잡는다(FnGuide와 같은 판단). 국내 전 종목 하루 1바퀴.
+	// 상한 60은 정상 속도(1.2초 = 50/분)보다 위 — 같으면 간격을 지켜도 분당 한도에 걸린다(첫 실행에서 74종목이 그랬다).
+	ProviderNaverStock: {
+		DailyQuota:  4000,
+		PerMinute:   60,
+		MinInterval: 1200 * time.Millisecond,
+	},
+	// ApeWisdom — 전 종목 목록 7페이지 남짓을 하루 한 번. 공표 한도가 없어 보수적으로.
+	ProviderApeWisdom: {
+		// 전체 7 + 서브레딧 9개 ≈ 18페이지 + 종목 페이지 상위 150(2026-09-29) ≈ 하루 170호출 + 재실행
+		DailyQuota: 500,
+		// 상한은 정상 속도(3초 = 20/분)보다 위에 — 10일 때 서브레딧 8개가 분당 한도에 걸려 비었다(09-29).
+		PerMinute:   30,
+		MinInterval: 3 * time.Second,
+	},
+	/*
+		Reddit 검색 RSS — 응답 머리의 x-ratelimit가 **분당 1회**를 말한다(2026-09-29 실측: 7초 뒤 두 번째는 429,
+		reset은 분 경계). 간격 62초 · 상한은 그보다 위(budget_cap_above_pace). 하루 약 80종목.
+	*/
+	ProviderRedditRSS: {
+		DailyQuota:  300,
+		PerMinute:   3,
+		MinInterval: 62 * time.Second,
+	},
+	/*
+		금감원 금융상품 Open API — 한도가 명세에 없다. 상품 5종 + 회사 1 × 권역 5 × 페이지 ≈ 하루 60호출.
+		1초 간격이면 분당 60이라 상한은 그 위(budget_cap_above_pace).
+	*/
+	ProviderFinlife: {
+		DailyQuota:  1000,
+		PerMinute:   90,
+		MinInterval: time.Second,
+	},
+	/*
+		국토부 실거래가 — 한도는 **API(종류)마다** 개발계정 일 10,000. 버킷은 12종을 한데 센다:
+		하루 상한 60,000은 그 합(12만)보다 낮게 — 전국 12종 첫 적재(아파트 매매 3년 포함 약 4.5만)가 하루에 들어간다
+		(2026-10-02). 평소는 하루 약 1만. 간격 0.25초(분당 240)라 분당 상한은 그 위(budget_cap_above_pace).
+	*/
+	ProviderMolitRTMS: {
+		DailyQuota:  60000,
+		PerMinute:   300,
+		MinInterval: 250 * time.Millisecond,
+	},
+	// R-ONE — 한도 명시 없음. 하루 수십 호출(지수 표 몇 개 × 지역 전체 1호출).
+	ProviderRone: {
+		DailyQuota:  2000,
+		PerMinute:   90,
+		MinInterval: 500 * time.Millisecond,
+	},
+	// ECOS — 한도 명시 없음. 하루 20여 호출.
+	ProviderEcos: {
+		DailyQuota:  2000,
+		PerMinute:   90,
+		MinInterval: 500 * time.Millisecond,
+	},
+	// 온비드 — 오퍼레이션마다 개발계정 일 1,000. 넷을 한데 세므로 3,500.
+	ProviderOnbid: {
+		DailyQuota:  3500,
+		PerMinute:   120,
+		MinInterval: 600 * time.Millisecond,
+	},
+	// 원화 전체 시세 2호출 × 최대 분당 1회(캐시). 업비트 실제 한도는 초당 10.
+	ProviderUpbitBoard: {
+		DailyQuota:  4000,
+		PerMinute:   6,
+		MinInterval: time.Second,
+	},
+	ProviderMoisRegion: {
+		DailyQuota:  200,
+		PerMinute:   30,
+		MinInterval: time.Second,
 	},
 	ProviderKRX: {
 		DailyQuota:  500,
@@ -302,6 +422,32 @@ var DefaultLimits = map[Provider]Limits{
 	ProviderOpenAI: llmDefaultLimits,
 	ProviderLLMKR:  llmDefaultLimits,
 	ProviderLLMUS:  llmDefaultLimits,
+	ProviderLLMSub: llmDefaultLimits,
+	// 실적 관전 포인트 — 국내·해외 합쳐 하루 60콜 · 12만 토큰(콜당 ~2K). 키 버킷(각 500콜·100만
+	// 토큰)의 약 6%다. 모자라면 규칙 문장으로 떨어지고 다음 날 이어서 채운다.
+	ProviderLLMFeatEarnings: {
+		DailyQuota:   60,
+		TokensPerDay: 120_000,
+	},
+	// 리포트 AI 검토 — 하루 30콜 · 8만 토큰(콜당 ~2.5K: 본문 앞 1,800자 포함). 리포트 게시량(하루 0~10)의 몇 배.
+	ProviderLLMFeatResearch: {
+		DailyQuota:   30,
+		TokensPerDay: 80_000,
+	},
+	// Reddit AI 요약 — 하루 40종목(콜당 ~2.5K: 글 제목·앞부분 10개 포함) + 수동 재실행 여유.
+	ProviderLLMFeatSocial: {
+		DailyQuota:   50,
+		TokensPerDay: 150_000,
+	},
+	/*
+		자산 AI — 전용 키(llm_sub, 500 RPD·100만 토큰)의 **절반**까지(2026-10-02 사용자: 한도를 넘지 않고 매일 돌 수 있게).
+		전국 첫 채우기는 약 350콜(금리 1 · 시군구 ~42 · 단지 ~210 · 우대조건 ~100)이라 이틀에 나눠 찬다.
+		그 뒤엔 입력을 반올림해 해시가 「실제로 달라졌을 때」만 다시 불러 하루 수십 콜. 콜당 ~2K.
+	*/
+	ProviderLLMFeatAsset: {
+		DailyQuota:   250,
+		TokensPerDay: 600_000,
+	},
 }
 
 // llmDefaultLimits is Gemini 3.1 Flash-Lite's free-tier request/token

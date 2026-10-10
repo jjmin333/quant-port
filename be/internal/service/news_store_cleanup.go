@@ -49,7 +49,8 @@ func (st *NewsStore) CleanupIrrelevantArticles(ctx context.Context, market strin
 			break
 		}
 		for _, rec := range recs {
-			keep := isStockRelatedRecord(ctx, st, rec)
+			// 주제 기사(부동산·금리 …, 2026-10-09)는 종목 관련성으로 판정하지 않는다 — 일부러 들인 기사다.
+			keep := (rec.Topic != "" && rec.Topic != "stock") || isStockRelatedRecord(ctx, st, rec)
 			if market == "us" {
 				keep = isUSStockRelatedRecord(ctx, st, rec) || isFinancialJuiceRecord(rec)
 			}

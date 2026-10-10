@@ -10,7 +10,3 @@ import _ "embed"
 
 //go:embed BATCH_SCHEDULE.md
 var batchSchedule string
-
-// BatchSchedule returns the compiled-in copy. Prefer LoadBatchSchedule for
-// the admin UI — that reads the on-disk file after an operator edit.
-func BatchSchedule() string { return batchSchedule }

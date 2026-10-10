@@ -1,7 +1,6 @@
 package textparse
 
 import (
-
 	"regexp"
 
 	"strconv"
@@ -9,35 +8,32 @@ import (
 	"strings"
 
 	"unicode"
-
 )
 
 var (
-
-	qtyPattern     = regexp.MustCompile(`(\d[\d,]*)\s*주`)
+	qtyPattern = regexp.MustCompile(`(\d[\d,]*)\s*주`)
 
 	bareQtyPattern = regexp.MustCompile(`^(\d[\d,]*)\s*%?$`)
 
-	percentQty     = regexp.MustCompile(`^(\d[\d,]*)%$`)
+	percentQty = regexp.MustCompile(`^(\d[\d,]*)%$`)
 
-	nameQtySuffix  = regexp.MustCompile(`^(.+?)\s+(\d{1,7})$`)
+	nameQtySuffix = regexp.MustCompile(`^(.+?)\s+(\d{1,7})$`)
 
 	singleDigitQty = regexp.MustCompile(`^(\d{1,3})$`)
 
 	ocrTrailingQty = regexp.MustCompile(`^(\d[\d,]*)\D+$`)
 
-	headerNoise    = regexp.MustCompile(`(?i)^(총|합계|평가|손익|수익|원|USD|₩|보유|종목|잔고|계좌|증권|주문|체결|시간|현재|전일|등락|거래|금액|비중|수량|해외|국내|내주식|국내주식|내투자|내 투자|직접|설정|omit|재가|현재가|평가금|더보기|탐색|관심|혜택|메뉴|채우기|보내기|베뉴|환전|소수점)`)
+	headerNoise = regexp.MustCompile(`(?i)^(총|합계|평가|손익|수익|원|USD|₩|보유|종목|잔고|계좌|증권|주문|체결|시간|현재|전일|등락|거래|금액|비중|수량|해외|국내|내주식|국내주식|내투자|내 투자|직접|설정|omit|재가|현재가|평가금|더보기|탐색|관심|혜택|메뉴|채우기|보내기|베뉴|환전|소수점)`)
 
-	brokerUINoise  = regexp.MustCompile(`(?i)(키움자산|다른자산|다른자|미래에셋|한국투자|NH투자|신한투자|KB증권|계좌의\s*총\s*자산|개\s*려나|가나다순|가격순|수량순)`)
+	brokerUINoise = regexp.MustCompile(`(?i)(키움자산|다른자산|다른자|미래에셋|한국투자|NH투자|신한투자|KB증권|계좌의\s*총\s*자산|개\s*려나|가나다순|가격순|수량순)`)
 
-	garbageName    = regexp.MustCompile(`(?i)^[@«»_a-z]{1,3}$|^[\p{Hangul}]{1}$|^[.\s]+$|^[a-z]\s+\S`)
+	garbageName = regexp.MustCompile(`(?i)^[@«»_a-z]{1,3}$|^[\p{Hangul}]{1}$|^[.\s]+$|^[a-z]\s+\S`)
 
-	moneyLikeName  = regexp.MustCompile(`^[\d,.]+%?$|^[\d,.]+원?$`)
-
+	moneyLikeName = regexp.MustCompile(`^[\d,.]+%?$|^[\d,.]+원?$`)
 )
 
 type ParsedLine struct {
-	Name     string
+	Name string
 
 	Quantity float64
 
@@ -123,22 +119,6 @@ func IsValidParsedLine(name string, qty float64) bool {
 	}
 
 	return letters >= 1
-}
-
-func recordLine(out *[]ParsedLine, seen map[string]struct{}, name string, qty float64) {
-	if !IsValidParsedLine(name, qty) {
-		return
-	}
-
-	key := name + "|" + strconv.FormatFloat(qty, 'f', -1, 64)
-
-	if _, dup := seen[key]; dup {
-		return
-	}
-
-	seen[key] = struct{}{}
-
-	*out = append(*out, ParsedLine{Name: name, Quantity: qty})
 }
 
 func isSkippableLine(line string) bool {
@@ -488,7 +468,6 @@ func cleanName(s string) string {
 		"[", " ",
 
 		"]", " ",
-
 	)
 
 	s = replacer.Replace(s)
@@ -591,78 +570,6 @@ func MergeParsedLines(items []ParsedLine) []ParsedLine {
 	}
 
 	return out
-}
-
-// MergeDualOCRPass combines two OCR parses of the same image without summing duplicate rows.
-
-func MergeDualOCRPass(items []ParsedLine) []ParsedLine {
-	items = FilterParsedLines(items)
-
-	merged := map[string]float64{}
-
-	display := map[string]string{}
-
-	finance := map[string]ParsedLine{}
-
-	order := []string{}
-
-	for _, item := range items {
-		key := mergeKey(item.Name)
-
-		if key == "" {
-			continue
-		}
-
-		if _, ok := merged[key]; !ok {
-			order = append(order, key)
-
-			display[key] = strings.TrimSpace(item.Name)
-
-			merged[key] = item.Quantity
-
-			finance[key] = item
-
-			continue
-		}
-
-		merged[key] = mergeDualQty(merged[key], item.Quantity)
-
-		finance[key] = pickRicherFinance(finance[key], item)
-	}
-
-	out := make([]ParsedLine, 0, len(order))
-
-	for _, key := range order {
-		line := finance[key]
-
-		line.Name = display[key]
-
-		line.Quantity = merged[key]
-
-		out = append(out, line)
-	}
-
-	return out
-}
-
-func mergeDualQty(existing, next float64) float64 {
-	if existing <= 0 {
-		return next
-	}
-
-	if next <= 0 {
-		return existing
-	}
-
-	if existing == next {
-		return existing
-	}
-
-	if existing < next {
-		return existing
-	}
-
-	return next
 }
 
 func mergeKey(name string) string {

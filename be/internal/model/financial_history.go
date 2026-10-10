@@ -51,4 +51,10 @@ type FinancialHistoryView struct {
 	// Note는 비어 있을 때의 이유를 말한다 — "아직 수집 전"과 "데이터 없음"을
 	// 사용자가 구분할 수 있어야 한다.
 	Note string `json:"note,omitempty"`
+	/*
+		Currency — 공시 통화가 상장 통화와 다를 때만(20-F 해외 발행사, 2026-09-28). 금액은 이 통화다.
+		CurrencyMixed — 기간마다 통화가 섞였을 수 있다(TSM: 달러 환산치와 대만 달러).
+	*/
+	Currency      string `json:"currency,omitempty"`
+	CurrencyMixed bool   `json:"currencyMixed,omitempty"`
 }

@@ -52,6 +52,41 @@ var catalog = map[Provider]CatalogEntry{
 		Label:   "Finnhub (카탈로그 배치)",
 		Purpose: "미국 ETP 카탈로그 동기화(cmd/sync-etp) 전용. 운영 조회와 별도 budget bucket.",
 	},
+	ProviderFinlife: {
+		Provider: ProviderFinlife, Category: CategoryMarket,
+		Label:   "금감원 금융상품 한눈에",
+		Purpose: "정기예금·적금·주택담보·전세자금·개인신용대출 공시와 금융회사 홈페이지(finlife Open API). 하루 한 번 약 60호출.",
+	},
+	ProviderMolitRTMS: {
+		Provider: ProviderMolitRTMS, Category: CategoryMarket,
+		Label:   "국토부 실거래가",
+		Purpose: "아파트·오피스텔·연립·단독·토지·상업·공장 매매와 전월세 실거래(12종). 순자산 부동산 추정가와 부동산 시세 화면.",
+	},
+	ProviderRone: {
+		Provider: ProviderRone, Category: CategoryMarket,
+		Label:   "한국부동산원 R-ONE",
+		Purpose: "주간·월간 주택가격지수, 공동주택 실거래가격지수, 전월세 전환율, 상업용 임대동향.",
+	},
+	ProviderEcos: {
+		Provider: ProviderEcos, Category: CategoryMarket,
+		Label:   "한국은행 ECOS",
+		Purpose: "기준금리·국고채·회사채·CD 금리와 예금·주담대 평균금리. 예금·채권 평가와 금리 카드.",
+	},
+	ProviderOnbid: {
+		Provider: ProviderOnbid, Category: CategoryMarket,
+		Label:   "캠코 온비드",
+		Purpose: "부동산 공매 공고·물건(감정가·최저입찰가·유찰횟수)과 낙찰 결과.",
+	},
+	ProviderUpbitBoard: {
+		Provider: ProviderUpbitBoard, Category: CategoryMarket,
+		Label:   "Upbit (보유 코인 평가)",
+		Purpose: "순자산의 코인 자산 평가용 원화 마켓 전체 시세. 1분 캐시.",
+	},
+	ProviderMoisRegion: {
+		Provider: ProviderMoisRegion, Category: CategoryMarket,
+		Label:   "행안부 법정동코드",
+		Purpose: "실거래 조회용 시군구 목록. 주 1회.",
+	},
 	ProviderKRX: {
 		Provider: ProviderKRX, Category: CategoryMarket,
 		Label:   "KRX",
@@ -86,6 +121,26 @@ var catalog = map[Provider]CatalogEntry{
 		Provider: ProviderFinnhubBackfill, Category: CategoryCorp,
 		Label:   "Finnhub Earnings (과거 백필)",
 		Purpose: "해외 과거 실적 서프라이즈 일회성 백필(/stock/earnings, 종목당 1호출). 캘린더 배치와 분리된 버킷 — 3,000종목을 한 번에 도느라 간격이 다르다.",
+	},
+	ProviderFinnhubMetrics: {
+		Provider: ProviderFinnhubMetrics, Category: CategoryCorp,
+		Label:   "Finnhub Metrics",
+		Purpose: "해외 지표 보조(PER·PBR·PSR·ROE 등, 본국 상장 기준 비율)와 애널리스트 추천 추이. EDGAR에 없는 값만 채운다.",
+	},
+	ProviderNaverStock: {
+		Provider: ProviderNaverStock, Category: CategoryCorp,
+		Label:   "네이버 증권(컨센서스)",
+		Purpose: "국내 평균 목표가·투자의견(m.stock.naver.com, 공개 API 아님 — 한도 자체 설정).",
+	},
+	ProviderApeWisdom: {
+		Provider: ProviderApeWisdom, Category: CategoryNews,
+		Label:   "ApeWisdom (Reddit)",
+		Purpose: "Reddit 종목 언급 수(24시간·전일)·추천 수 + 언급 상위 종목 페이지(감성·언급 사용자·키워드). 키 없음, 하루 한 번.",
+	},
+	ProviderRedditRSS: {
+		Provider: ProviderRedditRSS, Category: CategoryNews,
+		Label:   "Reddit 검색 RSS",
+		Purpose: "종목 커뮤니티 탭의 이번 주 인기 글(제목·앞부분·링크). 키 없음 · 분당 1회라 하루 약 80종목을 로테이션합니다.",
 	},
 	ProviderFnGuide: {
 		Provider: ProviderFnGuide, Category: CategoryCorp,
@@ -129,6 +184,31 @@ var catalog = map[Provider]CatalogEntry{
 		Provider: ProviderLLMKR, Category: CategoryLLM,
 		Label:   "LLM 국내",
 		Purpose: "국내 종목 AI 요약 + 국내 뉴스 시장 브리핑. GEMINI_KR_API_KEY (없으면 GEMINI_API_KEY). 조회 경로는 LLM 0콜.",
+	},
+	ProviderLLMFeatEarnings: {
+		Provider: ProviderLLMFeatEarnings, Category: CategoryLLM,
+		Label:   "LLM 기능 · 실적 관전 포인트",
+		Purpose: "향후 7일 실적 발표 종목의 「볼 것」 요약(매일 07:10 배치). 키 버킷과 별개로 이 기능에 떼어 준 몫이라, 다 쓰면 이 기능만 규칙 문장으로 떨어진다.",
+	},
+	ProviderLLMFeatResearch: {
+		Provider: ProviderLLMFeatResearch, Category: CategoryLLM,
+		Label:   "LLM 기능 · 리포트 AI 검토",
+		Purpose: "공개 리포트의 주장과 데이터 대조 노트(30분마다 새 게시·수정분만). 다 쓰면 이 기능만 규칙 노트로 떨어진다.",
+	},
+	ProviderLLMSub: {
+		Provider: ProviderLLMSub, Category: CategoryLLM,
+		Label:   "LLM (자산 전용 키)",
+		Purpose: "부동산·금융상품 AI 해설 전용 Gemini 키(GEMINI_SUB_API_KEY). 주식·뉴스 KR/US 키와 따로 센다.",
+	},
+	ProviderLLMFeatAsset: {
+		Provider: ProviderLLMFeatAsset, Category: CategoryLLM,
+		Label:   "기능: 자산 AI 해설",
+		Purpose: "금리 한 줄·시군구/단지 시장 해설·예적금 우대조건 구조화(asset_ai 잡). 여러 항목을 한 콜에 묶는다.",
+	},
+	ProviderLLMFeatSocial: {
+		Provider: ProviderLLMFeatSocial, Category: CategoryLLM,
+		Label:   "LLM 기능 · Reddit 커뮤니티 요약",
+		Purpose: "해외 종목 커뮤니티 탭의 AI 핵심 요약(매일 04:20 배치, 언급 상위 40종목). 다 쓰면 이 기능만 규칙 문장으로 떨어진다.",
 	},
 	ProviderLLMUS: {
 		Provider: ProviderLLMUS, Category: CategoryLLM,

@@ -74,6 +74,8 @@ func (e *ResearchSymbolCooldownError) Error() string {
 
 // ResearchPublishRequest is the client payload. Nothing factual is in here.
 type ResearchPublishRequest struct {
+	// Topic — 빈 값·stock은 종목 콜, real_estate·finance는 판정 없는 분석 리포트(2026-10-09 요청 9).
+	Topic        string
 	Symbol       string
 	Title        string
 	Direction    string
@@ -124,7 +126,10 @@ type ResearchService struct {
 	indexStore   *MarketIndexStore
 	marketStore  *MarketDataStore
 	stockSummary *StockSummaryService
+	mentions     *MentionService
 }
+
+func (s *ResearchService) SetMentions(m *MentionService) { s.mentions = m }
 
 func NewResearchService(
 	repo *repository.ResearchRepo,
@@ -150,6 +155,13 @@ func (s *ResearchService) Publish(ctx context.Context, req ResearchPublishReques
 	if err != nil {
 		return model.ResearchView{}, err
 	}
+	topic, ok := model.ParseTopic(req.Topic)
+	if !ok {
+		return model.ResearchView{}, invalidInput("알 수 없는 주제입니다")
+	}
+	if topic != model.TopicStock {
+		return s.publishNote(ctx, userID, topic, req)
+	}
 	symbol := strings.ToUpper(strings.TrimSpace(req.Symbol))
 	if symbol == "" {
 		return model.ResearchView{}, invalidInput("symbol required")
@@ -167,6 +179,9 @@ func (s *ResearchService) Publish(ctx context.Context, req ResearchPublishReques
 	*/
 	if strings.TrimSpace(req.BodyMD) == "" {
 		return model.ResearchView{}, invalidInput("본문을 작성해 주세요")
+	}
+	if err := s.mentions.Check(ctx, req.BodyMD); err != nil {
+		return model.ResearchView{}, err
 	}
 
 	now := time.Now().UTC()
@@ -218,6 +233,56 @@ func (s *ResearchService) Publish(ctx context.Context, req ResearchPublishReques
 	if err != nil {
 		return model.ResearchView{}, err
 	}
+	s.mentions.SyncLogged(ctx, model.MentionTargetResearchCall, created.ID, created.BodyMD)
+	views, err := s.decorate(ctx, userID, []model.ResearchCall{created})
+	if err != nil {
+		return model.ResearchView{}, err
+	}
+	return views[0], nil
+}
+
+/*
+publishNote — 부동산·금융상품 「분석 리포트」(2026-10-09 사용자 결정: 판정 없는 분석 리포트 추가).
+
+종목·목표가·기간이 없으니 근거 캡처·쿨다운·시총 기준·판정이 전부 빠진다. 대상은 본문의 @아파트·@지역·@상품·@금리
+태그가 말한다(mentions). 제목은 필수 — 종목 콜처럼 「삼성전자 매수 콜」로 지어 줄 재료가 없다. 하루 한도는 같이 센다.
+*/
+func (s *ResearchService) publishNote(ctx context.Context, userID int64, topic string, req ResearchPublishRequest) (model.ResearchView, error) {
+	title := truncateRunes(strings.TrimSpace(req.Title), researchTitleMax)
+	if title == "" {
+		return model.ResearchView{}, invalidInput("제목을 입력해 주세요")
+	}
+	if strings.TrimSpace(req.BodyMD) == "" {
+		return model.ResearchView{}, invalidInput("본문을 작성해 주세요")
+	}
+	if err := s.mentions.Check(ctx, req.BodyMD); err != nil {
+		return model.ResearchView{}, err
+	}
+	now := time.Now().UTC()
+	if n, err := s.repo.CountSince(ctx, userID, now.Add(-24*time.Hour)); err != nil {
+		return model.ResearchView{}, err
+	} else if n >= researchDailyCap {
+		return model.ResearchView{}, ErrResearchDailyCap
+	}
+	call := model.ResearchCall{
+		UserID:       userID,
+		Topic:        topic,
+		Title:        title,
+		PublishedAt:  now,
+		TradeDate:    now.In(kstZone).Format("2006-01-02"),
+		Direction:    model.DirectionHold,
+		Currency:     model.CurrencyKRW,
+		BodyMD:       truncateRunes(strings.TrimSpace(req.BodyMD), researchBodyMax),
+		ThumbnailURL: normalizeThumbnailURL(req.ThumbnailURL),
+		Tags:         normalizeResearchTags(req.Tags),
+		Visibility:   normalizeVisibility(req.Visibility),
+		Status:       model.StatusNote,
+	}
+	created, err := s.repo.Create(ctx, call)
+	if err != nil {
+		return model.ResearchView{}, err
+	}
+	s.mentions.SyncLogged(ctx, model.MentionTargetResearchCall, created.ID, created.BodyMD)
 	views, err := s.decorate(ctx, userID, []model.ResearchCall{created})
 	if err != nil {
 		return model.ResearchView{}, err
@@ -658,6 +723,7 @@ func (s *ResearchService) Get(ctx context.Context, id int64) (model.ResearchView
 	}
 	// The rating panel is detail-only, so it is not part of decorate.
 	s.attachRating(ctx, viewerID, &views[0])
+	views[0].Mentions = s.mentions.Load(ctx, model.MentionTargetResearchCall, call.ID, call.BodyMD)
 	return views[0], nil
 }
 
@@ -734,6 +800,9 @@ func (s *ResearchService) decorate(
 	earliestBySymbol := map[string]string{}
 	benchmarks := map[string]string{}
 	for _, c := range calls {
+		if c.Symbol == "" {
+			continue // 분석 리포트 — 시세가 없다
+		}
 		if cur, ok := earliestBySymbol[c.Symbol]; !ok || c.TradeDate < cur {
 			earliestBySymbol[c.Symbol] = c.TradeDate
 		}
@@ -785,9 +854,14 @@ func (s *ResearchService) decorate(
 	hitRate := s.authorHitRate(ctx, viewerID)
 	now := time.Now().UTC()
 	for _, c := range calls {
-		view := buildResearchView(
-			c, now, live[c.Symbol], priceSeries[c.Symbol], benchSeries[c.BenchmarkID], hitRate,
-		)
+		var view model.ResearchView
+		if c.Status == model.StatusNote {
+			view = model.ResearchView{ResearchCall: c, Returns: []model.ResearchReturn{}}
+		} else {
+			view = buildResearchView(
+				c, now, live[c.Symbol], priceSeries[c.Symbol], benchSeries[c.BenchmarkID], hitRate,
+			)
+		}
 		view.CanEdit = viewerID > 0 && viewerID == c.UserID
 		views = append(views, view)
 	}
@@ -822,29 +896,53 @@ func (s *ResearchService) Update(ctx context.Context, id int64, req ResearchUpda
 	if err != nil {
 		return model.ResearchView{}, err
 	}
-	if existing.UserID != userID {
+	if existing.UserID != userID && !authctx.IsAdmin(ctx) {
 		return model.ResearchView{}, repository.ErrResearchNotFound
 	}
 
 	visibility := normalizeVisibility(req.Visibility)
-	if visibility == model.VisibilityPublic {
+	if visibility == model.VisibilityPublic && existing.Status != model.StatusNote {
 		if ok, reason := researchEligible(existing.Currency, existing.Evidence.MarketCap); !ok {
 			return model.ResearchView{}, fmt.Errorf("%w: %s", ErrResearchNotEligible, reason)
 		}
 	}
 	title := normalizeResearchTitle(req.Title, existing.SymbolName, existing.Symbol, existing.Direction)
+	if existing.Status == model.StatusNote && strings.TrimSpace(req.Title) == "" {
+		title = existing.Title // 분석 리포트는 「… 관망 콜」로 지어 주지 않는다
+	}
 	body := truncateRunes(strings.TrimSpace(req.BodyMD), researchBodyMax)
+	if err := s.mentions.Check(ctx, body); err != nil {
+		return model.ResearchView{}, err
+	}
 
-	updated, err := s.repo.UpdateBody(ctx, userID, id, title, body,
+	// 관리자가 고칠 때도 행의 주인은 작성자다.
+	updated, err := s.repo.UpdateBody(ctx, existing.UserID, id, title, body,
 		normalizeThumbnailURL(req.ThumbnailURL), normalizeResearchTags(req.Tags), string(visibility))
 	if err != nil {
 		return model.ResearchView{}, err
 	}
+	s.mentions.SyncLogged(ctx, model.MentionTargetResearchCall, id, body)
 	views, err := s.decorate(ctx, userID, []model.ResearchCall{updated})
 	if err != nil {
 		return model.ResearchView{}, err
 	}
 	return views[0], nil
+}
+
+// Delete removes a call and everything hanging off it. Author or admin only.
+func (s *ResearchService) Delete(ctx context.Context, id int64) error {
+	userID, err := authctx.RequireUserID(ctx)
+	if err != nil {
+		return err
+	}
+	existing, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if existing.UserID != userID && !authctx.IsAdmin(ctx) {
+		return repository.ErrResearchNotFound
+	}
+	return s.repo.Delete(ctx, id)
 }
 
 // Retract withdraws a call. It is not a delete: the row keeps counting toward

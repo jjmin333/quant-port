@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"log"
+	"maps"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -196,6 +197,7 @@ func (st *NewsStore) normalizeItem(
 		}
 	}
 
+	topic, assetTags := st.topicFor(ctx, market, title, item.Description, symbols)
 	tags := classifyNewsTags(title, item.SourceID, storedURL)
 	if tags == nil {
 		tags = []string{}
@@ -242,6 +244,8 @@ func (st *NewsStore) normalizeItem(
 		ImageURL:      imageURL,
 		PreviewMode:   string(previewMode),
 		EmbedPolicy:   string(embedPolicy),
+		Topic:         topic,
+		AssetTags:     assetTags,
 	}
 
 	if market == "us" {
@@ -277,6 +281,8 @@ func (st *NewsStore) normalizeItem(
 			Symbols:       symbols,
 			Keywords:      keywords,
 			PublishedAt:   publishedAt,
+			Topic:         topic,
+			AssetTags:     assetTags,
 		}
 		if err := st.repo.Upsert(ctx, rec); err != nil {
 			st.logFetchErr("repo", err)
@@ -354,11 +360,16 @@ func (st *NewsStore) rebuildNameIndex(ctx context.Context) {
 	}
 	addHangulAliasNames(idx)
 	st.mu.Lock()
+	// 인덱스가 바뀌면 같은 본문도 다른 심볼을 낼 수 있다 (symbolMemo).
+	// **내용이 같으면 세대를 올리지 않는다** — 재구성은 30분마다 돌지만 종목 마스터는
+	// 하루에 한 번쯤 바뀐다. 매번 비우면 30분마다 첫 목록 재구성이 기사 전부를 다시
+	// 훑었다(실측 해외 목록 1회 536ms → 메모가 살아 있으면 1.5ms).
+	if !maps.Equal(st.nameIndex, idx) {
+		st.nameIndexGen++
+		st.symbolMemo = nil
+	}
 	st.nameIndex = idx
 	st.nameIndexAt = time.Now()
-	// 인덱스가 바뀌면 같은 본문도 다른 심볼을 낼 수 있다 (symbolMemo).
-	st.nameIndexGen++
-	st.symbolMemo = nil
 	st.mu.Unlock()
 	log.Printf("news name index (domestic): %d names from %d catalog rows", len(idx), len(stocks))
 }

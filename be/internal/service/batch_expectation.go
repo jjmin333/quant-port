@@ -106,6 +106,65 @@ var batchExpectations = map[model.BatchJobID]batchExpectation{
 	model.BatchWarnings: {
 		at: []string{"01:30"}, grace: 5 * time.Hour, maxRuntime: 4 * time.Hour,
 	}, // 전 종목 17,900개 · 실측 약 2시간
+	model.BatchSectorSync: {
+		// 첫 바퀴는 국내 1,000 × 1초 + 미국 3,000 × 0.3초 ≈ 35분. 이후는 몇 분.
+		at: []string{"02:30"}, grace: 4 * time.Hour, maxRuntime: 2 * time.Hour,
+	},
+	model.BatchETFScore: {
+		// 평시 1호출 + 점수 계산(수 초). 첫 실행은 60호출 × 7초 ≈ 7분.
+		at: []string{"10:00"}, grace: 4 * time.Hour, maxRuntime: 30 * time.Minute,
+	},
+	model.BatchExtMetrics: {
+		// 1,500종목 × 최대 2호출 × 3초 ≈ 2.5시간.
+		at: []string{"03:00"}, grace: 5 * time.Hour, maxRuntime: 4 * time.Hour,
+	},
+	model.BatchAnalystDomestic: {
+		// 약 2,700 × 1.2초 ≈ 55분.
+		at: []string{"06:30"}, grace: 4 * time.Hour, maxRuntime: 2 * time.Hour,
+	},
+	model.BatchSocialMentions: {
+		// 18페이지 + 종목 페이지 150 × 3초 ≈ 9분.
+		at: []string{"00:05"}, grace: 6 * time.Hour, maxRuntime: 25 * time.Minute,
+	},
+	model.BatchSocialPosts: {
+		// 80종목 × 62초 ≈ 85분.
+		at: []string{"00:30"}, grace: 6 * time.Hour, maxRuntime: 2 * time.Hour,
+	},
+	model.BatchReTrades: {
+		// 호출 상한 6,000 × 0.26초 + 응답 ≈ 40~60분.
+		at: []string{"03:30"}, grace: 6 * time.Hour, maxRuntime: 2 * time.Hour,
+	},
+	model.BatchAssetScores: {
+		// 단지 수천 개 백분위 + 금융상품 1,000여 개 — DB만, 몇 분.
+		at: []string{"09:50"}, grace: 6 * time.Hour, maxRuntime: 40 * time.Minute,
+	},
+	model.BatchAssetAI: {
+		// 많아야 약 60콜 × 4초 간격.
+		at: []string{"10:20"}, grace: 6 * time.Hour, maxRuntime: 40 * time.Minute,
+	},
+	model.BatchReIndex: {
+		// 첫 회는 전체 이력 약 550호출(≈ 6분), 그 뒤엔 20호출 남짓.
+		at: []string{"06:00"}, grace: 6 * time.Hour, maxRuntime: 40 * time.Minute,
+	},
+	model.BatchOnbid: {
+		// 목록 ≈ 45 + 상세 ≤ 900 + 낙찰가 ≤ 900, 0.65초 간격 ≈ 20분.
+		at: []string{"07:40"}, grace: 6 * time.Hour, maxRuntime: 90 * time.Minute,
+	},
+	model.BatchEcosRates: {
+		// 21계열 × 0.6초.
+		at: []string{"09:20"}, grace: 6 * time.Hour, maxRuntime: 15 * time.Minute,
+	},
+	model.BatchFinProducts: {
+		// 약 60호출 × 1.1초 ≈ 2분.
+		at: []string{"05:10"}, grace: 4 * time.Hour, maxRuntime: 20 * time.Minute,
+	},
+	model.BatchSocialSummary: {
+		at: []string{"04:20"}, grace: 4 * time.Hour, maxRuntime: 30 * time.Minute,
+	},
+	model.BatchInvestorFlow: {
+		// 국내 보통주 약 2,760 × (0.5초 + 응답) ≈ 30분.
+		at: []string{"20:30"}, grace: 3 * time.Hour, maxRuntime: 2 * time.Hour,
+	},
 	model.BatchStockScores: {
 		at: []string{"00:25"}, grace: 3 * time.Hour, maxRuntime: 2 * time.Hour,
 	},
@@ -123,6 +182,10 @@ var batchExpectations = map[model.BatchJobID]batchExpectation{
 	},
 	model.BatchResearchVerdict: {
 		at: []string{"07:00"}, grace: 3 * time.Hour,
+	},
+	model.BatchGrowthAudit: {
+		// 사이트맵 약 1,000 URL × (0.5초 간격 · 동시 2) ≈ 10분 + URL 검사 200 × 0.3초.
+		at: []string{"07:30"}, grace: 3 * time.Hour, maxRuntime: time.Hour,
 	},
 	model.BatchFinancialsOverseas: {
 		at: []string{"09:00"}, grace: 3 * time.Hour,
@@ -143,8 +206,19 @@ var batchExpectations = map[model.BatchJobID]batchExpectation{
 		at: []string{"22:00"}, grace: 5 * time.Hour, maxRuntime: 4 * time.Hour,
 	},
 	model.BatchDailyCloseDomestic: {
-		// KRX 마감 +20분. 실측 15:49~16:15에 적재가 끝난다.
-		at: []string{"15:50"}, grace: 4 * time.Hour, maxRuntime: 2 * time.Hour,
+		/*
+			KRX 마감 +20분. 실측 15:49~16:15에 적재가 끝난다.
+
+			**거래일에만 기대한다 (2026-09-20).** 이 잡은 다른 스케줄(weekdays_kst
+			지수)로 주말에도 돌기 때문에 위 머리글의 「휴장일에도 돈다」에 해당하는
+			것처럼 보였지만, **15:50 슬롯만은 KRX 달력을 본다**(daily_close.go의
+			`IsTradingDay`). 실측 2주: 평일 1회씩 · 토·일 0회.
+
+			매일로 두는 동안 주말마다 거짓 경보가 났다 — 09-19(토) 하루에만 67회,
+			09-20(일)도 같은 사건이 열렸다. 감시가 잡과 **같은 달력**을 봐야 한다.
+		*/
+		schedule: calendar.ScheduleKRX,
+		at:       []string{"15:50"}, grace: 4 * time.Hour, maxRuntime: 2 * time.Hour,
 	},
 	model.BatchDailyCloseOverseas: {
 		// US 마감 +20분 = 05:20 KST(서머타임 기준). 겨울에는 한 시간 늦으므로
@@ -174,6 +248,30 @@ var batchExpectations = map[model.BatchJobID]batchExpectation{
 		// ET로 적어 두면 서머타임 전환을 달력이 알아서 따라간다.
 		at: []string{"18:00"}, grace: 4 * time.Hour, maxRuntime: 3 * time.Hour,
 	},
+	/*
+		지수 해설의 **만회 슬롯** — 16:30 KST (2026-09-16).
+
+		본 실행은 여전히 점수 배치(00:25) 안에서 돌고 원장에 따로 남지 않는다. 여기
+		기대에 서는 것은 그 뒤 하루 한 번 도는 만회 슬롯이다 — 00:25가 실패해도 그날
+		안에 채워진다는 보장이 이 잡의 존재 이유이므로, **그 보장이 죽었는지를 감시가
+		알아야** 한다(`cmd/worker-scores`의 `runIndexNoteCatchupSchedule`).
+
+		달력을 걸지 않는다. 휴장일에도 돌고, 채울 것이 없으면 SELECT 열셋으로 끝난다.
+	*/
+	model.BatchIndexNotes: {
+		at: []string{"16:30"}, grace: 3 * time.Hour, maxRuntime: 30 * time.Minute,
+	},
+
+	/*
+		실적 관전 포인트 — 07:10 KST(2026-09-27). 달력을 걸지 않는다: 창이 「향후 7일」이라
+		휴장일에도 다가오는 발표가 있다. 재처리 허용 목록에는 넣지 않는다(LLM 비용 — 사람이 정한다).
+	*/
+	model.BatchEarningsPreviewDomestic: {
+		at: []string{"07:10"}, grace: 3 * time.Hour, maxRuntime: 30 * time.Minute,
+	},
+	model.BatchEarningsPreviewOverseas: {
+		at: []string{"07:10"}, grace: 3 * time.Hour, maxRuntime: 30 * time.Minute,
+	},
 
 	// ── 주기로 도는 잡 ────────────────────────────────────────────────────
 	model.BatchNewsBriefingDomestic: {
@@ -184,17 +282,23 @@ var batchExpectations = map[model.BatchJobID]batchExpectation{
 	model.BatchNewsBriefingOverseas: {
 		everyMinutes: 60, grace: 2 * time.Hour,
 	},
+	// 리포트 AI 검토 — 30분 주기. 할 일이 없으면 SELECT 한 번으로 끝난다.
+	model.BatchResearchReview: {
+		everyMinutes: 30, grace: 2 * time.Hour, maxRuntime: 20 * time.Minute,
+	},
 	model.BatchWatchdog: {
 		everyMinutes: batchWatchdogIntervalMinutes, grace: 45 * time.Minute, maxRuntime: 10 * time.Minute,
 	},
 
 	// ── 예약이 없는 잡 ────────────────────────────────────────────────────
+	// 점수 배치 안에서 첫 단계로 돈다 — 부모가 안 돌면 부모 쪽에서 보인다.
+	model.BatchNewsSentiment:          {partOf: model.BatchStockScores},
+	model.BatchChangeDetect:           {partOf: model.BatchStockScores},
+	model.BatchScoreReportCard:        {partOf: model.BatchStockScores},
 	model.BatchIndexCloses:            {manual: true},
 	model.BatchDailyCloseFetchStale:   {manual: true},
 	model.BatchDailyCloseFetchMissing: {manual: true},
 	model.BatchDailyCloseFetchHistory: {manual: true},
-	// 지수 해설은 점수 배치 **안에서** 돈다 — 따로 예약이 없다.
-	model.BatchIndexNotes: {partOf: model.BatchStockScores},
 }
 
 // batchExpectationLookbackDays bounds the walk backwards when every recent day

@@ -17,6 +17,8 @@ const (
 	indexSourceFRED      indexSource = "fred"
 	indexSourceUpbit     indexSource = "upbit"
 	indexSourceGoldPrice indexSource = "goldprice"
+	// 한국 금리(2026-10-01) — worker-asset의 ecos_rates가 채운 macro_rates 표를 읽는다(API는 외부 호출 없음).
+	indexSourceEcos indexSource = "ecos"
 )
 
 type indexCatalogEntry struct {
@@ -38,8 +40,22 @@ var marketIndexCatalog = []indexCatalogEntry{
 	{id: "nq100", name: "나스닥100 선물", currency: model.CurrencyUSD, source: indexSourceFinnhub, symbol: "QQQ", badge: "QQQ"},
 	{id: "sp500", name: "S&P 500", currency: model.CurrencyUSD, source: indexSourceFRED, symbol: "SP500"},
 	{id: "dow", name: "다우존스", currency: model.CurrencyUSD, source: indexSourceFRED, symbol: "DJIA"},
+	/*
+		지수 추종 ETF SPY·DIA(10-01 추가)는 **뺐다**(2026-10-07 사용자 결정 — 지수와 ETF가 같은 시장을 두 번
+		보였다). 출처 표기는 지수 모달 안에 있다. 카탈로그 길이가 바뀌어도 Redis 옛 스냅샷은
+		`alignIndicesToCatalog`가 id로 다시 맞춘다(10-01 패닉의 수정).
+	*/
 	{id: "vix", name: "VIX", currency: model.CurrencyUSD, source: indexSourceFRED, symbol: "VIXCLS"},
 	{id: "us10y", name: "미 국채 10년", currency: model.CurrencyUSD, source: indexSourceFRED, symbol: "DGS10"},
+	// 한국 금리(값은 %, 등락은 %p) — 일별(ECOS 다음 날 공표)·기준금리는 월별.
+	{id: "kr-base", name: "한국 기준금리", currency: model.CurrencyKRW, source: indexSourceEcos, symbol: "722Y001/0101000"},
+	/*
+		국고채 3·10년은 **토스 지표 API로 장중 실시간**이다(2026-10-07 — 그전엔 ECOS 다음 날 공표값).
+		KOSPI·KOSDAQ와 같은 /market-indicators/prices 한 번에 같이 받는다(추가 요청 없음).
+		금리 화면·자산 AI가 쓰는 ECOS 일별 표(macro_rates)는 그대로다.
+	*/
+	{id: "ktb3", name: "국고채 3년", currency: model.CurrencyKRW, source: indexSourceToss, symbol: "KR_BOND_3Y"},
+	{id: "ktb10", name: "국고채 10년", currency: model.CurrencyKRW, source: indexSourceToss, symbol: "KR_BOND_10Y"},
 	{id: "sox", name: "필라델피아 반도체", currency: model.CurrencyUSD, source: indexSourceFinnhub, symbol: "SOXX", badge: "SOXX"},
 	{id: "btc", name: "비트코인", currency: model.CurrencyKRW, source: indexSourceUpbit, symbol: "KRW-BTC"},
 	{id: "gold", name: "금", currency: model.CurrencyUSD, source: indexSourceGoldPrice, symbol: "XAU"},
@@ -93,10 +109,6 @@ func alignIndicesToCatalog(indices []model.MarketIndex) []model.MarketIndex {
 		}
 	}
 	return out
-}
-
-func indexMinRefreshInterval(entry indexCatalogEntry) time.Duration {
-	return batchMinIntervalForIndex(entry.id)
 }
 
 func batchMinIntervalForIndex(indexID string) time.Duration {

@@ -5,11 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
 
 const naverStockBasicURL = "https://m.stock.naver.com/api/stock/%s/basic"
+
+// NaverLogoURL is the Naver CDN PNG for a KRX symbol — the same file `itemLogoPngUrl` points at.
+func NaverLogoURL(symbol string) string {
+	return "https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock" + url.PathEscape(symbol) + ".png"
+}
 
 type naverStockBasic struct {
 	ItemLogoPngURL string `json:"itemLogoPngUrl"`

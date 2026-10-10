@@ -25,10 +25,6 @@ type goldSparklineState struct {
 	Points []float64 `json:"points"`
 }
 
-func (s *QuotesService) enrichGoldQuote(ctx context.Context, q marketdata.Quote) marketdata.Quote {
-	return enrichGoldQuote(ctx, s.redis, q)
-}
-
 func enrichGoldQuote(ctx context.Context, redis *redis.Client, q marketdata.Quote) marketdata.Quote {
 	if q.Value <= 0 {
 		return q

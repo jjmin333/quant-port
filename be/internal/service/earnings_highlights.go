@@ -27,8 +27,18 @@ type EarningsHighlights struct {
 }
 
 const (
+	// earningsHighlightsTTL은 「신선한 시간」, earningsHighlightsKeep은 「사는 시간」이다.
+	//
+	// 예전에는 30분 TTL 하나였고 만료된 요청이 세 질의를 **동기로** 기다렸다. 실측
+	// (09-24~25 운영 로그): 이 레일 요청 14건이 **전부** 2.8~3.1초였다 — 방문 간격이
+	// 30분보다 길어 사실상 모든 요청이 캐시 만료를 맞았다. 사용자 수와 무관하게
+	// 오는 지연이라 「사용자가 적은데 느리다」는 체감과 맞는다.
+	//
+	// 지금은 값을 하루 넘게 들고 있다가, 신선하지 않으면 그 값을 주고 뒤에서 다시
+	// 만든다. 재료가 배치로만 들어오므로 30분 낡은 레일은 문제가 되지 않는다.
 	earningsHighlightsTTL    = 30 * time.Minute
-	earningsHighlightsKeyFmt = "earnings:highlights:v2:%s:%s"
+	earningsHighlightsKeep   = 36 * time.Hour
+	earningsHighlightsKeyFmt = "earnings:highlights:v3:%s"
 
 	// 대형 발표는 앞으로 2주를 본다 — 그보다 멀면 「다가오는」이 아니다.
 	highlightsUpcomingDays = 14
@@ -78,21 +88,61 @@ func (s *EarningsCalendarService) Highlights(
 		return out, nil
 	}
 
-	nowKST := time.Now().In(model.KST)
+	now := time.Now()
+	nowKST := now.In(model.KST)
 	today := time.Date(nowKST.Year(), nowKST.Month(), nowKST.Day(), 0, 0, 0, 0, time.UTC)
+	day := today.Format("2006-01-02")
 
-	cacheKey := fmt.Sprintf(earningsHighlightsKeyFmt, market, today.Format("2006-01-02"))
-	var cached EarningsHighlights
-	if s.cacheGet(ctx, cacheKey, &cached) {
-		return cached, nil
+	cacheKey := fmt.Sprintf(earningsHighlightsKeyFmt, market)
+	build := func(buildCtx context.Context) {
+		fresh := EarningsHighlights{
+			Big:        s.upcomingBig(buildCtx, today, market),
+			Divergent:  s.divergentAnnouncements(buildCtx, today, market),
+			Consistent: s.consistentBeaters(buildCtx, today, market),
+		}
+		s.cacheSetTTL(buildCtx, cacheKey, earningsHighlightsEntry{
+			Day: day, BuiltAt: time.Now(), Data: fresh,
+		}, earningsHighlightsKeep)
 	}
 
+	var cached earningsHighlightsEntry
+	if s.cacheGet(ctx, cacheKey, &cached) {
+		if cached.isFresh(day, now) {
+			return cached.Data, nil
+		}
+		// 낡았어도 값은 있다 — 그것을 주고 재구성은 뒤로 보낸다. 자정을 넘긴 직후의
+		// 어제 레일도 여기로 온다(창이 하루 밀린 목록이 몇 초 보이는 쪽이 3초 멈춤보다 낫다).
+		s.highlightsRefresh().runOnce("earnings:highlights:"+market, build)
+		return cached.Data, nil
+	}
+
+	// 줄 것이 없을 때(첫 기동·키 만료)만 기다린다. 동시에 온 요청은 한 번의 재구성에 얹힌다.
+	s.highlightsRefresh().doSync(ctx, "earnings:highlights:"+market, build)
+	if s.cacheGet(ctx, cacheKey, &cached) {
+		return cached.Data, nil
+	}
+	// Redis가 없거나 쓰기에 실패했다 — 직접 만들어 준다.
 	out.Big = s.upcomingBig(ctx, today, market)
 	out.Divergent = s.divergentAnnouncements(ctx, today, market)
 	out.Consistent = s.consistentBeaters(ctx, today, market)
-
-	s.cacheSetTTL(ctx, cacheKey, out, earningsHighlightsTTL)
 	return out, nil
+}
+
+// earningsHighlightsEntry — 레일과 그것을 만든 시점. 신선도 판정에 둘 다 필요하다:
+// 30분이 안 지났어도 **날짜가 바뀌면** 창(앞으로 14일 · 지난 45일)이 달라진다.
+type earningsHighlightsEntry struct {
+	Day     string             `json:"day"`
+	BuiltAt time.Time          `json:"builtAt"`
+	Data    EarningsHighlights `json:"data"`
+}
+
+func (e earningsHighlightsEntry) isFresh(day string, now time.Time) bool {
+	return e.Day == day && now.Sub(e.BuiltAt) < earningsHighlightsTTL
+}
+
+func (s *EarningsCalendarService) highlightsRefresh() *quoteRefreshCoordinator {
+	s.refreshOnce.Do(func() { s.refresh = newQuoteRefreshCoordinator() })
+	return s.refresh
 }
 
 // upcomingBig — 다가오는 발표를 시가총액 순으로 (R1).

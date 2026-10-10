@@ -20,11 +20,11 @@ NAVER
 	lines := FilterParsedLines(ParseHoldingsText(text))
 	want := map[string]float64{
 		"잠성9미":  4,
-		"삼성전자":   35,
-		"한화솔루션":  55,
-		"한화시스템":  23,
-		"현대차":    4,
-		"NAVER":  19,
+		"삼성전자":  35,
+		"한화솔루션": 55,
+		"한화시스템": 23,
+		"현대차":   4,
+		"NAVER": 19,
 	}
 	for name, qty := range want {
 		found := false
@@ -101,9 +101,9 @@ $12,776.32
 50`
 	lines := ParseHoldingsText(text)
 	want := map[string]float64{
-		"아우스터":  60,
-		"아이렌":   55,
-		"코어위브":  30,
+		"아우스터":         60,
+		"아이렌":          55,
+		"코어위브":         30,
 		"ARM 2SA(ADR)": 50,
 	}
 	for name, qty := range want {
@@ -154,30 +154,6 @@ Apple Inc 3주
 	}
 	if !foundSamsung {
 		t.Fatalf("missing samsung line: %+v", lines)
-	}
-}
-
-func TestMergeDualOCRPass(t *testing.T) {
-	merged := MergeDualOCRPass([]ParsedLine{
-		{Name: "어플라이드 머티리얼즈", Quantity: 4},
-		{Name: "어플라이드 머티리얼즈", Quantity: 0},
-		{Name: "아우스터", Quantity: 60},
-		{Name: "아우스터", Quantity: 60},
-	})
-	if len(merged) != 2 {
-		t.Fatalf("unexpected len: %+v", merged)
-	}
-	for _, l := range merged {
-		switch l.Name {
-		case "어플라이드 머티리얼즈":
-			if l.Quantity != 4 {
-				t.Fatalf("expected qty 4, got %+v", l)
-			}
-		case "아우스터":
-			if l.Quantity != 60 {
-				t.Fatalf("expected qty 60, got %+v", l)
-			}
-		}
 	}
 }
 

@@ -4,3 +4,5 @@ tmp/
 .git
 **/*_test.go
 **/.DS_Store
+sentiment/
+secrets/

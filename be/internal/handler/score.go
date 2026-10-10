@@ -186,3 +186,74 @@ func (h *ScoreHandler) IndexScores(w http.ResponseWriter, r *http.Request) {
 	}
 	response.JSON(w, http.StatusOK, map[string]any{"data": rows})
 }
+
+/*
+Explain serves GET /stocks/{symbol}/score/explain — 점수의 근거와 변화 원인.
+
+History와 따로 둔 이유: 이력은 그래프 한 줄이면 되고 이미 여러 화면이 그렇게 쓰지만,
+이 응답은 하루치 근거 전부(지표 원값·백분위·순위 그룹·버린 값)와 전일·전주 귀인을
+싣는다. 목록에 실릴 크기가 아니라 **한 종목을 펼쳤을 때** 한 번 부르는 입구다.
+
+점수가 없는 종목은 오류가 아니라 `data: null`이다 — 화면은 이미 그 상태를 그린다.
+*/
+func (h *ScoreHandler) Explain(w http.ResponseWriter, r *http.Request) {
+	symbol := strings.TrimSpace(chi.URLParam(r, "symbol"))
+	if symbol == "" {
+		response.Error(w, http.StatusBadRequest, "symbol required")
+		return
+	}
+	if h.svc == nil {
+		response.JSON(w, http.StatusOK, map[string]any{"data": nil})
+		return
+	}
+	view, err := h.svc.Explain(r.Context(), symbol)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]any{"data": view})
+}
+
+/*
+Changes serves GET /stocks/scores/changes?symbols=A,B,C — 목록 행에 실리는
+한 줄짜리 점수 변화.
+
+`/score/explain`과 답은 같고 **크기가 다르다**. 설명 패널은 한 종목당 15KB이고 이것은
+행당 약 60B다 — 목록이 큰 쪽을 부르면 20종목에 300KB와 스무 번의 조회가 된다
+(PRINCIPLES 「응답 속도 원칙」 ①·④). 그래서 배치 입구를 따로 둔다.
+
+응답에 없는 종목은 「점수가 없다」는 뜻이고 오류가 아니다 — `/stocks/scores/batch`와
+같은 규약이라 화면은 이미 그 상태를 그린다.
+*/
+func (h *ScoreHandler) Changes(w http.ResponseWriter, r *http.Request) {
+	raw := strings.TrimSpace(r.URL.Query().Get("symbols"))
+	if raw == "" || h.svc == nil {
+		response.JSON(w, http.StatusOK, map[string]any{"data": []any{}})
+		return
+	}
+	parts := strings.Split(raw, ",")
+	symbols := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			symbols = append(symbols, p)
+		}
+	}
+	// `/stocks/scores/batch`와 같은 상한 — 한 번의 요청이 점수 표 전체를 훑지 못한다.
+	const maxBatch = 200
+	if len(symbols) > maxBatch {
+		symbols = symbols[:maxBatch]
+	}
+	if len(symbols) == 0 {
+		response.JSON(w, http.StatusOK, map[string]any{"data": []any{}})
+		return
+	}
+	rows, err := h.svc.Changes(r.Context(), symbols)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if rows == nil {
+		rows = []model.ScoreChangeSummary{}
+	}
+	response.JSON(w, http.StatusOK, map[string]any{"data": rows})
+}

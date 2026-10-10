@@ -1,12 +1,16 @@
 package service
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/enact/quant-port/be/internal/model"
+	"github.com/enact/quant-port/be/internal/repository"
 )
 
 // Facts payload for the AI 요약.
@@ -40,6 +44,49 @@ type stockSummaryFacts struct {
 	// DataGaps names what we could not measure, so the model states less
 	// rather than inventing coverage it does not have.
 	DataGaps []string `json:"dataGaps,omitempty"`
+
+	// Reddit — 미국 종목의 Reddit 여론(ApeWisdom). 의견이지 펀더멘털이 아니다(프롬프트가 그렇게 다룬다).
+	Reddit *factsReddit `json:"reddit,omitempty"`
+}
+
+type factsReddit struct {
+	AsOf            string `json:"asOf"`
+	Mentions24h     int    `json:"mentions24h"`
+	MentionsPrev24h int    `json:"mentionsPrev24h"`
+	Rank            int    `json:"rank"`
+	Users           int    `json:"users"`
+	SentimentPct    int    `json:"sentimentPct"`
+	CommunityScore  int    `json:"communityScore"`
+	Stance          string `json:"stance"`
+	Summary         string `json:"communitySummary,omitempty"`
+}
+
+// redditFacts — 3일 안의 ApeWisdom 요약이 있고 커뮤니티 점수를 매길 수 있을 때만.
+func redditFacts(ctx context.Context, repo *repository.ExternalSignalRepo, symbol string, now time.Time) *factsReddit {
+	if repo == nil {
+		return nil
+	}
+	ins, err := repo.SocialInsightLatest(ctx, symbol)
+	if err != nil || ins == nil || ins.SnapDate < now.In(kstLoc()).AddDate(0, 0, -3).Format("2006-01-02") {
+		return nil
+	}
+	score, ok := CommunityScore(ins.SentimentPct, ins.Users)
+	if !ok {
+		return nil
+	}
+	hist, err := repo.SocialHistory(ctx, symbol, 1)
+	if err != nil || len(hist) == 0 {
+		return nil
+	}
+	f := &factsReddit{AsOf: ins.SnapDate, Mentions24h: hist[0].Mentions, MentionsPrev24h: hist[0].MentionsPrev,
+		Rank: hist[0].Rank, Users: *ins.Users, SentimentPct: *ins.SentimentPct, CommunityScore: score, Stance: CommunityStance(score)}
+	if sum, err := repo.SocialSummaryOf(ctx, symbol); err == nil && sum != nil && sum.Source == "llm" {
+		var b SocialSummaryBody
+		if json.Unmarshal(sum.Body, &b) == nil {
+			f.Summary = b.Summary
+		}
+	}
+	return f
 }
 
 type factsMarket struct {
@@ -76,8 +123,13 @@ type factsScore struct {
 // 94th-percentile ROE, the model wrote 「동종 상위 94%」 — the bottom of the group
 // — from a standing it had called 「상위 6%」 the day before.
 type factsFundamental struct {
-	PER             *float64 `json:"per,omitempty"`
-	PERTopPercent   *int     `json:"perTopPercent,omitempty"`
+	PER           *float64 `json:"per,omitempty"`
+	PERTopPercent *int     `json:"perTopPercent,omitempty"`
+	// ...Standing — 「상위 N%」를 사람이 읽는 방향으로 푼 말(2026-10-10). 「PER 상위 77%」는 비싸다는
+	// 뜻인데 「PER이 높은 쪽 77%」로 읽혔다(BUSINESS_REVIEW §5 D6). 모델은 이 말을 그대로 쓴다.
+	PERStanding     string   `json:"perStanding,omitempty"`
+	PBRStanding     string   `json:"pbrStanding,omitempty"`
+	ROEStanding     string   `json:"roeStanding,omitempty"`
 	PBR             *float64 `json:"pbr,omitempty"`
 	PBRTopPercent   *int     `json:"pbrTopPercent,omitempty"`
 	ROE             *float64 `json:"roe,omitempty"`
@@ -394,14 +446,20 @@ func buildStockSummaryFacts(
 			RevenueYoY:      round1(fundamentals.RevenueGrowthYoY),
 			EPSYoY:          round1(fundamentals.EPSGrowthYoY),
 		}
+		// 비율 값은 **점수가 쓴 값**을 앞세운다 — 국내는 점수가 최근 4분기 합(TTM)으로 재고
+		// 재무 화면은 연간 값이라, 둘을 섞으면 「상위 N%」와 옆의 숫자가 서로 다른 해를 말한다.
+		overlayScoreRaw(f, score)
 		if v, ok := peerPct["per"]; ok {
 			f.PERTopPercent = topPercentPtr(v)
+			f.PERStanding = valuationStanding("PER", *f.PERTopPercent)
 		}
 		if v, ok := peerPct["pbr"]; ok {
 			f.PBRTopPercent = topPercentPtr(v)
+			f.PBRStanding = valuationStanding("PBR", *f.PBRTopPercent)
 		}
 		if v, ok := peerPct["roe"]; ok {
 			f.ROETopPercent = topPercentPtr(v)
+			f.ROEStanding = qualityStanding("ROE", *f.ROETopPercent)
 		}
 		facts.Fundamental = f
 	}
@@ -475,6 +533,55 @@ func buildStockSummaryFacts(
 
 // scorePercentiles pulls the peer percentiles the score batch already computed
 // out of its stored inputs blob.
+/*
+valuationStanding — 밸류에이션 지표의 동종 위치를 방향이 분명한 한국어로. 백분위는 「싼 쪽이 좋다」로
+매겨져 있으므로 상위 N%는 「저렴한 순」이다.
+*/
+func valuationStanding(metric string, top int) string {
+	switch {
+	case top <= 33:
+		return fmt.Sprintf("%s 동종 대비 저렴한 편(저렴한 순 상위 %d%%)", metric, top)
+	case top <= 66:
+		return fmt.Sprintf("%s 동종 중간 수준(저렴한 순 상위 %d%%)", metric, top)
+	default:
+		return fmt.Sprintf("%s 동종 대비 비싼 편(저렴한 순 상위 %d%%)", metric, top)
+	}
+}
+
+// qualityStanding — 높을수록 좋은 지표(ROE)의 동종 위치.
+func qualityStanding(metric string, top int) string {
+	switch {
+	case top <= 33:
+		return fmt.Sprintf("%s 동종 대비 높은 편(높은 순 상위 %d%%)", metric, top)
+	case top <= 66:
+		return fmt.Sprintf("%s 동종 중간 수준(높은 순 상위 %d%%)", metric, top)
+	default:
+		return fmt.Sprintf("%s 동종 대비 낮은 편(높은 순 상위 %d%%)", metric, top)
+	}
+}
+
+// overlayScoreRaw — 점수 행의 원값(inputs.raw)이 있으면 그 값으로 비율을 덮는다.
+func overlayScoreRaw(f *factsFundamental, score *model.StockScoreView) {
+	if score == nil || score.Inputs == nil {
+		return
+	}
+	raw, ok := score.Inputs["raw"].(map[string]any)
+	if !ok {
+		return
+	}
+	set := func(dst **float64, key string) {
+		if v, ok := toFloat(raw[key]); ok {
+			*dst = round1(&v)
+		}
+	}
+	set(&f.PER, "per")
+	set(&f.PBR, "pbr")
+	set(&f.ROE, "roe")
+	set(&f.OperatingMargin, "operatingMargin")
+	set(&f.RevenueYoY, "revenueGrowthYoY")
+	set(&f.EPSYoY, "epsGrowthYoY")
+}
+
 func scorePercentiles(score *model.StockScoreView) map[string]float64 {
 	out := map[string]float64{}
 	if score == nil || score.Inputs == nil {

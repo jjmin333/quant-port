@@ -21,7 +21,12 @@ func RunReferenceDataPoller(
 		return
 	}
 	lastShares := time.Now()
-	lastFundamentals := time.Now()
+	/*
+		지표 로테이션의 시계는 **DB의 마지막 시도 시각**에서 시작한다(2026-09-28).
+		예전엔 time.Now()라 「기동 +24시간」에야 돌았는데, api를 거의 매일 다시 띄우는
+		동안 09-22 이후 한 번도 못 돌았다. 기록이 없으면 zero → 첫 틱에 돈다.
+	*/
+	lastFundamentals := fundamentals.LastRotationAt(ctx)
 
 	ticker := time.NewTicker(referenceDataPollTick)
 	defer ticker.Stop()

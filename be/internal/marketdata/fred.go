@@ -1,7 +1,6 @@
 package marketdata
 
 import (
-
 	"context"
 
 	"encoding/json"
@@ -20,15 +19,14 @@ import (
 	"time"
 
 	"github.com/enact/quant-port/be/internal/marketdata/apibudget"
-
 )
 
 type FREDClient struct {
-	apiKey     string
+	apiKey string
 
 	httpClient *http.Client
 
-	budget     *apibudget.Manager
+	budget *apibudget.Manager
 }
 
 func NewFREDClient(apiKey string, httpClient *http.Client, budget *apibudget.Manager) *FREDClient {
@@ -168,15 +166,15 @@ func (c *FREDClient) quoteWithSparklineNoBudget(ctx context.Context, seriesID st
 
 func (c *FREDClient) latestObservationDate(ctx context.Context, seriesID string) (time.Time, bool) {
 	q := url.Values{
-		"series_id":  {seriesID},
+		"series_id": {seriesID},
 
-		"api_key":    {c.apiKey},
+		"api_key": {c.apiKey},
 
-		"file_type":  {"json"},
+		"file_type": {"json"},
 
 		"sort_order": {"desc"},
 
-		"limit":      {"1"},
+		"limit": {"1"},
 	}
 
 	req, err := http.NewRequestWithContext(
@@ -188,7 +186,6 @@ func (c *FREDClient) latestObservationDate(ctx context.Context, seriesID string)
 		"https://api.stlouisfed.org/fred/series/observations?"+q.Encode(),
 
 		nil,
-
 	)
 
 	if err != nil {
@@ -226,37 +223,17 @@ func (c *FREDClient) latestObservationDate(ctx context.Context, seriesID string)
 	return t, true
 }
 
-func (c *FREDClient) recentValues(ctx context.Context, seriesID string, limit int) ([]float64, error) {
-	if c.budget != nil {
-		if err := c.budget.Check(ctx, apibudget.ProviderFRED); err != nil {
-			return nil, err
-		}
-	}
-
-	values, err := c.recentValuesNoBudget(ctx, seriesID, limit)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if c.budget != nil {
-		c.budget.Record(ctx, apibudget.ProviderFRED)
-	}
-
-	return values, nil
-}
-
 func (c *FREDClient) recentValuesNoBudget(ctx context.Context, seriesID string, limit int) ([]float64, error) {
 	q := url.Values{
-		"series_id":  {seriesID},
+		"series_id": {seriesID},
 
-		"api_key":    {c.apiKey},
+		"api_key": {c.apiKey},
 
-		"file_type":  {"json"},
+		"file_type": {"json"},
 
 		"sort_order": {"desc"},
 
-		"limit":      {strconv.Itoa(limit)},
+		"limit": {strconv.Itoa(limit)},
 	}
 
 	req, err := http.NewRequestWithContext(
@@ -268,7 +245,6 @@ func (c *FREDClient) recentValuesNoBudget(ctx context.Context, seriesID string, 
 		"https://api.stlouisfed.org/fred/series/observations?"+q.Encode(),
 
 		nil,
-
 	)
 
 	if err != nil {

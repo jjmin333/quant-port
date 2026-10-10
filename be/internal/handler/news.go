@@ -99,10 +99,20 @@ func (h *NewsHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		full = dashboardMaxFull
 	}
 
+	// 홈 카드의 카테고리 칩(국내만, 2026-10-09 요청 4). 해외에는 칩이 없으므로 무시한다.
+	topic := strings.TrimSpace(q.Get("topic"))
+	if topic != "" && !service.IsNewsTopic(topic) {
+		response.Error(w, http.StatusBadRequest, "unknown topic: "+topic)
+		return
+	}
+	if market != "domestic" {
+		topic = ""
+	}
 	articles, updatedAt := h.store.List(r.Context(), model.NewsListFilter{
 		Market:   market,
 		SourceID: "all",
 		Sort:     "latest",
+		Topic:    topic,
 		Limit:    limit,
 	})
 	if full > len(articles) {
@@ -194,6 +204,8 @@ func digestArticle(a model.NewsArticle) model.NewsArticle {
 		Symbols:     a.Symbols,
 		Keywords:    a.Keywords,
 		PublishedAt: a.PublishedAt,
+		Topic:       a.Topic,
+		AssetTags:   a.AssetTags,
 	}
 }
 
@@ -248,12 +260,19 @@ func (h *NewsHandler) ListDomestic(w http.ResponseWriter, r *http.Request) {
 
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
+	// topic — 국내 카테고리 칩(2026-10-09 요청 4). 비우면 전체, 모르는 값은 400(필터가 빠진 결과를 걸린 줄 알지 않게).
+	topic := strings.TrimSpace(q.Get("topic"))
+	if topic != "" && !service.IsNewsTopic(topic) {
+		response.Error(w, http.StatusBadRequest, "unknown topic: "+topic)
+		return
+	}
 	filter := model.NewsListFilter{
 		Market:   "domestic",
 		SourceID: q.Get("source"),
 		Sort:     q.Get("sort"),
 		Query:    q.Get("q"),
 		Symbol:   q.Get("symbol"),
+		Topic:    topic,
 		Limit:    limit,
 	}
 	if filter.Sort == "" {

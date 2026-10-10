@@ -3,14 +3,20 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/enact/quant-port/be/internal/config"
 	"github.com/enact/quant-port/be/internal/llm"
+	"github.com/enact/quant-port/be/internal/marketdata"
 	"github.com/enact/quant-port/be/internal/marketdata/apibudget"
 	"github.com/enact/quant-port/be/internal/marketdata/fnguide"
 	"github.com/enact/quant-port/be/internal/repository"
+	"github.com/enact/quant-port/be/internal/sentiment"
 	"github.com/enact/quant-port/be/internal/toss"
+	"github.com/enact/quant-port/be/internal/translate"
 )
 
 // WorkerDeps is the common set of connections every worker process needs.
@@ -30,9 +36,12 @@ type WorkerDeps struct {
 	// ScoreRankings precomputes AI 추천 랭킹의 축·기간 조합. 점수 배치 직후에
 	// 돌아야 한다 — 그 결과를 그대로 재료로 쓴다.
 	ScoreRankings *ScoreRankingService
-	Indices       *IndexScoreService
-	IndexFill     *IndexBackfillService
-	Bars          *repository.CandleBarRepo
+	// RankingHistory는 그날 랭킹 구성을 얇은 표에 남긴다. 백테스트가 읽는 유일한
+	// 과거이고, `stock_scores`가 30거래일에서 잘리므로 여기서 남기지 않으면 사라진다.
+	RankingHistory *ScoreRankingHistoryService
+	Indices        *IndexScoreService
+	IndexFill      *IndexBackfillService
+	Bars           *repository.CandleBarRepo
 	// Research judges 리서치 콜 against stored closes. The verdict path needs
 	// no quote/score/news collaborator — those only matter when publishing.
 	Research *ResearchService
@@ -48,6 +57,27 @@ type WorkerDeps struct {
 	// TossUniverse는 「토스가 어떤 종목을 취급하는가」를 하루 7호출로 확정한다.
 	// 그 판정이 다른 잡의 대상 선정과 화면 노출을 함께 정한다.
 	TossUniverse *TossUniverseService
+	// Sectors는 종목별 산업 코드를 받아 공통 섹터로 옮긴다(stock_sectors).
+	Sectors *SectorIngestService
+	// InvestorFlows는 국내 보통주의 투자자별 순매수를 받는다(심리·수급 축의 수급 재료).
+	InvestorFlows *InvestorFlowIngestService
+	// ExternalSignals — 해외 지표 보조·애널리스트(Finnhub·네이버)·Reddit 언급(ApeWisdom). 2026-09-28.
+	ExternalSignals *ExternalSignalService
+	// FinProducts — 금감원 금융상품 공시(예·적금·대출). 키는 FSS_FINLIFE_API_KEY(2026-09-29).
+	FinProducts *FinProductService
+	// PublicData — 실거래·R-ONE·ECOS·온비드 적재 + 자산 재평가(2026-10-01).
+	PublicData *PublicDataSync
+	// AssetScores · AssetAI — 부동산·금융상품·공매 점수와 AI 해설(2026-10-01, worker-asset).
+	AssetScores *AssetScoreService
+	AssetAI     *AssetAIService
+	// ETFScores는 국내 ETF 일별 지표를 받고 ETF 점검 점수를 매긴다(KRX 하루 1호출).
+	ETFScores *ETFScoreService
+	// NewsSentiment는 기사 제목에 로컬 감성 모델 라벨을 붙인다(점수 배치의 첫 단계).
+	NewsSentiment *NewsSentimentLabelService
+	// Changes는 그날의 변화를 규칙으로 골라 둔다(점수 배치의 마지막 단계).
+	Changes *ChangeDetectService
+	// ReportCard는 AI 점수 성적표(축별 IC)를 잰다(점수 배치 꼬리).
+	ReportCard *ScoreReportCardService
 	// Health judges whether every batch ran on time. DB만 읽는다 —
 	// 감시가 감시 대상보다 무거우면 안 된다(batch_health.go 머리글).
 	Health *BatchHealthService
@@ -117,6 +147,11 @@ func BootstrapWorker(ctx context.Context) (*WorkerDeps, error) {
 	indexScores := NewIndexScoreService(mysql.DB(), indexCloseRepo)
 	scores.SetIndexScores(indexScores)
 	scoreRankings := NewScoreRankingService(
+		repository.NewStockScoreRankingRepo(mysql.DB()),
+		scores,
+	)
+	rankingHistory := NewScoreRankingHistoryService(
+		repository.NewScoreRankingHistoryRepo(mysql.DB()),
 		repository.NewStockScoreRankingRepo(mysql.DB()),
 		scores,
 	)
@@ -199,6 +234,14 @@ func BootstrapWorker(ctx context.Context) (*WorkerDeps, error) {
 		dartGate,
 	)
 
+	sectors := NewSectorIngestService(
+		repository.NewStockSectorRepo(mysql.DB()),
+		syncState,
+		dartClient,
+		edgarBatch,
+		dartGate,
+	)
+
 	runs := repository.NewBatchJobRunRepo(mysql.DB())
 	// 워치독이 판정을 사건 원장에도 남긴다 — 15분마다 같은 로그를 찍는 대신
 	// (kind, subject)당 한 행을 열고 닫는다(model.Incident 머리글).
@@ -213,22 +256,61 @@ func BootstrapWorker(ctx context.Context) (*WorkerDeps, error) {
 	quotaReporter := NewQuotaIncidentReporter(apiBudget, incidents)
 	quotaReporter.Install()
 	health.SetQuotaReporter(quotaReporter)
+	externalSignals := NewExternalSignalService(
+		marketdata.NewFinnhubClient(cfg.Finnhub.APIKey, &http.Client{Timeout: 20 * time.Second}, apiBudget),
+		marketdata.NewNaverStockClient(&http.Client{Timeout: 15 * time.Second}, apiBudget),
+		marketdata.NewApeWisdomClient(&http.Client{Timeout: 20 * time.Second}, apiBudget),
+		repository.NewExternalSignalRepo(mysql.DB()),
+		repository.NewInvestorFlowRepo(mysql.DB()), syncState, apiBudget)
+	// Reddit 글 + 번역(2026-09-29) — social_posts 잡(worker-filings)만 쓴다. 번역 엔진은 API와 같은 TRANSLATE_* 설정.
+	externalSignals.SetReddit(marketdata.NewRedditClient(&http.Client{Timeout: 20 * time.Second}, apiBudget),
+		translate.Build(translate.ParseOptions(os.Getenv), apiBudget))
+
 	return &WorkerDeps{
 		Cfg: cfg, MySQL: mysql, Redis: redisConn, Toss: tossClient,
-		Runs:          runs,
-		Health:        health,
-		RefreshTokens: repository.NewRefreshTokenRepo(mysql.DB()),
-		Closes:        closes,
-		Scores:        scores,
-		ScoreRankings: scoreRankings,
-		Indices:       indexScores,
-		IndexFill:     indexFill,
-		Bars:          bars,
-		Research:      research,
-		Earnings:      earnings,
-		Insider:       insider,
-		Reference:     reference,
-		TossUniverse:  NewTossUniverseService(tossClient, repository.NewTossUniverseRepo(mysql.DB())),
+		Runs:           runs,
+		Health:         health,
+		RefreshTokens:  repository.NewRefreshTokenRepo(mysql.DB()),
+		Closes:         closes,
+		Scores:         scores,
+		ScoreRankings:  scoreRankings,
+		RankingHistory: rankingHistory,
+		Indices:        indexScores,
+		IndexFill:      indexFill,
+		Bars:           bars,
+		Research:       research,
+		Earnings:       earnings,
+		Insider:        insider,
+		Reference:      reference,
+		Sectors:        sectors,
+		InvestorFlows: NewInvestorFlowIngestService(tossClient,
+			repository.NewInvestorFlowRepo(mysql.DB()), syncState),
+		ExternalSignals: externalSignals,
+		FinProducts: NewFinProductService(
+			marketdata.NewFinlifeClient(os.Getenv("FSS_FINLIFE_API_KEY"), &http.Client{Timeout: 20 * time.Second}, apiBudget),
+			repository.NewFinProductRepo(mysql.DB())),
+		ETFScores: NewETFScoreService(
+			marketdata.NewKRXClient(cfg.KRX.APIKey, nil, apiBudget),
+			repository.NewETFMetricsRepo(mysql.DB())),
+		Changes:    NewChangeDetectService(repository.NewChangeEventRepo(mysql.DB())),
+		ReportCard: NewScoreReportCardService(repository.NewScoreICRepo(mysql.DB())),
+		NewsSentiment: NewNewsSentimentLabelService(
+			repository.NewNewsSentimentRepo(mysql.DB()),
+			// 비어 있으면 잡이 「분류기 없음」으로 건너뛴다(점수 배치는 그대로 돈다).
+			sentiment.New(os.Getenv("SENTIMENT_URL")),
+		),
+		TossUniverse: NewTossUniverseService(tossClient, repository.NewTossUniverseRepo(mysql.DB())),
+		// 뉴스 주제 기사(2026-10-09 요청 5): 점수는 근거 칸만, AI는 제목 몇 줄만 받는다.
+		AssetScores: NewAssetScoreService(repository.NewPublicDataRepo(mysql.DB()), repository.NewFinProductRepo(mysql.DB()),
+			repository.NewAssetIntelRepo(mysql.DB())).WithNews(repository.NewNewsRepo(mysql.DB())),
+		AssetAI: NewAssetAIService(assetLLM(cfg, apiBudget), apiBudget, repository.NewAssetIntelRepo(mysql.DB()),
+			repository.NewPublicDataRepo(mysql.DB()), repository.NewFinProductRepo(mysql.DB()), repository.NewWealthRepo(mysql.DB())).
+			WithNews(repository.NewNewsRepo(mysql.DB())),
+		PublicData: NewPublicDataSync(
+			marketdata.NewPublicDataClient(os.Getenv("DATA_GO_KR_API_KEY"), os.Getenv("REB_RONE_API_KEY"), os.Getenv("ECOS_API_KEY"),
+				&http.Client{Timeout: 30 * time.Second}, apiBudget),
+			repository.NewPublicDataRepo(mysql.DB()), repository.NewWealthRepo(mysql.DB()),
+			NewWealthValuer(mysql.DB(), marketdata.NewUpbitClient("", "", &http.Client{Timeout: 15 * time.Second}, apiBudget))),
 	}, nil
 }
 
@@ -243,4 +325,22 @@ func (d *WorkerDeps) Close() {
 	if d.MySQL != nil {
 		d.MySQL.Close()
 	}
+}
+
+// assetLLM — 자산 AI 전용 클라이언트(GEMINI_SUB_API_KEY, 버킷 llm_sub). 키가 없으면 nil — 잡은 규칙 문장으로 돈다.
+func assetLLM(cfg *config.Config, budget *apibudget.Manager) *llm.Client {
+	key := strings.TrimSpace(os.Getenv("GEMINI_SUB_API_KEY"))
+	if key == "" {
+		return nil
+	}
+	base := cfg.LLM.BaseURL
+	if cfg.LLM.Provider != "gemini" || base == "" {
+		base = "https://generativelanguage.googleapis.com/v1beta/openai/"
+	}
+	model := cfg.LLM.Model
+	if cfg.LLM.Provider != "gemini" || model == "" {
+		model = "gemini-3.1-flash-lite"
+	}
+	return llm.NewClient(llm.Config{Provider: "gemini", APIKey: key, BaseURL: base, Model: model,
+		BudgetProvider: apibudget.ProviderLLMSub}, budget)
 }

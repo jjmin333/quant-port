@@ -32,40 +32,14 @@ func TestLogoURLWithManifest(t *testing.T) {
 		{"aapl", model.CurrencyUSD, model.AssetUS, "/logos/us/AAPL.png"},
 		{"NVDA", model.CurrencyUSD, model.AssetUS, FMPImageURL("NVDA", model.CurrencyUSD, model.AssetUS)},
 		{"SOXS", model.CurrencyUSD, model.AssetUS, ""},
-		// 매니페스트에 아예 없는 종목은 예전 그대로 원격 URL이다.
-		{"069500", model.CurrencyKRW, model.AssetETF, FMPImageURL("069500", model.CurrencyKRW, model.AssetETF)},
+		// 매니페스트에 아예 없는 종목은 원격 URL이다 — 국내는 네이버(FMP .KS는 신규 상장이 404).
+		{"069500", model.CurrencyKRW, model.AssetETF, NaverLogoURL("069500")},
+		{"CBOE", model.CurrencyUSD, model.AssetUS, FMPImageURL("CBOE", model.CurrencyUSD, model.AssetUS)},
 		{"", model.CurrencyUSD, model.AssetUS, ""},
 	}
 	for _, tc := range cases {
 		if got := LogoURL(tc.symbol, tc.currency, tc.assetType); got != tc.want {
 			t.Errorf("LogoURL(%q) = %q, want %q", tc.symbol, got, tc.want)
 		}
-	}
-}
-
-func TestFMPFallbackURL(t *testing.T) {
-	SetManifest(&Manifest{
-		Entries: map[string]ManifestEntry{
-			"005930": {Region: "domestic", Source: "naver", Path: "/logos/kr/005930.png"},
-			"AAPL":   {Region: "us", Source: "fmp", Path: "/logos/us/AAPL.png"},
-			"NVDA":   {Region: "us", Source: "fmp"},
-			"SOXS":   {Region: "us", Source: "fmp", Path: "/logos/us/SOXS.png", Tone: "blank"},
-		},
-	})
-	t.Cleanup(func() { SetManifest(nil) })
-
-	if got := FMPFallbackURL("005930", model.CurrencyKRW, model.AssetDomestic); got != FMPImageURL("005930", model.CurrencyKRW, model.AssetDomestic) {
-		t.Errorf("domestic fallback = %q, want FMP URL", got)
-	}
-	if got := FMPFallbackURL("AAPL", model.CurrencyUSD, model.AssetUS); got != FMPImageURL("AAPL", model.CurrencyUSD, model.AssetUS) {
-		t.Errorf("stored US fallback = %q, want FMP URL", got)
-	}
-	// 이미 원격이 primary면 폴백이 같은 URL이라 줄 것이 없다.
-	if got := FMPFallbackURL("NVDA", model.CurrencyUSD, model.AssetUS); got != "" {
-		t.Errorf("remote-primary fallback = %q, want empty", got)
-	}
-	// blank은 폴백도 없다 — 원격에 있는 것이 안 보이던 바로 그 그림이다.
-	if got := FMPFallbackURL("SOXS", model.CurrencyUSD, model.AssetUS); got != "" {
-		t.Errorf("blank fallback = %q, want empty", got)
 	}
 }

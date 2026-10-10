@@ -283,10 +283,6 @@ var adminTableCatalog = []TableSpec{
 	},
 }
 
-// AdminTableCatalog exposes the whitelist for tooling that needs to check the
-// live schema against it (e.g. finding tables the console cannot reach yet).
-func AdminTableCatalog() []TableSpec { return adminTableCatalog }
-
 func catalogByName(name string) (TableSpec, bool) {
 	for _, spec := range adminTableCatalog {
 		if spec.Name == name {

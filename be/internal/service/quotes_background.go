@@ -495,15 +495,6 @@ func (s *QuotesService) triggerCatalogBackfill(symbol string) {
 	})
 }
 
-func (s *QuotesService) triggerTerminalRefreshAsync(symbol string) {
-	s.initQuoteRefresh()
-	sym := strings.ToUpper(strings.TrimSpace(symbol))
-	s.touchTerminal(sym)
-	s.quoteRefresh.runOnce("terminal:"+sym, func(ctx context.Context) {
-		s.refreshTerminalSnapshot(ctx, sym)
-	})
-}
-
 func (s *QuotesService) triggerRawCandlesRefresh(symbol string) {
 	s.initQuoteRefresh()
 	sym := strings.ToUpper(strings.TrimSpace(symbol))

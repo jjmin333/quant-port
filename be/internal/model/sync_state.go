@@ -16,6 +16,15 @@ const (
 	// 일별 종가 구멍 메우기가 Toss에 물어본 결과. `not_found`는 **그 종목을 상대가
 	// 취급하지 않는다**는 뜻이고, 30일 쿨다운으로 다시 묻지 않는다.
 	SyncKindDailyCloseToss = "daily_close_toss"
+	// 섹터 분류(stock_sectors). 국내 DART 기업개황 · 미국 SEC submissions.
+	// 90일에 한 번이면 충분한 데이터라 로테이션 커서만 빌려 쓴다(sector_ingest.go).
+	SyncKindSectorDART = "sector_dart"
+	SyncKindSectorSEC  = "sector_sec"
+	// 종목별 투자자 매매동향(stock_investor_flows). 국내 보통주 전 종목 매일.
+	SyncKindInvestorFlow = "investor_flow"
+	// 해외 지표 보조(Finnhub /stock/metric + 추천 추이) · 국내 컨센서스(네이버) — 2026-09-28.
+	SyncKindExtMetrics   = "ext_metrics"
+	SyncKindAnalystNaver = "analyst_naver"
 )
 
 // Sync outcomes recorded per symbol. `empty` is deliberately distinct from

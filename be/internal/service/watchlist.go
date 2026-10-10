@@ -54,14 +54,6 @@ func (s *WatchlistService) List(ctx context.Context) ([]model.WatchlistItem, err
 	return out, nil
 }
 
-func (s *WatchlistService) Symbols(ctx context.Context) ([]string, error) {
-	userID, ok := authctx.UserID(ctx)
-	if !ok {
-		return nil, nil
-	}
-	return s.repo.List(ctx, userID)
-}
-
 /*
 Add puts a symbol on the watchlist.
 

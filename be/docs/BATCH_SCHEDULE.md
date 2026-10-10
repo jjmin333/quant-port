@@ -38,30 +38,53 @@
 
 ## 시간표 (KST)
 
+**워커는 성격별 4개(2026-10-01 통합)** — 바이너리 하나(`cmd/worker`, `WORKER_ROLES`)가 역할 여럿을 한 프로세스에서 돈다.
+`worker-market`(마감 국내·해외 · 시세 fetch · 지수) · `worker-stock`(점수 · 공시·재무 · 실적 · 리포트 · 검색 유입) ·
+`worker-asset`(부동산 · 금리 · 금융상품 · 공매 · 자산 점수·AI) · `worker-content`(API 바이너리 `SERVER_ROLE=batch`: LLM 배치 9종).
+`api`는 `SERVER_ROLE=api`로 요청·실시간 루프만 돈다. 예전 컨테이너 9개(`worker-filings`·`worker-scores`… )는 없앴다.
+
 
 | 시각 | 메뉴 | 잡 | 워커 | provider (버킷) | 대상 | 메모 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 01:00 | (운영) 종목 카탈로그 | `toss_universe` | worker-filings | toss `STOCK_ALL` | 마켓 7 (**하루 7호출**) | 토스가 취급하는 종목 확정 → 검색에서 숨김 + 수집 대상에서 제외. 한국어 종목명(뉴스 별칭)도 같은 응답에서 갱신. **그날 다른 잡보다 먼저 돈다** |
-| 00:00부터 5분 | 해외 실적 일정 | `earnings_overseas` (live) | worker-earnings | `finnhub_earnings` | KST 어제~오늘 (1호출) | 실적치 실시간. 06:00 전체 창이 도는 동안 skip. 관리자 이력에는 안 남김. **어제 이전 「예정」은 이 잡이 지우지 않음** — 화면 조회에서만 숨김(아래 「과거 예정」) |
-| 00:25 | AI 추천 랭킹 | `stock_scores` | worker-scores | — (DB만) | 전 종목 | |
-| 01:30 | 종목 · 개요 | `warnings_sync` | worker-filings | toss | **전 종목 매일** (약 17,900 · 2시간) | 경고 배지. 사이드바 단독 메뉴는 없음 |
-| 15분마다 | — (운영) | `batch_watchdog` | worker-scores | — (DB만) | 예약된 잡 전부 | 「돌았어야 했는데 안 돌았나」 판정 + **놓친 잡 재처리**(허용 목록·회차당 2개). 아래 「배치 감시」·「놓친 잡 재처리」 절. 원장 90일 정리도 함께 |
-| 04:30 | — (운영) | `data_retention` | worker-scores | — (DB만) | 만료된 리프레시 토큰 | 만료 후 7일 지난 것만. 활성 사용자당 연 365행씩 쌓이던 것 |
-| 05:30 | 실시간 차트 | `candle_rollup` | worker-scores | — (DB만) | 만료된 인트라데이 봉 | 해상도 강등(삭제 아님). **되돌릴 수 없음** — 접힌 1분봉은 사라짐. 아래 「캔들 계층」 절 |
-| 06:00 | 해외 실적 일정 | `earnings_overseas` | worker-earnings | `finnhub_earnings` | −49d~+76d (~18호출). 기동 catch-up | 일정 정정·먼 미래. −49/+77은 조각 19회라 −49/+76으로 18회 유지. 실적 없는 지난 행도 **적재는 유지**(나중에 확정으로 갱신). 화면은 KST 어제보다 오래된 예정만 숨김 |
-| 07:00 | 종목 · 내부자 거래 | `insider_overseas` | worker-filings | `edgar_bulk` | 등급제 1,200 | |
-| 09:00 | 종목 · 재무제표 · 실적 | `financials_overseas` | worker-filings | `edgar_bulk` | 등급제 600 | |
-| 시즌 10:00–20:00 /2h · 비시즌 18:30 | 국내 실적 일정 | `earnings_domestic` | worker-earnings | `fnguide` | 시장 전체 (월당 1호출). 기동 catch-up | 비시즌: 3, 6, 9, 12월. 이번 달만 리로딩. 20시에만 이번 달+저번 달 |
-| 19:30 | 국내 실적 일정 · 종목 · 실적 | `disclosures_daily` | worker-filings | `dart` | **시장 전체 매일** (실측 하루 2페이지) | 실적 탭 「최근 실적 공시」 |
-| 20:00 | 종목 · 내부자 거래 | `insider_domestic` | worker-filings | `dart` | 등급제 1,500 | |
-| 22:00 | 종목 · 재무제표 · 실적 | `financials_domestic` | worker-filings | `dart` | 등급제 400 | |
-| api 기동 +24h마다 | 종목 · 개요(PER·PBR·ROE) | `fundamentals_rotation` (원장 밖) | api (reference data poller) | `dart` / `edgar` | 등급제 **국내 400 · 해외 600** | **원장에 안 남는 유일한 종목 단위 적재다.** 아래 「지표 로테이션」 절 |
-| KRX 마감+20분 | 실시간 차트 · AI 추천 랭킹 | `daily_close_domestic` | worker-close-domestic | — | 전 종목 | 종가. 스탬프·투자 리포트·목표가도 읽음 |
-| US 마감+20분 | 실시간 차트 · AI 추천 랭킹 | `daily_close_overseas` | worker-close-overseas | — | 전 종목 | 종가. 스탬프·투자 리포트·목표가도 읽음 |
-| 마감 배치 이후 | 투자 리포트 | `research_verdict` | worker-research | — | 열린 콜 | |
-| KRX 마감 후 16:30~18:30 | AI 추천 랭킹 · 종목 · AI 분석 | `llm_summary_domestic` | api | `llm_kr` | 3층 · 최대 350 | 종가 적재(15:50~16:15) 뒤 |
-| US 마감 후 18:00~20:00 ET | AI 추천 랭킹 · 종목 · AI 분석 | `llm_summary_overseas` | api | `llm_us` | 3층 · 최대 350 | 종가 적재(≈17:37 ET) 뒤 |
-| 장중 30분 / 그 외 1시간 | 국내 주식 · 해외 주식 | `news_briefing_*` | api | `llm_kr` / `llm_us` | 시장별 1건 | 뉴스 화면 AI 브리핑. 국내 슬롯만 Toss 수급 1호출(5분 캐시). 페이지 로드는 LLM·Toss 없음 |
+| 01:00 | (운영) 종목 카탈로그 | `toss_universe` | worker-stock | toss `STOCK_ALL` | 마켓 7 (**하루 7호출**) | 토스가 취급하는 종목 확정 → 검색에서 숨김 + 수집 대상에서 제외. 한국어 종목명(뉴스 별칭)도 같은 응답에서 갱신. **그날 다른 잡보다 먼저 돈다** |
+| 00:00부터 5분 | 해외 실적 일정 | `earnings_overseas` (live) | worker-stock | `finnhub_earnings` | KST 어제~오늘 (1호출) | 실적치 실시간. 06:00 전체 창이 도는 동안 skip. 관리자 이력에는 안 남김. **어제 이전 「예정」은 이 잡이 지우지 않음** — 화면 조회에서만 숨김(아래 「과거 예정」) |
+| 00:05 | 오늘의 변화 「레딧」 · 종목 커뮤니티 탭 · 점수 심리 축 | `social_mentions` | worker-stock | `apewisdom` (3초) | 전 종목 목록 7페이지 + 서브레딧 9개 + **언급 상위 150종목 페이지** ≈ 9분 | ApeWisdom 24시간 언급·전일·순위(`social_mentions`, 하루 한 줄·180일) + 종목 페이지의 언급 사용자·감성·WSB 감성·키워드(`social_insights`, 09-29). 낱말 티커(ON·ALL·AI…)·카탈로그 밖 제외. 변화 감지(00:25)가 급증·과열로 읽고, 점수(00:25)가 감성을 심리 축 Reddit 성분(미국, 가중치 0.3, 판 `|reddit`)으로 씀 |
+| 00:30 | 종목 커뮤니티 탭 「이번 주 Reddit 인기 글」 | `social_posts` | worker-stock | `reddit_rss` (62초 · 분당 1회) | 로테이션 80종목 ≈ 85분(상위 40 매일 · 나머지 사흘) | Reddit 검색 RSS(wsb·stocks·investing·StockMarket·options, 이번 주 인기순) → `social_posts`(종목당 20). 티커가 실제로 적힌 글만 · 토론 스레드 제외. 제목·앞부분은 번역 엔진(TRANSLATE_*)으로 옮김, 이미 옮긴 글은 다시 안 옮김. **맨 먼저 시장 인기 글**(stocks·investing·StockMarket 오늘 top RSS 1회, 8개 → `social_posts` 심볼 `_MARKET`, 홈 「미국 개미 분위기」, 2026-10-01) |
+| 00:25 | AI 추천 랭킹 | `stock_scores` | worker-stock | — (DB만) | 전 종목 | |
+| 01:30 | 종목 · 개요 | `warnings_sync` | worker-stock | toss | **전 종목 매일** (약 17,900 · 2시간) | 경고 배지. 사이드바 단독 메뉴는 없음 |
+| 02:30 | (재료) 점수 피어그룹 · 포트폴리오 섹터 | `sector_sync` | worker-stock | `dart` · `edgar_bulk` | 로테이션, **90일 신선도** (국내 1,000 · 미국 3,000) | KSIC·SIC → 공통 섹터 11개(`stock_sectors`). 첫 바퀴 뒤엔 신규 상장·90일 지난 종목만 |
+| 15분마다 | — (운영) | `batch_watchdog` | worker-stock | — (DB만) | 예약된 잡 전부 | 「돌았어야 했는데 안 돌았나」 판정 + **놓친 잡 재처리**(허용 목록·회차당 2개). 아래 「배치 감시」·「놓친 잡 재처리」 절. 원장 90일 정리도 함께 |
+| 04:30 | — (운영) | `data_retention` | worker-stock | — (DB만) | 만료된 리프레시 토큰 | 만료 후 7일 지난 것만. 활성 사용자당 연 365행씩 쌓이던 것 |
+| 03:30 | 순자산 · 부동산 시세 | `re_trades` | worker-asset | `molit_rtms` (0.26초) | 국토부 실거래 12종 × **전국 시군구**(법정동코드 API, 2026-10-02). 13개월 창, **아파트 매매만 36개월**. **호출 상한 15,000/회**(평소 약 1만) · 버킷 하루 60,000(API마다 개발계정 1만이라 한도 초과 응답이 온 종류는 그 회차에서 뺌) · 우리 예산 소진이면 즉시 멈춤 | 최근 3개월 매일 · 3~5개월 전 주 1회 · 그 이전 한 번(신고 30일·해제 반영). (종류·지역·월) 단위로 통째 교체(`re_sync_state`). 끝나면 **모든 사용자 자산 재평가**(`asset_valuations` 하루 한 줄). 25개월(아파트 매매 48개월) 지난 거래는 지움. 수동 일괄 적재가 03:30을 넘기면 예약 회차는 건너뜀(`RunScheduledJob`이 queued/running 행을 봄). 키 `DATA_GO_KR_API_KEY`, API마다 공공데이터포털 활용신청 |
+| 06:00 | 순자산 · 부동산 지역 지수 | `re_index` | worker-asset | `reb_rone` (0.6초) | R-ONE 11표(주간 매매·전세, 실거래가격지수, 월간 매매·월세, 전월세 전환율, 오피스텔, 오피스·상가 임대·공실) | 처음엔 전체 이력(≈550호출), 그 뒤엔 마지막 시점부터. 끝나면 지역별 주간 지수 id 매칭(평가의 지수 보정). 키 `REB_RONE_API_KEY` |
+| 07:40 | 부동산 공매 | `onbid` | worker-asset | `kamco_onbid` (0.65초) | 온비드 부동산 공고(30일 앞) → 공고상세(회차별 물건) **≤ 900** → 낙찰 회차 결과상세 ≤ 900 | 오퍼레이션당 개발계정 일 1,000. 입찰이 끝났는데 결과가 빈 공고는 다시 받음 |
+| 09:20 | 금리 | `ecos_rates` | worker-asset | `bok_ecos` (0.6초) | ECOS 21계열(기준금리·국고채 1~30년·회사채·CD·CP·KOFR·예금/대출 평균) | 처음엔 일별 5년·월별 2009년부터, 그 뒤엔 마지막 1주(월 3개월) 앞부터. 키 `ECOS_API_KEY` |
+| 09:50 | 부동산·금융상품·공매 점수 | `asset_scores` | worker-asset | — (DB만) | 아파트 단지(최근 12개월 매매 5건↑) · 시군구 · 예·적금·대출 · 열린 공매 | 같은 묶음(시도·상품 종류·공매 용도) 안 백분위 가중 → `asset_scores`(kind·키당 한 줄, 통째 교체). 단지: 모멘텀 35·거래 25·전세 받침 20·고점 위치 20 / 지역: 4주 30·12주 30·거래량 추세 20·전세 20 / 예·적금: 기본 50·최고 15·우대 의존 15·가입 제한 10·권역 10 / 대출: 금리 60·폭 20·권역 20 / 공매: 할인 60·유찰 20·주의 표지 20. 공시월 금리 이력(`fin_rate_history`)도 여기서 |
+| 10:20 | 부동산·금융상품 AI 해설 | `asset_ai` | worker-asset | `llm_feat_asset`(250콜·60만 — 전용 키 500의 절반) + **`llm_sub`**(GEMINI_SUB_API_KEY, 주식 LLM 키와 분리) | 금리 1콜 · 전국·시도 해설 5개/콜 · **홈 「부동산·금리 브리핑」 2콜(2026-10-03, 해시 같으면 0 — 부동산은 주 1회꼴)** · 전국 시군구 6개/콜 · 단지(보유 + 시군구마다 점수 상위 5) 6개/콜 · 예·적금 우대조건 8개/콜(≤60콜) | 입력은 압축 JSON 사실표(숫자 반올림 — 지수 0.1%p·모멘텀 1%p·건수·비율 5), `max_tokens` 상한, **입력 해시가 같으면 건너뜀**. 첫 채우기 ~350콜은 이틀, 그 뒤 하루 수십 콜. 한도·오류면 새 대상은 규칙 문장, **옛 AI 글은 덮지 않고 둠**(다음 회차 재시도) → `asset_ai_notes` |
+| 05:10 | 금융상품 (예·적금 · 대출 금리) | `fin_products` | worker-asset | `fss_finlife` (1초) | 상품 5종 × 권역 5 + 금융회사 ≈ 60호출 · 2분 | 금감원 「금융상품 한눈에」 Open API(키 `FSS_FINLIFE_API_KEY`, be/.env). 원문 그대로 `fin_products.base/options`에. **모든 권역이 성공한 종류만** 이번에 안 보인 상품을 숨김(삭제 없음). 파킹통장(수시입출금)은 API에 없음 |
+| 05:30 | 실시간 차트 | `candle_rollup` | worker-stock | — (DB만) | 만료된 인트라데이 봉 | 해상도 강등(삭제 아님). **되돌릴 수 없음** — 접힌 1분봉은 사라짐. 아래 「캔들 계층」 절 |
+| 06:00 | 해외 실적 일정 | `earnings_overseas` | worker-stock | `finnhub_earnings` | −49d~+76d (~18호출). 기동 catch-up | 일정 정정·먼 미래. −49/+77은 조각 19회라 −49/+76으로 18회 유지. 실적 없는 지난 행도 **적재는 유지**(나중에 확정으로 갱신). 화면은 KST 어제보다 오래된 예정만 숨김 |
+| 03:00 | 종목 · 밸류에이션(해외 보조) · 애널리스트 | `ext_metrics_overseas` | worker-stock | `finnhub_metrics` (20/분 · 3초) | 등급제 1,500 (종목당 최대 2호출 ≈ 2.5시간, 한 바퀴 약 5일) | Finnhub `/stock/metric`(본국 상장 기준 비율) → `stock_ext_metrics`, 추천 추이 → `stock_analyst_consensus`. **EDGAR가 비운 칸만** 점수·화면에 씀(판에 `|ext`). 21일 넘은 값은 안 씀. 목표가는 무료 등급에 없음 |
+| 04:20 | 종목 커뮤니티 탭 「AI 핵심 요약」 | `social_summary` | worker-content | `llm_feat_social` (50콜·15만) + 키 버킷 | 언급 상위 40종목 | 커뮤니티 점수(규칙: 감성을 표본 크기로 보정, -100..100)에 맞춘 레딧 여론 요약·태그·낙관/주의 근거 → `social_summaries`. 같은 스냅샷 날 AI 글이 있으면 건너뜀, 한도 없으면 규칙 문장. **맨 먼저 시장 한 줄 1콜**(심볼 `_MARKET`, 사실표 = 분위기 점수·지수 ETF 감성·급증·시장 인기 글, 2026-10-01) |
+| 06:30 | 종목 · 목표가·투자의견(국내) | `analyst_domestic` | worker-stock | `naver_stock` (1.2초) | **국내 보통주 전 종목 매일** (약 2,700 ≈ 55분) | 네이버 증권 컨센서스(공개 API 아님) → `stock_analyst_consensus`. 스크리너 「평균 목표가·목표가 여력·애널리스트 의견」 |
+| 07:00 | 종목 · 내부자 거래 | `insider_overseas` | worker-stock | `edgar_bulk` | 등급제 1,200 | |
+| 07:30 | (운영) 검색 유입 감시 | `growth_audit` | worker-stock | 우리 사이트 · Search Console · GA4 · Bing (각자 무료 한도) | 사이트맵 URL 전부(약 1,000 · 0.5초 간격 2개 ≈ 10분) + URL 검사 하루 200 | 일간 보고서, **월요일엔 주간 보고서(Top 20 기회)**. LLM 없음 · `growth_*` 표만 씀. 자격 증명 없으면 크롤 + DB 지표만. `docs/GROWTH.md` |
+| 09:00 | 종목 · 재무제표 · 실적 | `financials_overseas` | worker-stock | `edgar_bulk` | 등급제 600 | |
+| 시즌 10:00–20:00 /2h · 비시즌 18:30 | 국내 실적 일정 | `earnings_domestic` | worker-stock | `fnguide` | 시장 전체 (월당 1호출). 기동 catch-up | 비시즌: 3, 6, 9, 12월. 이번 달만 리로딩. 20시에만 이번 달+저번 달 |
+| 19:30 | 국내 실적 일정 · 종목 · 실적 | `disclosures_daily` | worker-stock | `dart` | **시장 전체 매일** (실측 하루 2페이지) | 실적 탭 「최근 실적 공시」 |
+| 20:00 | 종목 · 내부자 거래 | `insider_domestic` | worker-stock | `dart` | 등급제 1,500 | |
+| 10:00 | 종목(ETF) · AI 랭킹 국내 ETF 탭 | `etf_score` | worker-stock | `krx` | **국내 ETF 전체** (하루 1호출 · 전 영업일분) | KRX `etf_bydd_trd`가 다음 영업일에 공개. 지표(`etf_daily_metrics`) 적재 뒤 괴리·추적오차·유동성·규모를 집단(일반·채권금리·레버리지) 백분위로 점검 점수(`etf_scores`). 첫 실행 90일 백필 |
+| 20:30 | (재료) 심리·수급 축 | `investor_flow_sync` | worker-stock | toss `STOCK_TRADING_TREND` | **국내 보통주 전 종목 매일** (약 2,760 · 0.5초 간격 ≈ 23분) | 외국인·기관·개인 순매수(`stock_investor_flows`). 확정치만. 처음 보는 종목은 60일 백필(호출 수 같음). 사용자 시세 버킷과 다름 |
+| 22:00 | 종목 · 재무제표 · 실적 | `financials_domestic` | worker-stock | `dart` | 등급제 400 | |
+| 마지막 실행 +24h마다 (DB 기준, 2026-09-28) | 종목 · 개요(PER·PBR·ROE) | `fundamentals_rotation` (원장 밖) | api (reference data poller) | `dart` / `edgar_bulk` | 등급제 **국내 400 · 해외 600** | **원장에 안 남는 유일한 종목 단위 적재다.** 아래 「지표 로테이션」 절 |
+| KRX 마감+20분 | 실시간 차트 · AI 추천 랭킹 | `daily_close_domestic` | worker-market | — | 전 종목 | 종가. 스탬프·투자 리포트·목표가도 읽음 |
+| US 마감+20분 | 실시간 차트 · AI 추천 랭킹 | `daily_close_overseas` | worker-market | — | 전 종목 | 종가. 스탬프·투자 리포트·목표가도 읽음 |
+| 마감 배치 이후 | 투자 리포트 | `research_verdict` | worker-stock | — | 열린 콜 | |
+| KRX 마감 후 16:30~18:30 | AI 추천 랭킹 · 종목 · AI 분석 | `llm_summary_domestic` | worker-content | `llm_kr` | 3층 · 최대 350 | 종가 적재(15:50~16:15) 뒤 |
+| US 마감 후 18:00~20:00 ET | AI 추천 랭킹 · 종목 · AI 분석 | `llm_summary_overseas` | worker-content | `llm_us` | 3층 · 최대 350 | 종가 적재(≈17:37 ET) 뒤 |
+| 07:10 | 국내·해외 실적 일정 | `earnings_preview_domestic` · `earnings_preview_overseas` | worker-content | `llm_feat_earnings`(기능 버킷 60콜·12만) + `llm_kr`/`llm_us` | 향후 7일 발표(국내는 작년 발표일 추정 포함) · 시장당 최대 30(보유·관심 먼저) | 「이번 주 실적 관전 포인트」(2026-09-27). 같은 사실표면 건너뜀 · AI 글 3일 유지 · 발표 전날 한 번 새로 · 규칙 문장은 다음 회차에 AI로 재시도. 재처리 허용 목록 밖(LLM 비용) |
+| 30분마다(:05 · :35) | 투자 리포트 | `research_review` | worker-content | `llm_feat_research`(기능 버킷 30콜·8만) + `llm_kr`/`llm_us` | 최근 30일 공개 리포트 중 새로 게시·수정된 것, 회차당 10 | 「AI 검토 노트」(2026-09-27). 할 일이 없으면 SELECT 한 번. 규칙 노트는 6시간 뒤 AI로 재시도 |
+| 장중 30분 / 그 외 1시간 | 국내 주식 · 해외 주식 | `news_briefing_*` | worker-content | `llm_kr` / `llm_us` | 시장별 1건 | 뉴스 화면 AI 브리핑. 국내 슬롯만 Toss 수급 1호출(5분 캐시). 페이지 로드는 LLM·Toss 없음 |
 
 
 
@@ -238,6 +261,7 @@ API는 그 보고서의 **나이**를 읽는다 — 서로가 서로를 본다.
 - **05:30 캔들 롤업** — 미국장 마감(05:00 KST) 직후이고 06:00 해외 실적 배치보다 앞선다.
 두 시장이 모두 닫혀 1분봉 쓰기가 없는 유일한 창이다.
 - **01:30 종목 경고** — KRX 마감 뒤이고 다른 배치가 비어 있는 시간대. 약 2시간 걸린다(실측 400ms/종목).
+- **02:30 섹터 분류** — DART·EDGAR를 쓰는 다른 잡이 없는 새벽. 종목 경고(Toss)와는 원천이 달라 겹쳐도 된다.
 - **07:00 내부자 해외** — 미국 마감(16:00 ET ≈ 05~06시 KST) 직후. Form 4는 거래일로부터
 2영업일 안에 제출되므로 마감 뒤가 그날 것을 가장 많이 담는다.
 - **09:00 재무 해외** — 같은 `edgar_bulk` 버킷이라 내부자 배치와 두 시간을 벌린다.
@@ -421,6 +445,9 @@ of Operations) 제출일을 받아 붙인다. `data.sec.gov/submissions`는 종�
 | `financials_domestic` | 종목 수          | 400   | 20+ (연도 4벌 × 보고서 4종 + 누적) |
 | `warnings_sync`       | 종목 수          | 전 종목  | 1 (초당 5회 상한 — 250ms 간격)   |
 | `disclosures_daily`   | **거슬러 받을 일수** | 1     | 하루당 2~4호출                 |
+| `sector_sync`         | 종목 수(국내·미국 각각) | 1,000 / 3,000 | 정확히 1 (90일 안에 받은 종목은 건너뜀) |
+| `investor_flow_sync`  | 종목 수          | 전 종목(약 2,760) | 정확히 1 (0.5초 간격) |
+| `etf_score`           | **거슬러 받을 달력일** (첫 실행만) | 90 | 평일 하루당 1 (7초 간격) |
 
 
 `disclosures_daily`만 축이 종목이 아니라 날짜다 — 워커가 며칠 죽어 있었다면
@@ -479,7 +506,7 @@ of Operations) 제출일을 받아 붙인다. `data.sec.gov/submissions`는 종�
 
 
 > 시세·호가·체결은 예외로 남아 있다. 그쪽은 성격이 다르다 — 실시간성이 상품 자체이고,
-> 이미 폴러 + Redis + MySQL write-through 구조를 따로 갖고 있다(AGENT_STATE 참조).
+> 이미 폴러 + Redis + MySQL write-through 구조를 따로 갖고 있다(PRINCIPLES 참조).
 
 
 
@@ -492,6 +519,9 @@ of Operations) 제출일을 받아 붙인다. `data.sec.gov/submissions`는 종�
 | `financial_periods`    | `financials_domestic` / `financials_overseas` | 재무제표 상세 모달, 실적 탭 분기 |
 | `stock_disclosures`    | `disclosures_daily`                           | 오늘의 공시, 실적 탭 최근 공시  |
 | `stock_warnings`       | `warnings_sync`                               | 종목 경고 배지, 인사이트      |
+| `stock_sectors`        | `sector_sync`                                 | 점수 섹터 피어, 포트폴리오 섹터 노출 |
+| `stock_investor_flows` | `investor_flow_sync`                          | 심리·수급 축(수급 성분) |
+| `etf_daily_metrics` · `etf_scores` | `etf_score`                    | ETF 종목 화면 「ETF 점검」, AI 랭킹 「국내 ETF」 탭 |
 | `earnings_events`      | `earnings_domestic` / `earnings_overseas`     | 실적 캘린더, 실적 탭, 인사이트  |
 | `earnings_surprise_history` | `cmd/backfill-earnings-surprises` (수치) + `cmd/backfill-earnings-announced` (발표일·**일회성**) | 적중 이력 카드 + 과거 캘린더로 승격 |
 | `symbol_sync_state`    | 위 잡들이 공유                                      | 관리자 커버리지, "수집 전" 안내 |
@@ -529,7 +559,14 @@ of Operations) 제출일을 받아 붙인다. `data.sec.gov/submissions`는 종�
 
 로고가 바뀌는 사건은 상장·사명 변경·CI 교체뿐이고 셋 다 드물어서 한 달에 한 번이면
 충분하다. 스크립트는 `-delta-only`로 돌므로 두 번째 실행부터는 새로 상장된 것과 지난번에
-실패한 것만 다시 시도한다. **갱신 뒤에는 FE를 다시 배포해야 화면에 반영된다.**
+실패한 것만 다시 시도한다. **갱신 뒤에는 FE를 다시 배포하고 API를 재시작해야 화면에 반영된다**
+(FE는 `logo-index.json`을 번들에 굽고, API는 `manifest.json`을 기동 때 읽는다).
+
+**갱신 사이에 상장한 종목도 로고가 나온다**(10-03부터). 목록에 없는 종목은 원격 URL로
+떨어지는데, 해외는 FMP, **국내는 네이버 CDN**이다 — 예전엔 국내도 FMP `.KS`였고 신규
+상장은 거의 다 404라 모노그램만 나왔다(거래대금 상위 468670·486510·0035S0 등). 그래서 이
+갱신은 「없는 로고를 채우는」 일이 아니라 **로컬 사본 + 밝기 판정(tone)** 을 채우는 일이다.
+2026-09-02 이후 한 달간 안 돌았던 것도 그 때문에 드러났다.
 
 해외 로고는 기본적으로 **저장하지 않고** FMP CDN URL을 런타임에 부른다. `-StoreUS`를
 주면 `fe/public/logos/us/*.png`로 내려받아 외부 CDN 의존을 없앨 수 있는데, 실측 종목당
@@ -553,8 +590,9 @@ of Operations) 제출일을 받아 붙인다. `data.sec.gov/submissions`는 종�
 | 분류 | 잡 | 왜 |
 | --- | --- | --- |
 | 멱등 · DB만 | `stock_scores` · `data_retention` · `research_verdict` | 다시 돌리면 그냥 최신이 된다 |
-| 멱등 · 그날 것을 다시 받으면 되는 것 | `warnings_sync` · `disclosures_daily` | 경고 배지가 낡으면 **틀린 정보**를 보여준다 |
-| 등급제 로테이션 | `insider_*` · `financials_*` | 건너뛴 슬라이스는 다음 바퀴까지 낡은 채로 남는다 |
+| 멱등 · 우리 사이트 + 무료 조회 | `growth_audit` | 같은 날 다시 돌면 그날 보고서를 덮는다. 외부 지출 없음 |
+| 멱등 · 그날 것을 다시 받으면 되는 것 | `warnings_sync` · `disclosures_daily` · `investor_flow_sync` | 경고 배지가 낡으면 **틀린 정보**를 보여준다 |
+| 등급제 로테이션 | `insider_*` · `financials_*` · `sector_sync` | 건너뛴 슬라이스는 다음 바퀴까지 낡은 채로 남는다 |
 | 실적 일정 | `earnings_*` | 기동 catch-up이 있지만 그건 **프로세스가 떠야** 돈다. 호출이 적어 겹쳐도 싸다 |
 
 **빼는 것과 그 이유** — 이쪽이 더 중요하다.

@@ -338,16 +338,6 @@ func (s *HoldingTradesService) syncHolding(ctx context.Context, userID int64, sy
 	return pos, nil
 }
 
-// Positions returns every symbol's derived position, for callers that need to
-// know which holdings are backed by real history.
-func (s *HoldingTradesService) Positions(ctx context.Context) (map[string]model.HoldingPosition, error) {
-	trades, err := s.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return repository.DerivePositions(trades), nil
-}
-
 // Valuation reconstructs the day-by-day market value of what the user actually
 // held, from `days` calendar days ago until today.
 //

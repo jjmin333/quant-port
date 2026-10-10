@@ -43,8 +43,6 @@ var goldIndexTerms = []string{
 	"국제 금", "금 가격", "금 시장",
 }
 
-var goldmanGuardTerms = []string{"goldman", "goldman sachs"}
-
 func matchesGoldIndex(blob string) bool {
 	if containsAnyTerm(blob, goldIndexTerms) {
 		return true

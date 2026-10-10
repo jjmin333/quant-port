@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/enact/quant-port/be/internal/model"
@@ -103,6 +104,41 @@ func (r *BatchJobRunRepo) HasPending(ctx context.Context, jobID string) (bool, e
 		SELECT COUNT(*) FROM batch_job_runs WHERE job_id = ? AND status IN ('queued', 'running')`,
 		jobID).Scan(&n)
 	return n > 0, err
+}
+
+/*
+QueuedJobIDs — 주어진 잡 중 queued 행이 하나라도 있는 잡만 돌려준다.
+
+큐 폴러가 **빈 큐를 확인하는 데 쓰는 유일한 쿼리**다. 잠금도 트랜잭션도 없다 —
+집는 것은 여전히 `ClaimNext`(SKIP LOCKED)가 한다. 여기서 본 뒤 집기 전에 남이
+가져가도 ClaimNext가 ok=false로 끝날 뿐이다.
+
+인덱스 (job_id, status, id)로 잡마다 한 점을 찍고 끝난다.
+*/
+func (r *BatchJobRunRepo) QueuedJobIDs(ctx context.Context, jobIDs []string) ([]string, error) {
+	if r == nil || r.db == nil || len(jobIDs) == 0 {
+		return nil, nil
+	}
+	args := make([]any, len(jobIDs))
+	for i, id := range jobIDs {
+		args[i] = id
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT DISTINCT job_id FROM batch_job_runs
+		 WHERE status = 'queued' AND job_id IN (`+placeholders(len(jobIDs))+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
 }
 
 // ClaimNext atomically takes the oldest queued run for one job and marks it
@@ -284,6 +320,15 @@ type BatchLedgerRow struct {
 	LastFinishAt  *time.Time
 	LastMessage   string
 	LastSuccessAt *time.Time
+	/*
+		LastInterrupted — 마지막 실행이 **끝나지 못하고 잘린 것**인가
+		(`MarkStaleRunsFailed`가 닫은 실행).
+
+		`LastStatus == "error"`만으로는 「돌았는데 깨졌다」와 「프로세스가 죽어서
+		못 돌았다」가 구분되지 않는다. 그 둘은 다음 행동이 정반대다 — 앞은 사람이
+		원인을 봐야 하고, 뒤는 그냥 다시 돌리면 된다.
+	*/
+	LastInterrupted bool
 }
 
 /*
@@ -304,9 +349,10 @@ func (r *BatchJobRunRepo) LedgerRows(ctx context.Context, since time.Duration) (
 		since = 30 * 24 * time.Hour
 	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT job_id, status, started_at, finished_at, message, last_success
+		SELECT job_id, status, started_at, finished_at, message, last_success, interrupted
 		  FROM (
 		        SELECT job_id, status, started_at, finished_at, message,
+		               COALESCE(JSON_EXTRACT(result, '$.interrupted') = TRUE, FALSE) AS interrupted,
 		               ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY started_at DESC) AS rn,
 		               MAX(CASE WHEN status = 'done' THEN started_at END)
 		                 OVER (PARTITION BY job_id) AS last_success
@@ -328,7 +374,9 @@ func (r *BatchJobRunRepo) LedgerRows(ctx context.Context, since time.Duration) (
 			success  sql.NullTime
 			started  time.Time
 		)
-		if err := rows.Scan(&row.JobID, &row.LastStatus, &started, &finished, &message, &success); err != nil {
+		if err := rows.Scan(
+			&row.JobID, &row.LastStatus, &started, &finished, &message, &success, &row.LastInterrupted,
+		); err != nil {
 			return nil, fmt.Errorf("ledger rows scan: %w", err)
 		}
 		row.LastRunAt = &started
@@ -397,14 +445,68 @@ func (r *BatchJobRunRepo) MarkStaleRunsFailed(ctx context.Context) error {
 	if r == nil || r.db == nil {
 		return nil
 	}
+	/*
+		**표식을 함께 남긴다 (2026-09-20).**
+
+		이 문장이 닫는 실행은 「돌았는데 깨졌다」가 아니라 「돌다가 프로세스가
+		사라졌다」다. 그런데 원장에는 둘 다 `status='error'`로만 남아서, 늦은 잡을
+		다시 큐에 넣는 쪽(`batch_catchup.go`)이 **구분할 방법이 없어 둘 다 건너뛰고
+		있었다.** 실측(2026-08-20~09-20): 이렇게 닫힌 실행이 **69건 · 8개 잡 ·
+		20일**이고, 그 하루치 데이터는 아무도 다시 받지 않았다.
+
+		한국어 문장을 되읽어 판정하지 않는다 — 문구는 화면에 보이라고 있는 것이고,
+		기계가 읽을 것은 따로 둔다. `result`가 이미 JSON이라 칸을 새로 만들 필요가
+		없다(이 행의 `result`는 언제나 비어 있다 — 끝내지 못한 실행이니까).
+	*/
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE batch_job_runs
 		   SET status = 'error',
 		       message = '프로세스가 재시작되어 결과를 확인할 수 없습니다',
+		       result = JSON_OBJECT('interrupted', TRUE),
 		       finished_at = CURRENT_TIMESTAMP(3)
 		 WHERE status = 'running'
 		   AND started_at < DATE_SUB(NOW(), INTERVAL ? SECOND)`, int64(staleRunAge.Seconds()))
 	return err
+}
+
+/*
+MarkInterruptedRuns — **이 잡들을 돌리는 유일한 프로세스가 방금 떴을 때** 그 잡들의
+running 행을 나이와 상관없이 닫는다.
+
+MarkStaleRunsFailed(API 기동 때 · 6시간 넘은 것만)만으로는 모자랐다. 워커가 실행 도중
+재배포로 죽으면 그 행이 running으로 남고, 만회(batch_catchup)는 「돌고 있는」 잡을
+건너뛴다. 2026-09-25 실측: 02:29:59에 시작한 sector_sync와 01:29 warnings_sync가 02:31
+워커 재기동으로 죽었는데 **16시간 동안 running**으로 남아 그날 경고·섹터를 아무도 다시
+받지 않았다(09-23·24도 같은 모양 — 경고 스윕이 하루 2종목만 처리하고 멈춘 것처럼 보였다).
+
+잡은 워커 하나에만 속하므로(cmd/worker-*의 잡 목록이 서로 겹치지 않는다) 그 워커가
+기동했다는 것 자체가 「이전 실행은 끝났다」는 증거다. `before`(기동 시각)보다 늦게
+시작한 행은 건드리지 않는다 — 이 프로세스가 방금 집어 든 실행이다. 닫을 때는
+MarkStaleRunsFailed와 같은 표식(interrupted)을 남겨 만회가 다시 큐에 넣게 한다.
+*/
+func (r *BatchJobRunRepo) MarkInterruptedRuns(ctx context.Context, jobIDs []string, before time.Time) (int64, error) {
+	if r == nil || r.db == nil || len(jobIDs) == 0 {
+		return 0, nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(jobIDs)), ",")
+	args := make([]any, 0, len(jobIDs)+1)
+	for _, id := range jobIDs {
+		args = append(args, id)
+	}
+	args = append(args, before)
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE batch_job_runs
+		   SET status = 'error',
+		       message = '프로세스가 재시작되어 결과를 확인할 수 없습니다',
+		       result = JSON_OBJECT('interrupted', TRUE),
+		       finished_at = CURRENT_TIMESTAMP(3)
+		 WHERE status = 'running'
+		   AND job_id IN (`+placeholders+`)
+		   AND started_at < ?`, args...)
+	if err != nil {
+		return 0, fmt.Errorf("mark interrupted runs: %w", err)
+	}
+	return res.RowsAffected()
 }
 
 // MigrateBatchJobRunsIfNeeded applies 032_batch_job_runs.sql and

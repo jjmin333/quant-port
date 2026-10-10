@@ -120,25 +120,6 @@ func axisScore(parts []float64) *float64 {
 	return &v
 }
 
-// growthRate guards the negative-base trap: EPS going -10 → +1 is not "+110%
-// growth", it is a turnaround whose percentage is meaningless. Measured on the
-// live universe this path is exactly what produced EPS YoY = 2.28e9%.
-//
-// Returns ok=false when the reported growth cannot be trusted, so the caller
-// drops the metric instead of feeding a nonsense number into the ranking.
-func growthRate(reported *float64) (float64, bool) {
-	if reported == nil {
-		return 0, false
-	}
-	v := *reported
-	// A swing beyond ±1000% is, in this dataset, always a base-effect artifact
-	// rather than real operating growth.
-	if v > 1000 || v < -1000 {
-		return 0, false
-	}
-	return v, true
-}
-
 // shrinkFactor pulls a score toward neutral when little data backed it.
 //
 // Renormalizing weights alone is not enough: a symbol with only RSI available

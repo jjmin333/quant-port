@@ -66,8 +66,9 @@ func WaitForSlot(ctx context.Context, at time.Time) bool {
 			timer.Stop()
 			return false
 		case <-timer.C:
-			// 벽시계가 뒤로 밀려 이르게 깼을 수 있다 — 루프가 다시 재운다.
-			if remaining := time.Until(at); remaining > 0 {
+			// 벽시계가 뒤로 밀려 이르게 깼을 수 있다 — 루프가 다시 재운다. 1초 미만은 도커 VM 타이머의
+			// 평범한 오차라 적지 않는다(worker-earnings 5분 루프가 하루 288줄을 찍었다, 2026-09-29).
+			if remaining := time.Until(at); remaining > time.Second {
 				log.Printf("batch slot: %s 보다 %s 이르게 깨어났다 — 다시 기다린다",
 					at.Format(time.RFC3339), remaining)
 			}

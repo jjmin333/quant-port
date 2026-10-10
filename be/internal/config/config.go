@@ -76,25 +76,13 @@ type FinnhubNewsConfig struct {
 	APIKey string
 }
 
-func (c FinnhubNewsConfig) Enabled() bool {
-	return strings.TrimSpace(c.APIKey) != ""
-}
-
 type NaverConfig struct {
 	ClientID     string
 	ClientSecret string
 }
 
-func (c NaverConfig) Enabled() bool {
-	return strings.TrimSpace(c.ClientID) != "" && strings.TrimSpace(c.ClientSecret) != ""
-}
-
 type KakaoConfig struct {
 	RestAPIKey string
-}
-
-func (c KakaoConfig) Enabled() bool {
-	return strings.TrimSpace(c.RestAPIKey) != ""
 }
 
 type UpbitConfig struct {
@@ -143,6 +131,10 @@ type LLMConfig struct {
 	KeyUS   string
 	BaseURL string
 	Model   string
+	// FallbackModel is tried once when Model answers 503 (capacity). Opt-in
+	// per caller — only the 시장 브리핑 uses it today. OPENAI_FALLBACK_MODEL
+	// overrides; set it to "-" to disable.
+	FallbackModel string
 
 	// Quota overrides for apibudget's LLM limits. Free-tier ceilings move
 	// without notice and differ per model and per account, so they must be
@@ -155,10 +147,6 @@ type LLMConfig struct {
 	TokensPerDay    int64
 }
 
-func (c LLMConfig) Enabled() bool {
-	return strings.TrimSpace(c.KeyKR) != "" || strings.TrimSpace(c.KeyUS) != ""
-}
-
 // buildLLMConfig prefers an explicit OpenAI key; if unset, falls back to
 // Gemini against Google's OpenAI-compatible endpoint. Either way the
 // downstream llm.Client only ever speaks the OpenAI chat-completions shape —
@@ -167,7 +155,7 @@ func (c LLMConfig) Enabled() bool {
 //
 // Regional keys (GEMINI_KR_API_KEY / GEMINI_US_API_KEY, or the *_API_KEY_KR
 // aliases) take precedence over the shared GEMINI_API_KEY. New LLM features
-// must keep this KR/US split — see llm.Pool and docs/AGENT_STATE.md.
+// must keep this KR/US split — see llm.Pool and docs/PRINCIPLES.md.
 func buildLLMConfig() LLMConfig {
 	cfg := LLMConfig{
 		DailyQuota:      getEnvInt("LLM_DAILY_QUOTA", 0),
@@ -182,6 +170,7 @@ func buildLLMConfig() LLMConfig {
 		cfg.Provider = "openai"
 		cfg.BaseURL = getEnv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 		cfg.Model = getEnv("OPENAI_MODEL", "gpt-4o-mini")
+		cfg.FallbackModel = llmFallbackModel("")
 		cfg.KeyKR = firstNonEmpty(openaiKR, openai)
 		cfg.KeyUS = firstNonEmpty(openaiUS, openai)
 		return cfg
@@ -193,11 +182,31 @@ func buildLLMConfig() LLMConfig {
 		cfg.Provider = "gemini"
 		cfg.BaseURL = getEnv("OPENAI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
 		cfg.Model = getEnv("OPENAI_MODEL", "gemini-3.1-flash-lite")
+		// 주 모델이 미국 낮 시간(KST 22:00~03:00)마다 503으로 몇 시간씩 막힌다.
+		// 대체 모델은 용량 풀이 다르고, 무료 키에서는 모델마다 한도가 따로라
+		// 주 모델의 한도를 깎지 않는다(결제 미연결 키라 청구도 없다).
+		// ⚠️ gemini-2.5-flash-lite는 ListModels에 나오지만 호출하면 404 「no longer
+		// available to new users」다(09-25 실측) — 목록에 있다고 쓸 수 있는 게 아니다.
+		cfg.FallbackModel = llmFallbackModel("gemini-3.5-flash-lite")
 		cfg.KeyKR = firstNonEmpty(geminiKR, gemini)
 		cfg.KeyUS = firstNonEmpty(geminiUS, gemini)
 		return cfg
 	}
 	return cfg
+}
+
+// llmFallbackModel reads OPENAI_FALLBACK_MODEL; "-" (or "off") turns the
+// fallback off even where the provider has a default.
+func llmFallbackModel(def string) string {
+	v := strings.TrimSpace(getEnv("OPENAI_FALLBACK_MODEL", def))
+	switch strings.ToLower(v) {
+	case "-", "off", "none":
+		return ""
+	}
+	if v == strings.TrimSpace(getEnv("OPENAI_MODEL", "")) {
+		return ""
+	}
+	return v
 }
 
 type DartConfig struct {
@@ -221,10 +230,6 @@ type FnGuideConfig struct {
 
 type KRXConfig struct {
 	APIKey string
-}
-
-func (c KRXConfig) Enabled() bool {
-	return strings.TrimSpace(c.APIKey) != ""
 }
 
 type TossConfig struct {

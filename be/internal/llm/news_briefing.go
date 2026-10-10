@@ -20,6 +20,9 @@ type NewsBriefingLLMOutput struct {
 	// TotalTokens is what the provider charged, taken from the response rather
 	// than the model's JSON.
 	TotalTokens int64 `json:"-"`
+	// Model is the model that wrote this narrative — the primary one, or the
+	// 503 fallback (Config.FallbackModel).
+	Model string `json:"-"`
 }
 
 // newsBriefingOutputTokens is the pre-flight ceiling for the completion. The
@@ -65,7 +68,7 @@ func (c *Client) GenerateNewsBriefing(ctx context.Context, factsJSON string) (*N
 // GenerateNewsBriefingRaw returns the provider completion before parsing, plus
 // the decoded payload. Admin/dry-run tooling uses the raw string for auditing.
 func (c *Client) GenerateNewsBriefingRaw(ctx context.Context, factsJSON string) (raw string, out *NewsBriefingLLMOutput, err error) {
-	content, used, err := c.chatCompletion(
+	content, used, model, err := c.chatCompletionWithFallback(
 		ctx,
 		newsBriefingSystemPrompt,
 		factsJSON,
@@ -83,14 +86,8 @@ func (c *Client) GenerateNewsBriefingRaw(ctx context.Context, factsJSON string) 
 	parsed.Summary = strings.TrimSpace(parsed.Summary)
 	parsed.Mood = normalizeBriefingMood(parsed.Mood)
 	parsed.TotalTokens = used
+	parsed.Model = model
 	return content, &parsed, nil
-}
-
-// EstimateNewsBriefingTokens reports what one call is expected to cost, input
-// plus completion, so a scheduler can decide whether it still fits the day's
-// budget before spending it.
-func (c *Client) EstimateNewsBriefingTokens(factsJSON string) int64 {
-	return EstimateTokens(newsBriefingSystemPrompt, factsJSON) + newsBriefingOutputTokens
 }
 
 // normalizeBriefingMood keeps the label inside the three values the UI knows

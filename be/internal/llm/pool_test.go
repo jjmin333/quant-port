@@ -8,14 +8,14 @@ import (
 
 func TestRegionOf(t *testing.T) {
 	cases := map[string]string{
-		"KR":        RegionKR,
-		"kr":        RegionKR,
-		"domestic":  RegionKR,
-		"":          RegionKR,
-		"unknown":   RegionKR,
-		"US":        RegionUS,
-		"us":        RegionUS,
-		"overseas":  RegionUS,
+		"KR":       RegionKR,
+		"kr":       RegionKR,
+		"domestic": RegionKR,
+		"":         RegionKR,
+		"unknown":  RegionKR,
+		"US":       RegionUS,
+		"us":       RegionUS,
+		"overseas": RegionUS,
 	}
 	for in, want := range cases {
 		if got := RegionOf(in); got != want {

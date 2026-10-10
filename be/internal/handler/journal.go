@@ -21,7 +21,7 @@ func NewJournalHandler(svc *service.JournalService) *JournalHandler {
 }
 
 func (h *JournalHandler) List(w http.ResponseWriter, r *http.Request) {
-	notes, err := h.svc.List(r.Context(), r.URL.Query().Get("symbol"), r.URL.Query().Get("q"))
+	notes, err := h.svc.List(r.Context(), r.URL.Query().Get("symbol"), r.URL.Query().Get("topic"), r.URL.Query().Get("q"))
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -33,6 +33,7 @@ func (h *JournalHandler) List(w http.ResponseWriter, r *http.Request) {
 // measured by the server, never stated by the client.
 type journalNoteBody struct {
 	Title      string   `json:"title"`
+	Topic      string   `json:"topic"`
 	Body       string   `json:"body"`
 	Symbol     string   `json:"symbol"`
 	SymbolName string   `json:"symbolName"`
@@ -43,6 +44,7 @@ type journalNoteBody struct {
 func (b journalNoteBody) input() service.JournalNoteInput {
 	return service.JournalNoteInput{
 		Title:      b.Title,
+		Topic:      b.Topic,
 		Body:       b.Body,
 		Symbol:     b.Symbol,
 		SymbolName: b.SymbolName,

@@ -302,3 +302,11 @@ func NormalizeEarningsSymbols(raw string, max int) []string {
 	}
 	return out
 }
+
+// SnapshotEstimates records today's US consensus EPS where it changed (EPS 리비전 재료).
+func (s *EarningsIngestService) SnapshotEstimates(ctx context.Context) (int64, error) {
+	if s == nil || s.events == nil {
+		return 0, nil
+	}
+	return s.events.SnapshotEstimates(ctx, time.Now().In(model.KST).Format("2006-01-02"))
+}

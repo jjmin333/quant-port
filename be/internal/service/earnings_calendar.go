@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/enact/quant-port/be/internal/marketdata/calendar"
@@ -17,7 +18,7 @@ import (
 //
 // 적재는 워커(EarningsIngestService)만 한다. 이 서비스가 조회 중에 FnGuide나
 // Finnhub을 부르는 일은 없다 — 조회 경로에서 외부 HTTP를 하지 않는다는 규칙
-// (AGENT_STATE 응답 속도 원칙 #2)을 지킨다.
+// (PRINCIPLES 응답 속도 원칙 #2)을 지킨다.
 type EarningsCalendarService struct {
 	events *repository.EarningsEventRepo
 	// history — 발표일 없는 과거 서프라이즈(해외 전용). 「꾸준히 기대를 넘는
@@ -25,6 +26,10 @@ type EarningsCalendarService struct {
 	// 이 표에는 발표일이 없어서 날짜 축에 올릴 수 없다(migrations/055).
 	history *repository.EarningsSurpriseHistoryRepo
 	redis   *redis.Client
+
+	// refresh — 레일 재구성을 키당 하나로 묶는다(earnings_highlights.go).
+	refreshOnce sync.Once
+	refresh     *quoteRefreshCoordinator
 }
 
 func NewEarningsCalendarService(

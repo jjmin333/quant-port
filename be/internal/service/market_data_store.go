@@ -19,12 +19,12 @@ import (
 )
 
 const (
-	marketPriceKeyFmt       = "market:price:v1:%s"
-	marketPriceTTL          = 20 * time.Second
-	marketCalendarKRKey     = "market:calendar:kr:v1"
-	marketCalendarUSKey     = "market:calendar:us:v1"
-	marketCalendarTTL       = 26 * time.Hour
-	marketCalendarPoll      = 24 * time.Hour
+	marketPriceKeyFmt   = "market:price:v1:%s"
+	marketPriceTTL      = 20 * time.Second
+	marketCalendarKRKey = "market:calendar:kr:v1"
+	marketCalendarUSKey = "market:calendar:us:v1"
+	marketCalendarTTL   = 26 * time.Hour
+	marketCalendarPoll  = 24 * time.Hour
 	/*
 		marketCalendarRetryAfterStale — 달력이 「낡아 보일 때」의 재시도 간격.
 
@@ -33,15 +33,15 @@ const (
 		자세한 배경은 MarketDataStore.calAttemptedAt 머리글.
 	*/
 	marketCalendarRetryAfterStale = 10 * time.Minute
-	marketEarningsKey       = "market:earnings:calendar:v1"
-	marketEarningsTTL       = 1 * time.Hour
-	marketEarningsPoll      = 1 * time.Hour
-	marketWarningsKeyFmt    = "market:warnings:v1:%s"
-	marketWarningsTTL       = 6 * time.Hour
-	marketDisclosuresKeyFmt = "market:disclosures:v1:%s:%s"
-	marketDisclosuresTTL    = 1 * time.Hour
-	marketInsightsDataPoll  = 15 * time.Minute
-	marketRateLimitBackoff  = 60 * time.Second
+	marketEarningsKey             = "market:earnings:calendar:v1"
+	marketEarningsTTL             = 1 * time.Hour
+	marketEarningsPoll            = 1 * time.Hour
+	marketWarningsKeyFmt          = "market:warnings:v1:%s"
+	marketWarningsTTL             = 6 * time.Hour
+	marketDisclosuresKeyFmt       = "market:disclosures:v1:%s:%s"
+	marketDisclosuresTTL          = 1 * time.Hour
+	marketInsightsDataPoll        = 15 * time.Minute
+	marketRateLimitBackoff        = 60 * time.Second
 )
 
 type cachedMarketPrice struct {
@@ -1042,23 +1042,6 @@ func (s *MarketDataStore) GetTodayDisclosures(ctx context.Context, symbols []str
 			continue
 		}
 		out = append(out, events...)
-	}
-	return out
-}
-
-func domesticSymbolsFromList(symbols []string) []string {
-	var out []string
-	seen := map[string]struct{}{}
-	for _, sym := range symbols {
-		sym = strings.TrimSpace(sym)
-		if len(sym) != 6 {
-			continue
-		}
-		if _, ok := seen[sym]; ok {
-			continue
-		}
-		seen[sym] = struct{}{}
-		out = append(out, sym)
 	}
 	return out
 }

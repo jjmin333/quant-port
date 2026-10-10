@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -65,6 +66,65 @@ func TestChatCompletionDoesNotRetry503Twice(t *testing.T) {
 	}
 	if n := hits.Load(); n != 2 {
 		t.Fatalf("hits=%d want 2 (original + one retry)", n)
+	}
+}
+
+// 시장 브리핑의 503 재시도는 같은 모델이 아니라 대체 모델로 간다. 주 모델의 503은
+// 미국 낮 시간 내내 이어져, 4초 뒤 같은 모델은 거의 늘 같은 대답이었다.
+func TestNewsBriefingRetries503OnFallbackModel(t *testing.T) {
+	withFastUnavailableRetry(t)
+	var models []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Model string `json:"model"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		models = append(models, body.Model)
+		if body.Model == "primary" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`[{"error":{"status":"UNAVAILABLE"}}]`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"summary\":\"요약\",\"mood\":\"중립\"}"}}],"usage":{"total_tokens":9}}`))
+	}))
+	t.Cleanup(srv.Close)
+	c := NewClient(Config{APIKey: "test", BaseURL: srv.URL, Model: "primary", FallbackModel: "backup"}, nil)
+	c.httpClient = srv.Client()
+
+	out, err := c.GenerateNewsBriefing(context.Background(), `{}`)
+	if err != nil {
+		t.Fatalf("fallback should answer: %v", err)
+	}
+	if out.Summary != "요약" || out.Model != "backup" {
+		t.Fatalf("summary=%q model=%q, want 요약/backup", out.Summary, out.Model)
+	}
+	if len(models) != 2 || models[0] != "primary" || models[1] != "backup" {
+		t.Fatalf("models=%v, want [primary backup]", models)
+	}
+}
+
+// 대체 모델은 opt-in이다 — 브리핑 외 경로(번역·종목 요약)는 같은 모델로 한 번 더.
+func TestChatCompletionRetries503OnSameModelWithoutOptIn(t *testing.T) {
+	withFastUnavailableRetry(t)
+	var models []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Model string `json:"model"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		models = append(models, body.Model)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(srv.Close)
+	c := NewClient(Config{APIKey: "test", BaseURL: srv.URL, Model: "primary", FallbackModel: "backup"}, nil)
+	c.httpClient = srv.Client()
+
+	if _, err := c.TranslateENToKO(context.Background(), "hello"); err == nil {
+		t.Fatal("expected 503")
+	}
+	if len(models) != 2 || models[1] != "primary" {
+		t.Fatalf("models=%v, want [primary primary]", models)
 	}
 }
 

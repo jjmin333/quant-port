@@ -2,7 +2,6 @@ package service
 
 import (
 	"math"
-	"strings"
 	"time"
 
 	"github.com/enact/quant-port/be/internal/model"
@@ -171,22 +170,6 @@ func ComputeValuationMetrics(price *float64, current model.FinancialSnapshot, sh
 	return out
 }
 
-// ComputeFundamentals computes stored metrics plus optional valuation when price is provided.
-func ComputeFundamentals(current, prior model.FinancialSnapshot, price *float64, sharesOverride *int64) StoredFundamentals {
-	stored := ComputeStoredFundamentals(current, prior, sharesOverride)
-	if price == nil {
-		return stored
-	}
-	val := ComputeValuationMetrics(price, current, sharesOverride)
-	if val.PER == nil {
-		stored.Missing = append(stored.Missing, "per")
-	}
-	if val.PBR == nil {
-		stored.Missing = append(stored.Missing, "pbr")
-	}
-	return stored
-}
-
 func calcStatus(computed StoredFundamentals) model.FundamentalsCalcStatus {
 	core := []string{"roe", "operating_margin", "revenue_growth_yoy", "eps_growth_yoy"}
 	missingCore := 0
@@ -206,24 +189,6 @@ func calcStatus(computed StoredFundamentals) model.FundamentalsCalcStatus {
 	default:
 		return model.FundamentalsStatusFailed
 	}
-}
-
-func CalcStatusFromStored(f model.StockFundamentals) (model.FundamentalsCalcStatus, string) {
-	var missing []string
-	if f.ROE == nil {
-		missing = append(missing, "roe")
-	}
-	if f.OperatingMargin == nil {
-		missing = append(missing, "operating_margin")
-	}
-	if f.RevenueGrowthYoY == nil {
-		missing = append(missing, "revenue_growth_yoy")
-	}
-	if f.EPSGrowthYoY == nil {
-		missing = append(missing, "eps_growth_yoy")
-	}
-	status := calcStatus(StoredFundamentals{Missing: missing})
-	return status, strings.Join(missing, ",")
 }
 
 func nowPtr() *time.Time {

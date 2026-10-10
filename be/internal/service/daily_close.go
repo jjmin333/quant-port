@@ -22,8 +22,23 @@ const DailyCloseBackfillStart = "2026-01-01"
 // the final print has settled and the poller has written the day's 1d bar.
 const dailyCloseIngestDelay = 20 * time.Minute
 
-// dailyCloseIndexSchedules maps each tracked index to the session whose close
-// defines its trade date.
+/*
+dailyCloseIndexSchedules maps each tracked index to the session whose close
+defines its trade date.
+
+**여기 없는 지수는 일별 종가가 한 줄도 쌓이지 않는다.** `IngestIndexCloses`가
+`dailyCloseIndexSchedules[idx.ID] != schedule`로 거르는데, 없는 키는 빈
+ScheduleID라 어떤 세션과도 같지 않다 — 오류도 로그도 남지 않고 조용히 건너뛴다.
+
+실제로 `us10y`가 그렇게 빠져 있었다(2026-09-16 발견). 라이브 값은 멀쩡했으므로
+(`/quotes/indices`가 FRED에서 바로 읽는다) 홈의 지수 스트립과 브리핑은 정상이었고,
+**일별 종가에 기대는 것만** 2026-08-27에 멈춰 있었다 — 지수 모달의 종가표, 추세
+점수, 키워드, LLM 해설. 08-27까지 있던 행은 폴러가 아니라 백필 명령이 넣은 것이라
+(`source='fred'`) 그 뒤로는 아무도 채우지 않았다.
+
+**그래서 이 표는 `marketIndexCatalog`와 같은 수여야 한다** —
+`TestEveryCatalogIndexHasACloseSchedule`이 그것을 잠근다.
+*/
 var dailyCloseIndexSchedules = map[string]calendar.ScheduleID{
 	"kospi":     calendar.ScheduleKRX,
 	"kosdaq":    calendar.ScheduleKRX,
@@ -35,8 +50,15 @@ var dailyCloseIndexSchedules = map[string]calendar.ScheduleID{
 	"vix":       calendar.ScheduleUS,
 	"sox":       calendar.ScheduleUS,
 	"gold":      calendar.ScheduleUS,
-	"usd-krw":   calendar.ScheduleWeekdays,
-	"btc":       calendar.ScheduleAlways,
+	// FRED의 DGS10. 다른 FRED 계열과 같은 미국 달력이고, 하루 늦은 공표는
+	// `indexLiveDate`가 이미 앞당겨 준다.
+	"us10y":   calendar.ScheduleUS,
+	"usd-krw": calendar.ScheduleWeekdays,
+	// 한국 금리 — ECOS는 영업일만 공표한다.
+	"kr-base": calendar.ScheduleWeekdays,
+	"ktb3":    calendar.ScheduleWeekdays,
+	"ktb10":   calendar.ScheduleWeekdays,
+	"btc":     calendar.ScheduleAlways,
 }
 
 // DailyCloseService owns the 일별 종가 store: a read-optimised projection of
@@ -75,7 +97,7 @@ SetSyncState — 구멍 메우기가 헛도는 것을 멈추게 한다 (2026-09-
 
 # 어떻게 거르나 — 조건 셋을 **모두** 만족해야 건너뛴다
 
-종가는 크리티컬 데이터라(AGENT_STATE 개발 원칙) 「한 번 실패했으니 빼자」로는 부족하다.
+종가는 크리티컬 데이터라(PRINCIPLES 개발 원칙) 「한 번 실패했으니 빼자」로는 부족하다.
 
  1. **오류 코드가 `stock-not-found`일 때만.** 429·타임아웃·5xx는 절대 아니다 —
     그쪽은 다시 물어야 나아진다. Toss 장애는 종목별 `stock-not-found`가 아니라
@@ -459,6 +481,7 @@ func (s *DailyCloseService) StockSeries(ctx context.Context, symbol string, limi
 			Close:          row.Close,
 			Volume:         row.Volume,
 			AISummary:      row.AISummary,
+			AIOverview:     row.AIOverview,
 			AnalysisSource: row.AnalysisSource,
 		}
 		if row.Currency != "" {
@@ -842,12 +865,20 @@ func (s *DailyCloseService) CoverageSummary(ctx context.Context, assetTypes ...m
 	}
 	filter, filterArgs := assetTypeFilter(assetTypes)
 	// assetTypeFilter aliases the table as "st"; join it in for this read too.
+	/*
+		종목마다 PK(symbol, trade_date)의 맨 끝 한 칸만 찌른다 (2026-09-27 제보 1).
+
+		예전 질의는 일봉 표 전체(수백만 행)를 stocks와 조인해 COUNT(DISTINCT)로 셌고,
+		관리자 배치 화면이 잡 다섯 개 몫으로 그걸 다섯 번 불러 응답이 20초였다.
+		stocks.symbol이 PK라 「최신 일봉이 있는 종목 수」는 COUNT(DISTINCT)와 같은 값이다.
+	*/
 	var latest sql.NullString
 	err = s.db.QueryRowContext(ctx, `
-		SELECT COUNT(DISTINCT d.symbol), DATE_FORMAT(MAX(d.trade_date), '%Y-%m-%d')
-		  FROM stock_daily_closes d
-		  JOIN stocks st ON st.symbol = d.symbol
-		 WHERE 1=1`+filter, filterArgs...).Scan(&symbols, &latest)
+		SELECT COUNT(x.latest), DATE_FORMAT(MAX(x.latest), '%Y-%m-%d')
+		  FROM (SELECT (SELECT MAX(d.trade_date) FROM stock_daily_closes d
+		                 WHERE d.symbol = st.symbol) AS latest
+		          FROM stocks st
+		         WHERE 1=1`+filter+`) x`, filterArgs...).Scan(&symbols, &latest)
 	if err != nil {
 		return 0, 0, "", err
 	}

@@ -495,13 +495,6 @@ func joinImageNumbers(nums []int) string {
 	return strings.Join(parts, ", ")
 }
 
-func (s *ImportJobService) recognize(imagePath string) (string, error) {
-	if s.ocr.Available() {
-		return s.ocr.RecognizeFile(imagePath)
-	}
-	return "", fmt.Errorf("tesseract unavailable")
-}
-
 // resolvedPhantomPairs drops false-positive symbols when the canonical ticker is already present at the same qty.
 var resolvedPhantomPairs = map[string]string{
 	"065660": "035420", // 안트로젠 debris when NAVER (19주) already parsed

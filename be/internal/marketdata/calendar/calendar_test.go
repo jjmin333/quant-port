@@ -104,15 +104,3 @@ func TestSessionCloseAtAlwaysDoesNotPanic(t *testing.T) {
 		t.Fatal("expected a non-zero close time for ScheduleAlways")
 	}
 }
-
-func TestScheduleForIndex(t *testing.T) {
-	if ScheduleForIndex("kospi") != ScheduleKRX {
-		t.Fatal("kospi schedule")
-	}
-	if ScheduleForIndex("nasdaq") != ScheduleUS {
-		t.Fatal("nasdaq schedule")
-	}
-	if ScheduleForIndex("btc") != ScheduleAlways {
-		t.Fatal("btc schedule")
-	}
-}

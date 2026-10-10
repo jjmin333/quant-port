@@ -32,9 +32,12 @@ func (h *AdminHandler) GetBatchJobs(w http.ResponseWriter, r *http.Request) {
 	if history == nil {
 		history = []model.BatchJobRun{}
 	}
+	jobs, coveragePending := h.batch.Catalog(ctx)
 	response.JSON(w, http.StatusOK, map[string]any{"data": map[string]any{
-		"jobs":    h.batch.Catalog(ctx),
+		"jobs":    jobs,
 		"history": history,
+		// 커버리지를 아직 한 번도 세지 못했다 — 화면이 잠시 뒤 다시 묻는다.
+		"coveragePending": coveragePending,
 		// 같은 응답에 실어 보낸다 — 배너 하나 때문에 화면이 요청을 하나 더 낼
 		// 이유가 없고, 목록과 배너가 서로 다른 순간을 가리키면 안 된다.
 		"health": h.batch.Health(ctx),
@@ -88,6 +91,23 @@ func (h *AdminHandler) RunBatchJob(w http.ResponseWriter, r *http.Request) {
 		"job":    jobID,
 		"queued": true,
 	}})
+}
+
+// RunOverdueBatches queues every job the watchdog judged late/failed — minus the
+// ones that must not run in bulk (service/batch_overdue.go). `?dryRun=1` only
+// returns the plan so the screen can show what it is about to do.
+func (h *AdminHandler) RunOverdueBatches(w http.ResponseWriter, r *http.Request) {
+	if h.batch == nil {
+		response.Error(w, http.StatusServiceUnavailable, "batch service unavailable")
+		return
+	}
+	dryRun := r.URL.Query().Get("dryRun") == "1"
+	plan, err := h.batch.RunOverdue(r.Context(), dryRun)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]any{"data": plan})
 }
 
 // GetBatchSchedule serves the operator-facing 배치 시간표 문서.

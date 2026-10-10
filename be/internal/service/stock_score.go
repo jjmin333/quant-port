@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/enact/quant-port/be/internal/marketdata/calendar"
 	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/repository"
 )
@@ -66,6 +65,7 @@ type scoreInput struct {
 	market    string
 
 	close     float64
+	closeDate string // 쓴 종가의 날짜 — 기준일보다 이를 수 있다(scoreCloseLookbackDays)
 	shares    float64
 	marketCap float64
 
@@ -80,6 +80,10 @@ type scoreInput struct {
 	per *float64
 	pbr *float64
 	psr *float64
+	// extUsed — EDGAR가 비운 값을 Finnhub 보조로 채웠다(2026-09-28). 판에 「|ext」가 붙는다.
+	extUsed bool
+	// ttmPeriod — 국내 비율을 최근 4분기 합으로 덮었을 때 그 마지막 분기(「2026Q2」). 판에 「|ttm」(stock_score_ttm.go).
+	ttmPeriod string
 
 	ti       *TechnicalIndicators
 	barCount int
@@ -90,6 +94,21 @@ type scoreInput struct {
 	techConf float64
 
 	peer string
+	// sentScore/sentConf — 심리·수급 축(0–100)과 그 재료의 두께(0–1). 재료가
+	// 없으면 sentScore는 nil이다(sentiment_axis.go). newsCount는 inputs 기록용.
+	sentScore *float64
+	sentConf  float64
+	newsCount int
+	// flowPct — 외국인+기관 20거래일 순매수 ÷ 거래량(%). 수급 성분이 쓰였을 때만(inputs 기록용).
+	flowPct *float64
+	// redditSent — Reddit 성분(15..85)이 쓰였을 때만. 판에 「|reddit」가 붙는다(2026-09-29).
+	redditSent *float64
+
+	// sector is the common 11-sector key from stock_sectors ("" when unknown).
+	sector string
+	// sectorPeer is the finest level for fundamental metrics — "asset:sector" —
+	// set only when that asset type's sector coverage passes sectorPeerMinCoverage.
+	sectorPeer string
 	// metricLevels records which peer level each metric was ranked in, so an
 	// unexpected percentile can be traced back to its comparison set.
 	metricLevels map[string]string
@@ -134,6 +153,12 @@ func (s *ScoreService) Recompute(ctx context.Context, tradeDate string) (model.S
 		return dist, fmt.Errorf("no symbols for %s", tradeDate)
 	}
 	log.Printf("score: loaded %d symbols for %s in %s", len(inputs), tradeDate, time.Since(start).Round(time.Millisecond))
+	if n, err := s.attachDomesticTTM(ctx, inputs, tradeDate); err != nil {
+		// 분기 표를 못 읽었다 — 국내는 연간 값으로 매긴다(지금까지와 같다).
+		log.Printf("score: domestic TTM skipped: %v", err)
+	} else {
+		log.Printf("score: domestic TTM on %d symbols", n)
+	}
 
 	techStart := time.Now()
 	if err := s.attachTechnicals(ctx, inputs, tradeDate); err != nil {
@@ -155,6 +180,15 @@ func (s *ScoreService) Recompute(ctx context.Context, tradeDate string) (model.S
 		prevPeer = nil
 	}
 	assignPeerGroups(inputs, prevPeer)
+	if n, err := s.attachSentiment(ctx, inputs, tradeDate); err != nil {
+		// 재료를 못 읽었다 — 심리 축만 빠지고 나머지 네 축은 그대로 매긴다.
+		log.Printf("score: sentiment axis skipped: %v", err)
+	} else {
+		log.Printf("score: sentiment axis on %d symbols", n)
+	}
+	for asset, cov := range assignSectorPeers(inputs) {
+		log.Printf("score: sector peers %s coverage %.1f%% → %v", asset, cov.pct*100, cov.enabled)
+	}
 	normalized := normalizeUniverse(inputs)
 
 	settings := model.DefaultScoreSettings()
@@ -189,15 +223,39 @@ func (s *ScoreService) Recompute(ctx context.Context, tradeDate string) (model.S
 	} else {
 		log.Printf("score: mirrored onto %d 일별 종가 rows", n)
 	}
+	// 추천 목록의 거래대금 하한이 읽는 값. 못 채워도 점수는 서 있고, 랭킹 사전계산이
+	// 시작할 때 한 번 더 채운다(`EnsureTradeValue`).
+	if n, err := s.scores.FillAvgTradeValue(ctx, tradeDate); err != nil {
+		log.Printf("score: avg trade value %s: %v", tradeDate, err)
+	} else {
+		log.Printf("score: avg trade value on %d rows", n)
+	}
 	log.Printf("score: %s — %d rows (%d scored, mean %.1f sd %.1f) in %s; healthy=%v %v",
 		tradeDate, len(rows), dist.Count, dist.Mean, dist.StdDev,
 		time.Since(start).Round(time.Millisecond), dist.Healthy, dist.Warnings)
 	return dist, nil
 }
 
-// loadUniverse pulls every active symbol with whatever fundamentals and that
-// day's close exist — one query, LEFT JOINed so missing data stays NULL rather
-// than dropping the symbol.
+/*
+scoreCloseLookbackDays — 가치 축이 쓰는 종가를 기준일에서 며칠까지 거슬러 찾나.
+
+**기준일 당일 종가만 붙이면 가치 축이 날마다 생겼다 사라진다** (2026-09-23 실측).
+점수 배치는 00:25 KST에 돌고 미국 종가는 05:20 KST에 적재되므로, 미국 종목은 그날
+종가가 대개 없다 — 그러면 PER·PBR·PSR이 통째로 빠지고 분모가 줄어 점수가 튄다.
+30거래일 이력에서 가치 축의 유무가 **81,124번** 바뀌었고(하루 약 2,800종목), 축
+유무가 바뀐 비교는 전체의 19%인데 **점수 절대 변동의 38%, 5점 이상 급변의 44%**를
+만들었다. AAPL은 가치 축이 격일로 생겼다 사라지며 61↔73을 오갔다.
+
+그래서 **기준일 이전의 가장 최근 종가**를 쓴다. 밸류에이션은 「지금 가격 대비」이고
+그 가격은 마지막 거래일 종가다 — 휴장일이나 적재 전이라고 가격이 사라진 것이 아니다.
+10일은 추석·설 연휴(최장 5영업일 안팎)를 덮고, 그보다 오래된 종가는 거래정지에 가까워
+가치 평가에 쓰지 않는다. 쓴 종가의 날짜는 `inputs.closeDate`에 남긴다.
+*/
+const scoreCloseLookbackDays = 10
+
+// loadUniverse pulls every active symbol with whatever fundamentals and the
+// most recent close on or before tradeDate — one query, LEFT JOINed so missing
+// data stays NULL rather than dropping the symbol.
 func (s *ScoreService) loadUniverse(ctx context.Context, tradeDate string) ([]*scoreInput, error) {
 	const q = `
 		SELECT s.symbol, s.name, s.asset_type, s.market,
@@ -205,13 +263,23 @@ func (s *ScoreService) loadUniverse(ctx context.Context, tradeDate string) ([]*s
 		       f.roe, f.operating_margin, f.net_profit_margin, f.debt_ratio, f.current_ratio,
 		       f.revenue_growth_yoy, f.eps_growth_yoy,
 		       f.eps_diluted, f.eps_basic, f.net_income, f.total_equity, f.revenue,
-		       d.close_price
+		       d.close_price, DATE_FORMAT(d.trade_date, '%Y-%m-%d'),
+		       COALESCE(ss.sector, ''),
+		       x.per, x.pbr, x.psr, x.roe, x.operating_margin, x.net_margin,
+		       x.revenue_growth, x.eps_growth, x.current_ratio
 		  FROM stocks s
 		  LEFT JOIN stock_fundamentals f ON f.symbol = s.symbol
-		  LEFT JOIN stock_daily_closes d ON d.symbol = s.symbol AND d.trade_date = ?
+		  LEFT JOIN stock_sectors ss ON ss.symbol = s.symbol
+		  LEFT JOIN stock_ext_metrics x ON x.symbol = s.symbol AND s.asset_type = 'us'
+		        AND x.fetched_at >= DATE_SUB(?, INTERVAL 21 DAY)
+		  LEFT JOIN stock_daily_closes d ON d.symbol = s.symbol AND d.trade_date = (
+		    SELECT MAX(dc.trade_date) FROM stock_daily_closes dc
+		     WHERE dc.symbol = s.symbol
+		       AND dc.trade_date <= ?
+		       AND dc.trade_date >= DATE_SUB(?, INTERVAL ? DAY))
 		 WHERE s.status = 'NORMAL'`
 
-	rows, err := s.db.QueryContext(ctx, q, tradeDate)
+	rows, err := s.db.QueryContext(ctx, q, tradeDate, tradeDate, tradeDate, scoreCloseLookbackDays)
 	if err != nil {
 		return nil, err
 	}
@@ -220,17 +288,21 @@ func (s *ScoreService) loadUniverse(ctx context.Context, tradeDate string) ([]*s
 	var out []*scoreInput
 	for rows.Next() {
 		var (
-			in                                    scoreInput
-			shares, equity, revenue               sql.NullFloat64
-			epsDiluted, epsBasic, netIncome       sql.NullFloat64
-			closePrice                            sql.NullFloat64
-			name, assetType, market               sql.NullString
+			in                              scoreInput
+			shares, equity, revenue         sql.NullFloat64
+			epsDiluted, epsBasic, netIncome sql.NullFloat64
+			closePrice                      sql.NullFloat64
+			closeDate                       sql.NullString
+			name, assetType, market         sql.NullString
+			ext                             [9]*float64
 		)
 		if err := rows.Scan(
 			&in.symbol, &name, &assetType, &market, &shares,
 			&in.roe, &in.opMargin, &in.netMargin, &in.debtRatio, &in.currentRatio,
 			&in.revGrowth, &in.epsGrowth,
-			&epsDiluted, &epsBasic, &netIncome, &equity, &revenue, &closePrice,
+			&epsDiluted, &epsBasic, &netIncome, &equity, &revenue, &closePrice, &closeDate,
+			&in.sector,
+			&ext[0], &ext[1], &ext[2], &ext[3], &ext[4], &ext[5], &ext[6], &ext[7], &ext[8],
 		); err != nil {
 			return nil, err
 		}
@@ -242,13 +314,14 @@ func (s *ScoreService) loadUniverse(ctx context.Context, tradeDate string) ([]*s
 		}
 		if closePrice.Valid {
 			in.close = closePrice.Float64
+			in.closeDate = closeDate.String
 		}
 		if in.close > 0 && in.shares > 0 {
 			in.marketCap = in.close * in.shares
 		}
 
 		// Valuation multiples are derived here rather than stored: PER/PBR
-		// depend on price, which moves daily. Using that day's close (not
+		// depend on price, which moves daily. Using the latest close (not
 		// symbol_last_prices, which covers only ~1.1k symbols) is what makes
 		// this axis reachable for thousands of symbols instead of hundreds.
 		if in.close > 0 {
@@ -267,9 +340,36 @@ func (s *ScoreService) loadUniverse(ctx context.Context, tradeDate string) ([]*s
 				}
 			}
 		}
+		in.applyExtMetrics(ext)
 		out = append(out, &in)
 	}
 	return out, rows.Err()
+}
+
+/*
+applyExtMetrics — EDGAR가 **비운 칸만** Finnhub 보조로 채운다(2026-09-28 사용자 결정 「해외 전 종목 보조」).
+
+순서가 중요하다: EDGAR 값이 있으면 절대 덮지 않는다 — 같은 종목의 값이 날마다 출처를 오가면
+점수가 출처 차이만큼 흔들린다. 보조 값은 본국 상장 기준 비율이라 ADR(TSM·SONY)에도 맞는다.
+ext 순서: per, pbr, psr, roe, operating_margin, net_margin, revenue_growth, eps_growth, current_ratio.
+*/
+func (in *scoreInput) applyExtMetrics(ext [9]*float64) {
+	fill := func(dst **float64, v *float64) {
+		if *dst == nil && v != nil {
+			x := *v
+			*dst = &x
+			in.extUsed = true
+		}
+	}
+	fill(&in.per, ext[0])
+	fill(&in.pbr, ext[1])
+	fill(&in.psr, ext[2])
+	fill(&in.roe, ext[3])
+	fill(&in.opMargin, ext[4])
+	fill(&in.netMargin, ext[5])
+	fill(&in.revGrowth, ext[6])
+	fill(&in.epsGrowth, ext[7])
+	fill(&in.currentRatio, ext[8])
 }
 
 /*
@@ -612,13 +712,123 @@ const minMetricSamples = 20
 // peerLevels is the fallback chain, finest first. A metric is ranked at the
 // most specific level that has enough real samples, so a sparsely covered
 // figure is compared market-wide rather than against two neighbours.
-func peerLevels(in *scoreInput) []string {
-	return []string{
+//
+// **재무 지표(수익성·성장·가치)는 섹터가 맨 앞이다** (2026-09-23 사용자 결정). PER 40은
+// 반도체에서 평범하고 은행에서 비정상이다 — 시총 3분위로만 줄 세우면 가치 축이 업종을
+// 판별한다. 추세는 업종과 무관하므로 기존 사슬 그대로다. 섹터 그룹에 그 지표의 표본이
+// `minMetricSamples`보다 적으면 아래 단계로 내려가므로, 얇은 섹터는 자연스럽게 기존
+// 그룹에서 매겨진다.
+func peerLevels(in *scoreInput, fundamental bool) []string {
+	levels := make([]string, 0, 5)
+	if fundamental && in.sectorPeer != "" {
+		levels = append(levels, in.sectorPeer)
+	}
+	return append(levels,
 		in.peer,
-		in.assetType + ":" + in.market,
+		in.assetType+":"+in.market,
 		in.assetType,
 		"*",
+	)
+}
+
+/*
+sectorPeerMinCoverage — 섹터 그룹을 켜는 자산유형별 문턱.
+
+섹터 배치는 로테이션이라 며칠에 걸쳐 채워진다(sector_ingest.go). 반쯤 채워진 날
+섹터 그룹을 켜면 **섹터가 있는 종목만** 섹터 안에서, 나머지는 시총 그룹에서 매겨져
+같은 날 같은 지표가 두 잣대로 섞인다. 재무 지표가 있는 종목의 80%가 섹터를 가질
+때까지는 그 자산유형 전체를 기존 그룹으로 둔다. 문턱을 넘는 날 점수가 한 번 크게
+움직이고, 그 이동은 설명 엔진이 「비교 집단이 바뀌었다」로 보여 줄 수 있다.
+*/
+const sectorPeerMinCoverage = 0.8
+
+/*
+scoreMethodVersion — 점수 **산출 방식**의 판. 방식을 바꾸면 이 값을 올린다.
+
+모든 점수 행의 `inputs.method`에 남고, 변화 감지가 두 날의 판이 다르면 그 점수 변화를
+「회사에 일어난 일」에서 뺀다(change_detect.go). 2026-09-23 실측: 심리 축 원천을 LLM
+요약에서 기사 라벨로 바꾸고 섹터 피어를 켠 날, 축도 비교 집단도 그대로인데 ±8 이상
+움직인 종목이 614개였다 — 전부 잣대가 움직인 것이다.
+
+섹터 피어를 쓰는지(종목별)도 판에 붙인다 — 커버리지가 문턱을 넘는 날 자동으로 켜지므로
+코드를 안 바꿔도 방식이 바뀐다.
+*/
+// 2026-10-10 — 국내 비율 TTM(stock_score_ttm.go). TTM 종목의 값이 움직이면 남의 백분위도 움직인다.
+const scoreMethodVersion = "2026-10-10"
+
+/*
+method — 판 + 종목별로 자동으로 켜지는 전환. 수급은 **적재가 닿은 날** 그 종목에 켜진다
+(신규 상장·첫 백필) — 코드가 그대로여도 그 종목의 잣대가 바뀌므로 판에 붙인다.
+*/
+func (in *scoreInput) method() string {
+	m := scoreMethodVersion
+	if in.sectorPeer != "" {
+		m += "|sector"
 	}
+	if in.flowPct != nil {
+		m += "|flow"
+	}
+	if in.ttmPeriod != "" {
+		m += "|ttm" // 분기 행이 4개 이어지는 날부터 그 종목의 잣대가 연간 → TTM으로 바뀐다
+	}
+	if in.extUsed {
+		m += "|ext" // Finnhub 보조가 채운 날부터 그 종목의 잣대가 바뀐다
+	}
+	if in.redditSent != nil {
+		m += "|reddit" // ApeWisdom 요약이 잡힌 날만 — 상위 150 안팎을 드나들면 판도 드나든다
+	}
+	return m
+}
+
+type sectorCoverage struct {
+	pct     float64
+	enabled bool
+}
+
+// assignSectorPeers sets sectorPeer for asset types whose sector coverage —
+// among symbols that carry at least one fundamental figure — passes the gate.
+func assignSectorPeers(inputs []*scoreInput) map[string]sectorCoverage {
+	type tally struct{ total, withSector int }
+	counts := map[string]*tally{}
+	for _, in := range inputs {
+		if !in.fundamentalsApplicable() || !in.hasFundamentals() {
+			continue
+		}
+		t := counts[in.assetType]
+		if t == nil {
+			t = &tally{}
+			counts[in.assetType] = t
+		}
+		t.total++
+		if in.sector != "" {
+			t.withSector++
+		}
+	}
+	out := map[string]sectorCoverage{}
+	for asset, t := range counts {
+		pct := 0.0
+		if t.total > 0 {
+			pct = float64(t.withSector) / float64(t.total)
+		}
+		out[asset] = sectorCoverage{pct: pct, enabled: pct >= sectorPeerMinCoverage}
+	}
+	for _, in := range inputs {
+		in.sectorPeer = ""
+		if in.sector != "" && out[in.assetType].enabled {
+			in.sectorPeer = in.assetType + ":" + in.sector
+		}
+	}
+	return out
+}
+
+// hasFundamentals reports whether any quality/growth/valuation figure exists.
+func (in *scoreInput) hasFundamentals() bool {
+	for _, spec := range scoreMetrics {
+		if spec.axis != model.AxisTechnical && spec.value(in) != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // normalizeUniverse ranks every metric, choosing the finest peer level that
@@ -646,7 +856,7 @@ func normalizeUniverse(inputs []*scoreInput) map[string]normalizedMetrics {
 			if v == nil {
 				continue
 			}
-			levels := peerLevels(in)
+			levels := peerLevels(in, spec.axis != model.AxisTechnical)
 			levelsBySymbol[in.symbol] = levels
 			sample := metricSample{symbol: in.symbol, value: *v}
 			for _, key := range levels {
@@ -779,18 +989,18 @@ func buildScoreRow(
 		}
 	}
 	/*
-		심리·수급은 **여기서 비워 둔다.** 뉴스 감성은 LLM이 붙인 기사별 라벨에서
-		나오고 내부자 거래는 DART/EDGAR 종목별 호출이라, 둘 다 17,901종목에 돌릴
-		수 없다.
+		심리·수급 — **이 배치가 전 종목에 매긴다** (2026-09-23).
 
-		대신 요약 파이프라인이 한 종목을 조립할 때 그 재료를 이미 모으므로, 그
-		끝에서 `ScoreService.ApplySentiment`가 이 행에 축을 얹고 종합 점수를 다시
-		낸다(`stock_score_sentiment.go`). 이 배치가 다시 돌면 축은 지워지고, 다음
-		요약 재빌드가 다시 붙인다.
-
-		비워 두는 것과 0을 넣는 것은 다르다 — `nil`은 가중치에서 빠지고, 0은
-		「심리 최하위」다.
+		예전에는 여기서 비워 두고 AI 요약이 다녀간 종목에만 뒤늦게 얹었다 — 그날 심리
+		축이 있는 종목이 9개였고, 00:25에 지워졌다가 08:00에 붙는 탓에 축이 날마다
+		생겼다 사라졌다(30거래일 8,444번). 이제 재료가 표에 있다: 기사 라벨(로컬 감성
+		모델, `news_article_sentiment`)과 내부자 거래(`insider_transactions`).
+		`attachSentiment` 참고. 재료가 없으면 nil — 0이 아니다.
 	*/
+	if in.fundamentalsApplicable() && in.sentScore != nil {
+		breakdown.Sentiment = in.sentScore
+		confidence[model.AxisSentiment] = in.sentConf
+	}
 
 	weights := settings.Weights
 	weightSource := "global"
@@ -868,12 +1078,31 @@ func collectInputs(in *scoreInput, metrics normalizedMetrics) map[string]any {
 	out := map[string]any{
 		"barCount":  in.barCount,
 		"peerGroup": in.peer,
+		"method":    in.method(),
 	}
 	if in.close > 0 {
 		out["close"] = in.close
+		if in.closeDate != "" {
+			out["closeDate"] = in.closeDate
+		}
+	}
+	if in.ttmPeriod != "" {
+		out["ttmPeriod"] = in.ttmPeriod
 	}
 	if in.marketCap > 0 {
 		out["marketCap"] = in.marketCap
+	}
+	if in.sentScore != nil && in.fundamentalsApplicable() {
+		// 키 이름은 예전 요약 경로와 같다 — 설명 엔진이 이 둘을 읽는다.
+		out["sentiment"] = math.Round(*in.sentScore*10) / 10
+		out["sentimentConfidence"] = math.Round(in.sentConf*100) / 100
+		out["newsCount"] = in.newsCount
+		if in.flowPct != nil {
+			out["flowNetPct"] = math.Round(*in.flowPct*100) / 100
+		}
+		if in.redditSent != nil {
+			out["redditSentiment"] = math.Round(*in.redditSent*10) / 10
+		}
 	}
 	raw := map[string]any{}
 	rejected := map[string]any{}
@@ -944,7 +1173,28 @@ func assignPeerPercentiles(rows []repository.StockScoreRow, peerScores map[strin
 		// Report as "top N%".
 		top := model.ReadPeerPct(100 - pct)
 		rows[i].PeerPct = sql.NullInt64{Int64: int64(top), Valid: true}
+		// 「N개 중 M위」(2026-10-10, 종목 화면 A안) — 상위 %만으로는 그룹이 몇 개인지 모른다.
+		// 같은 점수는 같은 순위(위에 있는 종목 수 + 1).
+		above := len(scores) - sort.SearchFloat64s(scores, v+0.5)
+		rows[i].Inputs = withPeerRank(rows[i].Inputs, above+1, len(scores))
 	}
+}
+
+// withPeerRank adds peerRank/peerSize to the stored inputs JSON. 읽지 못하면 원래 값을 둔다.
+func withPeerRank(inputs string, rank, size int) string {
+	m := map[string]any{}
+	if inputs != "" {
+		if err := json.Unmarshal([]byte(inputs), &m); err != nil {
+			return inputs
+		}
+	}
+	m["peerRank"] = rank
+	m["peerSize"] = size
+	b, err := json.Marshal(m)
+	if err != nil {
+		return inputs
+	}
+	return string(b)
 }
 
 // summarizeDistribution is the batch's own gate (design §7.1). A run whose
@@ -1011,7 +1261,7 @@ func summarizeDistribution(rows []repository.StockScoreRow) model.ScoreDistribut
 // side) so cmd/worker-scores can run both from its own daily loop without this
 // package importing a scheduler of its own — the loop now lives in that
 // worker, not here, since scoring runs as its own process (see
-// docs/AGENT_STATE.md "배치 잡을 독립 워커 프로세스로 분리").
+// docs/archive/sessions.md "배치 잡을 독립 워커 프로세스로 분리").
 func (s *ScoreService) RecomputeIndices(ctx context.Context) (int, error) {
 	if s == nil || s.indexScores == nil {
 		return 0, nil
@@ -1092,82 +1342,55 @@ overlayLiveChanges — 장이 열려 있는 동안에는 확정 종가 대신 �
 시세를 못 구한 행은 **손대지 않는다.** 목록에서 그 종목만 조용히 어제 값으로
 남는 편이, 절반은 실시간이고 절반은 빈칸인 목록보다 낫다.
 */
-/*
-scorePrevCloseHint — 저장된 종가에서 「직전 세션 종가」를 고른다.
-
-랭킹 행이 들고 있는 종가는 **점수일 이하 중 가장 최근** 것이다. 그게 그 종목 시장의
-오늘 세션 것이라면(미국 애프터마켓 중에는 그렇다 — 정규장이 끝나고 적재가 이미
-돌았다) 직전 종가는 그 행의 `prev_close`이고, 아직 오늘 것이 아니라면 그 행의 종가
-자체가 직전 종가다.
-
-「오늘」은 그 종목 시장의 표준시로 읽는다 — KST 자정을 넘긴 미국 애프터마켓을
-국내 날짜로 재면 한 세션씩 밀린다.
-*/
-func scorePrevCloseHint(it model.StockScoreListItem) float64 {
-	if it.ClosePrice == nil || *it.ClosePrice <= 0 {
-		return 0
-	}
-	schedule := calendar.ScheduleKRX
-	if it.AssetType == string(model.AssetUS) || it.AssetType == string(model.AssetETF) {
-		schedule = calendar.ScheduleUS
-	}
-	today := time.Now().In(calendar.LocationFor(schedule)).Format("2006-01-02")
-	if it.PriceAsOf >= today && it.PrevClose != nil && *it.PrevClose > 0 {
-		return *it.PrevClose
-	}
-	return *it.ClosePrice
-}
-
 func (s *ScoreService) overlayLiveChanges(ctx context.Context, items []model.StockScoreListItem) {
 	if s == nil || len(items) == 0 {
 		return
 	}
 	/*
-		기준가는 **실시간 시세를 못 구해도** 채운다.
+		판정은 `list_price_overlay.go` 한 곳에서 온다 — **스크리너도 같은 함수를 쓴다.**
 
-		화면이 SSE로 받은 가격에서 등락률을 내려면 이 값이 있어야 하고, 그건 이 함수가
-		시세를 구했는지와 무관하다. 예전 순서(구하기 → 성공한 것만 손대기)를 그대로
-		두면 마감 중이거나 시세가 없는 종목만 기준가가 비어, 장이 열리는 순간 그 행들만
-		등락률이 안 뜬다.
+		예전에는 이 규칙이 여기에만 있어서 같은 종목이 랭킹에서는 실시간 등락률로,
+		스크리너에서는 어제 종가 등락률로 보였다 (2026-09-23 QA P0-01).
 	*/
-	for i := range items {
-		if hint := scorePrevCloseHint(items[i]); hint > 0 {
-			base := hint
+	in := make([]ListPriceInput, len(items))
+	for i, it := range items {
+		in[i] = ListPriceInput{
+			Symbol:    it.Symbol,
+			AssetType: it.AssetType,
+			Close:     it.ClosePrice,
+			PrevClose: it.PrevClose,
+			PriceAsOf: it.PriceAsOf,
+		}
+	}
+	for i, d := range s.ResolveListPrices(ctx, in) {
+		if d.BasePrice > 0 {
+			base := d.BasePrice
 			items[i].BasePrice = &base
 		}
-	}
-	if s.liveQuotes == nil {
-		return
-	}
-	reqs := make([]LiveChangeRequest, len(items))
-	for i, it := range items {
-		reqs[i] = LiveChangeRequest{
-			Symbol:        it.Symbol,
-			AssetType:     it.AssetType,
-			PrevCloseHint: scorePrevCloseHint(it),
-		}
-	}
-	live := s.liveQuotes.LiveChanges(ctx, reqs)
-	if len(live) == 0 {
-		return
-	}
-	for i := range items {
-		lc, ok := live[strings.ToUpper(items[i].Symbol)]
-		if !ok || lc.Price <= 0 {
+		if !d.Live {
 			continue
 		}
-		rate := lc.ChangeRate
-		price := lc.Price
+		rate := d.ChangeRate
+		price := d.Price
 		items[i].ChangeRate = &rate
 		items[i].ClosePrice = &price
-		if lc.Currency != "" {
-			items[i].Currency = lc.Currency
+		if d.Currency != "" {
+			items[i].Currency = d.Currency
 		}
 		items[i].PriceAsOf = model.ScorePriceAsOfLive
 	}
 }
 
 // LatestScoredDate is the newest date the score batch actually wrote.
+// EnsureTradeValue fills inputs.avgTradeValue on tradeDate's rows that lack it
+// (the recommendable-size floor reads it). Idempotent; see FillAvgTradeValue.
+func (s *ScoreService) EnsureTradeValue(ctx context.Context, tradeDate string) (int64, error) {
+	if s == nil || s.scores == nil {
+		return 0, nil
+	}
+	return s.scores.FillAvgTradeValue(ctx, tradeDate)
+}
+
 func (s *ScoreService) LatestScoredDate(ctx context.Context) (string, error) {
 	var d sql.NullString
 	err := s.db.QueryRowContext(ctx,
@@ -1239,4 +1462,115 @@ func (s *ScoreService) Get(ctx context.Context, symbol string) (*model.StockScor
 		}
 	}
 	return view, nil
+}
+
+/*
+ScoredDates — 점수가 남아 있는 거래일 전부, 오래된 것부터.
+
+랭킹 이력 백필이 쓴다. `stock_scores`는 최근 30거래일만 보관하므로 이 목록은 짧고
+(실측 26일), 그것이 이 기능이 첫날에 확보할 수 있는 과거의 전부다.
+*/
+func (s *ScoreService) ScoredDates(ctx context.Context) ([]string, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("score service not configured")
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT DATE_FORMAT(trade_date, '%Y-%m-%d')
+		   FROM stock_scores GROUP BY trade_date ORDER BY trade_date`)
+	if err != nil {
+		return nil, fmt.Errorf("scored dates: %w", err)
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var date string
+		if err := rows.Scan(&date); err != nil {
+			return nil, err
+		}
+		out = append(out, date)
+	}
+	return out, rows.Err()
+}
+
+/*
+sentimentNewsWindow · sentimentInsiderWindow — 심리 축이 보는 창.
+
+뉴스 14일: 하루 기사로 매기면 한 건짜리 호재가 축을 흔든다. 두 주면 대형주는 수백 건,
+소형주도 몇 건은 모인다. 내부자 180일: 국내 소유보고는 분기에 한 번꼴이라 짧으면 늘 빈다.
+*/
+const (
+	sentimentNewsWindow    = 14 * 24 * time.Hour
+	sentimentInsiderWindow = 180 * 24 * time.Hour
+	// sentimentFlowWindowSessions — 수급은 달력이 아니라 적재된 거래일 20개(약 한 달).
+	sentimentFlowWindowSessions = 20
+)
+
+// attachSentiment fills sentScore/sentConf for every symbol with material.
+// It reads two aggregates (one GROUP BY each) — no per-symbol query.
+func (s *ScoreService) attachSentiment(ctx context.Context, inputs []*scoreInput, tradeDate string) (int, error) {
+	now := time.Now()
+	news, err := repository.NewNewsSentimentRepo(s.db).SymbolSentimentSince(ctx, now.Add(-sentimentNewsWindow))
+	if err != nil {
+		return 0, err
+	}
+	insider, err := repository.NewInsiderRepo(s.db).InsiderNetSharesSince(ctx, now.Add(-sentimentInsiderWindow))
+	if err != nil {
+		return 0, err
+	}
+	/*
+		수급은 국내 보통주만 있다. 못 읽어도 뉴스·내부자로 축을 매긴다 — 재료 하나가 빠진
+		것이지 축이 없는 것은 아니다.
+	*/
+	flows, err := repository.NewInvestorFlowRepo(s.db).FlowWindow(ctx, tradeDate, sentimentFlowWindowSessions)
+	if err != nil {
+		log.Printf("score: investor flows unavailable, sentiment without 수급: %v", err)
+		flows = nil
+	}
+	// Reddit(미국 종목만, 2026-09-29) — ApeWisdom 종목 요약이 있는 종목에만 성분이 붙는다.
+	from, to := socialSnapWindow(tradeDate)
+	reddit, err := repository.NewExternalSignalRepo(s.db).SocialInsightsBetween(ctx, from, to)
+	if err != nil {
+		log.Printf("score: reddit insights unavailable: %v", err)
+		reddit = nil
+	}
+	n := 0
+	for _, in := range inputs {
+		if !in.fundamentalsApplicable() {
+			continue
+		}
+		nt := news[in.symbol]
+		newsV, newsC, hasNews := newsComponentFromTally(nt.Total, nt.AvgScore)
+		ins := insider[in.symbol]
+		insV, insC, hasIns := insiderComponentFromTotals(ins.Buy, ins.Sell, ins.Counted)
+		fl := flows[in.symbol]
+		flowV, flowC, hasFlow := flowComponent(fl.Net, fl.Volume, fl.Days)
+		var redV, redC float64
+		var hasRed bool
+		if ins, found := reddit[in.symbol]; found && in.assetType == string(model.AssetUS) {
+			redV, redC, hasRed = redditSentimentComponent(&ins)
+		}
+		v, conf, ok := sentimentAxisParts(
+			sentimentPart{newsV, newsC, sentimentNewsWeight, hasNews},
+			sentimentPart{insV, insC, sentimentInsiderWeight, hasIns},
+			sentimentPart{flowV, flowC, sentimentFlowWeight, hasFlow},
+			sentimentPart{redV, redC, sentimentRedditWeight, hasRed},
+		)
+		if !ok {
+			continue
+		}
+		if hasRed {
+			r := redV
+			in.redditSent = &r
+		}
+		in.sentScore = &v
+		in.sentConf = conf
+		in.newsCount = nt.Total
+		if hasFlow {
+			pct := float64(fl.Net) / float64(fl.Volume) * 100
+			in.flowPct = &pct
+		}
+		n++
+	}
+	return n, nil
 }

@@ -189,18 +189,6 @@ func isNameOnlyCandidate(name string) bool {
 	return letters >= 2
 }
 
-func recordParsedLine(out *[]ParsedLine, seen map[string]struct{}, line ParsedLine) {
-	if !IsValidParsedLine(line.Name, line.Quantity) {
-		return
-	}
-	key := line.Name + "|" + formatQtyKey(line.Quantity)
-	if _, dup := seen[key]; dup {
-		return
-	}
-	seen[key] = struct{}{}
-	*out = append(*out, line)
-}
-
 func recordOrphanQty(out *[]ParsedLine, seen map[string]struct{}, qty float64) {
 	if qty <= 0 {
 		return

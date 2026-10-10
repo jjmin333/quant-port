@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -23,6 +24,7 @@ type FundamentalsService struct {
 	// 등급제 로테이션의 커서와 DART 예산. 둘 다 없으면 회전 갱신은 아무것도 하지
 	// 않는다 — 예전처럼 「전 종목 통째로」로 되돌아가는 길을 남기지 않는다.
 	sync   *repository.SyncStateRepo
+	ext    *repository.ExternalSignalRepo
 	budget *apibudget.Manager
 }
 
@@ -39,6 +41,44 @@ func NewFundamentalsService(
 		toss:   tossClient,
 		stocks: stocks,
 		repo:   repo,
+	}
+}
+
+// SetExternalSignals wires the Finnhub supplement reader (EDGAR 빈 칸 채우기, 2026-09-28).
+func (s *FundamentalsService) SetExternalSignals(r *repository.ExternalSignalRepo) { s.ext = r }
+
+/*
+applySupplement — 해외 종목에서 EDGAR가 비운 칸만 Finnhub 보조로 채운다. 점수(`applyExtMetrics`)와
+같은 규칙: 있는 값은 덮지 않는다. PSR은 원래 화면에 없던 값이라 보조가 있을 때만 나간다.
+*/
+func (s *FundamentalsService) applySupplement(ctx context.Context, stock *model.Stock, view *model.FundamentalsView) {
+	if s.ext == nil || stock == nil || s.fundamentalsAssetType(stock) == model.AssetDomestic {
+		return
+	}
+	x, err := s.ext.ExtMetricsFresh(ctx, stock.Symbol, ExtMetricsMaxAge)
+	if err != nil || x == nil {
+		return
+	}
+	var used []string
+	fill := func(name string, dst **float64, v *float64) {
+		if *dst == nil && v != nil {
+			c := *v
+			*dst = &c
+			used = append(used, name)
+		}
+	}
+	f := &view.StockFundamentals
+	fill("per", &view.PER, x.PER)
+	fill("pbr", &view.PBR, x.PBR)
+	fill("psr", &view.PSR, x.PSR)
+	fill("roe", &f.ROE, x.ROE)
+	fill("operatingMargin", &f.OperatingMargin, x.OperatingMargin)
+	fill("netProfitMargin", &f.NetProfitMargin, x.NetMargin)
+	fill("revenueGrowthYoy", &f.RevenueGrowthYoY, x.RevenueGrowth)
+	fill("epsGrowthYoy", &f.EPSGrowthYoY, x.EPSGrowth)
+	fill("currentRatio", &f.CurrentRatio, x.CurrentRatio)
+	if len(used) > 0 {
+		view.Supplement = &model.FundamentalsSupplement{Source: x.Source, AsOf: x.FetchedAt, Fields: used}
 	}
 }
 
@@ -90,7 +130,8 @@ func (s *FundamentalsService) RefreshSymbol(ctx context.Context, symbol string) 
 	var source model.FundamentalsDataSource
 	var fetchErr error
 
-	switch s.fundamentalsAssetType(stock) {
+	assetType := s.fundamentalsAssetType(stock)
+	switch assetType {
 	case model.AssetDomestic:
 		source = model.FundamentalsSourceDART
 		current, prior, fetchErr = s.fetchDartSnapshots(ctx, stock.Symbol)
@@ -108,9 +149,17 @@ func (s *FundamentalsService) RefreshSymbol(ctx context.Context, symbol string) 
 		shares = s.resolveShares(ctx, stock, edgarShares)
 	}
 	if fetchErr != nil {
-		// Keep last good row when refresh fails (bulk repair must not wipe DART ok data).
+		/*
+			예산 거절은 **일시적**이다 — 행을 쓰지 않고 부른 쪽에 돌려준다.
+			2026-09-28 실측: 로테이션이 8/min 버킷을 1.1초 간격으로 두드려 2,098종목이
+			「edgar per-minute quota exhausted」 failed 행으로 **덮였다**(TSM 포함).
+		*/
+		if errors.Is(fetchErr, apibudget.ErrExhausted) || errors.Is(fetchErr, apibudget.ErrPacing) {
+			return nil, fetchErr
+		}
+		// 값이 있는 행(ok·partial)은 실패로 덮지 않는다 — 예전엔 ok만 지켜 partial이 지워졌다.
 		if existing, _ := s.repo.GetBySymbol(ctx, stock.Symbol); existing != nil &&
-			existing.CalcStatus == model.FundamentalsStatusOK {
+			existing.CalcStatus != model.FundamentalsStatusFailed {
 			return existing, nil
 		}
 		row := model.StockFundamentals{
@@ -162,6 +211,9 @@ func (s *FundamentalsService) RefreshSymbol(ctx context.Context, symbol string) 
 	if len(computed.Missing) > 0 {
 		row.CalcError = strings.Join(computed.Missing, ",")
 	}
+	if dropForeignCurrencyAbsolutes(&row, current.Currency, listingCurrency(assetType)) {
+		row.CalcError = strings.TrimPrefix(row.CalcError+",currency_"+strings.ToLower(strings.ReplaceAll(current.Currency, ",", "_")), ",")
+	}
 
 	if err := s.repo.Upsert(ctx, row); err != nil {
 		return nil, err
@@ -169,8 +221,43 @@ func (s *FundamentalsService) RefreshSymbol(ctx context.Context, symbol string) 
 	return &row, nil
 }
 
-func (s *FundamentalsService) GetBySymbol(ctx context.Context, symbol string) (*model.StockFundamentals, error) {
-	return s.repo.GetBySymbol(ctx, symbol)
+func listingCurrency(assetType model.QuoteAssetType) string {
+	if assetType == model.AssetDomestic {
+		return "KRW"
+	}
+	return "USD"
+}
+
+/*
+dropForeignCurrencyAbsolutes — 공시 통화가 상장 통화와 다르면 **금액·주당 값을 버린다.**
+
+20-F를 내는 해외 발행사(TSM=TWD, SONY·TM=JPY, ASML=EUR, BABA=CNY)의 companyfacts는 현지
+통화인데, 가격은 미국 ADR의 달러다. 둘을 그대로 나누면 SONY PER 0.025 · TM 0.26이 나와
+가치 축 98점이 됐다(2026-09-28 실측). 비율(ROE·이익률·성장·부채비율)은 통화가 약분되니
+남기고, PER·PBR·PSR의 재료(순이익·자본·매출·EPS)와 화면의 금액만 비운다 — 틀린 값보다
+빈 값이 낫다. 환산하려면 환율과 ADR 비율이 필요한데 둘 다 없다.
+*/
+func dropForeignCurrencyAbsolutes(row *model.StockFundamentals, filing, listing string) bool {
+	foreign, n := false, 0
+	for _, c := range strings.Split(strings.ToUpper(filing), ",") {
+		if c = strings.TrimSpace(c); c != "" {
+			n++
+			foreign = foreign || c != listing
+		}
+	}
+	if !foreign {
+		return false
+	}
+	if n > 1 {
+		// 통화가 섞였으면(TSM: 올해 매출은 달러, 작년은 대만 달러) 비율도 약분되지 않는다 — 성장률 −97%.
+		row.ROE, row.ROA, row.OperatingMargin, row.NetProfitMargin = nil, nil, nil, nil
+		row.RevenueGrowthYoY, row.EPSGrowthYoY, row.DebtRatio, row.CurrentRatio = nil, nil, nil, nil
+	}
+	row.Revenue, row.OperatingIncome, row.NetIncome = nil, nil, nil
+	row.TotalAssets, row.TotalEquity, row.TotalLiabilities = nil, nil, nil
+	row.CurrentAssets, row.CurrentLiabilities = nil, nil
+	row.EPSBasic, row.EPSDiluted = nil, nil
+	return true
 }
 
 func (s *FundamentalsService) LookupStock(ctx context.Context, symbol string) (*model.Stock, error) {
@@ -199,11 +286,13 @@ func (s *FundamentalsService) GetWithValuation(ctx context.Context, symbol strin
 		return nil, err
 	}
 	if stored == nil {
-		return &model.FundamentalsView{
+		view := &model.FundamentalsView{
 			StockFundamentals: model.StockFundamentals{
 				Symbol: stock.Symbol,
 			},
-		}, nil
+		}
+		s.applySupplement(ctx, stock, view)
+		return view, nil
 	}
 
 	price := s.fetchPrice(ctx, symbol)
@@ -212,6 +301,7 @@ func (s *FundamentalsService) GetWithValuation(ctx context.Context, symbol strin
 		Price:             price,
 	}
 	if price == nil {
+		s.applySupplement(ctx, stock, view)
 		return view, nil
 	}
 
@@ -225,6 +315,7 @@ func (s *FundamentalsService) GetWithValuation(ctx context.Context, symbol strin
 	val := ComputeValuationMetrics(price, snap, stored.SharesOutstanding)
 	view.PER = val.PER
 	view.PBR = val.PBR
+	s.applySupplement(ctx, stock, view)
 	return view, nil
 }
 
@@ -402,6 +493,18 @@ fundamentalsStaleAfter — 관심·보유 종목을 우선순위 0으로 올리�
 */
 const fundamentalsStaleAfter = 7 * 24 * time.Hour
 
+// LastRotationAt — 로테이션이 마지막으로 종목을 건드린 시각(모르면 zero).
+func (s *FundamentalsService) LastRotationAt(ctx context.Context) time.Time {
+	if s == nil || s.sync == nil {
+		return time.Time{}
+	}
+	t, err := s.sync.LastSyncedAt(ctx, model.SyncKindFundamentals)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
 // FundamentalsRotationResult is what one rotation pass did, for the log line.
 type FundamentalsRotationResult struct {
 	Attempted int
@@ -474,7 +577,17 @@ func (s *FundamentalsService) RefreshRotation(
 		}
 		out.Attempted++
 		row, refreshErr := s.RefreshSymbol(ctx, sym)
+		if errors.Is(refreshErr, apibudget.ErrPacing) {
+			// 같은 버킷을 쓰는 워커(financials_overseas)와 간격이 겹쳤다 — 한 번만 기다렸다 다시.
+			time.Sleep(fundamentalsRefreshPause)
+			row, refreshErr = s.RefreshSymbol(ctx, sym)
+		}
 		switch {
+		case errors.Is(refreshErr, apibudget.ErrExhausted) || errors.Is(refreshErr, apibudget.ErrPacing):
+			// 한도에 닿았으면 이번 회차는 여기까지 — 이 종목은 표시하지 않아 다음 회차 맨 앞에 선다.
+			out.Attempted--
+			out.Stopped = "budget: " + refreshErr.Error()
+			return out, nil
 		case refreshErr != nil:
 			out.Failed++
 			_ = s.sync.Mark(ctx, repository.SyncOutcome{
@@ -503,37 +616,6 @@ func (s *FundamentalsService) RefreshRotation(
 		}
 	}
 	return out, nil
-}
-
-// RefreshFailedDomestic re-fetches DART fundamentals for domestic symbols stuck in failed state.
-func (s *FundamentalsService) RefreshFailedDomestic(ctx context.Context) (int, error) {
-	if s.repo == nil || s.stocks == nil {
-		return 0, nil
-	}
-	symbols, err := s.repo.ListSymbolsNotOK(ctx)
-	if err != nil {
-		return 0, err
-	}
-	updated := 0
-	for _, sym := range symbols {
-		stock, err := s.stocks.GetBySymbol(ctx, sym)
-		if err != nil || stock == nil {
-			continue
-		}
-		if s.fundamentalsAssetType(stock) != model.AssetDomestic {
-			continue
-		}
-		if _, err := s.RefreshSymbol(ctx, sym); err != nil {
-			continue
-		}
-		updated++
-		select {
-		case <-ctx.Done():
-			return updated, ctx.Err()
-		case <-time.After(fundamentalsRefreshPause):
-		}
-	}
-	return updated, nil
 }
 
 func intPtr(v int) *int {

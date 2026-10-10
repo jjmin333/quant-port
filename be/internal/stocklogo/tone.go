@@ -82,8 +82,18 @@ const (
 		떨어져 모노그램만 나왔다. SOXS(투명 0%)와 달리 배경이 비어 있으므로, 투명
 		15% 이상이면서 어두운 픽셀이 3% 이상이면 정상 로고로 본다.
 	*/
-	logoMinVisibleSmallMark   = 0.03
-	logoMinTransparentSmallMark = 0.15
+	/*
+		**위 5%만으로 blank를 정하면 멀쩡한 로고 378개가 사라진다**(10-03 실측).
+
+		불투명 흰 판 위의 가는 회색 글자(LITE 3.3% · CLS 4.2% · SWKS · LEN · TPR)와
+		노랑·민트 로고(CAVA · URBN · Goodyear — 휘도 200 이상이라 「안 보임」으로 셌다)가
+		모두 blank로 떨어져 모노그램만 나왔다. 위 표의 SOXS도 실제로는 잘 읽히는
+		Direxion 글자다. 그래서 투명 40% 미만인 로고는 **흰색에서 어느 채널이든 48 이상
+		떨어진 픽셀(잉크)이 0.5%라도 있으면** 정상으로 본다. 0.5%는 가장 옅은 정상
+		로고(Marwyn 1.9%)와 순백 이미지(0%) 사이다.
+	*/
+	logoInkDistance = 48
+	logoMinInkRatio = 0.005
 	/*
 		어두운 판이 통하려면 배경이 이만큼은 비어 있어야 한다.
 
@@ -91,6 +101,12 @@ const (
 		몰려 있다.
 	*/
 	logoMinTransparentRatio = 0.40
+	/*
+		잉크가 없는(순백) 로고는 투명이 조금만 있어도 판이 통한다 — 흰 도형에 글자가
+		투명으로 뚫린 꼴(ADI 22% · RBLX 35% · NTAP 27% · CHWY 39% · APEI 6%)이다.
+		잉크도 투명도 없는 흰 사각형(KNX)만 blank로 남는다.
+	*/
+	logoMinTransparentCutout = 0.05
 	// 알파가 이보다 낮으면 배경으로 본다.
 	logoOpaqueAlpha = 16
 )
@@ -124,7 +140,7 @@ func LogoTone(path string) string {
 		return ""
 	}
 
-	visible, transparent := 0, 0
+	visible, ink, transparent := 0, 0, 0
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
 			// RGBA()는 16비트 **프리멀티플라이드** 값을 준다 — 이미 알파가 곱해져 있다.
@@ -144,6 +160,9 @@ func LogoTone(path string) string {
 			if 0.2126*r+0.7152*g+0.0722*b < logoVisibleLuminance {
 				visible++
 			}
+			if 255-min(r, g, b) >= logoInkDistance {
+				ink++
+			}
 		}
 	}
 
@@ -153,9 +172,11 @@ func LogoTone(path string) string {
 	if float64(transparent)/float64(total) >= logoMinTransparentRatio {
 		return ToneLight
 	}
-	if float64(transparent)/float64(total) >= logoMinTransparentSmallMark &&
-		float64(visible)/float64(total) >= logoMinVisibleSmallMark {
-		return "" // 원형 네이버 로고 — 글자 면적은 작지만 실제로 읽힌다.
+	if float64(ink)/float64(total) >= logoMinInkRatio {
+		return "" // 옅은 글자·노란 로고 — 흰 카드 위에서 읽힌다.
+	}
+	if float64(transparent)/float64(total) >= logoMinTransparentCutout {
+		return ToneLight
 	}
 	return ToneBlank
 }

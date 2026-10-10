@@ -176,57 +176,6 @@ func (r *EarningsEventRepo) ListRange(
 	return r.query(ctx, q, args...)
 }
 
-// SummaryRange counts announcements per day for the month heatmap.
-//
-// 상세 행을 세어 만들지 않는다 — 월 전체가 2,000행이라 히트맵 하나에 그만큼을
-// 내리는 셈이 된다(AGENT_STATE 응답 속도 원칙 #4). 집계는 인덱스
-// idx_earnings_date_market 안에서 끝난다.
-func (r *EarningsEventRepo) SummaryRange(
-	ctx context.Context, from, to time.Time, market string,
-) (map[string]*model.EarningsDaySummary, error) {
-	if r == nil || r.db == nil {
-		return map[string]*model.EarningsDaySummary{}, nil
-	}
-	q := `SELECT event_date, date_status, COUNT(*)
-		FROM earnings_events
-		WHERE event_date BETWEEN ? AND ?`
-	args := []any{from.Format(earningsDateLayout), to.Format(earningsDateLayout)}
-	if market != "" {
-		q += ` AND market = ?`
-		args = append(args, market)
-	}
-	q += ` GROUP BY event_date, date_status`
-
-	rows, err := r.db.QueryContext(ctx, q, args...)
-	if err != nil {
-		return nil, fmt.Errorf("earnings_events summary: %w", err)
-	}
-	defer rows.Close()
-
-	out := map[string]*model.EarningsDaySummary{}
-	for rows.Next() {
-		var day time.Time
-		var status string
-		var n int
-		if err := rows.Scan(&day, &status, &n); err != nil {
-			return nil, err
-		}
-		key := day.Format(earningsDateLayout)
-		cell := out[key]
-		if cell == nil {
-			cell = &model.EarningsDaySummary{Date: key}
-			out[key] = cell
-		}
-		switch status {
-		case model.EarningsDateScheduled:
-			cell.Scheduled += n
-		default:
-			cell.Confirmed += n
-		}
-	}
-	return out, rows.Err()
-}
-
 // ListForSymbols returns every stored announcement for the given symbols,
 // newest first — the 종목 실적 탭과 홈 배치 카드가 함께 쓴다.
 func (r *EarningsEventRepo) ListForSymbols(

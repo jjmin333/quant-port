@@ -67,10 +67,6 @@ func SetPollerSizes(priced, terminal, targets int) {
 func SSEOpened() { sseStreams.Add(1) }
 func SSEClosed() { sseStreams.Add(-1) }
 
-// CacheHit / CacheMiss count Redis lookups by key prefix (e.g. "market:price").
-func CacheHit(prefix string)  { bump(cacheHit, prefix) }
-func CacheMiss(prefix string) { bump(cacheMiss, prefix) }
-
 // ChartFallback counts chart requests that could not be served from the
 // intended source. `reason` is one of: db, budget, ratelimit, timeout, nodata.
 func ChartFallback(reason string) { bump(chartFall, reason) }

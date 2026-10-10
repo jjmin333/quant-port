@@ -146,6 +146,7 @@ func (r *StockScoreRankingRepo) DisplayRows(
 
 	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(symbols)), ",")
 	productClause, productArgs := scoreRankableProductClause("s")
+	sizeClause, sizeArgs := scoreRecommendableClause("sc", "s")
 	query := `
 		SELECT sc.symbol, s.name, s.asset_type, sc.score, sc.grade, sc.peer_pct,
 		       d.change_rate, d.close_price, d.prev_close, d.currency,
@@ -162,14 +163,15 @@ func (r *StockScoreRankingRepo) DisplayRows(
 		         LIMIT 1
 		       ) d ON TRUE
 		 WHERE sc.trade_date = ? AND sc.symbol IN (` + placeholders + `)` +
-		productClause + scoreMinAxesClause("sc")
+		productClause + scoreMinAxesClause("sc") + sizeClause
 
-	args := make([]any, 0, len(symbols)+len(productArgs)+1)
+	args := make([]any, 0, len(symbols)+len(productArgs)+len(sizeArgs)+1)
 	args = append(args, tradeDate)
 	for _, s := range symbols {
 		args = append(args, s)
 	}
 	args = append(args, productArgs...)
+	args = append(args, sizeArgs...)
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {

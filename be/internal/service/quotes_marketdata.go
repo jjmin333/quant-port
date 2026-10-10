@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/enact/quant-port/be/internal/metrics"
@@ -79,26 +80,54 @@ refreshTerminalSnapshot — 차트·호가 화면이 읽는 스냅샷을 다시 
 스로틀을 넣은 이유가 사라진다.
 */
 func (s *QuotesService) refreshTerminalSnapshot(ctx context.Context, symbol string) (model.QuoteTerminalSnapshot, bool) {
-	detail, ok := s.getQuoteUncached(ctx, symbol)
-	if !ok {
-		return model.QuoteTerminalSnapshot{}, false
-	}
-
 	streamTrades, streamBook, streamed := s.streamTerminalSources(symbol)
 	plan := planTerminalSources(streamed, streamBook, streamTrades)
 
-	book := model.OrderBook{Symbol: symbol}
+	/*
+		**시세 · 호가 · 체결을 동시에 받는다** (09-25 후속3).
+
+		예전에는 차례로 불렀다 — 상세(종목 정보 → 가격) 다음 호가, 그다음 체결. 서로의
+		결과를 쓰지 않는데 왕복이 줄지어 이어져, 종목을 처음 열 때(캐시가 빈 유일한 순간)
+		272~540ms를 기다렸다(09-24~25 운영 로그). 호출 수는 그대로라 Toss 한도에는 차이가
+		없고, 기다림만 가장 느린 하나로 준다. 상세가 실패하면 예전처럼 통째로 실패다.
+	*/
+	var (
+		detail model.QuoteDetail
+		ok     bool
+		book   = model.OrderBook{Symbol: symbol}
+		trades = []model.TradeTick{}
+		wg     sync.WaitGroup
+	)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		detail, ok = s.getQuoteUncached(ctx, symbol)
+	}()
 	if plan.BookFromStream {
 		book = *streamBook
-	} else if b, okBook := s.terminalOrderBook(ctx, symbol, streamed); okBook {
-		book = b
+	} else {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if b, okBook := s.terminalOrderBook(ctx, symbol, streamed); okBook {
+				book = b
+			}
+		}()
 	}
-
-	trades := []model.TradeTick{}
 	if plan.TradesFromStream {
 		trades = streamTrades
-	} else if t, okTrades := s.terminalTrades(ctx, symbol, streamed); okTrades {
-		trades = t
+	} else {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if t, okTrades := s.terminalTrades(ctx, symbol, streamed); okTrades {
+				trades = t
+			}
+		}()
+	}
+	wg.Wait()
+	if !ok {
+		return model.QuoteTerminalSnapshot{}, false
 	}
 
 	s.rehydrateQuoteDetailWithSources(ctx, &detail, trades, &book)

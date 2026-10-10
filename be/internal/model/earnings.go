@@ -222,7 +222,7 @@ type EarningsEventUpsert struct {
 // EarningsDaySummary is one cell of the month heatmap.
 //
 // 월 전체를 상세 행으로 내리면 2,000행이 된다. 히트맵은 건수만 알면 되므로
-// 이 경량 표현을 따로 둔다 (AGENT_STATE 응답 속도 원칙 #4).
+// 이 경량 표현을 따로 둔다 (PRINCIPLES 응답 속도 원칙 #4).
 type EarningsDaySummary struct {
 	Date      string `json:"date"`
 	Confirmed int    `json:"confirmed"`

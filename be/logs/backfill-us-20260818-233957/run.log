@@ -1,6 +1,0 @@
-2026-08-18 23:39:57 log directory: C:\Users\enact\Projects\quant-port\be\logs\backfill-us-20260818-233957
-2026-08-18 23:39:57 checking /ready ...
-2026-08-18 23:39:57 === status-before ===
-2026-08-18 23:39:57 cmd: backfill-daily-closes.exe -status -market=us -since=2026-01-01 -timeout-min=5
-2026/08/18 23:40:05 status market=us since=2026-01-01 · history_incomplete=1184 · no_close_at_all=1555
-2026-08-18 23:40:07 ERROR: status-before exited  - see C:\Users\enact\Projects\quant-port\be\logs\backfill-us-20260818-233957\status-before.log

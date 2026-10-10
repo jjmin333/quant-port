@@ -1,4 +1,0 @@
-2026-08-18 23:44:07 log directory: C:\Users\enact\Projects\quant-port\be\logs\backfill-us-20260818-234407
-2026-08-18 23:44:07 checking /ready ...
-2026-08-18 23:44:07 === status-before ===
-2026-08-18 23:44:07 cmd: backfill-daily-closes.exe -status -market=us -since=2026-01-01 -timeout-min=5

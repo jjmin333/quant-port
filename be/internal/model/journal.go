@@ -9,6 +9,7 @@ package model
 type JournalNote struct {
 	ID         int64  `json:"id"`
 	Title      string `json:"title"`
+	Topic      string `json:"topic"`
 	Body       string `json:"body"`
 	Symbol     string `json:"symbol,omitempty"`
 	SymbolName string `json:"symbolName,omitempty"`

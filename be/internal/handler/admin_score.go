@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/enact/quant-port/be/internal/model"
@@ -198,5 +199,109 @@ func (h *AdminHandler) ScoreStatus(w http.ResponseWriter, r *http.Request) {
 		"tradeDate": tradeDate,
 		"total":     total,
 		"scored":    scored,
+	}})
+}
+
+/*
+ScoreExplainWeights serves GET /admin/score/explain-weights —
+`?symbol=005930&technical=20&quality=25&growth=20&valuation=25&sentiment=10`.
+
+저장 **전에** 결과를 보는 자리다. 가중치를 눌러 저장한 뒤 배치로 확인하면 17,906종목이
+한 번 더 계산되고, 되돌리려면 또 한 번이다. 이 입구는 **저장된 한 행**을 다른 가중치로
+다시 합산할 뿐이라 쓰기도 없고 배치도 돌지 않는다.
+
+빠진 축은 현재 설정값을 그대로 쓴다 — 한 축만 바꿔 보는 것이 가장 흔한 쓰임이다.
+*/
+func (h *AdminHandler) ScoreExplainWeights(w http.ResponseWriter, r *http.Request) {
+	symbol := strings.TrimSpace(r.URL.Query().Get("symbol"))
+	if symbol == "" {
+		response.Error(w, http.StatusBadRequest, "symbol required")
+		return
+	}
+	if h.scores == nil {
+		response.JSON(w, http.StatusOK, map[string]any{"data": nil})
+		return
+	}
+
+	base := model.DefaultScoreSettings().Weights
+	if h.scoreSettings != nil {
+		base = h.scoreSettings.Get(r.Context()).Weights
+	}
+	q := r.URL.Query()
+	for _, axis := range model.ScoreAxes {
+		raw := strings.TrimSpace(q.Get(string(axis)))
+		if raw == "" {
+			continue
+		}
+		v, err := strconv.Atoi(raw)
+		if err != nil {
+			response.Error(w, http.StatusBadRequest, "invalid weight for "+string(axis))
+			return
+		}
+		base.Set(axis, v)
+	}
+
+	out, err := h.scores.ExplainWeights(r.Context(), symbol, base)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]any{"data": out})
+}
+
+/*
+ScoreRankingHistoryStatus serves GET /admin/score/ranking-history — 백테스트가
+읽을 과거가 얼마나 쌓였나.
+
+화면이 「표본 N거래일」을 말하려면 그 N을 어디선가 알아야 한다. 백테스트 응답도
+같은 값을 담지만, 이 입구는 **아직 아무 백테스트도 돌리기 전에** 물을 수 있다.
+*/
+func (h *AdminHandler) ScoreRankingHistoryStatus(w http.ResponseWriter, r *http.Request) {
+	if h.rankingHistory == nil {
+		response.JSON(w, http.StatusOK, map[string]any{"data": nil})
+		return
+	}
+	out, err := h.rankingHistory.Status(r.Context())
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]any{"data": out})
+}
+
+/*
+BackfillScoreRankingHistory serves POST /admin/score/ranking-history/backfill.
+
+평소에는 점수 배치가 스냅샷과 백필을 함께 부른다. 이 입구가 따로 있는 이유는 **점수를
+손으로 재계산한 직후**다 — 그때 순위가 바뀌는데 배치는 다음 날에야 돈다. 그 사이의
+백테스트는 화면과 다른 목록을 본다.
+
+이미 채워진 날짜는 건너뛰므로 여러 번 눌러도 안전하다.
+*/
+func (h *AdminHandler) BackfillScoreRankingHistory(w http.ResponseWriter, r *http.Request) {
+	if h.rankingHistory == nil {
+		response.Error(w, http.StatusServiceUnavailable, "ranking history service unavailable")
+		return
+	}
+	ctx := r.Context()
+
+	// 최신 회차를 **먼저** 다시 쓴다 — 재계산으로 바뀐 순위가 반영되는 자리다.
+	if err := h.rankingHistory.SnapshotLatest(ctx); err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	filled, err := h.rankingHistory.Backfill(ctx)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	status, err := h.rankingHistory.Status(ctx)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]any{"data": map[string]any{
+		"filled": filled,
+		"status": status,
 	}})
 }

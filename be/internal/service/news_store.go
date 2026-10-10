@@ -36,6 +36,11 @@ const (
 	newsUSSnapshotKey            = "news:us:snapshot:v1"
 	newsUSKeywordCursorKey       = "news:us:keyword_cursor:v1"
 	newsUSGoogleKeywordCursorKey = "news:us:google_keyword_cursor:v1"
+	// 차선별 커서의 접두사. 실제 키는 여기에 ":hot" 같은 차선 이름이 붙는다
+	// (newsLaneCursorKey). 단일 커서 시절 키와 이름을 갈라 둔 것은, 배포 뒤
+	// 남아 있는 옛 값이 차선 커서로 잘못 읽히지 않게 하려는 것이다.
+	newsDomesticLaneCursorPrefix = "news:domestic:lane_cursor:v1"
+	newsUSGoogleLaneCursorPrefix = "news:us:google_lane_cursor:v1"
 	newsSnapshotTTL              = 6 * time.Hour
 	newsAdminKeywordCacheTTL     = time.Minute
 )
@@ -97,11 +102,28 @@ type NewsStore struct {
 	redis        *redis.Client
 	embedHTTP    *http.Client
 	ogHTTP       *http.Client
+	// assetTagger — 주제 기사 제목에서 자산 칩(지역·금리)을 뽑는다(news_topics.go). nil이면 칩 없이.
+	assetTagger NewsAssetTagger
 
-	mu            sync.RWMutex
-	articles      []model.NewsArticle
-	updatedAt     time.Time
-	keywordCursor int
+	// mergeMu — 적재 합치기끼리만 줄 세운다. 읽기 경로는 이것을 잡지 않는다
+	// (mergeArticlesForMarket 헤더).
+	mergeMu sync.Mutex
+
+	mu        sync.RWMutex
+	articles  []model.NewsArticle
+	updatedAt time.Time
+	/*
+		laneCursors — "차선 커서 접두사:차선" -> 다음에 집을 자리.
+
+		Redis가 있으면 그쪽이 정본이고 이 map은 그 앞의 그림자다(Redis가 비어 있는
+		동안에도 회전이 제자리걸음을 하지 않게). 차선을 나눈 이유는
+		news_keyword_lanes.go 머리글에.
+	*/
+	laneCursors map[string]int
+	// 검색어별 7일 기사 수. market -> 소문자 검색어 -> 건수. 차선을 가르는 값이고
+	// 한 시간에 한 번만 다시 센다(newsKeywordCountTTL).
+	keywordCounts   map[string]map[string]int
+	keywordCountsAt map[string]time.Time
 	nameIndex     map[string]string            // lowercase name -> symbol (domestic)
 	nameIndexAt   time.Time                    // when nameIndex was last built (TTL, see nameIndexTTL)
 	nameIndexGen  uint64                       // bumped whenever nameIndex is rebuilt
@@ -118,7 +140,6 @@ type NewsStore struct {
 	usArticles      []model.NewsArticle
 	usUpdatedAt     time.Time
 	usKeywordCursor int
-	usGoogleCursor  int
 	// finnhubCategoryCursor는 해외 일반 뉴스 카테고리 로테이션이다. 한 회차에
 	// 한 갈래만 부른다 — 이유는 refreshFinnhubUSGeneral 머리글에.
 	finnhubCategoryCursor int
@@ -153,6 +174,7 @@ type NewsStore struct {
 	usIndexSymbolsAt    time.Time
 	usNameIndexGen      uint64                       // bumped whenever usNameIndex is rebuilt
 	usSymbolMemo        map[string]usSymbolMemoEntry // article text -> extracted symbols
+	usNameLookupMemo    map[string]usSymbolMemoEntry // lower name -> stocks.Search 결과(없음 포함)
 	adminKeywordsCache  map[string]cachedKeywords
 	pollSettingsCache   model.NewsPollSettings
 	pollSettingsAt      time.Time
@@ -224,6 +246,7 @@ func (st *NewsStore) Run(ctx context.Context) {
 	// 할당량을 쓰지 않고, 시장별 Redis 표식으로 재기동마다 반복되지 않는다.
 	go safego.Call("news-retag", func() { st.retagUntilDone(ctx) })
 	go safego.Call("news-remigrate-market", func() { st.remigrateMarketOnceIfNeeded(ctx) })
+	go safego.Call("news-topic-retag", func() { st.retagTopicsOnce(ctx) })
 
 	// The five same-interval sources are offset against each other so they do
 	// not all fire on the same tick; otherwise every poll period queued five
@@ -244,6 +267,7 @@ func (st *NewsStore) Run(ctx context.Context) {
 			return
 		case <-naverTicker:
 			st.refreshNaver(ctx)
+			st.refreshTopics(ctx)
 		case <-rssTicker:
 			st.refreshRSS(ctx)
 		case <-rssUSTicker:
@@ -396,11 +420,13 @@ type newsListCacheEntry struct {
 	// canonical — 필터에 사용자 입력이 없는 키인가. 축출 계층을 가른다
 	// (rememberList 헤더 참조).
 	canonical bool
+	// filter — 이 목록을 만든 조건. 적재 직후 뒤에서 다시 만들 때 쓴다(warmListsAfterIngest).
+	filter model.NewsListFilter
 }
 
 func newsListCacheKey(f model.NewsListFilter) string {
 	return strings.Join([]string{
-		f.Market, f.SourceID, f.Sort, f.Query, f.Symbol, strconv.Itoa(f.Limit),
+		f.Market, f.SourceID, f.Sort, f.Query, f.Symbol, f.Topic, strconv.Itoa(f.Limit),
 	}, "\x00")
 }
 
@@ -452,7 +478,8 @@ func isCanonicalListKey(f model.NewsListFilter) bool {
 	return strings.TrimSpace(f.Query) == "" && strings.TrimSpace(f.Symbol) == ""
 }
 
-func (st *NewsStore) rememberList(key string, canonical bool, articles []model.NewsArticle, at time.Time) {
+func (st *NewsStore) rememberList(key string, filter model.NewsListFilter, articles []model.NewsArticle, at time.Time) {
+	canonical := isCanonicalListKey(filter)
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	if st.listCache == nil {
@@ -466,7 +493,7 @@ func (st *NewsStore) rememberList(key string, canonical bool, articles []model.N
 	st.evictListLocked(canonical, limit)
 
 	st.listCache[key] = newsListCacheEntry{
-		articles: articles, updatedAt: at, builtAt: time.Now(), canonical: canonical,
+		articles: articles, updatedAt: at, builtAt: time.Now(), canonical: canonical, filter: filter,
 	}
 }
 
@@ -535,6 +562,112 @@ func (st *NewsStore) dropListCacheForMarket(market string) {
 	}
 }
 
+// listBuilder returns the rebuild step for one list key. 요청 경로(List)와 적재 직후
+// 예열(warmListsAfterIngest)이 같은 것을 쓴다 — 두 벌이면 언젠가 어긋난다.
+func (st *NewsStore) listBuilder(filter model.NewsListFilter, cacheKey string) func(context.Context) {
+	return func(buildCtx context.Context) {
+		// 앞선 소유자가 이미 채웠으면 다시 만들지 않는다.
+		if _, _, ok := st.listFromCache(cacheKey); ok {
+			return
+		}
+		t0 := time.Now()
+		recs, err := st.repo.List(buildCtx, repository.NewsListParams{
+			Market:   filter.Market,
+			SourceID: filter.SourceID,
+			Sort:     filter.Sort,
+			Query:    filter.Query,
+			Symbol:   filter.Symbol,
+			Topic:    filter.Topic,
+			Limit:    filter.Limit,
+		})
+		if err != nil {
+			// 캐시에 아무것도 남기지 않는다 — 호출자가 아래 폴백으로 간다.
+			return
+		}
+		tDB := time.Since(t0)
+		articles := st.recordsToArticles(buildCtx, recs)
+		tConv := time.Since(t0) - tDB
+		market := filter.Market
+		if market == "" {
+			market = "domestic"
+		}
+		at, _ := st.repo.LatestUpdatedAt(buildCtx, market)
+		out := st.filterArticles(buildCtx, articles, filterWithoutTextSearch(filter))
+		st.rememberList(cacheKey, filter, out, at)
+		// 느린 재구성만 남긴다 — 어느 단계인지가 다음 조사의 출발점이다(09-25 후속2).
+		if total := time.Since(t0); total > newsListSlowBuild {
+			log.Printf("news list rebuild slow: market=%s symbol=%q q=%q limit=%d rows=%d total=%s db=%s convert=%s filter=%s",
+				market, filter.Symbol, filter.Query, filter.Limit, len(recs), total.Round(time.Millisecond),
+				tDB.Round(time.Millisecond), tConv.Round(time.Millisecond), (total - tDB - tConv).Round(time.Millisecond))
+		}
+	}
+}
+
+const newsListSlowBuild = 500 * time.Millisecond
+
+/*
+newsListWarmWindow — 적재 직후 뒤에서 다시 만들 목록의 범위(최근에 누가 본 것).
+
+적재는 시장 목록 캐시를 통째로 버린다(「새 기사는 즉시」). 그래서 버린 뒤 **처음 온
+요청이 재구성을 동기로 기다렸다.** 폴러가 2분마다 돌고 방문 간격은 그보다 길어, 실측
+(09-24~25 운영 로그) 뉴스 대시보드는 해외 p50 243ms · 국내 p95 1.7초였고, DB가 바쁜
+순간엔 doSync 대기 상한(5초)을 그대로 맞았다(두 시장 동시에 5.0 · 5.2초).
+
+그래서 버린 직후 **최근 이 창 안에 만들어진 목록**을 뒤에서 다시 만든다. canonical
+목록과 **종목 목록**(보유·종목 화면이 종목마다 부른다 — 예열 전 해외 적재 직후 첫
+요청 ~230ms)이 대상이다. 자유 검색어 키는 다시 부를지 모르므로 예열하지 않는다.
+종목 키는 무한히 늘 수 있어 최근 것 newsListWarmSymbolMax개로 자른다. 아무도 안 보는
+시간엔 키가 창 밖으로 나가 예열도 멈춘다 — 빈 사이트에 2분마다 DB를 읽지 않는다.
+*/
+const (
+	newsListWarmWindow    = 10 * time.Minute
+	newsListWarmSymbolMax = 16
+)
+
+// recentWarmFiltersLocked — 호출자가 st.mu를 잡고 있다.
+func (st *NewsStore) recentWarmFiltersLocked(market string) []model.NewsListFilter {
+	if market == "" {
+		market = "domestic"
+	}
+	prefix := market + "\x00"
+	var out []model.NewsListFilter
+	type symbolKey struct {
+		filter  model.NewsListFilter
+		builtAt time.Time
+	}
+	var symbols []symbolKey
+	for k, v := range st.listCache {
+		if !strings.HasPrefix(k, prefix) || time.Since(v.builtAt) > newsListWarmWindow {
+			continue
+		}
+		switch {
+		case v.canonical:
+			out = append(out, v.filter)
+		case strings.TrimSpace(v.filter.Query) == "" && strings.TrimSpace(v.filter.Symbol) != "":
+			symbols = append(symbols, symbolKey{v.filter, v.builtAt})
+		}
+	}
+	sort.Slice(symbols, func(i, j int) bool { return symbols[i].builtAt.After(symbols[j].builtAt) })
+	if len(symbols) > newsListWarmSymbolMax {
+		symbols = symbols[:newsListWarmSymbolMax]
+	}
+	for _, s := range symbols {
+		out = append(out, s.filter)
+	}
+	return out
+}
+
+// warmListsAfterIngest rebuilds the given lists in the background, one run per key.
+func (st *NewsStore) warmListsAfterIngest(filters []model.NewsListFilter) {
+	if st.repo == nil || st.listBuild == nil {
+		return
+	}
+	for _, f := range filters {
+		key := newsListCacheKey(f)
+		st.listBuild.runOnce("news:list:"+key, st.listBuilder(f, key))
+	}
+}
+
 func (st *NewsStore) List(ctx context.Context, filter model.NewsListFilter) ([]model.NewsArticle, time.Time) {
 	cacheKey := newsListCacheKey(filter)
 	if articles, at, ok := st.listFromCache(cacheKey); ok {
@@ -555,32 +688,7 @@ func (st *NewsStore) List(ctx context.Context, filter model.NewsListFilter) ([]m
 			대기는 quoteRefreshWait(5초)에서 끊기므로, 재구성이 이상하게 길어져도
 			요청이 무한정 잡혀 있지 않고 아래 스냅샷 폴백으로 내려간다.
 		*/
-		build := func(buildCtx context.Context) {
-			// 앞선 소유자가 이미 채웠으면 다시 만들지 않는다.
-			if _, _, ok := st.listFromCache(cacheKey); ok {
-				return
-			}
-			recs, err := st.repo.List(buildCtx, repository.NewsListParams{
-				Market:   filter.Market,
-				SourceID: filter.SourceID,
-				Sort:     filter.Sort,
-				Query:    filter.Query,
-				Symbol:   filter.Symbol,
-				Limit:    filter.Limit,
-			})
-			if err != nil {
-				// 캐시에 아무것도 남기지 않는다 — 호출자가 아래 폴백으로 간다.
-				return
-			}
-			articles := st.recordsToArticles(buildCtx, recs)
-			market := filter.Market
-			if market == "" {
-				market = "domestic"
-			}
-			at, _ := st.repo.LatestUpdatedAt(buildCtx, market)
-			out := st.filterArticles(buildCtx, articles, filterWithoutTextSearch(filter))
-			st.rememberList(cacheKey, isCanonicalListKey(filter), out, at)
-		}
+		build := st.listBuilder(filter, cacheKey)
 
 		/*
 			만료됐지만 값이 남아 있으면 그것을 그대로 주고 재구성은 뒤로 보낸다
@@ -590,9 +698,11 @@ func (st *NewsStore) List(ctx context.Context, filter model.NewsListFilter) ([]m
 			40 동시 요청 실측에서 p50 1.2초였다. 목록은 15초 TTL로 이미 그만큼
 			낡을 수 있는 값이라, 몇 초 더 낡은 것과 1.2초 멈춤 중에는 전자가 낫다.
 
-			**폴러가 새 기사를 넣으면 이 경로를 타지 않는다** — ingest는 listCache를
-			통째로 비우므로 남아 있는 값이 없고, 아래 동기 경로로 내려가 새 기사가
-			바로 보인다. 즉 "새 기사는 즉시"라는 보장은 그대로다.
+			**폴러가 새 기사를 넣으면 이 경로를 타지 않는다** — ingest는 그 시장의
+			listCache를 비우므로 남아 있는 값이 없고, 아래 동기 경로로 내려가 새 기사가
+			바로 보인다. 즉 "새 기사는 즉시"라는 보장은 그대로다. 최근 본 목록은
+			ingest가 곧바로 뒤에서 다시 만들어 두므로(warmListsAfterIngest) 대개 여기까지
+			오지 않고, 와도 진행 중인 재구성에 얹힌다.
 		*/
 		if stale, at, fresh, exists := st.listFromCacheAllowStale(cacheKey); exists && !fresh {
 			if st.listBuild != nil {
@@ -635,6 +745,7 @@ func (st *NewsStore) List(ctx context.Context, filter model.NewsListFilter) ([]m
 			Market:   filter.Market,
 			SourceID: filter.SourceID,
 			Sort:     filter.Sort,
+			Topic:    filter.Topic,
 			Limit:    filter.Limit,
 		})
 		if err == nil {
@@ -854,6 +965,8 @@ func (st *NewsStore) recordsToArticles(ctx context.Context, recs []repository.Ne
 			PreviewMode:   previewMode,
 			EmbedPolicy:   string(embedPolicy),
 			Highlighted:   rec.Highlighted,
+			Topic:         rec.Topic,
+			AssetTags:     rec.AssetTags,
 		})
 	}
 	return out
@@ -899,7 +1012,11 @@ func (st *NewsStore) filterArticles(ctx context.Context, items []model.NewsArtic
 		if a.Market != market {
 			continue
 		}
-		if market == "domestic" && !isStockRelatedArticle(ctx, st, a) {
+		if t := strings.TrimSpace(filter.Topic); t != "" && articleTopic(a) != t {
+			continue
+		}
+		// 주제 기사(부동산·금리 …)는 종목 관련성 판정 밖이다 — 그 판정이 바로 이 기사들을 막던 문이다.
+		if market == "domestic" && articleTopic(a) == model.NewsTopicStock && !isStockRelatedArticle(ctx, st, a) {
 			continue
 		}
 		if market == "us" && !isUSTranslationReady(a) {
@@ -1027,13 +1144,75 @@ func (st *NewsStore) mergeArticlesForMarket(ctx context.Context, incoming []mode
 		market = "domestic"
 	}
 
-	st.mu.Lock()
-	var existing []model.NewsArticle
-	if market == "us" {
-		existing = st.usArticles
-	} else {
-		existing = st.articles
+	/*
+		합치기(특히 dedupe)는 **쓰기 잠금 밖에서** 한다.
+
+		예전에는 st.mu.Lock을 잡은 채 이 전부를 했다. dedupe는 기사마다 제목 정규화
+		(정규식)를 하고 쌍을 비교해서, 실측(09-25) 해외 1,000건에 **780ms**·국내 461ms가
+		걸렸다(데스크톱 CPU — 운영 2코어에선 더). 그동안 목록 캐시를 읽는 **모든 뉴스
+		요청이 RLock에서 섰다** — 폴러가 2분마다 돌므로, 방문자가 받은 1~5초 멈춤의
+		정체였다(캐시가 살아 있는데도 대시보드 1.07초).
+
+		그래서: 스냅샷을 읽고(RLock) → 잠금 없이 합치고 → 잠깐 Lock으로 갈아 끼운다.
+		mergeMu가 합치기끼리만 줄 세운다(읽기는 이것을 기다리지 않는다). 그 사이
+		스냅샷이 통째로 바뀌었으면(재적재·정리) 예전처럼 잠금 안에서 다시 합치고,
+		자리에서 고친 필드(조회수·이미지·번역)는 carryInPlaceNewsEdits가 옮겨 싣는다.
+	*/
+	st.mergeMu.Lock()
+	defer st.mergeMu.Unlock()
+
+	snapshot := func() []model.NewsArticle {
+		if market == "us" {
+			return st.usArticles
+		}
+		return st.articles
 	}
+	st.mu.RLock()
+	existing := snapshot()
+	st.mu.RUnlock()
+	merged := mergeNewsSnapshot(existing, incoming, market)
+
+	st.mu.Lock()
+	if current := snapshot(); sameArticleSlice(current, existing) {
+		carryInPlaceNewsEdits(current, merged)
+	} else {
+		merged = mergeNewsSnapshot(current, incoming, market)
+	}
+	at := time.Now()
+	if market == "us" {
+		st.usArticles = merged
+		st.usUpdatedAt = at
+	} else {
+		st.articles = merged
+		st.updatedAt = at
+	}
+	/*
+		새 기사가 들어왔으니 이미 만들어 둔 목록은 낡았다. TTL을 기다리지 않고
+		지금 버린다 — 폴러가 방금 넣은 기사가 다음 요청에 바로 뜨게. 총 건수도
+		같은 이유로 함께 버린다(목록만 새 기사를 반영하고 카운트는 옛 값이면
+		화면의 두 숫자가 어긋난다).
+
+		**단, 이 market 것만 버린다.** 예전에는 `listCache = nil`로 통째로 비웠다.
+		그런데 뉴스 폴러는 2분 주기이고 국내·해외를 따로 적재하므로, **미국 기사
+		하나가 들어올 때마다 국내 목록 캐시까지 날아갔다.** 캐시 수명의 상한이
+		사실상 폴링 주기(2분)로 묶여 있었고, 그래서 미스가 반복됐다 —
+		미스 1건의 비용은 실측 298~320ms다.
+
+		시장이 둘뿐이라 키를 훑어 지우는 비용은 무시할 만하다(항목 수가 아래
+		newsListCacheMaxEntries로 묶여 있다).
+	*/
+	warm := st.recentWarmFiltersLocked(market)
+	st.dropListCacheForMarket(market)
+	delete(st.countCache, market)
+	st.mu.Unlock()
+
+	st.persistSnapshotRedis(ctx, merged, at, market)
+	st.warmListsAfterIngest(warm)
+}
+
+// mergeNewsSnapshot — 잠금 없이 도는 순수 함수. 규칙은 예전 그대로다: 같은 ID면 들어온
+// 것을 쓰되 조회수는 큰 쪽, 강조는 한 번 켜지면 유지, 키워드는 합친다.
+func mergeNewsSnapshot(existing, incoming []model.NewsArticle, market string) []model.NewsArticle {
 	byID := make(map[string]model.NewsArticle, len(existing)+len(incoming))
 	for _, a := range existing {
 		byID[a.ID] = a
@@ -1059,34 +1238,47 @@ func (st *NewsStore) mergeArticlesForMarket(ctx context.Context, incoming []mode
 	if len(merged) > mergeCapForMarket(market) {
 		merged = merged[:mergeCapForMarket(market)]
 	}
-	at := time.Now()
-	if market == "us" {
-		st.usArticles = merged
-		st.usUpdatedAt = at
-	} else {
-		st.articles = merged
-		st.updatedAt = at
+	return merged
+}
+
+// sameArticleSlice — 같은 배열의 같은 길이인가(통째로 갈아 끼워졌는지만 본다).
+func sameArticleSlice(a, b []model.NewsArticle) bool {
+	if len(a) != len(b) {
+		return false
 	}
-	/*
-		새 기사가 들어왔으니 이미 만들어 둔 목록은 낡았다. TTL을 기다리지 않고
-		지금 버린다 — 폴러가 방금 넣은 기사가 다음 요청에 바로 뜨게. 총 건수도
-		같은 이유로 함께 버린다(목록만 새 기사를 반영하고 카운트는 옛 값이면
-		화면의 두 숫자가 어긋난다).
+	return len(a) == 0 || &a[0] == &b[0]
+}
 
-		**단, 이 market 것만 버린다.** 예전에는 `listCache = nil`로 통째로 비웠다.
-		그런데 뉴스 폴러는 2분 주기이고 국내·해외를 따로 적재하므로, **미국 기사
-		하나가 들어올 때마다 국내 목록 캐시까지 날아갔다.** 캐시 수명의 상한이
-		사실상 폴링 주기(2분)로 묶여 있었고, 그래서 미스가 반복됐다 —
-		미스 1건의 비용은 실측 298~320ms다.
-
-		시장이 둘뿐이라 키를 훑어 지우는 비용은 무시할 만하다(항목 수가 아래
-		newsListCacheMaxEntries로 묶여 있다).
-	*/
-	st.dropListCacheForMarket(market)
-	delete(st.countCache, market)
-	st.mu.Unlock()
-
-	st.persistSnapshotRedis(ctx, merged, at, market)
+// carryInPlaceNewsEdits — 합치는 동안 스냅샷 **자리에서** 고쳐진 필드를 결과로 옮긴다
+// (news_store_backfill의 이미지·조회수, news_translate의 번역). 호출자가 st.mu를 잡고 있다.
+func carryInPlaceNewsEdits(current, merged []model.NewsArticle) {
+	if len(current) == 0 || len(merged) == 0 {
+		return
+	}
+	idx := make(map[string]int, len(merged))
+	for i := range merged {
+		idx[merged[i].ID] = i
+	}
+	for _, c := range current {
+		i, ok := idx[c.ID]
+		if !ok {
+			continue
+		}
+		m := &merged[i]
+		if c.ViewCount > m.ViewCount {
+			m.ViewCount = c.ViewCount
+		}
+		if c.Highlighted {
+			m.Highlighted = true
+		}
+		if m.ImageURL == "" && c.ImageURL != "" {
+			m.ImageURL = c.ImageURL
+		}
+		if m.HeadlineKo == "" && c.HeadlineKo != "" {
+			m.HeadlineKo = c.HeadlineKo
+			m.SummaryKo = c.SummaryKo
+		}
+	}
 }
 
 func mergeCapForMarket(market string) int {

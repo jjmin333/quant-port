@@ -30,10 +30,6 @@ func canonicalNewsLink(raw string) string {
 	return strings.ToLower(strings.TrimRight(u.String(), "/"))
 }
 
-func normalizeNewsHeadlineKey(headline string) string {
-	return marketdata.NormalizeNewsHeadlineKey(headline)
-}
-
 func newsArticleURL(article model.NewsArticle) string {
 	if u := strings.TrimSpace(article.OriginalURL); u != "" {
 		return u

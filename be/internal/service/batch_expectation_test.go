@@ -164,7 +164,7 @@ func TestLateButSucceededIsOK(t *testing.T) {
 // 수동 전용·부모 잡 포함은 판정하지 않는다.
 func TestUnscheduledJobsAreUnmanaged(t *testing.T) {
 	for _, id := range []model.BatchJobID{
-		model.BatchIndexCloses, model.BatchDailyCloseFetchStale, model.BatchIndexNotes,
+		model.BatchIndexCloses, model.BatchDailyCloseFetchStale,
 	} {
 		health, expected, _ := judgeBatchHealth(batchExpectations[id], repository.BatchLedgerRow{}, time.Now())
 		if health != model.BatchHealthUnmanaged {
@@ -254,5 +254,34 @@ func TestOverseasLLMJudgedFromWindowStart(t *testing.T) {
 	health, expected, _ := judgeBatchHealth(exp, row, at(t, "2026-09-08 12:00"))
 	if health != model.BatchHealthOK {
 		t.Fatalf("health = %s (기대 %v), want ok", health, expected)
+	}
+}
+
+/*
+주말에는 국내 종가 15:50 슬롯을 기대하지 않는다 (2026-09-20).
+
+실측 2주에서 그 슬롯은 평일에만 돌았다(토·일 0회) — 잡 자체가 KRX 달력을 보기
+때문이다(`daily_close.go`의 IsTradingDay). 감시만 매일로 두었더니 주말마다 사건이
+열렸다(09-19 하루 67회).
+*/
+func TestDailyCloseDomesticSkipsNonTradingDays(t *testing.T) {
+	exp := batchExpectations[model.BatchDailyCloseDomestic]
+	kst := seoulLocation()
+
+	// 일요일 20:00 — 직전 거래일(금)의 15:50이 기준이어야 한다.
+	sunday := time.Date(2026, 9, 20, 20, 0, 0, 0, kst)
+	got, ok := expectedLastRunAt(exp, sunday)
+	if !ok {
+		t.Fatal("기대 시각을 못 구했다")
+	}
+	if got.Weekday() != time.Friday || got.Day() != 18 {
+		t.Fatalf("일요일의 기준이 %s — 직전 거래일 금요일 09-18 15:50 이어야 한다", got.Format("01-02(Mon) 15:04"))
+	}
+
+	// 평일은 그대로 그날 15:50이다.
+	thursday := time.Date(2026, 9, 17, 20, 0, 0, 0, kst)
+	got, ok = expectedLastRunAt(exp, thursday)
+	if !ok || got.Day() != 17 || got.Hour() != 15 {
+		t.Fatalf("평일 기준이 %v — 당일 15:50 이어야 한다", got)
 	}
 }

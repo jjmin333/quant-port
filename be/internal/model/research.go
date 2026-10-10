@@ -49,6 +49,8 @@ const (
 	// StatusRetracted means the author withdrew it. The row stays and the
 	// retraction is reported — that is the whole point.
 	StatusRetracted ResearchStatus = "retracted"
+	// StatusNote — 부동산·금융상품 「분석 리포트」(2026-10-09 요청 9). 종목·목표가·판정이 없고 성적에 들지 않는다.
+	StatusNote ResearchStatus = "note"
 )
 
 // Resolved reports whether a status is a finished judgement.
@@ -75,6 +77,8 @@ type ResearchCall struct {
 	ID         int64          `json:"id"`
 	UserID     int64          `json:"userId"`
 	AuthorName string         `json:"authorName,omitempty"`
+	// Topic — stock | real_estate | finance (model.Topic*). stock이 아니면 Symbol은 빈 값이다.
+	Topic      string         `json:"topic"`
 	Symbol     string         `json:"symbol"`
 	SymbolName string         `json:"symbolName,omitempty"`
 	AssetType  QuoteAssetType `json:"assetType,omitempty"`
@@ -226,6 +230,8 @@ type ResearchReturn struct {
 // ResearchView is a call plus everything computed at read time.
 type ResearchView struct {
 	ResearchCall
+	// Mentions — 본문의 데이터 태그(상세에서만, 2026-09-28).
+	Mentions *MentionSet `json:"mentions,omitempty"`
 	Current   *ResearchCurrent       `json:"current,omitempty"`
 	Returns   []ResearchReturn       `json:"returns"`
 	Horizon   *ResearchReturn        `json:"horizon,omitempty"`

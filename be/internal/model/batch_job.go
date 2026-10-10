@@ -45,6 +45,14 @@ const (
 	BatchNewsBriefingDomestic BatchJobID = "news_briefing_domestic"
 	// BatchNewsBriefingOverseas is the 해외 뉴스 counterpart.
 	BatchNewsBriefingOverseas BatchJobID = "news_briefing_overseas"
+	// BatchEarningsPreviewDomestic writes 「관전 포인트」 for reports due in the
+	// next 7 days (LLM, 기능 버킷 llm_feat_earnings). 07:10 KST 자동 + 수동.
+	BatchEarningsPreviewDomestic BatchJobID = "earnings_preview_domestic"
+	// BatchEarningsPreviewOverseas is the US counterpart.
+	BatchEarningsPreviewOverseas BatchJobID = "earnings_preview_overseas"
+	// BatchResearchReview writes 「AI 검토 노트」 for newly published/edited public
+	// reports (LLM, 기능 버킷 llm_feat_research). 30분마다 자동 + 수동.
+	BatchResearchReview BatchJobID = "research_review"
 	/*
 		BatchIndexNotes writes each tracked index's LLM 해설.
 
@@ -93,6 +101,81 @@ const (
 		같은 응답의 한국어 종목명으로 뉴스 검색 별칭도 갱신한다(알파벳 A · 알파벳 C).
 	*/
 	BatchTossUniverse BatchJobID = "toss_universe"
+	/*
+		BatchSectorSync — 종목별 산업 코드(DART KSIC · SEC SIC)를 받아 공통 섹터
+		11개로 옮긴다. 점수 피어그룹과 포트폴리오 섹터 노출의 재료다.
+		90일에 한 번이면 충분해 첫 바퀴 뒤로는 하루 몇 십 호출이다.
+	*/
+	BatchSectorSync BatchJobID = "sector_sync"
+	/*
+		BatchInvestorFlow — 국내 보통주의 외국인·기관·개인 순매수(Toss STOCK_TRADING_TREND).
+		심리·수급 축의 수급 재료. 전 종목 매일(약 2,760호출 · 23분), 저녁 확정치 뒤에 돈다.
+	*/
+	BatchInvestorFlow BatchJobID = "investor_flow_sync"
+	/*
+		외부 신호 세 잡(2026-09-28 사용자 결정, 요청 6·7) — worker-filings.
+		BatchExtMetrics: 해외 지표 보조(Finnhub, EDGAR 빈 값만 채움) + 애널리스트 추천 추이, 등급제 1,500/일.
+		BatchAnalystDomestic: 국내 평균 목표가·투자의견(네이버), 보통주 전 종목 매일.
+		BatchSocialMentions: Reddit 종목 언급 수(ApeWisdom), 하루 한 번 — 변화 감지(00:25) 전에.
+	*/
+	BatchExtMetrics      BatchJobID = "ext_metrics_overseas"
+	BatchAnalystDomestic BatchJobID = "analyst_domestic"
+	BatchSocialMentions  BatchJobID = "social_mentions"
+	/*
+		Reddit 커뮤니티 탭(2026-09-29).
+		BatchSocialPosts: 언급 상위 종목의 이번 주 인기 글(Reddit 검색 RSS, 분당 1회) + 번역 — worker-filings 00:30.
+		BatchSocialSummary: 커뮤니티 탭 AI 핵심 요약(LLM, 기능 버킷 llm_feat_social) — API 04:20.
+	*/
+	BatchSocialPosts   BatchJobID = "social_posts"
+	BatchSocialSummary BatchJobID = "social_summary"
+	/*
+		BatchFinProducts — 금감원 「금융상품 한눈에」 예·적금·대출 공시 전체(2026-09-29, 금융상품 비교).
+		상품 5종 × 권역 5 + 금융회사 — 하루 약 60호출 · 1~2분. worker-filings 05:10.
+	*/
+	BatchFinProducts BatchJobID = "fin_products"
+	/*
+		순자산 확장 공공데이터(2026-10-01, docs/ASSET_EXPANSION_RESEARCH.md) — 전부 worker-filings.
+		BatchReTrades: 국토부 실거래 12종(전국 아파트 + 서울·사용자 지역 12종, 13개월) + 자산 일괄 재평가.
+		BatchReIndex: 한국부동산원 R-ONE 지수 11표.
+		BatchEcosRates: 한국은행 ECOS 금리 21계열.
+		BatchOnbid: 캠코 온비드 부동산 공매 공고·물건·낙찰가.
+	*/
+	BatchReTrades  BatchJobID = "re_trades"
+	BatchReIndex   BatchJobID = "re_index"
+	BatchEcosRates BatchJobID = "ecos_rates"
+	BatchOnbid     BatchJobID = "onbid"
+	/*
+		자산 점수·AI(2026-10-01). BatchAssetScores: 단지·시군구·금융상품·공매 규칙 점수(DB만).
+		BatchAssetAI: 금리 한 줄·지역·단지 해설·우대조건 구조화(자산 전용 LLM 키 GEMINI_SUB_API_KEY).
+	*/
+	BatchAssetScores BatchJobID = "asset_scores"
+	BatchAssetAI     BatchJobID = "asset_ai"
+	/*
+		BatchETFScore — 국내 ETF 일별 지표(KRX etf_bydd_trd, 하루 1호출)를 받고 ETF 점검 점수
+		(괴리·추적오차·유동성·규모)를 매긴다. KRX가 다음 영업일에 공개하므로 오전에 돈다.
+	*/
+	BatchETFScore BatchJobID = "etf_score"
+	/*
+		BatchNewsSentiment — 종목이 붙은 기사 제목에 감성 점수(로컬 모델)와 사건 종류(규칙)를
+		매긴다. **점수 배치의 첫 단계로 돈다** — 점수가 이 라벨로 심리 축을 매긴다. 수동
+		실행은 창을 넓혀 과거를 채우는 용도(limit = 일수).
+	*/
+	BatchNewsSentiment BatchJobID = "news_sentiment"
+	/*
+		BatchChangeDetect — 그날의 변화(급등락·거래량·점수·뉴스 사건·공시·실적·내부자)를
+		규칙으로 골라 stock_change_events에 둔다. 「변화」 메뉴가 읽는다. 점수 배치의 마지막
+		단계로 돈다(점수 이력이 먼저 있어야 점수 급변을 잰다).
+	*/
+	BatchChangeDetect BatchJobID = "change_detect"
+	// BatchScoreReportCard — AI 점수 성적표(축별 IC). 점수 배치 꼬리에서 새로 잴 수 있게
+	// 된 날짜(5거래일이 지난 날)만 잰다. 수동 실행은 빠진 날짜를 다시 채운다.
+	BatchScoreReportCard BatchJobID = "score_report_card"
+	/*
+		BatchGrowthAudit — 검색 유입 감시(worker-growth). 사이트맵 크롤 · Search Console · GA4 · Bing ·
+		DB 활동을 모아 일간 보고서를, 월요일에는 주간 보고서(Top 20 기회)를 만든다. LLM 없음 ·
+		growth_* 표만 쓴다(`internal/growth`).
+	*/
+	BatchGrowthAudit BatchJobID = "growth_audit"
 	/*
 		BatchWatchdog는 다른 잡들이 제때 돌았는지 판정한다.
 
@@ -204,6 +287,9 @@ type BatchJobHealth struct {
 	LastRunAt     *time.Time `json:"lastRunAt,omitempty"`
 	LastStatus    string     `json:"lastStatus,omitempty"`
 	Message       string     `json:"message,omitempty"`
+	// LastInterrupted — 마지막 실행이 프로세스가 사라져 잘린 것인가. `failed` 중
+	// **다시 돌리면 되는 것**을 가리는 자리다(BatchLedgerRow.LastInterrupted).
+	LastInterrupted bool `json:"lastInterrupted,omitempty"`
 	// LateBy is how far past the grace period this job is (0 unless late).
 	LateBySeconds int64 `json:"lateBySeconds,omitempty"`
 }

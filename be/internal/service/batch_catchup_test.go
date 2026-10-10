@@ -117,3 +117,59 @@ func TestCatchUpSelectsNothingWhenHealthy(t *testing.T) {
 		t.Fatalf("정상인데 %v 를 골랐다", picked)
 	}
 }
+
+/*
+**잘린 실행은 다시 돌린다** (2026-09-20).
+
+배포·재기동으로 도중에 죽은 실행은 `MarkStaleRunsFailed`가 error 로 닫고, 그러면
+판정이 `failed`가 되어 예전에는 재처리에서 빠졌다. 실측 한 달에 69건 · 8개 잡 ·
+20일이 그렇게 조용히 버려졌다 — 그 하루치 데이터는 아무도 다시 받지 않는다.
+
+「돌았는데 깨졌다」와 「돌다가 프로세스가 사라졌다」는 다음 행동이 정반대다.
+*/
+func TestCatchUpIncludesInterruptedFailures(t *testing.T) {
+	report := model.BatchHealthReport{Jobs: []model.BatchJobHealth{
+		{JobID: model.BatchWarnings, Health: model.BatchHealthFailed, LastInterrupted: true},
+		{JobID: model.BatchStockScores, Health: model.BatchHealthOK},
+	}}
+
+	picked := selectCatchUpCandidates(report)
+	if len(picked) != 1 || picked[0] != model.BatchWarnings {
+		t.Fatalf("잘린 실행을 다시 안 골랐다: %v", picked)
+	}
+}
+
+// 진짜 실패는 여전히 사람 몫이다 — 표식이 없으면 안 고른다.
+func TestCatchUpSkipsGenuineFailures(t *testing.T) {
+	report := model.BatchHealthReport{Jobs: []model.BatchJobHealth{
+		{JobID: model.BatchWarnings, Health: model.BatchHealthFailed},
+		{JobID: model.BatchDisclosures, Health: model.BatchHealthFailed, LastInterrupted: false},
+	}}
+	if picked := selectCatchUpCandidates(report); len(picked) != 0 {
+		t.Fatalf("원인 모를 실패를 다시 골랐다: %v", picked)
+	}
+}
+
+/*
+`stuck`은 표식이 있어도 안 고른다 — 「지금 붙잡혀 있다」는 아직 도는 중일 수 있고,
+겹쳐 넣으면 같은 잡이 둘이 된다. 잘렸다는 표식은 **지난** 실행의 성질이다.
+*/
+func TestCatchUpNeverTakesStuckEvenWhenInterrupted(t *testing.T) {
+	report := model.BatchHealthReport{Jobs: []model.BatchJobHealth{
+		{JobID: model.BatchWarnings, Health: model.BatchHealthStuck, LastInterrupted: true},
+	}}
+	if picked := selectCatchUpCandidates(report); len(picked) != 0 {
+		t.Fatalf("stuck 을 골랐다: %v", picked)
+	}
+}
+
+// 허용 목록은 그대로다 — 잘렸다고 해서 금지된 잡이 돌면 안 된다(LLM 비용).
+func TestCatchUpInterruptedStillRespectsAllowlist(t *testing.T) {
+	report := model.BatchHealthReport{Jobs: []model.BatchJobHealth{
+		{JobID: model.BatchLLMSummaryDomestic, Health: model.BatchHealthFailed, LastInterrupted: true},
+		{JobID: model.BatchNewsBriefingOverseas, Health: model.BatchHealthFailed, LastInterrupted: true},
+	}}
+	if picked := selectCatchUpCandidates(report); len(picked) != 0 {
+		t.Fatalf("금지된 잡을 잘렸다는 이유로 골랐다: %v", picked)
+	}
+}

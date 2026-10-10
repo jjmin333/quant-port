@@ -48,6 +48,9 @@ if ($DomesticOnly) {
     Write-Host '국내 로고를 갱신하고, 해외는 FMP에 그림이 있는지만 확인합니다.' -ForegroundColor Cyan
 }
 
+# PS 5.1은 출력을 돌려받으면(*> 로그, 작업 스케줄러) go의 stderr 로그 첫 줄을 오류로 바꿔
+# 'Stop'에서 스크립트를 끊는다 — 실패 판정은 아래 종료 코드로만 한다.
+$ErrorActionPreference = 'Continue'
 go run ./cmd/migrate-logos @args
 if ($LASTEXITCODE -ne 0) { throw "migrate-logos failed ($LASTEXITCODE)" }
 

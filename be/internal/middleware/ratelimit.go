@@ -58,17 +58,6 @@ type RateLimitConfig struct {
 	IPBurst   float64
 }
 
-// DefaultRateLimitConfig — see the threshold reasoning above.
-func DefaultRateLimitConfig() RateLimitConfig {
-	return RateLimitConfig{
-		Enabled:   true,
-		UserRate:  20,
-		UserBurst: 40,
-		IPRate:    30,
-		IPBurst:   60,
-	}
-}
-
 // bucketIdleTTL is how long an untouched bucket is kept. Without eviction the
 // map grows once per distinct IP forever — a slow memory leak that a scanner
 // could accelerate.

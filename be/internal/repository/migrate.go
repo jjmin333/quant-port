@@ -145,6 +145,12 @@ func ensureSchema(ctx context.Context, db *sql.DB, migrationsDir string) error {
 		if err := MigrateDailyClosesIfNeeded(ctx, db, migrationsDir); err != nil {
 			return err
 		}
+		if err := MigrateDailyCloseAIOverviewIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigratePageMetaIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
 		if err := MigrateStockScoresIfNeeded(ctx, db, migrationsDir); err != nil {
 			return err
 		}
@@ -199,9 +205,6 @@ func ensureSchema(ctx context.Context, db *sql.DB, migrationsDir string) error {
 		if err := MigrateHoldingTradesDedupIfNeeded(ctx, db, migrationsDir); err != nil {
 			return err
 		}
-		if err := MigrateHoldingTradesPriceMismatchCleanupIfNeeded(ctx, db, migrationsDir); err != nil {
-			return err
-		}
 		if err := MigratePerfIndexesIfNeeded(ctx, db, migrationsDir); err != nil {
 			return err
 		}
@@ -229,7 +232,115 @@ func ensureSchema(ctx context.Context, db *sql.DB, migrationsDir string) error {
 		if err := MigrateStockScoreRankingsIfNeeded(ctx, db, migrationsDir); err != nil {
 			return err
 		}
+		// 랭킹 이력은 랭킹 사전계산 표와 짝이다 — 하나는 오늘의 목록, 다른 하나는
+		// 그 목록의 날짜별 기록이다(백테스트가 읽는 유일한 과거).
+		if err := MigrateScoreRankingHistoryIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		// 축 점수 이력도 같은 짝이다 — 30거래일 뒤에도 「그날 몇 점이었나」에 답한다.
+		if err := MigrateStockScoreHistoryIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		// 섹터 분류. 섹터 배치만 쓰는 표라 카탈로그 동기화와 부딪히지 않는다.
+		if err := MigrateStockSectorsIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		// 기사별 감성·사건 라벨. 점수 배치가 심리 축을, 변화 감지가 사건을 읽는다.
+		if err := MigrateNewsSentimentIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		// 「변화」 메뉴의 이벤트. 점수 배치 끝에서 채운다.
+		if err := MigrateChangeEventsIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		// AI 점수 성적표(축별 IC). 점수 배치 꼬리에서 채운다.
+		if err := MigrateScoreICIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		// 「내 기준」 점수의 사용자 가중치.
+		if err := MigrateUserScoreWeightsIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		// 보유 종목 매수 이유(살 때 본 축). 보유 전체 교체와 무관하게 남도록 별도 표.
+		if err := MigrateHoldingThesesIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		// 종목별 투자자 매매동향(국내) — 심리·수급 축의 수급 재료.
+		if err := MigrateInvestorFlowsIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		// 미국 EPS 컨센서스 변화 이력 — 06:00 캘린더 적재가 덮어쓰기 전에 남긴다.
+		if err := MigrateEarningsEstimateRevisionsIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		// 국내 ETF 점검 — 일별 지표와 점수.
+		if err := MigrateETFMetricsIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		// 검색 유입 감시(worker-growth) — 크롤 · 검색 성과 · URL 검사 · KPI · 보고서.
+		if err := MigrateGrowthIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
 		if err := MigrateStockSummaryNarrativesIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		// 저장한 스크리너 조건. 사용자 표라 다른 것들과 달리 배치가 채우지 않는다.
+		if err := MigrateUserScreensIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		// 닉네임 중복 불가 (2026-09-27 요청 3) — 겹친 이름은 뒤에 번호를 붙인 뒤 유니크.
+		if err := MigrateUniqueDisplayNameIfNeeded(ctx, db); err != nil {
+			return err
+		}
+		// 커뮤니티 (2026-09-27 요청 4).
+		if err := MigrateCommunityIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		// 실적 관전 포인트 (2026-09-27 결정 C ②).
+		if err := MigrateEarningsPreviewsIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		// 리포트 AI 검토 노트 (2026-09-27 결정 C ④).
+		if err := MigrateResearchReviewsIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateContentMentionsIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateExternalSignalsIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateSocialRedditIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateFinProductsIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateWealthIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateAssetIntelIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateAssetWatchIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateAnalystHistoryIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateRequests1009IfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateNewsTopicKeywordsIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateContentTopicsIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateDBCleanup1010IfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
+		if err := MigrateNotificationsIfNeeded(ctx, db, migrationsDir); err != nil {
 			return err
 		}
 		log.Println("mysql: schema ok (all required tables present)")
@@ -368,9 +479,6 @@ func ensureSchema(ctx context.Context, db *sql.DB, migrationsDir string) error {
 	if err := MigrateHoldingTradesDedupIfNeeded(ctx, db, migrationsDir); err != nil {
 		return err
 	}
-	if err := MigrateHoldingTradesPriceMismatchCleanupIfNeeded(ctx, db, migrationsDir); err != nil {
-		return err
-	}
 	if err := MigratePerfIndexesIfNeeded(ctx, db, migrationsDir); err != nil {
 		return err
 	}
@@ -395,6 +503,57 @@ func ensureSchema(ctx context.Context, db *sql.DB, migrationsDir string) error {
 	if err := MigrateEarningsSurpriseAnnouncedIfNeeded(ctx, db, migrationsDir); err != nil {
 		return err
 	}
+	if err := MigrateUniqueDisplayNameIfNeeded(ctx, db); err != nil {
+		return err
+	}
+	if err := MigrateCommunityIfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
+	if err := MigrateEarningsPreviewsIfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
+	if err := MigrateResearchReviewsIfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
+	if err := MigrateContentMentionsIfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
+	if err := MigrateExternalSignalsIfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
+	if err := MigrateSocialRedditIfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
+	if err := MigrateFinProductsIfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
+	if err := MigrateWealthIfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
+	if err := MigrateAssetIntelIfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
+	if err := MigrateAssetWatchIfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
+	if err := MigrateAnalystHistoryIfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
+	if err := MigrateRequests1009IfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
+	if err := MigrateNewsTopicKeywordsIfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
+	if err := MigrateContentTopicsIfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
+	if err := MigrateDBCleanup1010IfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
+	if err := MigrateNotificationsIfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
 	go migrateCandleBarsAsync(db)
 
 	log.Println("mysql: schema ready")
@@ -407,7 +566,7 @@ VerifySchema — 워커 프로세스용. **DDL을 실행하지 않고** 스키�
 
 여태까지는 api와 워커 7개가 전부 기동 시 EnsureSchema를 불렀다. 버전 테이블 없이
 MigrateXIfNeeded 약 30개가 각자 "이 테이블/컬럼이 있나"를 마커로 판단하는 구조라,
-8개 프로세스가 같은 DDL을 동시에 실행하며 경쟁했다(AGENT_STATE에 isSchemaRaceError를
+8개 프로세스가 같은 DDL을 동시에 실행하며 경쟁했다(옛 AGENT_STATE — 지금 docs/archive/sessions.md — 에 isSchemaRaceError를
 무시한다고 적혀 있는 것이 그 흔적이다). 로컬에서 무사했던 이유는 스키마가 늘 이미
 최신이라 대부분의 마커가 곧바로 빠져나갔기 때문이고, **실제로 DDL이 도는 프로덕션
 첫 배포가 가장 위험했다.**

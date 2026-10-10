@@ -122,7 +122,11 @@ func (e *EdgarClient) FetchInsiderFilings(
 }
 
 type edgarSubmissions struct {
-	Filings struct {
+	// Sic · SicDescription은 섹터 배치가 읽는다(edgar_sector.go). 같은 응답이라
+	// 내부자 적재가 받을 때도 그대로 딸려 온다.
+	Sic            string `json:"sic"`
+	SicDescription string `json:"sicDescription"`
+	Filings        struct {
 		Recent struct {
 			AccessionNumber []string `json:"accessionNumber"`
 			FilingDate      []string `json:"filingDate"`
@@ -181,65 +185,6 @@ type nonDerivativeTransactionXML struct {
 			Value string `xml:"value"`
 		} `xml:"sharesOwnedFollowingTransaction"`
 	} `xml:"postTransactionAmounts"`
-}
-
-// FetchInsiderTransactions lists recent Form 4 (change-in-ownership) filings
-// for ticker via SEC's per-issuer submissions feed, then fetches each
-// filing's raw ownership XML for the actual transaction rows (submissions.json
-// only has filing metadata, not transaction detail). Best-effort per filing —
-// one malformed/unreachable filing does not fail the whole tab.
-func (e *EdgarClient) FetchInsiderTransactions(ctx context.Context, ticker string) ([]model.InsiderTransaction, error) {
-	cik, err := e.LookupCIK(ctx, ticker)
-	if err != nil {
-		return nil, err
-	}
-	subs, err := e.fetchSubmissions(ctx, cik)
-	if err != nil {
-		return nil, err
-	}
-
-	cikInt := strings.TrimLeft(cik, "0")
-	if cikInt == "" {
-		cikInt = "0"
-	}
-
-	recent := subs.Filings.Recent
-	type filingRef struct{ accession, doc string }
-	var filings []filingRef
-	for i, form := range recent.Form {
-		if form != "4" && form != "4/A" {
-			continue
-		}
-		if i >= len(recent.AccessionNumber) || i >= len(recent.PrimaryDocument) {
-			continue
-		}
-		filings = append(filings, filingRef{accession: recent.AccessionNumber[i], doc: recent.PrimaryDocument[i]})
-		if len(filings) >= edgarInsiderMaxFilings {
-			break
-		}
-	}
-
-	out := make([]model.InsiderTransaction, 0, len(filings))
-	var lastErr error
-	failCount := 0
-	for _, f := range filings {
-		txns, err := e.fetchForm4Transactions(ctx, cikInt, f.accession, f.doc)
-		if err != nil {
-			lastErr = err
-			failCount++
-			continue
-		}
-		out = append(out, txns...)
-	}
-	// If every filing fetch failed (typically the shared per-minute EDGAR
-	// budget getting exhausted by a burst of requests), surface an error
-	// instead of a false "no insider transactions" success — the caller
-	// (InsiderTabService) only caches successful results, and a 24h cache of
-	// an empty list would hide real data behind a transient rate limit.
-	if len(filings) > 0 && failCount == len(filings) {
-		return nil, fmt.Errorf("edgar form4: all %d filing fetches failed: %w", failCount, lastErr)
-	}
-	return out, nil
 }
 
 func (e *EdgarClient) fetchSubmissions(ctx context.Context, cik string) (*edgarSubmissions, error) {

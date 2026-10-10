@@ -26,6 +26,9 @@ type FundamentalsResponse struct {
 	Price *float64 `json:"price,omitempty"`
 	PER   *float64 `json:"per,omitempty"`
 	PBR   *float64 `json:"pbr,omitempty"`
+	PSR   *float64 `json:"psr,omitempty"`
+	// Supplement — EDGAR 빈 칸을 채운 보조 출처(Finnhub). 화면이 출처·날짜를 밝힌다.
+	Supplement *model.FundamentalsSupplement `json:"supplement,omitempty"`
 
 	ROE              *float64 `json:"roe,omitempty"`
 	OperatingMargin  *float64 `json:"operatingMargin,omitempty"`
@@ -50,6 +53,10 @@ type FundamentalsResponse struct {
 func BuildFundamentalsResponse(view *model.FundamentalsView, stock *model.Stock) FundamentalsResponse {
 	f := view.StockFundamentals
 	tier := model.ComputeCoverageTier(f, stock)
+	// 보조(Finnhub)만 있는 종목(TSM처럼 20-F를 비운 경우)도 「데이터 없음」 카드로 가리지 않는다.
+	if tier == model.CoverageTierUnavailable && view.Supplement != nil {
+		tier = model.CoverageTierBasic
+	}
 
 	resp := FundamentalsResponse{
 		Symbol:            f.Symbol,
@@ -66,6 +73,8 @@ func BuildFundamentalsResponse(view *model.FundamentalsView, stock *model.Stock)
 		Price:             view.Price,
 		PER:               view.PER,
 		PBR:               view.PBR,
+		PSR:               view.PSR,
+		Supplement:        view.Supplement,
 		ROE:               f.ROE,
 		OperatingMargin:   f.OperatingMargin,
 		RevenueGrowthYoY:  f.RevenueGrowthYoY,

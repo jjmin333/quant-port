@@ -216,8 +216,9 @@ func (s *BatchHealthService) Report(ctx context.Context, now time.Time) (model.B
 			ExpectedAt:    expectedAt,
 			LastSuccessAt: row.LastSuccessAt,
 			LastRunAt:     row.LastRunAt,
-			LastStatus:    row.LastStatus,
-			Message:       row.LastMessage,
+			LastStatus:      row.LastStatus,
+			Message:         row.LastMessage,
+			LastInterrupted: row.LastInterrupted,
 		}
 		if lateBy > 0 {
 			entry.LateBySeconds = int64(lateBy.Seconds())

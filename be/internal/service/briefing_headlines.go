@@ -41,10 +41,19 @@ func briefingHeadlines(articles []model.NewsArticle, mentioned []model.NewsBrief
 		h     model.NewsBriefingHeadline
 		score int
 		idx   int
+		rates bool
 	}
 	now := timeNowForBriefing()
 	items := make([]ranked, 0, len(articles))
 	for i, a := range articles {
+		/*
+			주제 기사(2026-10-09 요청 4·5): 시장 브리핑은 **주식** 브리핑이다. 부동산·예적금·대출 기사는 홈
+			「부동산·금리 브리핑」이 쓰고, 금리 기사만 증시와 맞닿아 있어 몇 건(briefingRatesHeadlineMax) 받는다.
+		*/
+		topic := articleTopic(a)
+		if topic == "real_estate" || topic == "deposit" || topic == "loan" {
+			continue
+		}
 		title := strings.TrimSpace(a.HeadlineKo)
 		if title == "" {
 			title = strings.TrimSpace(a.Headline)
@@ -75,6 +84,7 @@ func briefingHeadlines(articles []model.NewsArticle, mentioned []model.NewsBrief
 			},
 			score: score,
 			idx:   i, // 원래 목록이 최신순 — 동점이면 더 최근이 앞
+			rates: topic == "rates",
 		})
 	}
 	sort.SliceStable(items, func(i, j int) bool {
@@ -85,10 +95,17 @@ func briefingHeadlines(articles []model.NewsArticle, mentioned []model.NewsBrief
 	})
 
 	perPublisher := map[string]int{}
+	ratesTaken := 0
 	out := make([]model.NewsBriefingHeadline, 0, briefingHeadlineCount)
 	for _, item := range items {
 		if len(out) >= briefingHeadlineCount {
 			break
+		}
+		if item.rates {
+			if ratesTaken >= briefingRatesHeadlineMax {
+				continue
+			}
+			ratesTaken++
 		}
 		pub := item.h.Publisher
 		if perPublisher[pub] >= briefingHeadlinesPerPublisher {
@@ -102,3 +119,6 @@ func briefingHeadlines(articles []model.NewsArticle, mentioned []model.NewsBrief
 
 // timeNowForBriefing is a seam so tests can freeze "now" for 속보 창.
 var timeNowForBriefing = func() time.Time { return time.Now() }
+
+// briefingRatesHeadlineMax — 주식 브리핑 프롬프트에 들이는 금리 기사 상한(입력 토큰 관리, 2026-10-09).
+const briefingRatesHeadlineMax = 3

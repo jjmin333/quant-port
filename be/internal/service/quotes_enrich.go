@@ -126,6 +126,18 @@ func (s *QuotesService) loadQuoteStats(ctx context.Context, symbol string, stock
 	}
 
 	s.triggerQuoteStatsRefresh(symbol)
+	/*
+		캐시가 빈 첫 요청도 닫힌 세션이면 **확정 일봉으로 바로 답한다**(DB 한 번, 상류 호출 없음).
+		예전에는 여기서 빈 값을 돌려 첫 방문자(검색엔진 렌더러 포함)가 시가·고가·저가를 「—」로
+		봤다. 52주 범위 등 나머지는 위에서 건 갱신이 채운다 — 그래서 이 값은 캐시하지 않는다.
+	*/
+	loc := kst
+	if stock != nil && stock.Currency == toss.CurrencyUSD {
+		loc = usEastern
+	}
+	if o, h, l, v, tv, ok := s.closedSessionDailyStats(ctx, symbol, s.quoteSessionStart(ctx, symbol, loc)); ok {
+		return quoteStatsCache{Open: o, High: h, Low: l, Volume: v, TradingValue: tv}
+	}
 	return quoteStatsCache{}
 }
 
@@ -189,7 +201,77 @@ func (s *QuotesService) fetchQuoteStats(ctx context.Context, symbol string, stoc
 	return stats
 }
 
-// fetchIntradayStats computes today's open/high/low/volume/tradingValue.
+/*
+quoteSessionStart — 시가·고가·저가를 모을 세션의 첫 순간(그 시장 시간대 0시).
+
+**「오늘」이 아니라 현재가가 속한 세션이다** (2026-09-26 외부 방문자 점검). 예전에는
+벽시계의 오늘 0시였다. 장이 닫힌 날(주말·휴장)과 평일 개장 전에는 오늘 봉이 하나도
+없으니 아래 채움 규칙이 돌아 **시가 = 전일 종가, 고가 = 저가 = 현재가, 거래량 0**이라는
+있지도 않은 하루가 만들어졌다(실측 추석 연휴 삼성전자: 시가 277,500 · 고가·저가 286,500
+— 실제 9/23은 282,500 · 286,500 · 280,750). 캐시가 빈 순간에는 0이라 화면이 「—」였다.
+
+`priceSessionDate`는 등락률의 기준가(직전 종가)를 고르는 쪽이 이미 쓰는 판정이다 —
+장이 돌면 오늘, 닫혀 있으면 마지막으로 닫힌 세션. 같은 날짜를 쓰면 시가·고가·저가와
+등락률이 같은 하루를 말한다.
+*/
+func (s *QuotesService) quoteSessionStart(ctx context.Context, symbol string, loc *time.Location) time.Time {
+	if d, err := time.ParseInLocation("2006-01-02", s.priceSessionDate(ctx, symbol), loc); err == nil {
+		return d
+	}
+	return startOfDay(time.Now().In(loc))
+}
+
+/*
+closedSessionDailyStats — **장이 닫혀 있으면** 그 세션의 확정 일봉을 그대로 쓴다.
+
+1분봉 합산은 장중에는 맞지만 닫힌 뒤에는 틀린다: 저장·캐시된 1분봉은 최근 480개(8시간)라
+NXT까지 12시간을 도는 국내는 **정오 이후만** 남아 시가가 그 시각의 가격이 되고(추석 연휴
+삼성전자: 시가 283,000 · 실제 282,500), 미국은 확장 시간대 봉만 있어 거래량이 **6만 주**로
+나왔다(실제 정규장 2,164만 주). 확정 일봉에는 그런 구멍이 없다.
+
+일봉 날짜는 저장 규약대로 bar_time의 날짜가 그 시장의 거래일이다(`prevCloseFromDailyBars`와 같다).
+*/
+func (s *QuotesService) closedSessionDailyStats(ctx context.Context, symbol string, sessionStart time.Time) (
+	open, high, low float64, volume int64, tradingValue float64, ok bool,
+) {
+	c, found := s.closedSessionDailyBar(ctx, symbol, sessionStart)
+	if !found || c.Open <= 0 || c.High <= 0 || c.Low <= 0 {
+		return
+	}
+	return c.Open, c.High, c.Low, c.Volume, c.Close * float64(c.Volume), true
+}
+
+// closedSessionDailyBar — 장이 닫혀 있을 때 그 세션(sessionStart 날짜)의 확정 일봉.
+func (s *QuotesService) closedSessionDailyBar(ctx context.Context, symbol string, sessionStart time.Time) (model.Candle, bool) {
+	if s == nil || s.candles == nil || sessionStart.IsZero() {
+		return model.Candle{}, false
+	}
+	if !s.sessionClosedNow(ctx, symbol) {
+		return model.Candle{}, false
+	}
+	daily, _, err := s.candles.ListBefore(ctx, symbol, model.Interval1d, "", 3)
+	if err != nil {
+		return model.Candle{}, false
+	}
+	want := sessionStart.Format("2006-01-02")
+	for i := len(daily) - 1; i >= 0; i-- {
+		if parseQuoteCandleTime(daily[i].Time).In(kst).Format("2006-01-02") == want {
+			return daily[i], true
+		}
+	}
+	return model.Candle{}, false
+}
+
+// sessionClosedNow — 이 종목의 시장이 지금 닫혀 있는가(서버 달력 기준).
+func (s *QuotesService) sessionClosedNow(ctx context.Context, symbol string) bool {
+	var cals marketCalendars
+	if s.marketStore != nil {
+		cals, _ = s.marketStore.EnsureCalendars(ctx)
+	}
+	return marketClockAt(string(s.quoteAssetType(ctx, symbol)), cals, time.Now()).Closed()
+}
+
+// fetchIntradayStats computes the current session's open/high/low/volume/tradingValue.
 // Tries DB-stored 1m bars first — refreshRawCandles already keeps these warm
 // for every tracked symbol via its own delta fetch, so this can usually
 // avoid hitting Toss at all. Only symbols with no tracked history yet (cold
@@ -201,7 +283,10 @@ func (s *QuotesService) fetchIntradayStats(ctx context.Context, symbol string, c
 	if currency == toss.CurrencyUSD {
 		loc = usEastern
 	}
-	today := startOfDay(time.Now().In(loc))
+	today := s.quoteSessionStart(ctx, symbol, loc)
+	if o, h, l, v, tv, ok := s.closedSessionDailyStats(ctx, symbol, today); ok {
+		return o, h, l, v, tv
+	}
 
 	if bars := s.listIntradayBarsFromDB(ctx, symbol, 480); len(bars) > 0 {
 		if o, h, l, v, tv, ok := sumIntradayBarsFrom(bars, today); ok {
@@ -322,9 +407,13 @@ func (s *QuotesService) statsFromRawCache(ctx context.Context, symbol string, st
 	if stock != nil && stock.Currency == toss.CurrencyUSD {
 		loc = usEastern
 	}
-	today := startOfDay(time.Now().In(loc))
+	today := s.quoteSessionStart(ctx, symbol, loc)
 
 	var first bool
+	if o, h, l, v, tv, ok := s.closedSessionDailyStats(ctx, sym, today); ok {
+		stats.Open, stats.High, stats.Low, stats.Volume, stats.TradingValue = o, h, l, v, tv
+		raw1m = nil // 아래 1분봉 합산을 건너뛴다 — 닫힌 세션은 일봉이 정답이다.
+	}
 	for _, c := range raw1m {
 		t := parseQuoteCandleTime(c.Time)
 		if t.Before(today) {
@@ -371,13 +460,8 @@ func (s *QuotesService) statsFromRawCache(ctx context.Context, symbol string, st
 		stats.Low = currentPrice
 	}
 
-	for _, c := range raw1d {
-		if c.High > stats.Week52High {
-			stats.Week52High = c.High
-		}
-		if stats.Week52Low == 0 || (c.Low > 0 && c.Low < stats.Week52Low) {
-			stats.Week52Low = c.Low
-		}
+	if h, l, ok := week52RangeFromBars(raw1d); ok {
+		stats.Week52High, stats.Week52Low = h, l
 	}
 
 	if stock != nil && stock.SharesOutstanding != "" {

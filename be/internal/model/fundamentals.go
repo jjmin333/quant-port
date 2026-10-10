@@ -75,6 +75,9 @@ type FinancialSnapshot struct {
 	EPSBasic           *float64
 	EPSDiluted         *float64
 	SharesOutstanding  *int64
+	// Currency — the currencies of the values used, comma-joined ("USD" or "TWD,USD")
+	// when the source says so (EDGAR units). "" = unknown — treated as the listing currency.
+	Currency string
 }
 
 // StockFundamentals is the persisted fundamentals row for a symbol.
@@ -125,4 +128,14 @@ type FundamentalsView struct {
 	Price *float64 `json:"price,omitempty"`
 	PER   *float64 `json:"per,omitempty"`
 	PBR   *float64 `json:"pbr,omitempty"`
+	PSR   *float64 `json:"psr,omitempty"`
+	// Supplement — EDGAR가 비운 칸을 채운 보조 출처(Finnhub, 2026-09-28). 화면이 「보조」로 밝힌다.
+	Supplement *FundamentalsSupplement `json:"supplement,omitempty"`
+}
+
+// FundamentalsSupplement says which fields came from the secondary source and when.
+type FundamentalsSupplement struct {
+	Source string    `json:"source"`
+	AsOf   time.Time `json:"asOf"`
+	Fields []string  `json:"fields"`
 }
