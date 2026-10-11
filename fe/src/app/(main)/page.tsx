@@ -57,13 +57,14 @@ export default async function HomePage() {
     <>
       <PageHeading>{SITE_TITLE}</PageHeading>
       <PageScrollShell contentClassName="space-y-3">
-        {showcase && <HomeGuestShowcase data={showcase} />}
         {/*
           지수 전 종목이 한 줄로 흐른다. 예전에는 다섯 장만 깔고 나머지 일곱을 화면 맨
           아래 「전체 지수」 접힘에 넣어 뒀는데, 접힌 것은 사실상 아무도 펼치지 않아
           홈이 실제로 보여주는 지수는 다섯이었다. 그래서 그 접힘 섹션은 없앴다.
+          맨 위에 둔다(10-11 사용자 요청) — 비로그인 소개 블록보다도 위.
         */}
         <IndexTickerStrip seed={indices} />
+        {showcase && <HomeGuestShowcase data={showcase} />}
 
         <DashboardOverview scoreSeed={scoreTop} />
       </PageScrollShell>

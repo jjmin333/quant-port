@@ -1,7 +1,7 @@
 # Agent State
 
 > 현재 상태만 담는다. **150줄 이하, 매 세션 덮어쓴다(앞에 쌓지 않는다).** 이력은 `docs/archive/sessions.md`, 원칙은 `docs/PRINCIPLES.md`, 결정·함정은 메모리.
-> 갱신: 2026-10-11 저녁 (로그 점검: Toss 400/404·DART 점검·EDGAR 쿨다운 · Toss 스펙 감시 워크플로)
+> 갱신: 2026-10-11 밤 (홈 비로그인 블록 축소·지수 띠 맨 위)
 
 ## NOW
 - **코드는 GitHub에 있다** — `jjmin333/quant-port` public, `master`. 10-10에 09-15 이후 미커밋 전부를 3개 커밋으로 push(비밀값 점검 끝: `be/.env`·`be/secrets/`·워치독 설정은 git 밖). 이후 작업도 커밋·push 한다. 클라우드 세션 규칙은 `AGENTS.md` 「Cloud sessions」(배포는 PC 세션만).
@@ -11,6 +11,7 @@
 - 종목 서버 본문(접힌 요약 바)에 AI 요약 문단·다섯 축·스타일 이름표·업종 순위·비교 링크 추가. 홈 title/설명/OG가 점수 포지셔닝 문구.
 - worker-asset 예약 7→3: `re_trades`·`onbid`·`asset_scores`·`asset_ai` 중지(예약 주석 + 감시표 manual + catch-up 허용 목록 제외 — 셋 다 해야 워치독이 되살리지 않는다). 금융상품·R-ONE·ECOS는 돈다. 되살리는 법은 `be/internal/workers/asset/asset.go` 주석.
 - KRX 휴장일 목록 보정(`calendar/holidays_krx.json` +12일: 2025·2026 근로자의 날·선거일·한글날, 2026-08-17, 2027 대체휴일·부처님오신날). 전에는 10-09를 거래일로 보고 전 종목 종가 재수집(4,278)을 반복했다.
+- **홈 비로그인 블록 축소(10-11)**: 대표 종목 카드 6장·오늘 바뀐 종목·다가오는 실적·소개 카드 3장 제거, 히어로(질문·검색·종목 칩·대표 레이더)만 남김. 지수 흐름 띠(`IndexTickerStrip`)를 홈 맨 위로. 서버 선반입도 대표 점수 하나만(변화·실적·백테스트 요청 제거).
 - 화면 문구: 90일 시나리오 폭 ≥60%면 접음 · 애널리스트 카드 「증권사 의견, 권유 아님」 · 브리핑 금리 칩 bp.
 
 - **Toss 스펙 감시**: `.github/workflows/toss-spec-watch.yml`이 매일 09:00 KST 공식 openapi.json·asyncapi.json을 `be/docs/toss-*.json` 기준본과 비교해 다르면 GitHub 이슈를 연다(판마다 한 번). 처리 = 기준본 갱신·영향 검토·커밋. 기준본 1.2.24(REST)·1.2.2(WS).
