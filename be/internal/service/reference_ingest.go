@@ -306,8 +306,14 @@ func (s *ReferenceIngestService) ingestOverseasFinancials(ctx context.Context, s
 	s.edgar.pace(ctx)
 	snaps, err := s.edgar.FetchQuarterlySnapshots(ctx, symbol, financialsYears*4+1)
 	if err != nil {
+		/*
+			「분기 없음」·「facts 없음」도 not_found다 — 매출 태그가 없는 은행·매출 없는 바이오·
+			펀드라 내일도 같은 답이다. error로 두면 30일 쿨다운이 안 걸려 매일 다시 묻고 로테이션
+			600칸을 차지했다(2026-10-11: 한 번도 성공 못 한 1,393종목, 10-10 회차 실패 347).
+		*/
 		status := model.SyncError
-		if strings.Contains(err.Error(), "cik not found") {
+		if msg := err.Error(); strings.Contains(msg, "cik not found") ||
+			strings.Contains(msg, "no quarterly periods found") || strings.Contains(msg, "company facts not found") {
 			status = model.SyncNotFound
 		}
 		stats.record(ctx, s.sync, repository.SyncOutcome{

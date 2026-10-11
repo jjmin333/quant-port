@@ -43,8 +43,8 @@ func TestResolveDueAtSessionClose(t *testing.T) {
 func TestResolveDueAtNextSessionSkipsWeekend(t *testing.T) {
 	fridayMorning := time.Date(2026, 8, 14, 1, 0, 0, 0, time.UTC) // 10:00 KST Fri
 	got := resolveDueAt(model.HorizonNextSessionClose, model.AssetDomestic, fridayMorning, "")
-	if want := "2026-08-17 15:30"; seoulClock(t, got) != want {
-		t.Fatalf("next session close = %s, want %s (Monday)", seoulClock(t, got), want)
+	if want := "2026-08-18 15:30"; seoulClock(t, got) != want { // 08-17 = 광복절 대체공휴일
+		t.Fatalf("next session close = %s, want %s (Tuesday — 08-17 대체공휴일)", seoulClock(t, got), want)
 	}
 }
 
@@ -72,7 +72,7 @@ func TestResolveDueAtRollsOffNonTradingDay(t *testing.T) {
 	// +1 week from Thu 2026-08-08 is Sat 2026-08-15.
 	at := time.Date(2026, 8, 8, 1, 0, 0, 0, time.UTC)
 	got := resolveDueAt(model.Horizon1W, model.AssetDomestic, at, "")
-	if want := "2026-08-17 15:30"; seoulClock(t, got) != want {
+	if want := "2026-08-18 15:30"; seoulClock(t, got) != want { // 08-17 = 광복절 대체공휴일
 		t.Fatalf("1W landing on a Saturday = %s, want %s", seoulClock(t, got), want)
 	}
 }

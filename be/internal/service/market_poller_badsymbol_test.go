@@ -157,3 +157,33 @@ func TestDropQuarantinedSymbols_doesNotMutateInput(t *testing.T) {
 		}
 	}
 }
+
+// 404 stock-not-found도 400처럼 격리한다 — 전에는 그 묶음이 통째로 실패로 넘어갔다.
+func TestRefreshPrices_isolatesNotFoundSymbol(t *testing.T) {
+	f := newFakeToss()
+	f.rejectPricesSymbol = "ZZZZ"
+	f.rejectAs404 = true
+	store := &MarketDataStore{toss: newFakeTossClient(t, f.server(t))}
+
+	store.RefreshPrices(context.Background(), []string{"S0001", "S0002", "ZZZZ"})
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.symbol) != 2 {
+		t.Fatalf("가격을 받은 종목 %d개 — ZZZZ만 빠진 2개여야 한다", len(f.symbol))
+	}
+}
+
+// 스펙 밖 심볼(BAC^B·BRK/B)은 상류에 보내지 않는다 — 보내면 400으로 이등분 탐색을 치른다.
+func TestRefreshPrices_skipsCaretSymbols(t *testing.T) {
+	f := newFakeToss()
+	store := &MarketDataStore{toss: newFakeTossClient(t, f.server(t))}
+
+	store.RefreshPrices(context.Background(), []string{"BAC", "BAC^B", "BRK/B"})
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.symbol) != 1 || f.symbol["BAC"] != 1 {
+		t.Fatalf("BAC만 보내야 한다: %v", f.symbol)
+	}
+}

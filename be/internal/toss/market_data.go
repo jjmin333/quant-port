@@ -3,6 +3,7 @@ package toss
 import (
 	"context"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -19,6 +20,11 @@ func (c *Client) GetOrderbook(ctx context.Context, symbol string) (*OrderbookRes
 }
 
 func (c *Client) GetPrices(ctx context.Context, symbols []string) ([]PriceResponse, error) {
+	// 스펙 밖 문자(나스닥 우선주 BAC^B, 클래스주 BRK/B)가 하나라도 있으면 토스가 묶음 전체를 400으로
+	// 거절한다 — 보내지 않는다. 카탈로그에 400개(2026-10-11)가 NORMAL로 있어 요청 경로로 들어온다.
+	if slices.ContainsFunc(symbols, invalidSymbol) {
+		symbols = slices.DeleteFunc(slices.Clone(symbols), invalidSymbol)
+	}
 	if len(symbols) == 0 {
 		return nil, nil
 	}
@@ -28,6 +34,13 @@ func (c *Client) GetPrices(ctx context.Context, symbols []string) ([]PriceRespon
 		return nil, err
 	}
 	return out.Result, nil
+}
+
+// invalidSymbol — 스펙의 symbols 패턴(영문·숫자·'.'·'-')을 벗어난 심볼.
+func invalidSymbol(s string) bool {
+	return s == "" || strings.ContainsFunc(s, func(r rune) bool {
+		return !(r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '.' || r == '-')
+	})
 }
 
 func (c *Client) GetPrice(ctx context.Context, symbol string) (*PriceResponse, error) {

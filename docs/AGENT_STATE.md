@@ -1,7 +1,7 @@
 # Agent State
 
 > 현재 상태만 담는다. **150줄 이하, 매 세션 덮어쓴다(앞에 쌓지 않는다).** 이력은 `docs/archive/sessions.md`, 원칙은 `docs/PRINCIPLES.md`, 결정·함정은 메모리.
-> 갱신: 2026-10-10 저녁 (커밋·푸시 · 사업화 2차 검토 반영 · 메뉴 12→7 · KRX 휴장일 보정)
+> 갱신: 2026-10-11 저녁 (로그 점검: Toss 400/404·DART 점검·EDGAR 쿨다운 · Toss 스펙 감시 워크플로)
 
 ## NOW
 - **코드는 GitHub에 있다** — `jjmin333/quant-port` public, `master`. 10-10에 09-15 이후 미커밋 전부를 3개 커밋으로 push(비밀값 점검 끝: `be/.env`·`be/secrets/`·워치독 설정은 git 밖). 이후 작업도 커밋·push 한다. 클라우드 세션 규칙은 `AGENTS.md` 「Cloud sessions」(배포는 PC 세션만).
@@ -12,6 +12,9 @@
 - worker-asset 예약 7→3: `re_trades`·`onbid`·`asset_scores`·`asset_ai` 중지(예약 주석 + 감시표 manual + catch-up 허용 목록 제외 — 셋 다 해야 워치독이 되살리지 않는다). 금융상품·R-ONE·ECOS는 돈다. 되살리는 법은 `be/internal/workers/asset/asset.go` 주석.
 - KRX 휴장일 목록 보정(`calendar/holidays_krx.json` +12일: 2025·2026 근로자의 날·선거일·한글날, 2026-08-17, 2027 대체휴일·부처님오신날). 전에는 10-09를 거래일로 보고 전 종목 종가 재수집(4,278)을 반복했다.
 - 화면 문구: 90일 시나리오 폭 ≥60%면 접음 · 애널리스트 카드 「증권사 의견, 권유 아님」 · 브리핑 금리 칩 bp.
+
+- **Toss 스펙 감시**: `.github/workflows/toss-spec-watch.yml`이 매일 09:00 KST 공식 openapi.json·asyncapi.json을 `be/docs/toss-*.json` 기준본과 비교해 다르면 GitHub 이슈를 연다(판마다 한 번). 처리 = 기준본 갱신·영향 검토·커밋. 기준본 1.2.24(REST)·1.2.2(WS).
+- 10-11 로그 개선: 시세 `GetPrices`가 스펙 밖 심볼(BAC^B·BRK/B, 카탈로그 400개) 제외 · 폴러가 404 stock-not-found도 격리 · DART corpCode 받기 실패 시 옛 목록 유지 + 10분 재시도 간격(점검 800 중 종목마다 재다운로드하던 것) · EDGAR 「분기 없음/facts 없음」은 not_found(30일 쿨다운, 은행·무매출 바이오·펀드 1,393종목).
 
 ## BLOCKERS
 - 없음
@@ -32,6 +35,9 @@
 - 프로젝트 규칙 `AGENTS.md` · 저장·캐시·LLM·목록 원칙 `docs/PRINCIPLES.md` · 운영 함정은 MEMORY.md 색인
 - 배포 스크립트 출력을 파이프로 받지 말 것(메모리 `deploy_script_pipe_breaks_it`) — 10-10에 한 번 어겼고 nginx는 무사했다
 
+## VERIFY (10-11 저녁 실측)
+- go test ./... 통과(낡은 휴장일 기대값 3건 08-17→08-18 정정) · 배포 api+워커 4(이미지 일치), health 200, panic 0, api 네트워크 1
+
 ## VERIFY (10-10 저녁 실측)
 - go test ./... 전부 통과(calendar 휴장일 시험 추가) · vitest 510 · tsc 통과 · 손댄 파일 eslint 신규 0(남은 set-state-in-effect 3건은 기존)
 - 배포: api·fe·워커 4(= api 이미지), health 200, panic 0, api 네트워크 1, worker-asset 「3 jobs」
@@ -39,6 +45,9 @@
 - 브라우저: 사이드바 7칸, 탭 줄(종목 찾기·실적) 데스크톱·375px 가로 넘침 0, /analysis 분할 화면 세로 넘침 0
 
 ## NEXT
+- 10-12 09:00 이후: Actions 「Toss API spec watch」 첫 cron 실행 성공 확인(이슈 없음이 정상) · 10-12 09:00 financials_overseas 실패 수가 161에서 크게 줄었는지 · 10-12 20:00 insider_domestic·22:00 financials_domestic 정상(10-09·10은 DART 점검 800으로 전 종목 실패)
+- Toss 새 sectors API 5종(1.2.24) — 지금 DART/SEC로 하는 업종 분류를 대체할지 검토(사용자 결정)
+- 홈 `/` React #418(하이드레이션 텍스트 불일치) 하루 ~9건 — 일부는 가짜 UA 봇, 시간 의존 문구 의심
 0. 10-11 아침: 점수 로그 `score: domestic TTM on N symbols` · 005930 PER이 39.8에서 내려왔는지 · 「오늘의 변화」에 방식 변경 급변이 안 섞였는지 · 점수 카드 「N개 중 M위」 · 요약 배치 뒤 「PER 상위 N%」 문구가 사라졌는지
 1. 10-12(월) 장 마감 뒤: 국내 종가 자동 수집이 정상(재수집 반복 없음)인지 worker-market 로그
 2. 국내 서프라이즈 「개별 기준」 행 원인 — FnGuide 잠정실적에 연결 행이 없는 종목인지, 예상치가 개별/연결 어느 쪽인지 확인 후 BE에서 거를지 결정

@@ -847,7 +847,8 @@ func (s *MarketDataStore) fetchPricesIsolatingBad(ctx context.Context, chunk []s
 	if err == nil {
 		return prices, nil
 	}
-	if !toss.IsInvalidRequestError(err) {
+	// 404 stock-not-found도 400과 같다 — 상대가 모르는 종목은 기다려도 안 생긴다.
+	if !toss.IsInvalidRequestError(err) && !toss.IsStockNotFound(err) {
 		return nil, err
 	}
 	if len(chunk) == 1 {
