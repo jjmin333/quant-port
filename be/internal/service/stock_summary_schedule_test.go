@@ -152,7 +152,7 @@ func TestNextBatchWindowSkipsHolidays(t *testing.T) {
 		t.Fatal("expected a KR window")
 	}
 	got := krWindow.deadline.In(kstZone)
-	want := time.Date(2026, 8, 17, 18, 30, 0, 0, kstZone)
+	want := time.Date(2026, 8, 18, 18, 30, 0, 0, kstZone) // 08-17 = 광복절 대체공휴일
 	if !got.Equal(want) {
 		t.Fatalf("KR deadline = %s, want %s (weekend + 광복절 skipped)", got, want)
 	}

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -49,6 +50,11 @@ type DartClient struct {
 	mu         sync.RWMutex
 	bySymbol   map[string]string
 	loadedAt   time.Time
+	// corpCodeErr — 직전 corpCode 받기 실패. corpCodeRetryAfter 동안은 다시 받지 않고 이것을 돌려준다.
+	corpCodeErr   error
+	corpCodeErrAt time.Time
+	// corpCodeURL overrides the corpCode.xml endpoint (tests only).
+	corpCodeURL string
 	// financialAPIBase overrides fnlttSinglAcntAll endpoint (tests only).
 	financialAPIBase string
 
@@ -138,8 +144,40 @@ func (d *DartClient) ensureCorpCodes(ctx context.Context) error {
 	if len(d.bySymbol) > 0 && time.Since(d.loadedAt) < 24*time.Hour {
 		return nil
 	}
+	/*
+		**실패를 잠깐 기억한다 (2026-10-11).** 이 함수는 종목마다 불린다. DART 점검(800)
+		중에 목록이 없으면 1,500종목 배치가 corpCode(3.6MB)를 종목마다 다시 받으려 했다 —
+		10-09·10-10 insider·financials가 각 15~40분을 그렇게 쓰고 전 종목 실패로 끝났다.
+	*/
+	if d.corpCodeErr != nil && time.Since(d.corpCodeErrAt) < corpCodeRetryAfter {
+		return d.corpCodeErr
+	}
+	next, err := d.downloadCorpCodes(ctx)
+	if err != nil {
+		if len(d.bySymbol) > 0 {
+			// 옛 목록이 없는 것보다 낫다 — corp_code는 신규 상장 몇 건 말고는 바뀌지 않는다.
+			// 받기만 실패한 것이니 corpCodeRetryAfter 뒤에 다시 받아 본다.
+			log.Printf("dart corpCode: refresh failed, keeping %d codes from %s: %v", len(d.bySymbol), d.loadedAt.Format(time.RFC3339), err)
+			d.loadedAt = time.Now().Add(corpCodeRetryAfter - 24*time.Hour)
+			return nil
+		}
+		d.corpCodeErr, d.corpCodeErrAt = err, time.Now()
+		return err
+	}
+	d.bySymbol = next
+	d.loadedAt = time.Now()
+	d.corpCodeErr = nil
+	return nil
+}
 
+const corpCodeRetryAfter = 10 * time.Minute
+
+// downloadCorpCodes — corpCode.xml을 받아 종목코드 → corp_code 맵을 만든다. 빈 맵은 오류다.
+func (d *DartClient) downloadCorpCodes(ctx context.Context) (map[string]string, error) {
 	u := fmt.Sprintf("https://opendart.fss.or.kr/api/corpCode.xml?crtfc_key=%s", url.QueryEscape(d.cfg.APIKey))
+	if d.corpCodeURL != "" {
+		u = d.corpCodeURL
+	}
 	body, err := d.fetchURL(ctx, u)
 	// **거절도 HTTP 200으로 온다.** 한도가 소진되면 DART는 ZIP 대신
 	// `{"status":"020"}` JSON을 200으로 돌려준다 — 전송 계층은 성공이라
@@ -160,7 +198,7 @@ func (d *DartClient) ensureCorpCodes(ctx context.Context) error {
 		if cached, cacheErr := loadDartCorpCodeCache(); cacheErr == nil {
 			body = cached
 		} else {
-			return err
+			return nil, err
 		}
 	}
 
@@ -168,13 +206,13 @@ func (d *DartClient) ensureCorpCodes(ctx context.Context) error {
 	if len(body) > 2 && body[0] == 'P' && body[1] == 'K' {
 		xmlBody, err = unzipFirstFile(body)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	var doc corpCodeXML
 	if err := xml.Unmarshal(xmlBody, &doc); err != nil {
-		return err
+		return nil, err
 	}
 
 	next := map[string]string{}
@@ -188,11 +226,9 @@ func (d *DartClient) ensureCorpCodes(ctx context.Context) error {
 	// 빈 맵을 설치하지 않는다. 한 번 설치되면 24시간 캐시로 굳어 그 사이 모든
 	// 종목이 「corp_code not found」가 된다 — 원인과 한참 떨어진 곳에서 터진다.
 	if len(next) == 0 {
-		return fmt.Errorf("dart corpCode: 목록이 비어 있다 (%d바이트 응답)", len(xmlBody))
+		return nil, fmt.Errorf("dart corpCode: 목록이 비어 있다 (%d바이트 응답)", len(xmlBody))
 	}
-	d.bySymbol = next
-	d.loadedAt = time.Now()
-	return nil
+	return next, nil
 }
 
 func (d *DartClient) fetchDisclosureList(ctx context.Context, corpCode, bgn, end string) ([]string, error) {

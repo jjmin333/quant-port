@@ -1,0 +1,58 @@
+name: Toss API spec watch
+
+# 하루 한 번 토스 공식 스펙(REST·웹소켓)을 받아 be/docs의 기준본과 비교한다.
+# 다르면 이슈를 하나 연다(같은 판이면 다시 열지 않는다). 기준본을 갱신해 커밋하면 조용해진다.
+on:
+  schedule:
+    - cron: '0 0 * * *' # 09:00 KST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: openapi
+            url: https://openapi.tossinvest.com/openapi-docs/latest/openapi.json
+            baseline: be/docs/toss-openapi.json
+          - name: asyncapi
+            url: https://openapi.tossinvest.com/openapi-docs/latest/asyncapi.json
+            baseline: be/docs/toss-asyncapi.json
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Fetch and diff
+        id: diff
+        run: |
+          curl -fsSL --retry 3 "${{ matrix.url }}" -o /tmp/live.json
+          node .github/scripts/toss-spec-diff.mjs "${{ matrix.baseline }}" /tmp/live.json > /tmp/diff.md
+          echo "version=$(node -p "require('/tmp/live.json').info.version")" >> "$GITHUB_OUTPUT"
+          [ -s /tmp/diff.md ] && echo "changed=true" >> "$GITHUB_OUTPUT" || echo "변경 없음"
+
+      - name: Open issue
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Toss ${{ matrix.name }} 스펙 변경: v${{ steps.diff.outputs.version }}"
+          if gh issue list --state all --limit 100 --json title -q '.[].title' | grep -qxF "$title"; then
+            echo "이미 알린 판: $title"; exit 0
+          fi
+          {
+            echo "공식 스펙이 저장소 기준본(\`${{ matrix.baseline }}\`)과 다릅니다."
+            echo
+            cat /tmp/diff.md
+            echo
+            echo "갱신: \`curl -fsSL ${{ matrix.url }} -o ${{ matrix.baseline }}\` 후 우리가 쓰는 엔드포인트 영향 검토 → 커밋."
+          } > /tmp/body.md
+          gh issue create --title "$title" --body-file /tmp/body.md

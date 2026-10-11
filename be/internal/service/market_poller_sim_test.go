@@ -48,6 +48,8 @@ type fakeToss struct {
 	// 500(failPricesSymbol)과 갈라 두는 이유: 400은 재시도로 낫지 않으므로
 	// 호출부가 원인 심볼을 골라내는 다른 경로를 타야 한다.
 	rejectPricesSymbol string
+	// rejectAs404 — 거절을 400 대신 404 stock-not-found로 준다(2026-10-11 실측).
+	rejectAs404 bool
 	pricesSeen       int
 }
 
@@ -111,6 +113,13 @@ func (f *fakeToss) server(t *testing.T) *httptest.Server {
 
 		if shouldReject {
 			// 상류가 **요청 자체를 거절**한다 — 묶음에 든 심볼 하나 때문에 전부 400.
+			if f.rejectAs404 {
+				w.WriteHeader(http.StatusNotFound)
+				_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{
+					"code": "stock-not-found", "message": "종목을 찾을 수 없습니다.",
+				}})
+				return
+			}
 			w.WriteHeader(http.StatusBadRequest)
 			_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{
 				"code": "invalid-request", "message": "요청 필드가 올바르지 않습니다.",
