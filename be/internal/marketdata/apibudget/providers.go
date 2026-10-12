@@ -65,8 +65,6 @@ const (
 		(키 버킷은 llm.Client가, 기능 버킷은 그 기능의 배치가 본다).
 	*/
 	ProviderLLMFeatEarnings Provider = "llm_feat_earnings"
-	// ProviderLLMFeatResearch — 리포트 AI 검토 노트(2026-09-27 결정 C ④).
-	ProviderLLMFeatResearch Provider = "llm_feat_research"
 	// ProviderLLMFeatSocial — 종목 커뮤니티 탭의 Reddit AI 요약(2026-09-29).
 	ProviderLLMFeatSocial Provider = "llm_feat_social"
 	// ProviderLLMSub — 부동산·금융상품 AI 전용 키(GEMINI_SUB_API_KEY, 2026-10-01). KR/US 키와 따로 센다.
@@ -428,11 +426,6 @@ var DefaultLimits = map[Provider]Limits{
 	ProviderLLMFeatEarnings: {
 		DailyQuota:   60,
 		TokensPerDay: 120_000,
-	},
-	// 리포트 AI 검토 — 하루 30콜 · 8만 토큰(콜당 ~2.5K: 본문 앞 1,800자 포함). 리포트 게시량(하루 0~10)의 몇 배.
-	ProviderLLMFeatResearch: {
-		DailyQuota:   30,
-		TokensPerDay: 80_000,
 	},
 	// Reddit AI 요약 — 하루 40종목(콜당 ~2.5K: 글 제목·앞부분 10개 포함) + 수동 재실행 여유.
 	ProviderLLMFeatSocial: {

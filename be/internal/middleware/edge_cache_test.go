@@ -92,3 +92,22 @@ func TestEdgeCache_nonGetUntouched(t *testing.T) {
 		t.Fatalf("POST에 캐시 헤더: %q", got)
 	}
 }
+
+// 정책 없는 응답은 no-store, EdgeCache가 정한 public은 바깥에서 덮지 않는다.
+func TestDefaultNoStore(t *testing.T) {
+	plain := httptest.NewRecorder()
+	DefaultNoStore(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{}`))
+	})).ServeHTTP(plain, httptest.NewRequest(http.MethodGet, "/x", nil))
+	if got := plain.Header().Get("Cache-Control"); got != "private, no-store" {
+		t.Fatalf("plain: Cache-Control = %q", got)
+	}
+
+	edged := httptest.NewRecorder()
+	DefaultNoStore(EdgeCache(30*time.Second, 5*time.Minute)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{}`))
+	}))).ServeHTTP(edged, httptest.NewRequest(http.MethodGet, "/x", nil))
+	if got := edged.Header().Get("Cache-Control"); got != "public, max-age=0, s-maxage=30, stale-while-revalidate=300" {
+		t.Fatalf("edge: Cache-Control = %q", got)
+	}
+}

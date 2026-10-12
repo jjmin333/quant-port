@@ -50,8 +50,8 @@ const (
 	BatchEarningsPreviewDomestic BatchJobID = "earnings_preview_domestic"
 	// BatchEarningsPreviewOverseas is the US counterpart.
 	BatchEarningsPreviewOverseas BatchJobID = "earnings_preview_overseas"
-	// BatchResearchReview writes 「AI 검토 노트」 for newly published/edited public
-	// reports (LLM, 기능 버킷 llm_feat_research). 30분마다 자동 + 수동.
+	// BatchResearchReview writes the rule-based 「검토 노트」 for newly published/edited public
+	// reports (LLM 없음, 2026-10-12). 30분마다 자동 + 수동.
 	BatchResearchReview BatchJobID = "research_review"
 	/*
 		BatchIndexNotes writes each tracked index's LLM 해설.

@@ -47,11 +47,3 @@ func TestNextResearchReviewSlot(t *testing.T) {
 		}
 	}
 }
-
-func TestIsDomesticSymbol(t *testing.T) {
-	for s, want := range map[string]bool{"005930": true, "0010S0": true, "NVDA": false, "BRK.B": false} {
-		if got := isDomesticSymbol(s); got != want {
-			t.Errorf("%s: %v", s, got)
-		}
-	}
-}

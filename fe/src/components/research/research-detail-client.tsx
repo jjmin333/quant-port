@@ -464,7 +464,7 @@ export function ResearchDetailClient({
           </Card>
         )}
 
-        {/* AI 검토 노트 — 공개 리포트만, 배치가 저장한 것(2026-09-27 결정 C ④). */}
+        {/* 검토 노트 — 공개 리포트만, 배치가 저장한 것(2026-09-27 결정 C ④). */}
         {!editing && call.visibility === "public" && <ResearchReviewCard callId={call.id} bodyRev={call.bodyRev} />}
 
 

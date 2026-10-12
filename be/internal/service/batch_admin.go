@@ -389,12 +389,12 @@ var batchJobCatalog = []model.BatchJobSpec{
 	},
 	{
 		ID:       model.BatchResearchReview,
-		Category: model.CategoryLLM,
-		Label:    "리포트 AI 검토 노트",
+		Category: model.CategoryDerive,
+		Label:    "리포트 검토 노트",
 		Purpose:  "최근 30일 공개 리포트 중 새로 게시·수정된 것(한 번에 10건)의 주장과 데이터 대조 노트를 만듭니다.",
-		Cost:     model.CostRateLimited,
+		Cost:     model.CostFree,
 		Schedule: "30분마다(:05·:35) 자동 · 수동 실행 가능 (worker-content)",
-		Note:     "기능 버킷 llm_feat_research(하루 30콜·8만 토큰)을 씁니다. 한도가 없으면 규칙 노트로 저장되고, 본문을 고치면 다시 검토합니다.",
+		Note:     "LLM을 쓰지 않습니다(2026-10-12) — 점수 방향·목표가 거리·이후 가격으로 만든 규칙 노트만 저장하고, 본문을 고치면 다시 만듭니다.",
 	},
 	{
 		ID:       model.BatchNewsBriefingDomestic,

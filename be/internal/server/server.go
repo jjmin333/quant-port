@@ -570,8 +570,8 @@ func New(cfg *config.Config) (*Server, error) {
 	earningsPreviewSvc.SetCalendar(earningsCalendarSvc)
 	// 실적 화면 맨 위 AI 요약 (2026-10-09 요청 1) — 위 배치 끝에서, 같은 기능 버킷.
 	earningsPreviewSvc.SetDigest(service.NewEarningsDigestService(earningsCalendarSvc, repository.NewEarningsDigestRepo(mysql.DB()), llmPool, apiBudget))
-	// 리포트 AI 검토 노트 (2026-09-27 결정 C ④) — 30분 배치, 기능 버킷 llm_feat_research.
-	researchReviewSvc := service.NewResearchReviewService(repository.NewResearchReviewRepo(mysql.DB()), llmPool, apiBudget)
+	// 리포트 검토 노트 (2026-09-27 결정 C ④) — 30분 배치. 10-12부터 LLM 없이 규칙 노트만.
+	researchReviewSvc := service.NewResearchReviewService(repository.NewResearchReviewRepo(mysql.DB()))
 	// Reddit 커뮤니티 AI 요약 (2026-09-29) — 04:20 KST 배치, 기능 버킷 llm_feat_social.
 	socialSummarySvc := service.NewSocialSummaryService(repository.NewExternalSignalRepo(mysql.DB()), llmPool, apiBudget)
 

@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles } from "lucide-react";
+import { ListChecks } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { apiRequest } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 /**
- * 「AI 검토 노트」 — 리포트의 주장과 우리 데이터가 맞는지 (2026-09-27 사용자 결정 C ④).
+ * 「검토 노트」 — 리포트의 주장과 우리 데이터가 맞는지 (2026-09-27 사용자 결정 C ④). 10-12부터 LLM 없이 규칙 노트만.
  *
  * 30분 배치가 게시·수정 뒤에 만들어 둔 것을 읽는다(조회 LLM 0). 판정·채점이 아니라
  * **독자가 함께 확인할 곳**을 가리키는 메모다 — 리포트의 성적은 기한이 끝나면 따로 매겨진다.
@@ -53,8 +53,8 @@ export function ResearchReviewCard({ callId, bodyRev }: { callId: number; bodyRe
   return (
     <Card className="space-y-3 p-4 sm:p-5">
       <div className="flex flex-wrap items-center gap-2">
-        <Sparkles className="h-4 w-4 text-[var(--brand)]" />
-        <h2 className="text-section font-semibold text-[var(--text-primary)]">AI 검토 노트</h2>
+        <ListChecks className="h-4 w-4 text-[var(--brand)]" />
+        <h2 className="text-section font-semibold text-[var(--text-primary)]">검토 노트</h2>
         <span className="text-micro text-[var(--text-muted)]">
           {row.source === "llm" ? "AI" : "규칙"} · {row.generatedAt.slice(5, 16).replace("T", " ")}
           {stale && " · 수정 전 본문 기준(곧 다시 검토)"}
