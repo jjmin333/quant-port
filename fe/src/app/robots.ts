@@ -22,8 +22,9 @@ import { SITE_URL } from "@/lib/seo";
 const PUBLIC_API_PREFIXES = [
   "/api/v1/news/",
   "/api/v1/earnings/",
-  // research·community는 뺐다(2026-10-10) — 그 화면이 숨겨져(`lib/hidden-features.ts`)
-  // 크롤러가 렌더링할 페이지가 없는데 API만 긁혀 서버 1대의 몫을 먹었다. 다시 열면 되살린다.
+  // research·community는 10-10에 뺐다가 화면을 다시 열면서(10-12) 되살렸다 — 숨기면 다시 뺄 것.
+  "/api/v1/research/",
+  "/api/v1/community/",
   "/api/v1/stocks/",
   "/api/v1/quotes/",
   "/api/v1/rankings/",
