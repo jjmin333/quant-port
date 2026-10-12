@@ -17,7 +17,7 @@ import type { PriceScenario } from "@/lib/price-scenario-api";
 import type { CommunityPost } from "@/lib/community-types";
 import { QuoteDailyChart } from "@/components/quotes/quote-daily-chart";
 import { StockCommunityCard } from "@/components/community/stock-community-card";
-import { COMMUNITY_FEATURES_HIDDEN } from "@/lib/hidden-features";
+import { useCommunityVisible } from "@/hooks/use-community-visible";
 import type { FundamentalsData } from "@/lib/fundamentals-types";
 import type { ScoreChangeSummary } from "@/lib/score-explain-api";
 import type { StockScoreData } from "@/lib/stock-score-api";
@@ -66,6 +66,7 @@ export function StockOverviewTab({
   scenarioLoading = false,
   communityPosts = null,
 }: StockOverviewTabProps) {
+  const communityVisible = useCommunityVisible();
   /*
     국내 ETF는 점수 자리에 「ETF 점검」을 둔다 (2026-09-24 사용자 결정). 점검이 없으면
     (상장 20거래일 미만 등) 원래 점수 카드로 돌아간다 — 빈 자리를 남기지 않는다.
@@ -149,7 +150,7 @@ export function StockOverviewTab({
       )}
 
       {/* 이 종목 이야기 — 커뮤니티 입구 (2026-09-27 요청 4). */}
-      {!COMMUNITY_FEATURES_HIDDEN && (
+      {communityVisible && (
         <StockCommunityCard symbol={stock.symbol} name={stock.name} posts={communityPosts} />
       )}
 

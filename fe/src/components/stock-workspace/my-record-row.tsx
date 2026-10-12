@@ -10,7 +10,8 @@ import {
   verdictTone,
   type SymbolContext,
 } from "@/lib/symbol-context-api";
-import { COMMUNITY_FEATURES_HIDDEN, PREDICTION_FEATURES_HIDDEN } from "@/lib/hidden-features";
+import { PREDICTION_FEATURES_HIDDEN } from "@/lib/hidden-features";
+import { useCommunityVisible } from "@/hooks/use-community-visible";
 import { cn } from "@/lib/utils";
 
 /**
@@ -46,6 +47,7 @@ export function MyRecordRow({
   context: SymbolContext | null;
   className?: string;
 }) {
+  const communityVisible = useCommunityVisible();
   if (!hasAnyRecord(context) || !context) return null;
 
   const verdict = verdictLabel(context.diagnosisVerdict);
@@ -97,7 +99,7 @@ export function MyRecordRow({
         </Chip>
       ) : null}
 
-      {context.reportCount > 0 && !COMMUNITY_FEATURES_HIDDEN ? (
+      {context.reportCount > 0 && communityVisible ? (
         <Chip href="/reports" tone="on">
           리포트 {context.reportCount}
         </Chip>

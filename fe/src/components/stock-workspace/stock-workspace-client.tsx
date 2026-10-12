@@ -24,7 +24,7 @@ import { MyRecordRow } from "@/components/stock-workspace/my-record-row";
 import { MiniToggle } from "@/components/ui/mini-toggle";
 import { StockRedditPanel } from "@/components/community/stock-reddit-panel";
 import { fetchCommunityPosts } from "@/lib/community-api";
-import { COMMUNITY_FEATURES_HIDDEN } from "@/lib/hidden-features";
+import { useCommunityVisible } from "@/hooks/use-community-visible";
 import { fetchStockSignals, type StockSignals } from "@/lib/stock-signals-api";
 import type { CommunityPost } from "@/lib/community-types";
 import { useSymbolContext } from "@/hooks/use-symbol-context";
@@ -101,11 +101,14 @@ function TabScore({
  * 묻다 실패하면 탭은 보인다(`has: true`) — 실패로 탭이 사라지면 있는 글을 못 본다.
  * 답이 오기 전에는 `has: null`이고 탭을 감춘다: 대부분의 종목은 글이 없어, 떴다 사라지는 쪽이 더 잦다.
  */
-function useStockCommunityPosts(symbol: string): { posts: CommunityPost[] | null; has: boolean | null } {
+function useStockCommunityPosts(
+  symbol: string,
+  enabled: boolean,
+): { posts: CommunityPost[] | null; has: boolean | null } {
   const [state, setState] = useState<{ symbol: string; posts: CommunityPost[]; failed: boolean } | null>(null);
   useEffect(() => {
-    // 커뮤니티 비노출(lib/hidden-features)이면 묻지 않는다 — 탭과 카드가 모두 빠진다.
-    if (COMMUNITY_FEATURES_HIDDEN) return;
+    // 커뮤니티를 볼 수 없으면(관리자 전용, lib/hidden-features) 묻지 않는다 — 탭과 카드가 모두 빠진다.
+    if (!enabled) return;
     let alive = true;
     fetchCommunityPosts({ symbol, limit: 3 })
       .then((p) => alive && setState({ symbol, posts: p.items, failed: false }))
@@ -113,8 +116,8 @@ function useStockCommunityPosts(symbol: string): { posts: CommunityPost[] | null
     return () => {
       alive = false;
     };
-  }, [symbol]);
-  if (state?.symbol !== symbol) return { posts: null, has: null };
+  }, [symbol, enabled]);
+  if (!enabled || state?.symbol !== symbol) return { posts: null, has: null };
   return { posts: state.posts, has: state.failed || state.posts.length > 0 };
 }
 
@@ -175,7 +178,8 @@ export function StockWorkspaceClient({
   className,
   railFrom = "lg",
 }: StockWorkspaceClientProps) {
-  const community = useStockCommunityPosts(symbol);
+  const communityVisible = useCommunityVisible();
+  const community = useStockCommunityPosts(symbol, communityVisible);
   const router = useRouter();
   const searchParams = useSearchParams();
   const exchangeRate = useExchangeRate(true);
@@ -215,14 +219,14 @@ export function StockWorkspaceClient({
   */
 
   const requestedTab = controlledTab ?? (embedded ? embeddedTab : urlTab);
-  // 옛 링크의 ?tab=community는 커뮤니티 비노출 동안 개요로 연다.
+  // ?tab=community는 커뮤니티를 볼 수 없는 사람에게 개요로 연다.
   const effectiveTab: StockWorkspaceTabId =
-    COMMUNITY_FEATURES_HIDDEN && requestedTab === "community" ? "overview" : requestedTab;
+    !communityVisible && requestedTab === "community" ? "overview" : requestedTab;
   const reddit = useStockReddit(symbol, stock ? stockNewsMarket(stock) === "us" : null);
   // 보고 있는 중이면 감추지 않는다 — 링크로 들어온 커뮤니티·레딧 탭이 발밑에서 사라지면 안 된다.
   const tabs = STOCK_WORKSPACE_TABS.filter((t) =>
     t.id === "community"
-      ? !COMMUNITY_FEATURES_HIDDEN && (community.has === true || effectiveTab === "community")
+      ? communityVisible && (community.has === true || effectiveTab === "community")
       : t.id === "reddit"
         ? reddit != null || effectiveTab === "reddit"
         : true,

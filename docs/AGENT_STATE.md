@@ -7,7 +7,7 @@
 - **코드는 GitHub에 있다** — `jjmin333/quant-port` public, `master`. 10-10에 09-15 이후 미커밋 전부를 3개 커밋으로 push(비밀값 점검 끝: `be/.env`·`be/secrets/`·워치독 설정은 git 밖). 이후 작업도 커밋·push 한다. 클라우드 세션 규칙은 `AGENTS.md` 「Cloud sessions」(배포는 PC 세션만).
 - 사업화 단계표는 `docs/BUSINESS_REVIEW.md` §9(+「2차 검토 반영」), 경쟁사는 `docs/COMPETITORS.md`.
 - **메뉴**(10-10 결정 A + 10-12 요청 3, 메모리 `menu_sections_1010`): 실시간 차트 · **AI 점수 순위** · **종목 스크리너** · **오늘의 변화**(내 종목 배지) · 뉴스(국내·해외) · 실적(국내·해외·서프라이즈) + 보유·관심·메모장. 업종·스타일만 메뉴에서 보류(주소·사이트맵 산다). 태블릿 768~1023px에 접힌 아이콘 레일(햄버거는 드로어).
-- **커뮤니티·투자 리포트 복원(10-12)**: `hidden-features.ts` 목록에서 제거 + robots `/api/v1/research|community/` Allow. 부동산·금융상품·목표가 예측은 계속 숨김. 탭 줄 `section-tabs.tsx`는 이제 뉴스·실적만, 14px·36px.
+- **커뮤니티·투자 리포트 = 관리자 전용(10-12)**: BE `communityGate`(RequireAdmin, community·research 36경로) + FE `ADMIN_ONLY_ROUTE_PREFIXES`(메뉴·사이트맵·robots 제외, `AdminOnlyGate`, 종목 화면 입구 `useCommunityVisible`). 공개 전환은 세 곳 + 가상 데이터 삭제. 부동산·금융상품·목표가 예측은 계속 숨김. 탭 줄 `section-tabs.tsx`는 이제 뉴스·실적만, 14px·36px.
 - **뉴스 칩(10-12)**: 국내 칩 전체·주식·부동산·「금리·예금·대출」(필터 값 `finance` → BE `topic IN (rates,deposit,loan)`). 홈 실시간 뉴스 기본 칩 = 주식. 뉴스 Pill은 `buttonVariants` 없이 직접 색(다크 덮어쓰기·그림자 테두리 잘림 수정).
 - 롱테일 SSR 페이지(사이트맵 포함): `/stocks/sector/<kr|us>/<업종>`(22) · `/stocks/style/<slug>`(6, 이름표 `lib/stock-style.ts`) · `/compare/<a>-vs-<b>`(정렬된 쌍 하나, 사이트맵은 업종 1위×2~5위 79개, 종목 페이지가 가까운 순위 셋과 링크) · `/earnings/surprises`(색인 대상만). 점수 일괄은 `fetchIndexableScored`(batch 200씩 5회, 1시간 캐시).
 - 종목 서버 본문(접힌 요약 바)에 AI 요약 문단·다섯 축·스타일 이름표·업종 순위·비교 링크 추가. 홈 title/설명/OG가 점수 포지셔닝 문구.
@@ -53,7 +53,7 @@
 
 ## NEXT
 - 앱 출시·메뉴 이름 복원은 사용자가 진행 안 함(10-12). 앱인토스는 정책 3-5·3-6으로 핵심 기능 입점 불가
-- 커뮤니티·리포트 복원 뒤: 사이트맵에 다시 들어갔는지, 신고 관리 화면 동작, 스팸 글 유입 감시
+- 커뮤니티·리포트 가상 데이터 시드(사용자 요청): `cmd/seed-preview` 미작성 — Claude Code 자동 권한 검사가 삭제·시드 작업을 「대량 삭제」로 막음. 사용자가 권한 허용하면 진행(계정 @quant-port.test, 8/1~, 시세·점수·차트는 그날 기준)
 - 10-12 09:00 이후: Actions 「Toss API spec watch」 첫 cron 실행 성공 확인(이슈 없음이 정상) · 10-12 09:00 financials_overseas 실패 수가 161에서 크게 줄었는지 · 10-12 20:00 insider_domestic·22:00 financials_domestic 정상(10-09·10은 DART 점검 800으로 전 종목 실패)
 - Toss 새 sectors API 5종(1.2.24) — 지금 DART/SEC로 하는 업종 분류를 대체할지 검토(사용자 결정)
 - 홈 `/` React #418(하이드레이션 텍스트 불일치) 하루 ~9건 — 일부는 가짜 UA 봇, 시간 의존 문구 의심

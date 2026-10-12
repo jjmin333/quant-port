@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import { SITE_URL } from "@/lib/seo";
 import { fetchResearchCallsServer } from "@/lib/research-api.server";
 import { fetchCommunitySitemapServer } from "@/lib/community-api.server";
-import { isHiddenRoute } from "@/lib/hidden-features";
+import { isAdminOnlyRoute, isHiddenRoute } from "@/lib/hidden-features";
 import { fetchChangesServer } from "@/components/changes/changes-seo-list";
 import { fetchIndexableStocks } from "@/lib/stock-seo.server";
 import { comparePath, groupBySector, sectorPath, stylePath } from "@/lib/stock-seo";
@@ -136,5 +136,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // 노출을 끈 기능(lib/hidden-features, 2026-10-10)의 주소는 싣지 않는다 — 열면 홈으로 간다.
   return [...staticUrls, ...reportUrls, ...authorUrls, ...communityUrls, ...changeUrls, ...listUrls, ...stockUrls]
-    .filter((entry) => !isHiddenRoute(new URL(entry.url).pathname));
+    .filter((entry) => {
+      const path = new URL(entry.url).pathname;
+      return !isHiddenRoute(path) && !isAdminOnlyRoute(path);
+    });
 }
