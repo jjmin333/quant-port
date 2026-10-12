@@ -4,7 +4,7 @@ import Link from "next/link";
 import { MessagesSquare } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { communityShareHref } from "@/lib/community-share";
-import { COMMUNITY_FEATURES_HIDDEN } from "@/lib/hidden-features";
+import { useCommunityVisible } from "@/hooks/use-community-visible";
 import { leaveModal } from "@/lib/modal-history";
 import type { NewsArticle } from "@/lib/news-types";
 import { cn } from "@/lib/utils";
@@ -23,8 +23,9 @@ export function NewsCommunityShareLink({
   article: Pick<NewsArticle, "id" | "headline" | "headlineKo" | "symbols">;
   onClose: () => void;
 }) {
-  // 커뮤니티 비노출(lib/hidden-features) 동안은 세 셸 모두에서 빠진다.
-  if (COMMUNITY_FEATURES_HIDDEN) return null;
+  // 커뮤니티를 볼 수 없으면(관리자 전용, lib/hidden-features) 세 셸 모두에서 빠진다.
+  const communityVisible = useCommunityVisible();
+  if (!communityVisible) return null;
   return (
     <Link
       href={communityShareHref(article)}

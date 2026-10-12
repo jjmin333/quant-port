@@ -3239,3 +3239,4 @@
 - 2026-10-11: 홈 비로그인 블록에서 대표 카드·변화·실적·소개 카드 제거, 지수 흐름 띠 맨 위 · fe 재빌드(+api·워커 4 이미지 일치), health 200, panic 0
 - 2026-10-12: 홈 뉴스 기본 칩 주식 · 뉴스 칩 금리·예금·대출 하나(BE 필터 finance) · 뉴스 Pill 다크/테두리 잘림 수정 · 종목 찾기 → AI 점수 순위·종목 스크리너 두 칸(업종·스타일·변화 메뉴 보류, 변화 배지 훅 삭제) · 탭 줄 14px/36px · 반응형 14화면×4폭 넘침 0 · 앱 출시 검토(앱인토스 정책상 불가) · fe+api 재빌드, 워커 4 이미지 일치, health 200, panic 0
 - 2026-10-12: 오늘의 변화 별도 메뉴(+내 종목 배지 복원) · 커뮤니티·투자 리포트 복원(hidden-features·robots API Allow) · 태블릿 768~1023 접힌 아이콘 레일 · fe+api 재빌드, 워커 4 이미지 일치, health 200, panic 0
+- 2026-10-12: 커뮤니티·투자 리포트 관리자 전용(BE communityGate 36경로 + FE ADMIN_ONLY_ROUTE_PREFIXES·AdminOnlyGate·useCommunityVisible, 사이트맵·robots 제외) · 가상 데이터 시드는 자동 권한 검사에 막혀 미진행 · fe+api 재빌드, 워커 4 이미지 일치, health 200, panic 0, 익명 API 401

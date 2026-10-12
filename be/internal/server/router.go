@@ -76,6 +76,14 @@ func (s *Server) routes() http.Handler {
 			auth.With(middleware.RequireAuth(s.auth)).Post("/delete", s.authHandler.DeleteAccount)
 		})
 
+
+		/*
+			communityGate — 커뮤니티·투자 리포트를 관리자에게만 연다(2026-10-12 사용자 결정: 가상 데이터로
+			화면을 시험하는 동안 일반 방문자·검색엔진에 닫는다). 공개로 되돌릴 때는 이 줄을 통과 미들웨어로
+			바꾸고 FE lib/hidden-features.ts의 ADMIN_ONLY_ROUTE_PREFIXES를 비운다.
+		*/
+		communityGate := middleware.RequireAdmin(s.users)
+
 		// Public market data (optional auth enriches watchlist/held flags)
 		api.Group(func(public chi.Router) {
 			public.Use(middleware.OptionalAuth(s.auth))
@@ -228,30 +236,30 @@ func (s *Server) routes() http.Handler {
 			// Research calls are readable without an account (the feed is the
 			// public half of the feature); OptionalAuth still identifies the
 			// author so their own private/retracted calls stay visible to them.
-			public.Get("/research/calls", s.research.List)
-			public.Get("/research/calls/{id}", s.research.Get)
-			public.Get("/research/calls/{id}/revisions", s.research.Revisions)
-			public.Get("/research/calls/{id}/comments", s.research.Comments)
+			public.With(communityGate).Get("/research/calls", s.research.List)
+			public.With(communityGate).Get("/research/calls/{id}", s.research.Get)
+			public.With(communityGate).Get("/research/calls/{id}/revisions", s.research.Revisions)
+			public.With(communityGate).Get("/research/calls/{id}/comments", s.research.Comments)
 			// AI 검토 노트 — 배치가 저장한 것만(2026-09-27 결정 C ④).
-			public.Get("/research/calls/{id}/review", s.researchReview.Get)
+			public.With(communityGate).Get("/research/calls/{id}/review", s.researchReview.Get)
 			// Views are recorded by an explicit call, not as a side effect of
 			// the detail fetch — otherwise the counter measures re-renders.
-			public.Post("/research/calls/{id}/view", s.research.RecordView)
-			public.Get("/research/authors/{userId}", s.research.AuthorProfile)
+			public.With(communityGate).Post("/research/calls/{id}/view", s.research.RecordView)
+			public.With(communityGate).Get("/research/authors/{userId}", s.research.AuthorProfile)
 
 			// Uploaded images are served without auth: they are embedded in
 			// public report bodies, so a logged-out reader must be able to
 			// load them. Keys are content hashes, so the URL is the capability
 			// — nothing is enumerable from it.
 			public.Get("/media/*", s.mediaFiles.Serve)
-			public.Get("/research/symbols/{symbol}/summary", s.research.SymbolSummary)
+			public.With(communityGate).Get("/research/symbols/{symbol}/summary", s.research.SymbolSummary)
 			// 커뮤니티 읽기 — 비로그인도(검색 색인 허용, 2026-09-27 결정). 좋아요 여부·내 글 표시 때문에
 			// 신원을 읽으므로 엣지 캐시는 걸지 않는다(IdentityProbe가 어차피 private로 돌린다).
-			public.Get("/community/posts", s.community.List)
-			public.Get("/community/posts/{id}", s.community.Get)
-			public.Get("/community/posts/{id}/comments", s.community.Comments)
-			public.Post("/community/posts/{id}/view", s.community.RecordView)
-			public.Get("/community/sitemap", s.community.Sitemap)
+			public.With(communityGate).Get("/community/posts", s.community.List)
+			public.With(communityGate).Get("/community/posts/{id}", s.community.Get)
+			public.With(communityGate).Get("/community/posts/{id}/comments", s.community.Comments)
+			public.With(communityGate).Post("/community/posts/{id}/view", s.community.RecordView)
+			public.With(communityGate).Get("/community/sitemap", s.community.Sitemap)
 
 			public.With(edgeLive).Get("/news/domestic", s.news.ListDomestic)
 			public.With(edgeLive).Get("/news/us", s.news.ListUS)
@@ -332,35 +340,35 @@ func (s *Server) routes() http.Handler {
 			// this one endpoint.
 			protected.Post("/media/images", s.mediaFiles.UploadImage)
 			// 커뮤니티 쓰기. 이미지는 저장 전에 다시 굽는다(≤1MB · 평균 100~200KB).
-			protected.Post("/community/images", s.mediaFiles.UploadCommunityImage)
-			protected.Post("/community/posts", s.community.Create)
+			protected.With(communityGate).Post("/community/images", s.mediaFiles.UploadCommunityImage)
+			protected.With(communityGate).Post("/community/posts", s.community.Create)
 			protected.Post("/mentions/preview", s.mentions.Preview)
 			protected.Get("/mentions/assets", s.mentions.SearchAssets)
 			// 작성자 본인 + 관리자가 고치고 지우는 경로에만 관리자 표시를 붙인다(2026-10-09 요청 1).
 			markAdmin := middleware.MarkAdmin(s.users)
-			protected.With(markAdmin).Patch("/community/posts/{id}", s.community.Update)
-			protected.With(markAdmin).Delete("/community/posts/{id}", s.community.Delete)
-			protected.Post("/community/posts/{id}/like", s.community.LikePost)
-			protected.Post("/community/posts/{id}/comments", s.community.AddComment)
-			protected.With(markAdmin).Delete("/community/comments/{commentId}", s.community.DeleteComment)
-			protected.Post("/community/comments/{commentId}/like", s.community.LikeComment)
-			protected.Post("/community/reports", s.community.Report)
+			protected.With(communityGate, markAdmin).Patch("/community/posts/{id}", s.community.Update)
+			protected.With(communityGate, markAdmin).Delete("/community/posts/{id}", s.community.Delete)
+			protected.With(communityGate).Post("/community/posts/{id}/like", s.community.LikePost)
+			protected.With(communityGate).Post("/community/posts/{id}/comments", s.community.AddComment)
+			protected.With(communityGate, markAdmin).Delete("/community/comments/{commentId}", s.community.DeleteComment)
+			protected.With(communityGate).Post("/community/comments/{commentId}/like", s.community.LikeComment)
+			protected.With(communityGate).Post("/community/reports", s.community.Report)
 
 			// 삭제는 완전 삭제다 — 성적에서도 빠진다(2026-10-09 사용자 결정). 철회는 행이 남는다.
-			protected.Post("/research/calls", s.research.Publish)
-			protected.Post("/research/preview", s.research.Preview)
-			protected.Get("/research/mine", s.research.Mine)
-			protected.Get("/research/summary", s.research.Summary)
-			protected.With(markAdmin).Patch("/research/calls/{id}", s.research.Update)
-			protected.With(markAdmin).Delete("/research/calls/{id}", s.research.Delete)
-			protected.Post("/research/calls/{id}/retract", s.research.Retract)
-			protected.Post("/research/calls/{id}/report", s.research.Report)
-			protected.Post("/research/calls/{id}/reactions", s.research.ToggleReaction)
-			protected.Post("/research/calls/{id}/comments", s.research.AddComment)
-			protected.With(markAdmin).Put("/research/comments/{commentId}", s.research.UpdateComment)
-			protected.With(markAdmin).Delete("/research/comments/{commentId}", s.research.DeleteComment)
-			protected.Post("/research/comments/{commentId}/like", s.research.ToggleCommentLike)
-			protected.Post("/research/calls/{id}/ratings", s.research.Rate)
+			protected.With(communityGate).Post("/research/calls", s.research.Publish)
+			protected.With(communityGate).Post("/research/preview", s.research.Preview)
+			protected.With(communityGate).Get("/research/mine", s.research.Mine)
+			protected.With(communityGate).Get("/research/summary", s.research.Summary)
+			protected.With(communityGate, markAdmin).Patch("/research/calls/{id}", s.research.Update)
+			protected.With(communityGate, markAdmin).Delete("/research/calls/{id}", s.research.Delete)
+			protected.With(communityGate).Post("/research/calls/{id}/retract", s.research.Retract)
+			protected.With(communityGate).Post("/research/calls/{id}/report", s.research.Report)
+			protected.With(communityGate).Post("/research/calls/{id}/reactions", s.research.ToggleReaction)
+			protected.With(communityGate).Post("/research/calls/{id}/comments", s.research.AddComment)
+			protected.With(communityGate, markAdmin).Put("/research/comments/{commentId}", s.research.UpdateComment)
+			protected.With(communityGate, markAdmin).Delete("/research/comments/{commentId}", s.research.DeleteComment)
+			protected.With(communityGate).Post("/research/comments/{commentId}/like", s.research.ToggleCommentLike)
+			protected.With(communityGate).Post("/research/calls/{id}/ratings", s.research.Rate)
 
 			protected.Get("/user/holdings", s.userHoldings.List)
 			protected.Put("/user/holdings", s.userHoldings.Replace)

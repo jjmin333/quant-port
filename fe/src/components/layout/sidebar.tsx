@@ -34,7 +34,7 @@ import {
   HandCoins,
 } from "lucide-react";
 import { isAdminNavVisible, isAdminSession } from "@/lib/admin-features";
-import { isHiddenRoute } from "@/lib/hidden-features";
+import { isAdminOnlyRoute, isHiddenRoute } from "@/lib/hidden-features";
 import { navSectionOf } from "@/lib/nav-sections";
 import { useMyChangeSummary } from "@/hooks/use-my-change-summary";
 import { fetchAdminBatchHealth } from "@/lib/admin";
@@ -256,7 +256,10 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
           ...group,
           // 노출을 끈 기능(lib/hidden-features)은 관리자에게도 메뉴에서 뺀다.
           items: group.items.filter(
-            (item) => isAdminNavVisible(item.href, session) && !isHiddenRoute(item.href),
+            (item) =>
+              isAdminNavVisible(item.href, session) &&
+              !isHiddenRoute(item.href) &&
+              (!isAdminOnlyRoute(item.href) || isAdminSession(session)),
           ),
         }))
         .filter((group) => group.items.length > 0)

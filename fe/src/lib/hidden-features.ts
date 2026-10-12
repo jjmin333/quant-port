@@ -32,8 +32,19 @@ export function isHiddenRoute(pathname: string): boolean {
 /** 부동산·공매·금융상품(예·적금·대출·금리) — 홈 카드, 헤더 검색, 보유·관심의 자산 칸, 기사 자산 칩. */
 export const ASSET_FEATURES_HIDDEN = isHiddenRoute("/real-estate");
 
-/** 커뮤니티·리포트 — 종목 화면 이야기 카드·탭, 글쓰기·발행 버튼. 10-12에 다시 열어 지금은 false. */
-export const COMMUNITY_FEATURES_HIDDEN = isHiddenRoute("/community");
+/**
+ * 관리자에게만 여는 경로 (2026-10-12 사용자 결정) — 커뮤니티·투자 리포트를 가상 데이터로 채워
+ * 화면을 시험하는 동안 일반 방문자·검색엔진에는 닫는다. 진짜 차단은 BE(`router.go` communityGate)이고,
+ * FE는 메뉴·사이트맵·robots에서 빼고 비관리자를 홈으로 돌려보낸다(`AdminOnlyGate`).
+ * 공개로 되돌릴 때는 이 목록을 비우고 BE의 communityGate를 걷는다.
+ */
+export const ADMIN_ONLY_ROUTE_PREFIXES = ["/community", "/reports"] as const;
+
+export function isAdminOnlyRoute(pathname: string): boolean {
+  return ADMIN_ONLY_ROUTE_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
 
 /** 목표가 예측(스탬프·목표가) — 종목 화면 버튼, 보유 화면 목표가 카드, 내 기록 줄. */
 export const PREDICTION_FEATURES_HIDDEN = isHiddenRoute("/predictions");
