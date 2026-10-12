@@ -190,11 +190,6 @@ var catalog = map[Provider]CatalogEntry{
 		Label:   "LLM 기능 · 실적 관전 포인트",
 		Purpose: "향후 7일 실적 발표 종목의 「볼 것」 요약(매일 07:10 배치). 키 버킷과 별개로 이 기능에 떼어 준 몫이라, 다 쓰면 이 기능만 규칙 문장으로 떨어진다.",
 	},
-	ProviderLLMFeatResearch: {
-		Provider: ProviderLLMFeatResearch, Category: CategoryLLM,
-		Label:   "LLM 기능 · 리포트 AI 검토",
-		Purpose: "공개 리포트의 주장과 데이터 대조 노트(30분마다 새 게시·수정분만). 다 쓰면 이 기능만 규칙 노트로 떨어진다.",
-	},
 	ProviderLLMSub: {
 		Provider: ProviderLLMSub, Category: CategoryLLM,
 		Label:   "LLM (자산 전용 키)",

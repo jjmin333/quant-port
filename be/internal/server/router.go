@@ -58,6 +58,8 @@ func (s *Server) routes() http.Handler {
 	}, s.bgDone)
 
 	r.Route("/api/v1", func(api chi.Router) {
+		// 캐시 정책을 정하지 않은 응답은 엣지·브라우저에 남기지 않는다(middleware/edge_cache.go DefaultNoStore).
+		api.Use(middleware.DefaultNoStore)
 		api.Route("/auth", func(auth chi.Router) {
 			// 인증 경로는 로그인 전이라 언제나 IP 기준이다. 무차별 대입에
 			// 대한 완전한 방어는 아니지만(계정별 잠금은 별도), 초당 수십 회

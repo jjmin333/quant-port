@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/enact/quant-port/be/internal/llm"
-	"github.com/enact/quant-port/be/internal/marketdata/apibudget"
 	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/repository"
 )
@@ -18,8 +17,11 @@ import (
 투자 리포트 「AI 검토 노트」 (2026-09-27 사용자 결정 C ④).
 
 공개 리포트가 게시되거나 본문이 고쳐지면 다음 회차(30분 간격)에 한 번 만든다. 리포트 하나에
-노트 하나 — 조회 때 만들지 않는다(llm_spend_rule). 기능 버킷 `llm_feat_research`(하루 30콜 ·
-8만 토큰)가 떨어지면 규칙 노트(점수 방향·목표가 거리·이후 가격)로 채운다.
+노트 하나 — 조회 때 만들지 않는다.
+
+**LLM을 쓰지 않는다** (2026-10-12 사용자 결정). 노트는 규칙 노트(점수 방향·목표가 거리·이후 가격)뿐이다.
+예전에는 기능 버킷 `llm_feat_research`로 모델을 부르고 한도가 떨어질 때만 규칙 노트였다. 그때 저장된
+`source = 'llm'` 행은 그대로 남고, 본문을 고치면 규칙 노트로 다시 만들어진다.
 
 지키는 선: 판정·채점하지 않는다(리포트의 성적은 기한이 끝나면 따로 매겨진다), 작성자를
 줄 세우지 않는다(리포트 방침 2026-08-10), 링크 공개·비공개 리포트는 모델에 보내지 않는다.
@@ -32,16 +34,14 @@ const (
 )
 
 type ResearchReviewService struct {
-	repo   *repository.ResearchReviewRepo
-	llm    *llm.Pool
-	budget *apibudget.Manager
-	runs   *repository.BatchJobRunRepo
-	now    func() time.Time
-	sleep  func(context.Context, time.Duration) bool
+	repo  *repository.ResearchReviewRepo
+	runs  *repository.BatchJobRunRepo
+	now   func() time.Time
+	sleep func(context.Context, time.Duration) bool
 }
 
-func NewResearchReviewService(repo *repository.ResearchReviewRepo, pool *llm.Pool, budget *apibudget.Manager) *ResearchReviewService {
-	return &ResearchReviewService{repo: repo, llm: pool, budget: budget, now: time.Now, sleep: sleepCtx}
+func NewResearchReviewService(repo *repository.ResearchReviewRepo) *ResearchReviewService {
+	return &ResearchReviewService{repo: repo, now: time.Now, sleep: sleepCtx}
 }
 
 func (s *ResearchReviewService) SetBatchRuns(r *repository.BatchJobRunRepo) { s.runs = r }
@@ -57,9 +57,7 @@ func (s *ResearchReviewService) RunBatchNow(ctx context.Context) (map[string]any
 	if err != nil {
 		return nil, "", err
 	}
-	var nLLM, nRule, nFail int
-	var tokens int64
-	lastCall := time.Time{}
+	var nRule, nFail int
 	for _, p := range pending {
 		if ctx.Err() != nil {
 			break
@@ -70,69 +68,16 @@ func (s *ResearchReviewService) RunBatchNow(ctx context.Context) (map[string]any
 			nFail++
 			continue
 		}
-		factsJSON, _ := json.Marshal(facts)
 		out := RuleResearchReview(facts)
-		source, modelName := "rule", ""
-		var used int64
-
-		// 리포트 종목의 시장 키로 청구한다(국내 리포트는 국내 키).
-		market := "domestic"
-		if !isDomesticSymbol(facts.Symbol) {
-			market = "us"
-		}
-		var client *llm.Client
-		if s.llm != nil {
-			client = s.llm.For(market)
-		}
-		if client != nil && client.Enabled() {
-			if wait := client.Limits().MinInterval - time.Since(lastCall); !lastCall.IsZero() && wait > 0 {
-				if !s.sleep(ctx, wait) {
-					break
-				}
-			}
-			est := client.EstimateResearchReviewTokens(string(factsJSON))
-			if err := s.budget.CheckTokens(ctx, apibudget.ProviderLLMFeatResearch, est); err != nil {
-				log.Printf("research review: feature budget — %v", err)
-			} else {
-				lastCall = time.Now()
-				res, err := client.GenerateResearchReview(ctx, string(factsJSON))
-				if err != nil {
-					log.Printf("research review %d llm: %v", p.CallID, err)
-				} else {
-					s.budget.Record(ctx, apibudget.ProviderLLMFeatResearch)
-					s.budget.RecordTokens(ctx, apibudget.ProviderLLMFeatResearch, res.TotalTokens)
-					if len(res.Checks) >= 2 && res.Summary != "" {
-						out, source, modelName, used = *res, "llm", res.Model, res.TotalTokens
-					}
-				}
-			}
-		}
 		body, _ := json.Marshal(map[string]any{"checks": out.Checks, "summary": out.Summary})
-		if err := s.repo.Upsert(ctx, p.CallID, facts.BodyRev, body, source, modelName, used); err != nil {
+		if err := s.repo.Upsert(ctx, p.CallID, facts.BodyRev, body, "rule", "", 0); err != nil {
 			nFail++
 			continue
 		}
-		tokens += used
-		if source == "llm" {
-			nLLM++
-		} else {
-			nRule++
-		}
+		nRule++
 	}
-	msg := fmt.Sprintf("리포트 %d건 — AI %d · 규칙 %d · 실패 %d (토큰 %d)", len(pending), nLLM, nRule, nFail, tokens)
-	return map[string]any{"pending": len(pending), "llm": nLLM, "rule": nRule, "failed": nFail, "tokens": tokens}, msg, nil
-}
-
-func isDomesticSymbol(sym string) bool {
-	if len(sym) != 6 {
-		return false
-	}
-	for _, r := range sym[:1] {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
+	msg := fmt.Sprintf("리포트 %d건 — 규칙 노트 %d · 실패 %d", len(pending), nRule, nFail)
+	return map[string]any{"pending": len(pending), "rule": nRule, "failed": nFail}, msg, nil
 }
 
 // RuleResearchReview is the no-LLM note — structured data only.

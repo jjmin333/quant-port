@@ -3241,3 +3241,4 @@
 - 2026-10-12: 오늘의 변화 별도 메뉴(+내 종목 배지 복원) · 커뮤니티·투자 리포트 복원(hidden-features·robots API Allow) · 태블릿 768~1023 접힌 아이콘 레일 · fe+api 재빌드, 워커 4 이미지 일치, health 200, panic 0
 - 2026-10-12: 커뮤니티·투자 리포트 관리자 전용(BE communityGate 36경로 + FE ADMIN_ONLY_ROUTE_PREFIXES·AdminOnlyGate·useCommunityVisible, 사이트맵·robots 제외) · 가상 데이터 시드는 자동 권한 검사에 막혀 미진행 · fe+api 재빌드, 워커 4 이미지 일치, health 200, panic 0, 익명 API 401
 - 2026-10-12: ResearchRepo.Create user_id·topic 인자 순서 버그 수정 · cmd/seed-preview(관리자 전용 커뮤니티·리포트 화면 시험용 데이터) · api 재시작, 워커 4 이미지 일치, health 200, panic 0
+- 2026-10-12: 리포트 검토 노트 LLM 제거(규칙 노트만, llm_feat_research 버킷 삭제, 화면 「검토 노트」) · API 기본 Cache-Control private,no-store(DefaultNoStore) — Cloudflare가 헤더 없는 응답을 캐시해 관리자에게 옛 글이 보이던 원인 · fe+api 재빌드, 워커 4 이미지 일치, health 200, panic 0

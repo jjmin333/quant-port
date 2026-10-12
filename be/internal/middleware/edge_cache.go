@@ -100,3 +100,52 @@ func (w *edgeCacheWriter) Flush() {
 
 // Unwrap lets http.ResponseController reach the underlying writer.
 func (w *edgeCacheWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+/*
+DefaultNoStore — 캐시 정책을 정하지 않은 API 응답은 `private, no-store`로 내보낸다 (2026-10-12).
+
+Cloudflare 존의 `/api/v1/` 캐시 규칙이 문서(docs/EDGE_CACHE.md 4번 「헤더 없으면 우회」)와 달리 **헤더 없는
+200을 기본 TTL로 캐시**하고 있었다. 그래서 커뮤니티를 공개했던 동안 익명 응답이 엣지에 남았고, 관리자 전용으로
+닫은 뒤에도 그 사본이 Authorization과 무관하게 누구에게나 나갔다(관리자에게는 지운 옛 글, 비로그인에게는
+막힌 데이터). 엣지 규칙 설정과 상관없이 안전하도록, 공개로 내도 되는 응답은 EdgeCache가 명시적으로 public을
+붙이고 나머지는 전부 여기서 막는다. EdgeCache 안쪽이 먼저 헤더를 정하므로 순서상 그 값을 덮지 않는다.
+*/
+func DefaultNoStore(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(&noStoreWriter{ResponseWriter: w}, r)
+	})
+}
+
+type noStoreWriter struct {
+	http.ResponseWriter
+	decided bool
+}
+
+func (w *noStoreWriter) decide() {
+	if w.decided {
+		return
+	}
+	w.decided = true
+	if w.Header().Get("Cache-Control") == "" {
+		w.Header().Set("Cache-Control", "private, no-store")
+	}
+}
+
+func (w *noStoreWriter) WriteHeader(status int) {
+	w.decide()
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *noStoreWriter) Write(b []byte) (int, error) {
+	w.decide()
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *noStoreWriter) Flush() {
+	w.decide()
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (w *noStoreWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }

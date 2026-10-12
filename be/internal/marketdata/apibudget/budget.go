@@ -444,7 +444,7 @@ func AllProviders() []Provider {
 		ProviderNaverStock, ProviderApeWisdom, ProviderRedditRSS,
 		ProviderNaver, ProviderKakao, ProviderAzureTranslate,
 		ProviderOpenAI, ProviderLLMKR, ProviderLLMUS,
-		ProviderLLMFeatEarnings, ProviderLLMFeatResearch, ProviderLLMFeatSocial, ProviderLLMSub, ProviderLLMFeatAsset,
+		ProviderLLMFeatEarnings, ProviderLLMFeatSocial, ProviderLLMSub, ProviderLLMFeatAsset,
 	}
 }
 
