@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
+  Activity,
   Briefcase,
   Heart,
   Newspaper,
@@ -35,6 +36,7 @@ import {
 import { isAdminNavVisible, isAdminSession } from "@/lib/admin-features";
 import { isHiddenRoute } from "@/lib/hidden-features";
 import { navSectionOf } from "@/lib/nav-sections";
+import { useMyChangeSummary } from "@/hooks/use-my-change-summary";
 import { fetchAdminBatchHealth } from "@/lib/admin";
 import { useAuth } from "@/components/providers/auth-provider";
 import { useShellMode } from "@/components/providers/shell-mode-provider";
@@ -68,12 +70,14 @@ const navGroups = [
      *
      * 2026-10-12 사용자 요청 3 — 「종목 찾기」를 AI 점수 순위·종목 스크리너 두 칸으로 나누고, 업종·스타일·오늘의
      * 변화는 메뉴에서 보류. 「AI 추천 랭킹」으로 되돌리지 않는 이유는 10-10 사업화 검토 D8·S5(「추천」 표현).
+     * 같은 날 사용자 요청으로 「오늘의 변화」만 별도 칸으로 되살렸다(업종·스타일은 계속 보류).
      */
     label: "시장",
     items: [
       { href: "/market", label: "실시간 차트", icon: LineChart, rail: "실시간 차트" },
       { href: "/analysis", label: "AI 점수 순위", icon: Trophy, rail: "AI 점수 순위" },
       { href: "/screener", label: "종목 스크리너", icon: ScanSearch, rail: "스크리너" },
+      { href: "/changes", label: "오늘의 변화", icon: Activity, rail: "오늘의 변화" },
       { href: "/news/domestic", label: "뉴스", icon: Newspaper, rail: "뉴스", section: "news" },
       { href: "/earnings/domestic", label: "실적", icon: CalendarClock, rail: "실적", section: "earnings" },
     ],
@@ -237,6 +241,8 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
   const { session } = useAuth();
   const activeHref = activeNavHref(pathname);
   const batchAlerts = useBatchAlertCount(session);
+  // 오늘 변화가 있는 내 관심·보유 종목 수 (2026-09-23 — 알림은 앱 안 배지부터).
+  const myChanges = useMyChangeSummary()?.symbols ?? 0;
 
   return (
     <nav
@@ -328,6 +334,17 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
                       <span className="hidden group-data-[sidebar-state=open]/sidebar:inline">
                         {item.label}
                       </span>
+                      {item.href === "/changes" && myChanges > 0 && (
+                        <span
+                          aria-label={`오늘 변화가 있는 내 종목 ${myChanges}개`}
+                          className={cn(
+                            "ml-auto shrink-0 rounded-full bg-[var(--brand)] px-1.5 text-[10px] font-semibold leading-[18px] text-white",
+                            "group-data-[sidebar-state=collapsed]/sidebar:ml-0",
+                          )}
+                        >
+                          {myChanges}
+                        </span>
+                      )}
                       {item.href === "/admin/batch" && batchAlerts > 0 && (
                         <span
                           aria-label={`제때 돌지 않은 배치 ${batchAlerts}개`}
@@ -388,15 +405,21 @@ export function Sidebar({ open, onClose }: SidebarProps) {
    * 보이는 네비). hydration이 끝난 뒤 데스크톱이면 드로어 트리를 걷어 중복 nav를 없앤다.
    */
   const showMobileDrawer = !mounted || isCompact;
+  /*
+   * 태블릿(768~1023px)에도 접힌 아이콘 레일을 세운다(2026-10-12 사용자 결정 D) — 전에는 햄버거
+   * 드로어만 있어 메뉴가 화면에서 사라졌다. 이 폭은 여전히 compact 셸이라 햄버거는 드로어를 열고,
+   * 레일은 펼치지 않는다(펼치면 남는 본문 폭이 500px대로 줄어든다).
+   */
+  const railOpen = open && !isCompact;
 
   return (
     <>
       <div
         className={cn(
-          "group/sidebar hidden h-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-300 ease-in-out lg:flex",
-          open ? "w-[var(--sidebar-width)]" : "w-[var(--sidebar-collapsed-width)]",
+          "group/sidebar hidden h-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-300 ease-in-out md:flex",
+          railOpen ? "w-[var(--sidebar-width)]" : "w-[var(--sidebar-collapsed-width)]",
         )}
-        data-sidebar-state={open ? "open" : "collapsed"}
+        data-sidebar-state={railOpen ? "open" : "collapsed"}
       >
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <SidebarNav />

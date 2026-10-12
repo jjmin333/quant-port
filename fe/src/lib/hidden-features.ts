@@ -16,9 +16,7 @@ export const HIDDEN_ROUTE_PREFIXES = [
   "/holdings/assets",
   // 금융상품 분석(예·적금·대출·금리 동향·상품 상세)
   "/finance",
-  // 커뮤니티·투자 리포트
-  "/community",
-  "/reports",
+  // 커뮤니티·투자 리포트는 2026-10-12 사용자 요청으로 다시 열었다.
   // 목표가 예측 = 스탬프 + 목표가
   "/predictions",
   "/stamps",
@@ -34,7 +32,7 @@ export function isHiddenRoute(pathname: string): boolean {
 /** 부동산·공매·금융상품(예·적금·대출·금리) — 홈 카드, 헤더 검색, 보유·관심의 자산 칸, 기사 자산 칩. */
 export const ASSET_FEATURES_HIDDEN = isHiddenRoute("/real-estate");
 
-/** 커뮤니티·리포트 — 종목 화면 이야기 카드·탭, 글쓰기·발행 버튼. */
+/** 커뮤니티·리포트 — 종목 화면 이야기 카드·탭, 글쓰기·발행 버튼. 10-12에 다시 열어 지금은 false. */
 export const COMMUNITY_FEATURES_HIDDEN = isHiddenRoute("/community");
 
 /** 목표가 예측(스탬프·목표가) — 종목 화면 버튼, 보유 화면 목표가 카드, 내 기록 줄. */
