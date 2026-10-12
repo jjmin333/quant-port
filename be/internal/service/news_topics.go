@@ -95,6 +95,11 @@ func classifyNewsTopic(title, summary string) string {
 	return best
 }
 
+// IsNewsTopicFilter — 목록 필터로 받는 값: 기사 topic 하나 또는 묶음(NewsTopicFinance).
+func IsNewsTopicFilter(t string) bool {
+	return t == model.NewsTopicFinance || IsNewsTopic(t)
+}
+
 // IsNewsTopic reports whether t is a known topic (handler validation).
 func IsNewsTopic(t string) bool {
 	for _, x := range model.NewsTopics {

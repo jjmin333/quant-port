@@ -470,8 +470,11 @@ func (r *NewsRepo) List(ctx context.Context, params NewsListParams) ([]NewsArtic
 		args = append(args, sym)
 	}
 	if topic := strings.TrimSpace(params.Topic); topic != "" {
-		query += " AND topic = ?"
-		args = append(args, topic)
+		members := model.NewsTopicFilterMembers(topic)
+		query += " AND topic IN (?" + strings.Repeat(",?", len(members)-1) + ")"
+		for _, m := range members {
+			args = append(args, m)
+		}
 	}
 	if q := strings.TrimSpace(params.Query); q != "" {
 		like := "%" + q + "%"

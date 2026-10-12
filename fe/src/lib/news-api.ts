@@ -4,6 +4,7 @@ import type {
   NewsAssetTag,
   NewsListFilter,
   NewsTopic,
+  NewsTopicFilter,
   NewsPreviewMode,
   NewsReaderContent,
   NewsSourceId,
@@ -222,7 +223,7 @@ export async function fetchDashboardNews(
    */
   full = 8,
   /** 국내 카테고리 칩(2026-10-09). 해외는 무시. */
-  topic: NewsTopic | "" = "",
+  topic: NewsTopicFilter = "",
 ): Promise<DashboardNewsResult> {
   const path = `/api/v1/news/${market}/dashboard?full=${full}${market === "domestic" && topic ? `&topic=${topic}` : ""}`;
   // 서버도 이 목록을 15초 캐시한다. 여기 캐시는 그 위에서 **왕복 자체를** 없앤다 —
@@ -242,31 +243,6 @@ export async function fetchDashboardNews(
       fullCount: body.meta?.fullCount ?? body.data?.length ?? 0,
     };
   });
-}
-
-function articleMatchesStock(
-  article: NewsArticle,
-  symbol: string,
-  name: string,
-): boolean {
-  const sym = symbol.trim().toUpperCase();
-  if (!sym) return false;
-
-  if (article.symbols?.some((s) => s.trim().toUpperCase() === sym)) {
-    return true;
-  }
-
-  const haystack = `${article.headline} ${article.summary ?? ""}`.toLowerCase();
-  if (haystack.includes(sym.toLowerCase())) {
-    return true;
-  }
-
-  const trimmedName = name.trim();
-  if (trimmedName.length >= 2 && haystack.includes(trimmedName.toLowerCase())) {
-    return true;
-  }
-
-  return false;
 }
 
 /** Stock detail — domestic symbol match or US ticker/name keyword match in headlines. */

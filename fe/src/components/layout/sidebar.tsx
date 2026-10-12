@@ -16,6 +16,7 @@ import {
   Tags,
   Gauge,
   Sparkles,
+  Trophy,
   Calculator,
   ListChecks,
   LineChart,
@@ -35,7 +36,6 @@ import { isAdminNavVisible, isAdminSession } from "@/lib/admin-features";
 import { isHiddenRoute } from "@/lib/hidden-features";
 import { navSectionOf } from "@/lib/nav-sections";
 import { fetchAdminBatchHealth } from "@/lib/admin";
-import { useMyChangeSummary } from "@/hooks/use-my-change-summary";
 import { useAuth } from "@/components/providers/auth-provider";
 import { useShellMode } from "@/components/providers/shell-mode-provider";
 import { cn } from "@/lib/utils";
@@ -63,14 +63,17 @@ import { cn } from "@/lib/utils";
 const navGroups = [
   {
     /*
-     * 2026-10-10 사용자 결정 A — 12칸 → 7칸. 「종목 찾기」는 AI 점수 순위·스크리너·종목 모음·오늘의 변화,
-     * 「뉴스」·「실적」은 국내/해외(+서프라이즈)를 한 칸에 묶고, 화면 위 탭 줄(`SectionTabs`)이 그 안을
-     * 오간다. 주소는 그대로다(각자 색인됨). 묶음 정의는 `lib/nav-sections.ts` 한 곳.
+     * 2026-10-10 사용자 결정 A — 12칸 → 7칸. 「뉴스」·「실적」은 국내/해외(+서프라이즈)를 한 칸에 묶고,
+     * 화면 위 탭 줄(`SectionTabs`)이 그 안을 오간다. 주소는 그대로다(각자 색인됨). 묶음 정의는 `lib/nav-sections.ts` 한 곳.
+     *
+     * 2026-10-12 사용자 요청 3 — 「종목 찾기」를 AI 점수 순위·종목 스크리너 두 칸으로 나누고, 업종·스타일·오늘의
+     * 변화는 메뉴에서 보류. 「AI 추천 랭킹」으로 되돌리지 않는 이유는 10-10 사업화 검토 D8·S5(「추천」 표현).
      */
     label: "시장",
     items: [
       { href: "/market", label: "실시간 차트", icon: LineChart, rail: "실시간 차트" },
-      { href: "/analysis", label: "종목 찾기", icon: ScanSearch, rail: "종목 찾기", section: "find" },
+      { href: "/analysis", label: "AI 점수 순위", icon: Trophy, rail: "AI 점수 순위" },
+      { href: "/screener", label: "종목 스크리너", icon: ScanSearch, rail: "스크리너" },
       { href: "/news/domestic", label: "뉴스", icon: Newspaper, rail: "뉴스", section: "news" },
       { href: "/earnings/domestic", label: "실적", icon: CalendarClock, rail: "실적", section: "earnings" },
     ],
@@ -161,7 +164,7 @@ const allNavHrefs = navGroups.flatMap((group) => group.items.map((item) => item.
  * longest-match makes the child win and leaves only one item highlighted.
  */
 function activeNavHref(pathname: string): string {
-  // 묶인 화면(종목 찾기·뉴스·실적)은 그 묶음의 사이드바 칸이 켜진다.
+  // 묶인 화면(뉴스·실적)은 그 묶음의 사이드바 칸이 켜진다.
   const sectionId = navSectionOf(pathname)?.section.id;
   if (sectionId) {
     const item = navGroups.flatMap((g) => g.items).find((i) => "section" in i && i.section === sectionId);
@@ -234,8 +237,6 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
   const { session } = useAuth();
   const activeHref = activeNavHref(pathname);
   const batchAlerts = useBatchAlertCount(session);
-  // 오늘 변화가 있는 내 관심·보유 종목 수 (2026-09-23 — 알림은 앱 안 배지부터).
-  const myChanges = useMyChangeSummary()?.symbols ?? 0;
 
   return (
     <nav
@@ -327,18 +328,6 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
                       <span className="hidden group-data-[sidebar-state=open]/sidebar:inline">
                         {item.label}
                       </span>
-                      {/* 「오늘의 변화」가 「종목 찾기」 안으로 들어갔다(2026-10-10) — 배지도 그 칸에. */}
-                      {item.href === "/analysis" && myChanges > 0 && (
-                        <span
-                          aria-label={`오늘 변화가 있는 내 종목 ${myChanges}개`}
-                          className={cn(
-                            "ml-auto shrink-0 rounded-full bg-[var(--brand)] px-1.5 text-[10px] font-semibold leading-[18px] text-white",
-                            "group-data-[sidebar-state=collapsed]/sidebar:ml-0",
-                          )}
-                        >
-                          {myChanges}
-                        </span>
-                      )}
                       {item.href === "/admin/batch" && batchAlerts > 0 && (
                         <span
                           aria-label={`제때 돌지 않은 배치 ${batchAlerts}개`}

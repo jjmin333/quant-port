@@ -44,7 +44,7 @@ type NewsListFilter struct {
 	Sort     string
 	Query    string
 	Symbol   string
-	// Topic — 비우면 전부. NewsTopics 중 하나.
+	// Topic — 비우면 전부. NewsTopics 중 하나 또는 NewsTopicFinance(묶음).
 	Topic string
 	Limit int
 }
@@ -54,3 +54,15 @@ var NewsTopics = []string{"stock", "real_estate", "rates", "deposit", "loan"}
 
 // NewsTopicStock is the default topic of every article that is not one of the asset topics.
 const NewsTopicStock = "stock"
+
+// NewsTopicFinance — 칩 「금리·예금·대출」(2026-10-12 사용자 요청): rates·deposit·loan을 한 필터로 거른다.
+// 기사에 저장되는 topic 값이 아니라 **필터 값**이다(분류·관리자 재분류는 셋을 그대로 쓴다).
+const NewsTopicFinance = "finance"
+
+// NewsTopicFilterMembers — 필터 값 t가 고르는 기사 topic들. 묶음이 아니면 t 하나.
+func NewsTopicFilterMembers(t string) []string {
+	if t == NewsTopicFinance {
+		return []string{"rates", "deposit", "loan"}
+	}
+	return []string{t}
+}
