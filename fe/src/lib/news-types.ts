@@ -69,19 +69,37 @@ export type NewsTopic = "stock" | "real_estate" | "rates" | "deposit" | "loan";
 
 export type NewsAssetTag = { kind: "region" | "sido" | "rate" | "apt" | "product"; key: string; name: string };
 
-/** 국내 뉴스 카테고리 칩(2026-10-09 결정 A — 6칩). `""`은 전체. 해외에는 칩이 없다. */
-export const NEWS_TOPIC_CHIPS: { id: "" | NewsTopic; label: string }[] = [
+/**
+ * 목록 필터 값 — 기사 topic 하나 또는 묶음 `finance`(금리·예적금·대출, 2026-10-12 사용자 요청).
+ * 묶음은 BE가 `topic IN (rates, deposit, loan)`으로 푼다(`model.NewsTopicFilterMembers`).
+ */
+export type NewsTopicFilter = "" | NewsTopic | "finance";
+
+/** 국내 뉴스 카테고리 칩(2026-10-09 결정 A, 10-12에 금리·예적금·대출을 한 칩으로). `""`은 전체. 해외에는 칩이 없다. */
+export const NEWS_TOPIC_CHIPS: { id: NewsTopicFilter; label: string }[] = [
   { id: "", label: "전체" },
   { id: "stock", label: "주식" },
   { id: "real_estate", label: "부동산" },
-  { id: "rates", label: "금리" },
-  { id: "deposit", label: "예·적금" },
-  { id: "loan", label: "대출" },
+  { id: "finance", label: "금리·예금·대출" },
 ];
 
+/** 옛 칩 주소(`?topic=rates` 등)는 묶음 칩으로. 모르는 값은 null. */
+export function parseNewsTopicFilter(t: string | null): NewsTopicFilter | null {
+  if (t === "rates" || t === "deposit" || t === "loan") return "finance";
+  return NEWS_TOPIC_CHIPS.some((c) => c.id === t) ? (t as NewsTopicFilter) : null;
+}
+
+const NEWS_TOPIC_LABELS: Record<NewsTopic, string | null> = {
+  stock: null,
+  real_estate: "부동산",
+  rates: "금리",
+  deposit: "예·적금",
+  loan: "대출",
+};
+
+/** 기사 카드의 주제 배지 — 기사 topic은 셋으로 남아 있어 배지는 그대로 「금리」·「대출」처럼 나뉜다. */
 export function newsTopicLabel(topic?: NewsTopic): string | null {
-  if (!topic || topic === "stock") return null;
-  return NEWS_TOPIC_CHIPS.find((c) => c.id === topic)?.label ?? null;
+  return topic ? NEWS_TOPIC_LABELS[topic] ?? null : null;
 }
 
 export type NewsListFilter = {
@@ -91,7 +109,7 @@ export type NewsListFilter = {
   query?: string;
   symbol?: string;
   /** 국내만. 비우면 전체. */
-  topic?: NewsTopic | "";
+  topic?: NewsTopicFilter;
 };
 
 export type NewsReaderContent = {

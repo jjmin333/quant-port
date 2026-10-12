@@ -101,7 +101,7 @@ func (h *NewsHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 
 	// 홈 카드의 카테고리 칩(국내만, 2026-10-09 요청 4). 해외에는 칩이 없으므로 무시한다.
 	topic := strings.TrimSpace(q.Get("topic"))
-	if topic != "" && !service.IsNewsTopic(topic) {
+	if topic != "" && !service.IsNewsTopicFilter(topic) {
 		response.Error(w, http.StatusBadRequest, "unknown topic: "+topic)
 		return
 	}
@@ -262,7 +262,7 @@ func (h *NewsHandler) ListDomestic(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	// topic — 국내 카테고리 칩(2026-10-09 요청 4). 비우면 전체, 모르는 값은 400(필터가 빠진 결과를 걸린 줄 알지 않게).
 	topic := strings.TrimSpace(q.Get("topic"))
-	if topic != "" && !service.IsNewsTopic(topic) {
+	if topic != "" && !service.IsNewsTopicFilter(topic) {
 		response.Error(w, http.StatusBadRequest, "unknown topic: "+topic)
 		return
 	}

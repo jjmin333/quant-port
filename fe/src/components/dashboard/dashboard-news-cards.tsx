@@ -12,7 +12,7 @@ import { SCREEN_REFRESH_MS } from "@/lib/screen-refresh";
 import { fetchDashboardNews } from "@/lib/news-api";
 import { isArticleBreakingNews } from "@/lib/news-breaking";
 import { allArticleSymbols } from "@/lib/news-derive";
-import type { NewsArticle, NewsMarket, NewsTopic } from "@/lib/news-types";
+import type { NewsArticle, NewsMarket, NewsTopicFilter } from "@/lib/news-types";
 import { NEWS_TOPIC_CHIPS } from "@/lib/news-types";
 import { cn } from "@/lib/utils";
 
@@ -138,8 +138,11 @@ function LatestNewsCardBody({
   className?: string;
 }) {
   const [articles, setArticles] = useState<NewsArticle[] | null>(null);
-  /** 국내 카테고리 칩(2026-10-09 요청 4). 해외 탭에서는 칩을 숨기고 이 값도 쓰지 않는다. */
-  const [topic, setTopic] = useState<NewsTopic | "">("");
+  /**
+   * 국내 카테고리 칩(2026-10-09 요청 4). 해외 탭에서는 칩을 숨기고 이 값도 쓰지 않는다.
+   * 기본은 「주식」(2026-10-12 사용자 요청 1) — 홈은 종목 서비스의 첫 화면이라 부동산·금리 기사가 위를 덮지 않게.
+   */
+  const [topic, setTopic] = useState<NewsTopicFilter>("stock");
   const activeTopic = market === "domestic" ? topic : "";
 
   /** 언마운트 뒤 도착한 응답을 버린다 — 요청을 거는 자리가 첫 적재와 주기 둘이다. */

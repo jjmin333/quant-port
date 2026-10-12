@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1012,7 +1013,7 @@ func (st *NewsStore) filterArticles(ctx context.Context, items []model.NewsArtic
 		if a.Market != market {
 			continue
 		}
-		if t := strings.TrimSpace(filter.Topic); t != "" && articleTopic(a) != t {
+		if t := strings.TrimSpace(filter.Topic); t != "" && !slices.Contains(model.NewsTopicFilterMembers(t), articleTopic(a)) {
 			continue
 		}
 		// 주제 기사(부동산·금리 …)는 종목 관련성 판정 밖이다 — 그 판정이 바로 이 기사들을 막던 문이다.

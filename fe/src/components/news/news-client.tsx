@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Check, RefreshCw, X } from "lucide-react";
-import type { NewsArticle, NewsMarket, NewsSort, NewsSourceId, NewsTopic } from "@/lib/news-types";
-import { NEWS_TOPIC_CHIPS } from "@/lib/news-types";
+import type { NewsArticle, NewsMarket, NewsSort, NewsSourceId, NewsTopicFilter } from "@/lib/news-types";
+import { NEWS_TOPIC_CHIPS, parseNewsTopicFilter } from "@/lib/news-types";
 import { getMockNews } from "@/lib/mock-news";
 import {
   fetchDomesticNews,
@@ -42,7 +42,6 @@ import { cn } from "@/lib/utils";
 import { toUserMessage } from "@/lib/error-message";
 import { useUrlParamState } from "@/hooks/use-url-param-state";
 import { LoadErrorState } from "@/components/common/load-error-state";
-import { buttonVariants } from "@/components/ui/button";
 
 type LiveNewsMarket = Extract<NewsMarket, "domestic" | "us">;
 
@@ -86,10 +85,9 @@ export function NewsClient({ market, initialArticles = [] }: NewsClientProps) {
 
   const [sourceId, setSourceId] = useState<NewsSourceId | "all">("all");
   /** 국내 카테고리(2026-10-09 요청 4). `?topic=`으로 들어오면 그 칩부터(홈 카드에서 「더 보기」). */
-  const [topic, setTopic] = useState<NewsTopic | "">(() => {
-    const t = searchParams.get("topic");
-    return market === "domestic" && NEWS_TOPIC_CHIPS.some((c) => c.id === t) ? (t as NewsTopic) : "";
-  });
+  const [topic, setTopic] = useState<NewsTopicFilter>(() =>
+    market === "domestic" ? parseNewsTopicFilter(searchParams.get("topic")) ?? "" : "",
+  );
   /*
    * 목록을 좁히는 길이 **한 벌**이 됐다.
    *
@@ -697,6 +695,10 @@ export function NewsClient({ market, initialArticles = [] }: NewsClientProps) {
 
 그래서 켜진 쪽은 hover도 같은 색으로 못 박고, 색 하나에만 기대지 않도록 체크
 표시를 함께 그린다 — 색 대비만으로는 옆 pill과의 차이가 작다.
+
+2026-10-12: 다크 모드에서도 같은 일이 났다 — outline의 `dark:bg-input/30`·`dark:border-input`이
+브랜드 칠·테두리를 덮어, 켜진 pill이 어두운 바탕에 1px 그림자 테두리만 남았고 그 그림자는
+가로 스크롤 줄(overflow)에 위아래가 잘렸다. 그래서 `buttonVariants`를 쓰지 않고 색을 직접 둔다.
 */
 function Pill({
   active,
@@ -719,9 +721,10 @@ function Pill({
       disabled={disabled}
       title={title}
       aria-pressed={active}
-      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "rounded-full",
+      className={cn(
+        "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 text-cell font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--brand)]/50",
         active
-          ? "border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_0_0_1px_var(--brand)] hover:border-[var(--brand)] hover:bg-[var(--brand)] hover:text-white"
+          ? "border-[var(--brand)] bg-[var(--brand)] text-white"
           : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:border-[var(--text-muted)] hover:text-[var(--text-primary)]",
         disabled && "cursor-not-allowed opacity-50 hover:border-[var(--border)]",
       )}

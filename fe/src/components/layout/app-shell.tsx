@@ -97,7 +97,7 @@ function AppShellFrame({ children }: { children: React.ReactNode }) {
             {!isWebView && <Sidebar open={sidebarOpen} onClose={closeSidebar} />}
 
             <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-              {/* 묶인 메뉴(종목 찾기·뉴스·실적)의 탭 줄 — 그 밖의 화면에서는 아무것도 그리지 않는다. */}
+              {/* 묶인 메뉴(뉴스·실적)의 탭 줄 — 그 밖의 화면에서는 아무것도 그리지 않는다. */}
               <SectionTabs />
               {children}
             </div>

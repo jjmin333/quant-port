@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/repository"
 )
 
@@ -124,4 +125,25 @@ func TestSidoHeadlineDB(t *testing.T) {
 		t.Fatalf("서울 미리보기 값 없음: %+v", a)
 	}
 	t.Logf("%+v", a)
+}
+
+func TestNewsTopicFinanceFilter(t *testing.T) {
+	if !IsNewsTopicFilter("finance") || !IsNewsTopicFilter("rates") || IsNewsTopicFilter("bogus") {
+		t.Fatal("IsNewsTopicFilter")
+	}
+	// 관리자 재분류(IsNewsTopic)는 묶음 값을 기사 topic으로 받으면 안 된다.
+	if IsNewsTopic("finance") {
+		t.Fatal("finance is a filter, not an article topic")
+	}
+	st := &NewsStore{}
+	items := []model.NewsArticle{
+		{ID: "a", Market: "domestic", Topic: "rates"},
+		{ID: "b", Market: "domestic", Topic: "deposit"},
+		{ID: "c", Market: "domestic", Topic: "loan"},
+		{ID: "d", Market: "domestic", Topic: "real_estate"},
+	}
+	got := st.filterArticles(context.Background(), items, model.NewsListFilter{Market: "domestic", Topic: "finance"})
+	if len(got) != 3 {
+		t.Fatalf("finance filter: got %d, want 3", len(got))
+	}
 }

@@ -1,12 +1,13 @@
 # Agent State
 
 > 현재 상태만 담는다. **150줄 이하, 매 세션 덮어쓴다(앞에 쌓지 않는다).** 이력은 `docs/archive/sessions.md`, 원칙은 `docs/PRINCIPLES.md`, 결정·함정은 메모리.
-> 갱신: 2026-10-11 밤 (홈 비로그인 블록 축소·지수 띠 맨 위)
+> 갱신: 2026-10-12 오후 (요청 7건: 뉴스 칩·메뉴 분리·탭 줄·반응형 점검·앱 검토)
 
 ## NOW
 - **코드는 GitHub에 있다** — `jjmin333/quant-port` public, `master`. 10-10에 09-15 이후 미커밋 전부를 3개 커밋으로 push(비밀값 점검 끝: `be/.env`·`be/secrets/`·워치독 설정은 git 밖). 이후 작업도 커밋·push 한다. 클라우드 세션 규칙은 `AGENTS.md` 「Cloud sessions」(배포는 PC 세션만).
 - 사업화 단계표는 `docs/BUSINESS_REVIEW.md` §9(+「2차 검토 반영」), 경쟁사는 `docs/COMPETITORS.md`.
-- **메뉴 12→7**(사용자 결정 A, 메모리 `menu_sections_1010`): 실시간 차트 · 종목 찾기(AI 점수 순위·조건 검색·업종·스타일·오늘의 변화) · 뉴스(국내·해외) · 실적(국내·해외·서프라이즈) + 보유·관심·메모장. 주소는 그대로, 묶음 정의 `fe/src/lib/nav-sections.ts`, 탭 줄 `components/layout/section-tabs.tsx`(앱 셸 맨 위, 묶음 밖 주소에선 안 그림). 「변화」 배지는 「종목 찾기」 칸으로.
+- **메뉴**(10-10 결정 A + 10-12 요청 3, 메모리 `menu_sections_1010`): 실시간 차트 · **AI 점수 순위** · **종목 스크리너** · 뉴스(국내·해외) · 실적(국내·해외·서프라이즈) + 보유·관심·메모장. 업종·스타일·오늘의 변화는 메뉴에서만 보류(주소·사이트맵 산다). 탭 줄 `section-tabs.tsx`는 이제 뉴스·실적만, 14px·36px.
+- **뉴스 칩(10-12)**: 국내 칩 전체·주식·부동산·「금리·예금·대출」(필터 값 `finance` → BE `topic IN (rates,deposit,loan)`). 홈 실시간 뉴스 기본 칩 = 주식. 뉴스 Pill은 `buttonVariants` 없이 직접 색(다크 덮어쓰기·그림자 테두리 잘림 수정).
 - 롱테일 SSR 페이지(사이트맵 포함): `/stocks/sector/<kr|us>/<업종>`(22) · `/stocks/style/<slug>`(6, 이름표 `lib/stock-style.ts`) · `/compare/<a>-vs-<b>`(정렬된 쌍 하나, 사이트맵은 업종 1위×2~5위 79개, 종목 페이지가 가까운 순위 셋과 링크) · `/earnings/surprises`(색인 대상만). 점수 일괄은 `fetchIndexableScored`(batch 200씩 5회, 1시간 캐시).
 - 종목 서버 본문(접힌 요약 바)에 AI 요약 문단·다섯 축·스타일 이름표·업종 순위·비교 링크 추가. 홈 title/설명/OG가 점수 포지셔닝 문구.
 - worker-asset 예약 7→3: `re_trades`·`onbid`·`asset_scores`·`asset_ai` 중지(예약 주석 + 감시표 manual + catch-up 허용 목록 제외 — 셋 다 해야 워치독이 되살리지 않는다). 금융상품·R-ONE·ECOS는 돈다. 되살리는 법은 `be/internal/workers/asset/asset.go` 주석.
@@ -36,6 +37,10 @@
 - 프로젝트 규칙 `AGENTS.md` · 저장·캐시·LLM·목록 원칙 `docs/PRINCIPLES.md` · 운영 함정은 MEMORY.md 색인
 - 배포 스크립트 출력을 파이프로 받지 말 것(메모리 `deploy_script_pipe_breaks_it`) — 10-10에 한 번 어겼고 nginx는 무사했다
 
+## VERIFY (10-12 오후 실측)
+- go test service·repository·handler·model 통과(service 첫 실행 1회 실패, 재실행 2회 통과 — 병렬 실행 간섭 의심) · vitest 512 · tsc 통과
+- 반응형: 14화면 × 360/768/1024/1440 가로 넘침 0(공개 도메인, 배포 전). 768에서 순위 목록이 전폭으로 늘어나는 것은 남김
+
 ## VERIFY (10-11 저녁 실측)
 - go test ./... 통과(낡은 휴장일 기대값 3건 08-17→08-18 정정) · 배포 api+워커 4(이미지 일치), health 200, panic 0, api 네트워크 1
 
@@ -46,6 +51,8 @@
 - 브라우저: 사이드바 7칸, 탭 줄(종목 찾기·실적) 데스크톱·375px 가로 넘침 0, /analysis 분할 화면 세로 넘침 0
 
 ## NEXT
+- 앱 출시 방향 결정(사용자): PWA 먼저 → Capacitor 래핑 스토어 출시 안. 앱인토스는 정책 3-5·3-6으로 핵심 기능 입점 불가(메모리 `requests_1012_decisions`)
+- 보류 메뉴 재노출 결정(사용자): 추천은 오늘의 변화(홈 「내 종목」에서만 들어감)
 - 10-12 09:00 이후: Actions 「Toss API spec watch」 첫 cron 실행 성공 확인(이슈 없음이 정상) · 10-12 09:00 financials_overseas 실패 수가 161에서 크게 줄었는지 · 10-12 20:00 insider_domestic·22:00 financials_domestic 정상(10-09·10은 DART 점검 800으로 전 종목 실패)
 - Toss 새 sectors API 5종(1.2.24) — 지금 DART/SEC로 하는 업종 분류를 대체할지 검토(사용자 결정)
 - 홈 `/` React #418(하이드레이션 텍스트 불일치) 하루 ~9건 — 일부는 가짜 UA 봇, 시간 의존 문구 의심
