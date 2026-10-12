@@ -205,7 +205,7 @@ func (r *ResearchRepo) Create(ctx context.Context, c model.ResearchCall) (model.
 			evidence, context, chart, body_md, body_rev, thumbnail_url, tags_json, visibility, status
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
 	`,
-		researchTopicOrStock(c.Topic), c.UserID, c.Symbol, c.SymbolName, string(c.AssetType), string(c.Currency), c.Title,
+		c.UserID, researchTopicOrStock(c.Topic), c.Symbol, c.SymbolName, string(c.AssetType), string(c.Currency), c.Title,
 		c.PublishedAt.UTC(), c.TradeDate, c.BenchmarkID, string(c.Direction), c.BasePrice,
 		// nullFloat64 (not nullFloat) — nullFloat drops non-positive values.
 		nullFloat64(c.TargetPrice), nullFloat64(c.StopPrice), c.HorizonDays, c.Conviction,
