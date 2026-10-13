@@ -12,6 +12,7 @@ import { StockAvatar } from "@/components/stocks/stock-avatar";
 import { QuoteCell } from "@/components/ui/quote-cell";
 import { SectionCard, SectionEmpty, SectionSkeleton } from "@/components/ui/section-card";
 import { useLiveQuotes } from "@/hooks/use-live-quotes";
+import { DASHBOARD_RANK_ROWS } from "@/lib/dashboard-rows";
 import { earningsDaysFromToday, formatEarningsDateLabel } from "@/lib/earnings-date";
 import type { EarningsDateStatus, EarningsEvent } from "@/lib/earnings-types";
 import { formatFinancialAmount } from "@/lib/format";
@@ -57,6 +58,12 @@ export type MajorEarningsVariant = "home" | "rail";
 type MajorEarningsCardProps = {
   /** 아직 받는 중이면 `null`, 받았는데 없으면 `[]`. 둘을 같은 화면으로 그리면 안 된다. */
   events: EarningsEvent[] | null;
+  /**
+   * 최근 발표된 대형 실적 — 홈만. 다가오는 발표가 일곱 줄에 못 미치면 그 아래를 가까운 순으로
+   * 채운다(2026-10-13 사용자 요청 — 옆 카드와 줄 수가 같아야 카드 밑이 비지 않는다).
+   * 날짜 칸이 「3일 전」으로 적혀 다가오는 줄과 갈린다.
+   */
+  recent?: EarningsEvent[];
   variant: MajorEarningsVariant;
   /** 줄을 눌렀을 때. 홈은 종목 퀵룩을, 실적 화면은 발표 상세를 연다. */
   onPick: (event: EarningsEvent) => void;
@@ -77,6 +84,7 @@ function dateStatusLabel(status: EarningsDateStatus): string {
 
 export function MajorEarningsCard({
   events,
+  recent,
   variant,
   onPick,
   action,
@@ -87,8 +95,14 @@ export function MajorEarningsCard({
   const rows = useMemo(() => {
     if (events === null) return null;
     // 홈만 날짜순으로 다시 세운다 — 레일은 「무엇이 큰가」를 말하는 자리라 시총 순이다.
-    return home ? [...events].sort((a, b) => a.date.localeCompare(b.date)) : events;
-  }, [events, home]);
+    if (!home) return events;
+    const upcoming = [...events].sort((a, b) => a.date.localeCompare(b.date));
+    const seen = new Set(upcoming.map(earningsEventKey));
+    const past = (recent ?? [])
+      .filter((e) => !seen.has(earningsEventKey(e)))
+      .sort((a, b) => b.date.localeCompare(a.date));
+    return [...upcoming, ...past].slice(0, Math.max(DASHBOARD_RANK_ROWS, upcoming.length));
+  }, [events, recent, home]);
 
   /*
     발표를 앞둔 종목의 **지금 시세**. 홈에서만 붙인다 — 레일의 그 자리는 시가총액이

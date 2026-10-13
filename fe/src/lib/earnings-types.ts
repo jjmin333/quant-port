@@ -232,6 +232,8 @@ export type EarningsConsistency = {
  */
 export type EarningsHighlights = {
   big: EarningsEvent[];
+  /** 최근 발표된 대형 실적. 홈 카드가 `big`으로 일곱 줄을 못 채울 때 아래를 채운다. 옛 캐시 응답엔 없다. */
+  recentBig?: EarningsEvent[];
   divergent: EarningsEvent[];
   consistent: EarningsConsistency[];
 };

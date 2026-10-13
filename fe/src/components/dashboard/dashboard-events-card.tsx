@@ -40,6 +40,7 @@ export function DashboardEventsCard({ onPick }: { onPick: (symbol: string) => vo
     <MajorEarningsCard
       variant="home"
       events={highlights?.big ?? null}
+      recent={highlights?.recentBig}
       onPick={(event) => onPick(event.symbol)}
       href={market === "us" ? "/earnings/us" : "/earnings/domestic"}
       action={
