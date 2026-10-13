@@ -49,6 +49,75 @@ export function StockRedditPanel({ symbol, signals }: { symbol: string; signals:
   );
 }
 
+/**
+ * 개요 맨 아래의 레딧 카드 (2026-10-13 요청 6, 시안 `docs/mockups/stock-overview-v2.html` ⑥) —
+ * 점수 · 24시간 숫자 셋 · 요약 문단 · 인기 글 2건만, 나머지는 「레딧」 탭으로. 자료는 탭과 같은 응답.
+ */
+export function StockRedditOverviewCard({ signals, onOpen }: { signals: StockSignals; onOpen?: () => void }) {
+  const last = signals.social[0];
+  if (!last) return null;
+  const reddit = signals.reddit;
+  const community = reddit?.community;
+  const insight = reddit?.insight;
+  return (
+    <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-[var(--border)] px-3 py-2">
+        <RedditMark />
+        <h3 className="text-cell font-semibold text-[var(--text-primary)]">레딧 분위기</h3>
+        {community && (
+          <span
+            className="text-note font-bold tabular-nums"
+            style={{ color: scoreColor(community.score) }}
+            title="커뮤니티 점수 — 언급한 사용자들의 긍정 비율을 표본 크기로 보정한 값(-100~100)"
+          >
+            {community.score > 0 ? `+${community.score}` : community.score}{" "}
+            <span className="text-micro font-semibold">{community.stance}</span>
+          </span>
+        )}
+        <span className="ml-auto text-micro text-[var(--text-muted)]">
+          {last.date.slice(5).replace("-", "/")} · ApeWisdom 24시간
+        </span>
+      </div>
+      <div className="space-y-2 px-3 py-2.5">
+        <dl className="grid grid-cols-3 gap-1.5">
+          <OverviewStat label="언급" value={`${last.mentions.toLocaleString()}회`} extra={<Delta now={last.mentions} prev={last.mentionsPrev} pct />} />
+          <OverviewStat label="언급 순위" value={`#${last.rank}`} extra={<Delta now={last.rank} prev={last.rankPrev} />} />
+          <OverviewStat
+            label="긍정 비율"
+            value={insight?.sentimentPct != null ? `${insight.sentimentPct}%` : "—"}
+            extra={insight?.users != null ? <span className="text-micro text-[var(--text-muted)]">{insight.users}명</span> : null}
+          />
+        </dl>
+        {community?.body?.summary && (
+          <p className="text-cell leading-relaxed text-[var(--text-secondary)]">{community.body.summary}</p>
+        )}
+        {reddit?.posts.slice(0, 2).map((p, i) => <PostCard key={p.id} post={p} rank={i + 1} />)}
+      </div>
+      {onOpen && (
+        <button
+          type="button"
+          onClick={onOpen}
+          className="flex w-full items-center justify-center gap-0.5 border-t border-[var(--border)] px-3 py-1.5 text-cell font-medium text-[var(--brand)] hover:bg-[var(--brand)]/5"
+        >
+          레딧 탭에서 전체 보기 ›
+        </button>
+      )}
+    </div>
+  );
+}
+
+function OverviewStat({ label, value, extra }: { label: string; value: string; extra?: React.ReactNode }) {
+  return (
+    <div className="min-w-0 rounded-md border border-[var(--border)] px-2 py-1">
+      <dt className="truncate text-micro text-[var(--text-muted)]">{label}</dt>
+      <dd className="flex items-baseline gap-1">
+        <span className="text-note font-bold tabular-nums text-[var(--text-primary)]">{value}</span>
+        {extra}
+      </dd>
+    </div>
+  );
+}
+
 export function scoreColor(score: number): string {
   if (score >= 25) return "var(--profit)";
   if (score <= -25) return "var(--loss)";

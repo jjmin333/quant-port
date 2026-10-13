@@ -14,14 +14,11 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * 90일 시나리오 — **개요 「종합 점수」 카드 안**의 한 구획 (2026-10-07 사용자 요청 9).
+ * 90일 뒤 가격 범위 — 개요, 다음 실적 옆 (2026-10-13 요청 3, 시안 `docs/mockups/stock-overview-v2.html` ④).
  *
- * 2026-09-19부터 밸류에이션 탭 맨 위의 독립 카드였다. 이제 점수 카드가 「이 종목이 어떤가」
- * 다음에 「그래서 90일 뒤 어디쯤인가」를 함께 말한다. 가독성을 위해 바꾼 것:
- *
- *   · 맨 위에 **한 문장**: 「90일 뒤 A ~ B 사이일 가능성이 높습니다 (이 방법 적중률 N%)」
- *   · 세 줄 목록 → **세 칸 타일**(약세 · 중립 · 강세) — 가격·등락률·내재 PER이 한눈에
- *   · 간단/상세 토글을 걷었다 — 검증 수치는 접힌 「검증 수치」 안으로
+ * 한 문장(「10번 중 N번꼴로 A ~ B 사이」) + 가격 축 막대 + 검증 세 칸(범위 안 · 아래 · 위)만 남긴다.
+ * 10-10의 「폭 ≥60%면 접고 『방향을 말하기 어렵습니다』」는 대부분의 종목이 그 문장만 보게 만들어 걷었고,
+ * 아래에 붙던 변동성·PER·검증 수치 설명도 같은 날 사용자 지시로 뺐다.
  *
  * # 하나의 목표가를 찍지 않습니다
  *
@@ -30,20 +27,14 @@ import { cn } from "@/lib/utils";
  *
  * # 막대는 **가격 축**입니다
  *
- * 세 칸을 같은 간격으로 그리면 「강세가 약세보다 멀다」는 사실이 사라집니다. 로그
- * 밴드라 위쪽 거리가 언제나 더 먼데, 그 비대칭이 이 구획이 말하려는 것의 절반입니다.
+ * 로그 밴드라 위쪽 거리가 언제나 더 멉니다 — 같은 간격으로 그리면 그 비대칭이 사라집니다.
  *
  * # 적중률은 이 종목의 성적이 아닙니다
  *
- * 종목별 표본은 6건뿐이라 적중률이라 부를 수 없습니다. 문장을 「이 방법은」으로
- * 시작해 그 구분을 잃지 않게 합니다.
+ * 종목별 표본은 6건뿐이라, 세 칸은 「같은 방법으로 과거에 그린 범위」의 성적입니다(title로 밝힌다).
  *
- * 시나리오가 없거나(이력 부족) 못 받았으면 **아무것도 그리지 않는다** — 점수 카드 안에서
- * 「없다」를 한 줄 더 적는 것은 높이만 쓴다.
+ * 시나리오가 없거나(이력 부족) 못 받았으면 **아무것도 그리지 않는다**.
  */
-/** 범위 폭(약세~강세 ÷ 현재가)이 이 이상이면 접는다. 연 변동성 ≈ 40%인 종목의 90일 범위가 대략 이 폭이다. */
-const SCENARIO_WIDE_PCT = 60;
-
 export function PriceScenarioSection({
   scenario,
   loading,
@@ -60,7 +51,7 @@ export function PriceScenarioSection({
     return (
       <p className={cn("flex items-center gap-1.5 px-3 py-2 text-cell text-[var(--text-muted)]", className)}>
         <Loader2 className="h-3 w-3 animate-spin" />
-        90일 시나리오를 계산하는 중입니다…
+        90일 범위를 계산하는 중입니다…
       </p>
     );
   }
@@ -69,97 +60,39 @@ export function PriceScenarioSection({
   const bear = points.find((p) => p.kind === "bear");
   const bull = points.find((p) => p.kind === "bull");
   const acc = scenario.accuracy;
-  const base = points.find((p) => p.kind === "base");
-  /*
-    범위 폭을 함께 적는다 (2026-10-10, BUSINESS_REVIEW §5 D4). 「적중률 77%」만 있으면 −38%~+61%처럼
-    넓은 범위가 정확한 예측처럼 읽힌다 — 범위가 넓을수록 그 안에 들어갈 확률은 저절로 오른다.
-  */
-  const widthPct = bear && bull && base && base.price > 0 ? ((bull.price - bear.price) / base.price) * 100 : null;
-  /*
-    폭이 이 이상이면 「가능성이 높다」는 말과 세 칸 타일을 접는다(2026-10-10 사업화 검토 N4).
-    삼성전자 99%(−38%~+61%)처럼 넓은 범위는 방향을 말해 주지 않는데, 크게 그리면 예측처럼 읽힌다.
-  */
-  const wide = widthPct != null && widthPct >= SCENARIO_WIDE_PCT;
-
-  const tiles = (
-    <>
-      <div className="grid grid-cols-3 gap-1.5">
-        {(["bear", "base", "bull"] as const).map((kind) => {
-          const p = points.find((x) => x.kind === kind);
-          return p ? <ScenarioTile key={kind} point={p} currency={scenario.currency} /> : <span key={kind} />;
-        })}
-      </div>
-      <PriceAxis points={points} axis={axis} />
-    </>
-  );
+  const price = (v: number) => withUnit(v, scenario.currency);
+  const sample = acc
+    ? `같은 방법으로 과거에 그린 범위를 ${scenario.horizonDays}일 뒤 실제 가격과 맞춰 본 결과 · ${acc.symbols}종목 × ${acc.dates}시점 = ${acc.samples.toLocaleString("ko-KR")}건`
+    : undefined;
 
   return (
     <div className={cn("space-y-2 px-3 py-2.5", className)}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
         <Target className="h-3.5 w-3.5 shrink-0 text-[var(--brand)]" aria-hidden />
-        <span className="text-cell font-semibold text-[var(--text-primary)]">
-          {scenario.horizonDays}일 시나리오
-        </span>
+        <span className="text-cell font-semibold text-[var(--text-primary)]">{scenario.horizonDays}일 뒤 가격 범위</span>
         {/* 종가 기준임을 적습니다 — 실시간 시세가 아닙니다. */}
-        <span className="text-micro text-[var(--text-muted)]">{scenario.asOf} 종가 기준</span>
+        <span className="text-micro tabular-nums text-[var(--text-muted)]">
+          {scenario.asOf.slice(5).replace("-", "/")} 종가 {price(scenario.close)} 기준
+        </span>
       </div>
 
-      {bear && bull && wide && (
+      {bear && bull && (
         <p className="text-cell leading-relaxed text-[var(--text-secondary)]">
-          변동성이 커서 {scenario.horizonDays}일 범위가 넓습니다(
-          {formatScenarioPrice(bear.price, scenario.currency)} ~ {formatScenarioPrice(bull.price, scenario.currency)},
-          폭 {widthPct?.toFixed(0)}%). 이 범위로는 방향을 말하기 어렵습니다.
+          {scenario.horizonDays}일 뒤 주가는{" "}
+          {acc && <b className="text-[var(--text-primary)]">10번 중 {Math.round(acc.hitRate / 10)}번꼴로 </b>}
+          <b className={cn("tabular-nums", SCENARIO_TONE.bear)}>{price(bear.price)}</b> ~{" "}
+          <b className={cn("tabular-nums", SCENARIO_TONE.bull)}>{price(bull.price)}</b> 사이에 있습니다.
         </p>
       )}
 
-      {bear && bull && !wide && (
-        <p className="text-cell leading-relaxed text-[var(--text-secondary)]">
-          {scenario.horizonDays}일 뒤{" "}
-          <b className={SCENARIO_TONE.bear}>{formatScenarioPrice(bear.price, scenario.currency)}</b> ~{" "}
-          <b className={SCENARIO_TONE.bull}>{formatScenarioPrice(bull.price, scenario.currency)}</b> 사이일
-          가능성이 높습니다
-          {widthPct != null && (
-            <span className="text-[var(--text-muted)]"> (범위 폭 {widthPct.toFixed(0)}%)</span>
-          )}
-          .
-          {acc ? (
-            <span className="text-[var(--text-muted)]">
-              {" "}
-              같은 방법으로 과거에 그린 범위가 실제 가격을 담은 비율은{" "}
-              <b className="text-[var(--text-primary)]">{acc.hitRate.toFixed(0)}%</b>입니다(범위 포함률).
-            </span>
-          ) : null}
-        </p>
-      )}
-
-      {wide ? (
-        <details className="text-micro text-[var(--text-muted)]">
-          <summary className="cursor-pointer select-none hover:text-[var(--text-primary)]">세 갈래 보기</summary>
-          <div className="mt-1.5 space-y-2">{tiles}</div>
-        </details>
-      ) : (
-        tiles
-      )}
-
-      <p className="text-micro text-[var(--text-muted)]">
-        {scenario.horizonDays}일 변동성{" "}
-        <b className="text-[var(--text-primary)]">{scenario.volatilityPct.toFixed(1)}%</b>
-      </p>
+      <PriceAxis points={points} axis={axis} currency={scenario.currency} />
 
       {acc && (
-        <details className="group text-micro text-[var(--text-muted)]">
-          <summary className="cursor-pointer select-none hover:text-[var(--text-primary)]">검증 수치</summary>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            <Kpi label="범위 포함률" value={`${acc.hitRate.toFixed(1)}%`} />
-            <Kpi label="중립 평균 오차" value={`${acc.baseErrorPct.toFixed(1)}%`} />
-            <Kpi label="표본" value={acc.samples.toLocaleString("ko-KR")} />
-          </div>
-          <p className="mt-1.5">
-            {acc.symbols}종목 × {acc.dates}개 시점 · {scenario.horizonDays}일 지평
-            {acc.measuredAt ? ` · ${acc.measuredAt} 기준` : ""}
-          </p>
-          <p className="mt-1">범위가 넓을수록 포함률은 저절로 오릅니다 — 예측이 아니라 변동성으로 그린 범위입니다.</p>
-        </details>
+        <div className="grid grid-cols-3 gap-1.5" title={sample}>
+          <Kpi label="범위 안에 든 비율" value={`${acc.hitRate.toFixed(0)}%`} />
+          <Kpi label="범위보다 아래" value={`${acc.missBelowPct.toFixed(1)}%`} tone={SCENARIO_TONE.bear} />
+          <Kpi label="범위보다 위" value={`${acc.missAbovePct.toFixed(1)}%`} tone={SCENARIO_TONE.bull} />
+        </div>
       )}
     </div>
   );
@@ -167,62 +100,58 @@ export function PriceScenarioSection({
 
 /* ------------------------------------------------------------------------- */
 
-function ScenarioTile({ point, currency }: { point: ScenarioPoint; currency?: string }) {
+function withUnit(v: number, currency?: string): string {
+  return (currency ?? "").toUpperCase() === "USD" ? `$${formatScenarioPrice(v, currency)}` : `${formatScenarioPrice(v, currency)}원`;
+}
+
+/** 가격 축 — 위에 등락률, 아래에 가격. 양끝 이름표는 끝에 붙이고 현재가만 제 자리에 세운다. */
+function PriceAxis({ points, axis, currency }: { points: ScenarioPoint[]; axis: Map<string, number>; currency?: string }) {
+  const label = (p: ScenarioPoint) =>
+    p.kind === "bear" ? { left: 0 } : p.kind === "bull" ? { right: 0 } : { left: `${axis.get(p.kind) ?? 50}%`, transform: "translateX(-50%)" };
   return (
-    <div
-      className={cn(
-        "rounded-md border px-2 py-1.5 text-center",
-        point.kind === "base" ? "border-[var(--border)] bg-[var(--surface-elevated)]/60" : "border-[var(--border)]",
-      )}
-    >
-      <span className={cn("block text-micro font-semibold", SCENARIO_TONE[point.kind])}>
-        {point.kind === "base" ? "중립 · 현재가" : point.label}
-      </span>
-      <span className="block text-note font-bold tabular-nums text-[var(--text-primary)]">
-        {formatScenarioPrice(point.price, currency)}
-      </span>
-      <span className={cn("block text-micro tabular-nums", SCENARIO_TONE[point.kind])}>
-        {point.kind === "base" ? "±0%" : formatScenarioPct(point.changePct)}
-      </span>
-      {/* PER이 있는 종목은 60%뿐이라 없으면 줄을 비운다 — 「-」로 채우지 않는다. */}
-      {point.impliedPer != null && (
-        <span className="block text-micro tabular-nums text-[var(--text-muted)]">
-          PER {point.impliedPer.toFixed(1)}배
-        </span>
-      )}
+    <div className="space-y-0.5">
+      <div className="relative h-4 text-micro font-semibold tabular-nums">
+        {points.map((p) => (
+          <span key={p.kind} className={cn("absolute whitespace-nowrap", SCENARIO_TONE[p.kind])} style={label(p)}>
+            {p.kind === "base" ? "현재" : formatScenarioPct(p.changePct)}
+          </span>
+        ))}
+      </div>
+      <div
+        className="relative h-2 rounded-full"
+        style={{
+          background:
+            "linear-gradient(90deg, var(--loss-bg, rgba(37,99,235,.18)) 0%, var(--muted) 50%, var(--profit-bg, rgba(220,38,38,.18)) 100%)",
+        }}
+        aria-hidden
+      >
+        {points.map((p) => (
+          <span
+            key={p.kind}
+            className={cn(
+              "absolute top-1/2 h-3.5 w-0.5 -translate-y-1/2 rounded-sm",
+              p.kind === "base" ? "bg-[var(--text-primary)]" : p.kind === "bear" ? "bg-[var(--loss)]" : "bg-[var(--profit)]",
+            )}
+            style={{ left: `${axis.get(p.kind) ?? 50}%` }}
+          />
+        ))}
+      </div>
+      <div className="relative h-4 text-micro tabular-nums text-[var(--text-muted)]">
+        {points.map((p) => (
+          <span key={p.kind} className="absolute whitespace-nowrap" style={label(p)}>
+            {withUnit(p.price, currency)}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
 
-function PriceAxis({ points, axis }: { points: ScenarioPoint[]; axis: Map<string, number> }) {
+function Kpi({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div
-      className="relative h-2 rounded-full"
-      style={{
-        background:
-          "linear-gradient(90deg, var(--loss-bg, rgba(37,99,235,.18)) 0%, var(--muted) 50%, var(--profit-bg, rgba(220,38,38,.18)) 100%)",
-      }}
-      aria-hidden
-    >
-      {points.map((p) => (
-        <span
-          key={p.kind}
-          className={cn(
-            "absolute top-1/2 h-3.5 w-0.5 -translate-y-1/2 rounded-sm",
-            p.kind === "base" ? "bg-[var(--text-primary)]" : p.kind === "bear" ? "bg-[var(--loss)]" : "bg-[var(--profit)]",
-          )}
-          style={{ left: `${axis.get(p.kind) ?? 50}%` }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function Kpi({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-[5.5rem] flex-1 rounded-md border border-[var(--border)] px-2 py-1">
-      <span className="block text-micro text-[var(--text-muted)]">{label}</span>
-      <span className="block text-note font-bold tabular-nums text-[var(--text-primary)]">{value}</span>
+    <div className="min-w-0 rounded-md border border-[var(--border)] px-2 py-1">
+      <span className="block truncate text-micro text-[var(--text-muted)]">{label}</span>
+      <span className={cn("block text-note font-bold tabular-nums", tone ?? "text-[var(--text-primary)]")}>{value}</span>
     </div>
   );
 }

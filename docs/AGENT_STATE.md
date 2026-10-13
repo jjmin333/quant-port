@@ -1,7 +1,7 @@
 # Agent State
 
 > 현재 상태만 담는다. **150줄 이하, 매 세션 덮어쓴다(앞에 쌓지 않는다).** 이력은 `docs/archive/sessions.md`, 원칙은 `docs/PRINCIPLES.md`, 결정·함정은 메모리.
-> 갱신: 2026-10-13 (커뮤니티·리포트 주제 주식만 · 국내 언급 문턱 20)
+> 갱신: 2026-10-13 밤 (종목 개요 v2 — 시안 `docs/mockups/stock-overview-v2.html`)
 
 ## NOW
 - **코드는 GitHub에 있다** — `jjmin333/quant-port` public, `master`. 10-10에 09-15 이후 미커밋 전부를 3개 커밋으로 push(비밀값 점검 끝: `be/.env`·`be/secrets/`·워치독 설정은 git 밖). 이후 작업도 커밋·push 한다. 클라우드 세션 규칙은 `AGENTS.md` 「Cloud sessions」(배포는 PC 세션만).
@@ -15,7 +15,7 @@
 - KRX 휴장일 목록 보정(`calendar/holidays_krx.json` +12일: 2025·2026 근로자의 날·선거일·한글날, 2026-08-17, 2027 대체휴일·부처님오신날). 전에는 10-09를 거래일로 보고 전 종목 종가 재수집(4,278)을 반복했다.
 - **홈 비로그인 블록 축소(10-11)**: 대표 종목 카드 6장·오늘 바뀐 종목·다가오는 실적·소개 카드 3장 제거, 히어로(질문·검색·종목 칩·대표 레이더)만 남김. 지수 흐름 띠(`IndexTickerStrip`)를 홈 맨 위로. 서버 선반입도 대표 점수 하나만(변화·실적·백테스트 요청 제거).
 - 브리핑 「많이 언급된 종목」 문턱: **국내 20 · 해외 25**(10-13, BE `briefingMentionMinCount(market)` = FE `MENTION_MIN_COUNT`). 저장된 브리핑은 다음 슬롯부터 20 기준.
-- 화면 문구: 90일 시나리오 폭 ≥60%면 접음 · 애널리스트 카드 「증권사 의견, 권유 아님」 · 브리핑 금리 칩 bp.
+- **종목 개요 v2(10-13 밤, 메모리 `stock_overview_v2_1013`)**: 최근 핵심 사건 → AI 요약(개요만 기본 간단) → 점수(레이더 + 다섯 축 막대, 전일 칩은 머리줄) → 다음 실적(확정/추정·예상치·지난 4번 표) | 90일 범위(접지 않음, 문장+막대+검증 세 칸만) → 애널리스트(목표가 세 칸·5단계·결론 문장) → 차트·지표·커뮤니티 → 레딧 카드(해외·자료 있을 때). 관심 등록 안내·질문 칩·`ScoreChangeLine` 삭제. 브리핑 금리 칩 bp.
 
 - **Toss 스펙 감시**: `.github/workflows/toss-spec-watch.yml`이 매일 09:00 KST 공식 openapi.json·asyncapi.json을 `be/docs/toss-*.json` 기준본과 비교해 다르면 GitHub 이슈를 연다(판마다 한 번). 처리 = 기준본 갱신·영향 검토·커밋. 기준본 1.2.24(REST)·1.2.2(WS).
 - 10-11 로그 개선: 시세 `GetPrices`가 스펙 밖 심볼(BAC^B·BRK/B, 카탈로그 400개) 제외 · 폴러가 404 stock-not-found도 격리 · DART corpCode 받기 실패 시 옛 목록 유지 + 10분 재시도 간격(점검 800 중 종목마다 재다운로드하던 것) · EDGAR 「분기 없음/facts 없음」은 not_found(30일 쿨다운, 은행·무매출 바이오·펀드 1,393종목).
@@ -40,6 +40,10 @@
 - 프로젝트 규칙 `AGENTS.md` · 저장·캐시·LLM·목록 원칙 `docs/PRINCIPLES.md` · 운영 함정은 MEMORY.md 색인
 - 배포 스크립트 출력을 파이프로 받지 말 것(메모리 `deploy_script_pipe_breaks_it`) — 10-10에 한 번 어겼고 nginx는 무사했다
 
+## VERIFY (10-13 밤 실측)
+- tsc·vitest 512 통과, 손댄 파일 eslint 신규 0(workspace-client set-state-in-effect 3건은 기존) · fe 재빌드(api 같이 재생성, 워커는 코드 무관이라 그대로), health 200, panic 0
+- 브라우저: AMD(데스크톱)·000660(375px) 개요 순서·전일 ▲5 칩·간단 기본·레딧 카드(해외만), 375px 가로 넘침 0
+
 ## VERIFY (10-13 저녁 실측)
 - tsc·eslint(손댄 6파일)·vitest 512·go build·service 시험 통과 · 배포 api+fe+worker-content(이미지 일치), health 200, panic 0 · 공개 /community 새 문구, 주제 필터 없음
 
@@ -53,12 +57,6 @@
 
 ## VERIFY (10-11 저녁 실측)
 - go test ./... 통과(낡은 휴장일 기대값 3건 08-17→08-18 정정) · 배포 api+워커 4(이미지 일치), health 200, panic 0, api 네트워크 1
-
-## VERIFY (10-10 저녁 실측)
-- go test ./... 전부 통과(calendar 휴장일 시험 추가) · vitest 510 · tsc 통과 · 손댄 파일 eslint 신규 0(남은 set-state-in-effect 3건은 기존)
-- 배포: api·fe·워커 4(= api 이미지), health 200, panic 0, api 네트워크 1, worker-asset 「3 jobs」
-- 공개 도메인: 홈 title 새 문구 · /stocks/005930 서버 본문에 AI 요약·다섯 축·비교 링크 · /stocks/sector/kr/IT 120행 · /stocks/style/quality-growth 133행 · /compare/000660-vs-005930 레이더 겹침 · /earnings/surprises 56행 · 없는 업종/비교는 noindex · 사이트맵 1,131(업종 22·스타일 6·비교 79·서프라이즈 1 추가)
-- 브라우저: 사이드바 7칸, 탭 줄(종목 찾기·실적) 데스크톱·375px 가로 넘침 0, /analysis 분할 화면 세로 넘침 0
 
 ## NEXT
 - 앱 출시·메뉴 이름 복원은 사용자가 진행 안 함(10-12). 앱인토스는 정책 3-5·3-6으로 핵심 기능 입점 불가

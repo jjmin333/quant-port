@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { ArrowLeftRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { ScoreChangeLine } from "@/components/analysis/score-change-line";
 import { ScoreRadar } from "@/components/analysis/score-radar";
-import { peerGroupLabel, type ScoreChangeSummary } from "@/lib/score-explain-api";
+import { peerGroupLabel, shortDriverLabel, type ScoreChangeSummary } from "@/lib/score-explain-api";
 import {
   SCORE_AXIS_LABELS,
   SCORE_AXIS_ORDER,
@@ -88,7 +87,7 @@ export function StockScoreCard({
    * 나머지는 AI 분석 탭의 패널이 자기가 열릴 때 받는다.
    */
   change?: ScoreChangeSummary | null;
-  /** 있으면 변화 줄이 버튼이 되어 AI 분석 탭(점수 근거)으로 보낸다. */
+  /** 있으면 머리줄 「전일」 칩이 버튼이 되어 AI 분석 탭(점수 근거)으로 보낸다. */
   onOpenExplain?: () => void;
   className?: string;
 }) {
@@ -109,11 +108,6 @@ export function StockScoreCard({
   const peerRank = typeof score.inputs?.peerRank === "number" ? score.inputs.peerRank : null;
   const peerSize = typeof score.inputs?.peerSize === "number" ? score.inputs.peerSize : null;
   const groupName = peerGroupLabel(score.peerGroup) ?? "동종";
-  // 가장 강한 축·가장 약한 축 — 레이더가 모양을 말하고, 막대 둘이 「무엇이 끌어올리고 끌어내리나」를 말한다.
-  const ranked = SCORE_AXIS_ORDER.filter((a) => typeof score.breakdown?.[a] === "number").sort(
-    (a, b) => (score.breakdown[b] ?? 0) - (score.breakdown[a] ?? 0),
-  );
-  const extremes = ranked.length >= 2 ? [ranked[0], ranked[ranked.length - 1]] : ranked;
   const coveragePct = Math.round((score.coverage ?? 0) * 100);
   const thin = coveragePct < 60;
 
@@ -147,6 +141,7 @@ export function StockScoreCard({
               {score.grade}
             </span>
           )}
+          <ScoreDeltaChip change={change} onOpen={onOpenExplain} />
         </div>
 
         {/*
@@ -178,12 +173,10 @@ export function StockScoreCard({
 
       <div className="flex items-center gap-3 px-3 py-2">
         <ScoreRadar breakdown={score.breakdown} className="h-40 w-48 shrink-0 sm:h-44 sm:w-52" />
-        <div className="min-w-0 flex-1 space-y-1.5">
-          {extremes.map((axis, i) => (
-            <div key={axis}>
-              <p className="mb-0.5 text-micro text-[var(--text-muted)]">{i === 0 ? "가장 강한 축" : "가장 약한 축"}</p>
-              <AxisBar axis={axis} value={score.breakdown?.[axis]} />
-            </div>
+        {/* 다섯 축 막대 — 10-10 A안의 「가장 강한·약한 축」 둘을 이전처럼 다섯으로 되돌렸다(2026-10-13 요청 1). */}
+        <div className="min-w-0 flex-1 space-y-2">
+          {SCORE_AXIS_ORDER.map((axis) => (
+            <AxisBar key={axis} axis={axis} value={score.breakdown?.[axis]} />
           ))}
           <Link
             href={`/analysis?backtest=1&market=${/^[0-9]/.test(score.symbol) ? "domestic" : "overseas"}`}
@@ -217,13 +210,6 @@ export function StockScoreCard({
         )}
       </div>
 
-      {/*
-        변화 한 줄 (2026-09-17 사용자 결정 A). 본문 div **밖**이라 위에 구분선이 서고,
-        축 막대와 섞이지 않는다. 비교할 회차가 없으면 `ScoreChangeLine`이 스스로
-        아무것도 그리지 않는다 — 없는 값을 0으로 때우지 않는다.
-      */}
-      <ScoreChangeLine change={change} onOpen={onOpenExplain} />
-
       {/* 스크리너 입구 (2026-09-28 요청 5) — 이 종목 값으로 조건을 채워 같거나 나은 종목을 찾는다. */}
       <Link
         href={`/screener?like=${encodeURIComponent(score.symbol)}`}
@@ -233,6 +219,34 @@ export function StockScoreCard({
         해당 종목과 유사한 다른 종목 찾기
       </Link>
     </Card>
+  );
+}
+
+/**
+ * 전일 대비 칩 — 머리줄 점수 옆 (2026-10-13 요청 1, 그전엔 카드 아래 「전일 +5 · 추세 변화」 한 줄).
+ * 비교할 회차가 없으면 그리지 않는다 — 없는 값을 0으로 때우지 않는다. 원인은 title로, 누르면 점수 근거로.
+ */
+function ScoreDeltaChip({ change, onOpen }: { change: ScoreChangeSummary | null; onOpen?: () => void }) {
+  if (!change?.available || change.delta == null) return null;
+  const d = Math.round(change.delta);
+  const cause = shortDriverLabel(change.topDriver);
+  const cls = cn(
+    "rounded-md px-1.5 py-0.5 text-micro font-semibold leading-none tabular-nums",
+    d > 0
+      ? "bg-[var(--profit)]/10 text-[var(--profit)]"
+      : d < 0
+        ? "bg-[var(--loss)]/10 text-[var(--loss)]"
+        : "bg-[var(--surface-elevated)] text-[var(--text-muted)]",
+  );
+  const label = `전일 ${d > 0 ? "▲" : d < 0 ? "▼" : ""}${Math.abs(d)}`;
+  const title = [change.fromScore != null ? `${change.fromDate} ${change.fromScore} → ${change.tradeDate} ${change.score}` : null, cause]
+    .filter(Boolean)
+    .join(" · ");
+  if (!onOpen) return <span className={cls} title={title}>{label}</span>;
+  return (
+    <button type="button" onClick={onOpen} title={title} className={cn(cls, "hover:opacity-80")}>
+      {label} ›
+    </button>
   );
 }
 

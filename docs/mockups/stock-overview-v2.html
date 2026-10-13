@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>종목 개요 탭 — 제안 v2</title>
+<style>
+:root{--bg:#F4F5F7;--card:#fff;--el:#F3F4F6;--fg:#111827;--sec:#374151;--muted:#6B7280;--line:#E5E7EB;--brand:#2563EB;--brand-bg:rgba(37,99,235,.08);
+--hi:#16A34A;--mid:#EA580C;--lo:#DC2626;--up:#DC2626;--down:#2563EB;--rd:#FF4500;--note:#FEF3C7;--note-fg:#92400E}
+[data-theme=dark]{--bg:#0B0B0C;--card:#161617;--el:#232325;--fg:#F4F4F5;--sec:#C4C4C8;--muted:#8B8B92;--line:#2C2C2F;--brand:#4C8DFF;--brand-bg:rgba(76,141,255,.10);
+--hi:#22C55E;--mid:#FB923C;--lo:#F87171;--up:#F87171;--down:#60A5FA;--note:#2A2210;--note-fg:#FCD34D}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font-family:Pretendard,-apple-system,"Segoe UI",system-ui,sans-serif;font-size:13px;line-height:1.55;padding:24px 16px}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:20px} h2{font-size:16px;margin:30px 0 8px} .lead{color:var(--muted);margin:4px 0 14px}
+.toggle{float:right;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:8px;padding:4px 10px;cursor:pointer}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+@media (max-width:900px){.grid2{grid-template-columns:1fr}}
+.cap{font-size:12px;font-weight:700;margin-bottom:6px;color:var(--muted)} .cap b{color:var(--brand)}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;background:var(--el);color:var(--muted);margin-left:4px}
+.tag.new{background:var(--brand-bg);color:var(--brand)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.pad{padding:10px 12px}.hd{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:8px 12px;border-bottom:1px solid var(--line)}
+.t{font-weight:700}.m{color:var(--muted)}.s{font-size:11px}.sec{color:var(--sec)}.num{font-variant-numeric:tabular-nums}
+.up{color:var(--up)}.dn{color:var(--down)}.hi{color:var(--hi)}.mid{color:var(--mid)}.lo{color:var(--lo)}
+.big{font-size:24px;font-weight:800;line-height:1}
+.badge{border:1px solid currentColor;border-radius:6px;padding:1px 6px;font-size:11px;font-weight:700}
+.chip{border-radius:6px;padding:1px 6px;font-size:11px;font-weight:700}
+.chip.up{background:rgba(248,113,113,.12)}.chip.dn{background:rgba(96,165,250,.12)}.chip.b{background:var(--brand-bg);color:var(--brand)}
+.right{margin-left:auto;text-align:right}
+.bar{height:6px;border-radius:99px;background:var(--el);flex:1;overflow:hidden}.bar i{display:block;height:100%;border-radius:99px}
+.axis{display:flex;align-items:center;gap:8px;margin:6px 0}.axis span:first-child{width:62px;color:var(--muted)}.axis span:last-child{width:28px;text-align:right}
+.foot{border-top:1px solid var(--line);padding:6px 12px;font-size:11px;display:flex;justify-content:space-between;color:var(--muted)}
+.link{color:var(--brand)}
+.cta{border-top:1px solid var(--line);text-align:center;padding:6px;color:var(--brand);font-weight:600}
+.x{position:relative;opacity:.4}.x:after{content:"삭제";position:absolute;right:8px;top:6px;background:var(--lo);color:#fff;font-size:11px;font-weight:700;border-radius:6px;padding:1px 8px}
+.strike{text-decoration:line-through;text-decoration-color:var(--lo);opacity:.55}
+.why{display:flex;gap:8px;background:var(--brand-bg);border-radius:10px;padding:8px 12px}
+table{width:100%;border-collapse:collapse}th{font-weight:500;color:var(--muted);font-size:11px;text-align:right;padding:4px 6px}th:first-child,td:first-child{text-align:left}
+td{padding:5px 6px;border-top:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+.range{position:relative;height:8px;border-radius:99px;background:linear-gradient(90deg,rgba(96,165,250,.35),var(--el) 50%,rgba(248,113,113,.35));margin:22px 4px 26px}
+.range i{position:absolute;top:-4px;width:2px;height:16px;background:var(--fg);border-radius:2px}
+.range .lbl{position:absolute;font-size:11px;white-space:nowrap;transform:translateX(-50%)}
+.kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.kpi div{border:1px solid var(--line);border-radius:8px;padding:5px 8px}.kpi b{display:block;font-size:14px}
+.steps{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;text-align:center;font-size:11px}.steps span{background:var(--el);border-radius:5px;padding:3px 0;color:var(--muted)}.steps .on{background:var(--up);color:#fff;font-weight:700}
+.dist{display:flex;height:8px;border-radius:99px;overflow:hidden}
+.order li{list-style:none;display:flex;gap:8px;align-items:center;padding:5px 8px;border:1px solid var(--line);border-radius:8px;margin:4px 0;background:var(--card)}
+.order .n{width:20px;height:20px;border-radius:99px;background:var(--el);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+.post{border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin-top:6px}
+.note{background:var(--note);color:var(--note-fg);border-radius:8px;padding:8px 10px;margin-top:8px;font-size:12px}
+.q{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:26px}.q ol{padding-left:18px}.q li{margin:5px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+<button class="toggle" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">라이트/다크</button>
+<h1>종목 개요 탭 — 제안 v2 (10-13 요청 6건)</h1>
+<p class="lead">숫자는 <b>10-13 운영 API 실측값</b>(국내 SK하이닉스 000660 · 해외 AMD). 왼쪽 = 지금, 오른쪽 = 제안. 새 수집·새 API 없음 — 전부 이미 받는 값.</p>
+
+<h2>① 개요 순서 (요청 2·4·5·6)</h2>
+<div class="grid2">
+<div><p class="cap">지금</p><ol class="order">
+<li><span class="n">1</span>왜 움직였나 한 줄</li>
+<li><span class="n">2</span>종합 점수 (레이더 + 강한 축·약한 축)</li>
+<li><span class="n">3</span>다음 실적 | 90일 시나리오</li>
+<li class="strike"><span class="n">4</span>관심 등록 안내 (점선 카드)</li>
+<li><span class="n">5</span>AI 핵심 요약 (기본 상세)</li>
+<li class="strike"><span class="n">6</span>질문 칩 (왜 움직였나 · 점수가 왜 · 다음 실적은 …)</li>
+<li><span class="n">7</span>애널리스트 의견</li>
+<li><span class="n">8</span>일봉 차트 · 지표 · 커뮤니티</li>
+</ol></div>
+<div><p class="cap">제안</p><ol class="order">
+<li><span class="n">1</span><b>최근 핵심 사건</b> 한 줄 <span class="tag new">이름만 변경</span></li>
+<li><span class="n">2</span><b>AI 핵심 요약 — 기본 「간단」</b> <span class="tag new">점수 위로</span></li>
+<li><span class="n">3</span>종합 점수 (다섯 막대 복원 · 전일 대비는 머리줄) <span class="tag new">②</span></li>
+<li><span class="n">4</span>다음 실적 | 90일 범위 <span class="tag new">③④</span></li>
+<li><span class="n">5</span>애널리스트 의견 <span class="tag new">⑤</span></li>
+<li><span class="n">6</span>일봉 차트 · 지표 · 커뮤니티</li>
+<li><span class="n">7</span><b>레딧 분위기</b> — 해외 · 레딧 자료가 있을 때만 <span class="tag new">⑥ 새 카드</span></li>
+</ol>
+<p class="s m" style="margin-top:6px">관심 등록 안내·질문 칩은 개요에서만 뺀다(컴포넌트는 남는다 — 질문 칩은 AI 분석 탭에서도 안 쓰면 같이 지움). 관심 등록은 종목 머리줄 ☆ 단추가 그대로 한다.</p>
+</div></div>
+
+<div class="grid2" style="margin-top:10px">
+<div><p class="cap">1번 줄 — 지금</p><div class="why"><span class="link">⚡</span><p><b>왜 움직였나</b> <span class="m num">10/12</span> <span class="sec">목표가 상향 · "SK하이닉스, 3분기 영업익 80조 '깜짝 실적'…목표가↑"-메리츠</span></p></div></div>
+<div><p class="cap">1번 줄 — 제안</p><div class="why"><span class="link">⚡</span><p><b>최근 핵심 사건</b> <span class="m num">10/12</span> <span class="sec">목표가 상향 · "SK하이닉스, 3분기 영업익 80조 '깜짝 실적'…목표가↑"-메리츠</span></p></div></div>
+</div>
+
+<h2>② 종합 점수 카드 (요청 1) — 머리줄 그대로 + 전일 대비, 가운데는 이전 다섯 막대로</h2>
+<p class="lead">「이전 버전」 = 10-10 A안 이전(`v1.0` 스냅샷)의 다섯 축 막대. 맨 아래 「전일 +5 · 추세 변화」 줄은 없애고 그 숫자만 점수 옆 칩으로 올린다. 칩을 누르면 지금처럼 AI 분석 탭(점수 근거)으로 간다.</p>
+<div class="grid2">
+<div><p class="cap">지금 (SK하이닉스)</p><div class="card">
+  <div class="hd"><span class="t">종합 점수</span><span class="big mid num">61</span><span class="m s">/ 100</span><span class="badge mid">B+</span><span class="right s m"><b style="color:var(--fg)">국내 KOSPI 대형주 57개 중 16위</b> (상위 29%)</span></div>
+  <div class="pad" style="display:flex;gap:14px;align-items:center">
+    <svg width="150" height="120" viewBox="0 0 150 120"><polygon points="75,10 140,55 115,115 35,115 10,55" fill="none" stroke="var(--line)"/><polygon points="75,45 128,52 110,112 58,82 47,62" fill="rgba(76,141,255,.3)" stroke="var(--brand)"/></svg>
+    <div style="flex:1"><p class="s m">가장 강한 축</p><div class="axis"><span>성장</span><div class="bar"><i style="width:96%;background:var(--hi)"></i></div><span class="hi">96</span></div>
+    <p class="s m">가장 약한 축</p><div class="axis"><span>가치</span><div class="bar"><i style="width:30%;background:var(--lo)"></i></div><span class="lo">30</span></div>
+    <p class="s link">이 점수의 과거 성적 보기 →</p></div>
+  </div>
+  <div class="foot" style="outline:2px dashed var(--lo);outline-offset:-2px"><span>전일 <b class="up">+5</b> · 추세 변화</span><span>근거 ›</span></div>
+  <div class="cta">⇆ 해당 종목과 유사한 다른 종목 찾기</div>
+</div></div>
+<div><p class="cap">제안 (SK하이닉스)</p><div class="card">
+  <div class="hd"><span class="t">종합 점수</span><span class="big mid num">61</span><span class="m s">/ 100</span><span class="badge mid">B+</span>
+    <span class="chip up num" title="10/09 56 → 10/12 61 · 가장 큰 원인: 추세 26.8 → 41.1">전일 ▲5 ›</span>
+    <span class="right s m"><b style="color:var(--fg)">국내 KOSPI 대형주 57개 중 16위</b> (상위 29%)</span></div>
+  <div class="pad">
+    <div class="axis"><span>추세</span><div class="bar"><i style="width:41%;background:var(--mid)"></i></div><span class="mid num">41</span></div>
+    <div class="axis"><span>수익성</span><div class="bar"><i style="width:80%;background:var(--hi)"></i></div><span class="hi num">80</span></div>
+    <div class="axis"><span>성장</span><div class="bar"><i style="width:96%;background:var(--hi)"></i></div><span class="hi num">96</span></div>
+    <div class="axis"><span>가치</span><div class="bar"><i style="width:30%;background:var(--lo)"></i></div><span class="lo num">30</span></div>
+    <div class="axis"><span>심리·수급</span><div class="bar"><i style="width:45%;background:var(--mid)"></i></div><span class="mid num">45</span></div>
+    <p class="s link" style="margin-top:4px">이 점수의 과거 성적 보기 →</p>
+  </div>
+  <div class="cta">⇆ 해당 종목과 유사한 다른 종목 찾기</div>
+</div>
+<p class="s m" style="margin-top:6px">칩 색: 오름 빨강 · 내림 파랑 · 0이면 「전일 0」 회색. 비교 회차가 없으면 칩을 안 단다. 레이더는 AI 분석 탭·비교 페이지에 그대로 남는다.</p>
+</div></div>
+
+<h2>③ 다음 실적 (요청 3) — 「무엇이 · 언제 · 얼마를 기대하나 · 지난번엔 어땠나」</h2>
+<div class="grid2">
+<div><p class="cap">지금 (SK하이닉스)</p><div class="card pad">
+  <p><span class="t">다음 실적</span> <span class="chip b">D-16</span></p>
+  <p class="sec">10/29 2026 3Q 실적발표</p>
+  <div style="display:flex;gap:8px;align-items:flex-end;height:46px;margin-top:6px">
+    <div style="flex:1;text-align:center"><div style="height:2px;background:var(--lo)"></div><span class="s lo">-0.3%</span></div>
+    <div style="flex:1;text-align:center"><div style="height:30px;background:var(--hi)"></div><span class="s hi">+6.1%</span></div>
+    <div style="flex:1;text-align:center"><div style="height:17px;background:var(--hi)"></div><span class="s hi">+3.3%</span></div>
+    <div style="flex:1;text-align:center"><div style="height:32px;background:var(--lo)"></div><span class="s lo">-6.4%</span></div>
+  </div>
+  <p class="s m">3Q · FY · 1Q · 2Q</p>
+  <p class="s m">지난 4번 영업이익 서프라이즈 · 예상을 넘은 2번</p>
+  <p class="note">막대만으로는 「무엇을 얼마나 예상했고 실제 얼마였는지」, 「발표 날 주가가 어땠는지」, 날짜가 확정인지 추정인지를 알 수 없다.</p>
+</div></div>
+<div><p class="cap">제안 (SK하이닉스 · 국내)</p><div class="card pad">
+  <p><span class="t">다음 실적</span> <span class="chip b">D-16</span> <span class="s m">· 2026 3Q</span></p>
+  <p style="margin-top:4px"><b>10월 29일(목)</b> <span class="tag">추정일</span> <span class="s m">작년 3Q 발표일(10/29) 기준 · 회사가 아직 날짜를 공시하지 않았습니다</span></p>
+  <p class="s m" style="margin-top:2px">이번 분기 컨센서스(예상 영업이익)는 아직 없습니다.</p>
+  <table style="margin-top:8px"><tr><th>지난 발표</th><th>예상 영업이익</th><th>실제</th><th>예상 대비</th><th>다음 날 주가</th></tr>
+  <tr><td>2026 2Q <span class="s m">7/29</span></td><td>64.7조</td><td>60.5조</td><td class="lo">−6.4% 하회</td><td class="dn">−3.6%</td></tr>
+  <tr><td>2026 1Q <span class="s m">4/23</span></td><td>36.4조</td><td>37.6조</td><td class="hi">+3.3% 상회</td><td class="up">+0.7%</td></tr>
+  <tr><td>2025 연간 <span class="s m">1/28</span></td><td>44.5조</td><td>47.2조</td><td class="hi">+6.1% 상회</td><td class="dn">−0.8%</td></tr>
+  <tr><td>2025 3Q <span class="s m">10/29</span></td><td>11.4조</td><td>11.4조</td><td class="m">−0.3% 부합</td><td class="dn">−0.5%</td></tr></table>
+  <p class="sec" style="margin-top:6px">최근 4번 중 <b>2번 예상을 넘었고</b>, 발표 다음 날 주가는 평균 <b>±1.4%</b> 움직였습니다.</p>
+  <p class="s m">예상 = FnGuide 컨센서스 · ±1% 안은 「부합」 · 다음 날 주가 = 발표일 종가 대비</p>
+</div>
+<p class="cap" style="margin-top:10px">제안 (AMD · 해외 — 날짜 확정·EPS 예상이 있는 경우)</p><div class="card pad">
+  <p><span class="t">다음 실적</span> <span class="chip b">D-21</span> <span class="s m">· 2026 3Q</span></p>
+  <p style="margin-top:4px"><b>11월 3일(화) 장 마감 후</b> <span class="tag new">확정</span> <span class="s m">한국 시간 11/4(수) 아침</span></p>
+  <p style="margin-top:2px">시장 예상 EPS <b class="num">$1.96</b> <span class="s m">— 지난 분기 실제 $1.66보다 18% 높음</span></p>
+  <table style="margin-top:8px"><tr><th>지난 발표</th><th>예상 EPS</th><th>실제</th><th>예상 대비</th><th>다음 날 주가</th></tr>
+  <tr><td>2026 2Q <span class="s m">8/5</span></td><td>$1.63</td><td>$1.66</td><td class="hi">+1.8% 상회</td><td class="dn">−7.0%</td></tr>
+  <tr><td>2026 1Q <span class="s m">5/6</span></td><td>$1.31</td><td>$1.37</td><td class="hi">+4.8% 상회</td><td class="up">+18.6%</td></tr>
+  <tr><td>2025 4Q <span class="s m">2/4</span></td><td>$1.33</td><td>$1.53</td><td class="hi">+14.8% 상회</td><td class="dn">−17.3%</td></tr>
+  <tr><td>2025 3Q <span class="s m">11/5</span></td><td>$1.18</td><td>$1.20</td><td class="hi">+2.1% 상회</td><td class="up">+2.5%</td></tr></table>
+  <p class="sec" style="margin-top:6px">최근 4번 <b>모두 예상을 넘었지만</b>, 다음 날 주가는 평균 <b>±11.4%</b>(오름 2 · 내림 2) — 예상을 넘어도 내린 적이 두 번입니다.</p>
+</div></div></div>
+
+<h2>④ 90일 시나리오 (요청 3) — 「방향을 말하기 어렵습니다」 대신 숫자로</h2>
+<div class="grid2">
+<div><p class="cap">지금 (SK하이닉스 — 폭 ≥60%라 접힌 상태)</p><div class="card pad">
+  <p><span class="t">◎ 90일 시나리오</span> <span class="s m">2026-10-13 종가 기준</span></p>
+  <p class="sec" style="margin-top:4px">변동성이 커서 90일 범위가 넓습니다(816,584원 ~ 2,581,859원, 폭 122%). 이 범위로는 방향을 말하기 어렵습니다.</p>
+  <p class="s m" style="margin-top:4px">▸ 세 갈래 보기</p>
+  <p class="s m">90일 변동성 <b style="color:var(--fg)">45.0%</b></p>
+  <p class="s m">▸ 검증 수치</p>
+  <p class="note">「폭 122%」·「변동성 45%」가 무엇을 뜻하는지, 이 범위를 얼마나 믿을지가 접힌 곳 안에 있다. 넓은 종목(대부분)은 늘 이 문장만 보인다 — AMD도 폭 89%로 접힌다.</p>
+</div></div>
+<div><p class="cap">제안 (SK하이닉스)</p><div class="card pad">
+  <p><span class="t">◎ 90일 뒤 가격 범위</span> <span class="s m">10/13 종가 1,452,000원 기준</span></p>
+  <p style="margin-top:6px">90일 뒤 주가는 <b>10번 중 8번꼴로</b> <b class="dn num">816,584원</b> ~ <b class="up num">2,581,859원</b> 사이에 있습니다.</p>
+  <div class="range">
+    <i style="left:0%"></i><span class="lbl dn num" style="left:4%;top:-20px">−43.8%</span><span class="lbl m num" style="left:4%;top:12px">81.7만</span>
+    <i style="left:36%"></i><span class="lbl num" style="left:36%;top:-20px">현재</span><span class="lbl m num" style="left:36%;top:12px">145.2만</span>
+    <i style="left:100%;margin-left:-2px"></i><span class="lbl up num" style="left:94%;top:-20px">+77.8%</span><span class="lbl m num" style="left:94%;top:12px">258.2만</span>
+  </div>
+  <div class="kpi"><div><span class="s m">범위 안에 든 비율</span><b class="num">78%</b></div><div><span class="s m">범위보다 아래</span><b class="num dn">13.5%</b></div><div><span class="s m">범위보다 위</span><b class="num up">8.4%</b></div></div>
+  <p class="s m" style="margin-top:4px">같은 방법으로 과거에 그린 범위를 90일 뒤 실제 가격과 맞춰 본 결과 · 국내 250종목 × 6시점 = 1,462건 · 10/12 측정</p>
+  <ul class="sec" style="margin:8px 0 0 16px">
+    <li>범위 폭은 <b>최근 1년 이 종목의 주가 출렁임</b>(90일 환산 변동성 45%)으로 정합니다. 많이 출렁인 종목일수록 넓습니다.</li>
+    <li><b>오를지 내릴지는 말하지 않습니다</b> — 가운데가 현재가입니다. 위쪽이 더 멀어 보이는 것은 수익률이 % 단위로 붙기 때문입니다.</li>
+    <li>하단 가격이면 PER <b class="num">4.1배</b>, 상단이면 <b class="num">12.9배</b>(지금 7.2배).</li>
+  </ul>
+</div></div></div>
+
+<h2>⑤ 애널리스트 의견 (요청 3) — 척도 막대 대신 「몇 명이 · 얼마를 · 최근 바뀌었나」</h2>
+<div class="grid2">
+<div><p class="cap">지금 (SK하이닉스)</p><div class="card pad">
+  <p><span class="t">애널리스트 의견</span> <span class="badge up">매수</span><span class="right s m" style="float:right">네이버 증권 컨센서스 · 2026-10-08</span></p>
+  <p class="sec" style="margin-top:4px">평균 의견은 「매수」, 평균 목표가는 지금보다 +124.1% 위입니다.</p>
+  <p class="s m">증권사 의견을 모은 것이며 Quant Port의 판단이나 투자 권유가 아닙니다.</p>
+  <div style="height:8px;border-radius:99px;margin:8px 0 2px;background:linear-gradient(90deg,var(--down),var(--el),var(--up))"></div>
+  <p class="s m" style="display:flex;justify-content:space-between"><span>강력매도</span><span>매도</span><span>보유</span><span>매수</span><span>강력매수</span></p>
+  <p class="s m" style="text-align:right">평균 4.00 / 5</p>
+  <p class="s m">평균 목표가 <b style="color:var(--fg)">3,253,182원</b> 현재가 1,452,000원 <span class="up" style="float:right">+124.1%</span></p>
+  <p class="s m">2026-10-02 이후 변화 · <span class="chip dn">목표가 −0.7%</span></p>
+  <p class="s m">평균 목표가 추이 (계단선 2점) · 최근 증권사 리포트 5건</p>
+  <p class="note">「평균 4.00 / 5」 척도는 몇 곳이 의견을 냈는지 말하지 않고, 목표가가 언제·누구 기준인지 흐리다.</p>
+</div></div>
+<div><p class="cap">제안 (SK하이닉스 · 국내)</p><div class="card pad">
+  <p><span class="t">애널리스트 의견</span> <span class="badge up">매수</span><span class="s m" style="float:right">네이버 증권 · 10/08 기준</span></p>
+  <div class="kpi" style="margin-top:8px"><div><span class="s m">평균 목표가</span><b class="num">3,253,182원</b></div><div><span class="s m">현재가</span><b class="num">1,452,000원</b></div><div><span class="s m">목표가까지</span><b class="num up">+124%</b></div></div>
+  <p class="sec" style="margin-top:6px">증권사들은 평균적으로 <b>「매수」(5단계 중 4단계)</b> 의견이며, 평균 목표가는 지금 주가의 <b>2.2배</b>입니다. 최근 30일 리포트 <b>6건</b>, 목표가는 10/02 3,276,957원 → 10/06 3,253,182원(<span class="dn">−0.7%</span>).</p>
+  <div class="steps" style="margin-top:8px"><span>강력매도</span><span>매도</span><span>보유</span><span class="on">매수</span><span>강력매수</span></div>
+  <p class="s m" style="margin-top:8px">최근 증권사 리포트</p>
+  <table><tr><td>환율을 이기는 호실적 예상</td><td class="m s">SK증권</td><td class="m s">10/12</td></tr><tr><td>증명의 시간</td><td class="m s">유진투자증권</td><td class="m s">10/08</td></tr><tr><td>실적에 수급을 더한다</td><td class="m s">IBK투자증권</td><td class="m s">10/07</td></tr></table>
+  <p class="s m" style="margin-top:6px">증권사 의견을 모은 것이며 Quant Port의 판단이나 투자 권유가 아닙니다.</p>
+</div>
+<p class="cap" style="margin-top:10px">제안 (AMD · 해외 — 명수가 있고 목표가가 없는 경우)</p><div class="card pad">
+  <p><span class="t">애널리스트 의견</span> <span class="badge up">매수</span><span class="s m" style="float:right">Finnhub · 9월 집계</span></p>
+  <p style="margin-top:6px">애널리스트 <b>59명 중 49명(83%)</b>이 매수 이상, <b>매도 0명</b>입니다.</p>
+  <div class="dist" style="margin-top:6px"><i style="width:29%;background:var(--up)"></i><i style="width:54%;background:rgba(248,113,113,.55)"></i><i style="width:17%;background:var(--muted)"></i></div>
+  <p class="s m num" style="display:flex;justify-content:space-between;margin-top:2px"><span class="up">강력매수 17</span><span class="up">매수 32</span><span>보유 10</span><span>매도 0 · 강력매도 0</span></p>
+  <p class="sec" style="margin-top:6px">3개월 전(6월)에는 57명 중 46명(81%) — 매수 비중 <span class="up">+2%p</span>, 참여 <span class="up">+2명</span>.</p>
+  <p class="s m">월별 의견 분포 막대(지금 그대로) · 해외 종목은 무료 목표가 출처가 없어 목표가를 싣지 않습니다.</p>
+</div></div></div>
+
+<h2>⑥ 레딧 분위기 (요청 6) — 해외 · 레딧 자료가 있을 때만, 개요 맨 아래</h2>
+<div class="grid2">
+<div><p class="cap">지금</p><div class="card pad m">개요에는 없음 — 「레딧」 탭에만 있다(커뮤니티 점수 · AI 요약 · 버즈 · 인기 글).</div></div>
+<div><p class="cap">제안 (AMD)</p><div class="card">
+  <div class="hd"><span style="background:var(--rd);color:#fff;border-radius:99px;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:900">r</span><span class="t">레딧 분위기</span>
+    <span class="big num mid" style="font-size:18px">+17</span><span class="s mid">관망</span><span class="right s m">10/13 · ApeWisdom 24시간</span></div>
+  <div class="pad">
+    <div class="kpi"><div><span class="s m">언급</span><b class="num">19회</b><span class="s m">전일 20</span></div><div><span class="s m">언급 순위</span><b class="num">#16</b><span class="s dn">▼8</span></div><div><span class="s m">긍정 비율</span><b class="num">71%</b><span class="s m">18명</span></div></div>
+    <p class="sec" style="margin-top:8px">레딧에서는 AMD의 2027년 공급 확대 계획과 장기 옵션 포지션에 대한 논의가 활발합니다. 다만 표본이 18명으로 적어 신중한 접근이 필요하며, 전반적인 분위기는 관망세입니다.</p>
+    <div class="post"><span class="s m">r/wallstreetbets · 10/6</span><br>AMD는 2027년에 공급을 대폭 늘릴 계획이라고 CEO가 밝혔습니다</div>
+    <div class="post"><span class="s m">r/wallstreetbets · 10/7</span><br>고급 머니 디스펜서 도약 위치(Advanced Money Disverser Leap Positions)</div>
+  </div>
+  <div class="cta">레딧 탭에서 전체 보기 ›</div>
+</div>
+<p class="s m" style="margin-top:6px">자료는 「레딧」 탭이 이미 받는 같은 응답을 나눠 쓴다(요청 추가 없음). 글 2건, AI 요약은 간단 문단만.</p>
+</div></div>
+
+<div class="q"><b>확인할 것</b><ol>
+<li>② 점수 카드 — 「이 점수의 과거 성적 보기 →」 링크는 막대 아래에 남김(권장) / 뺌</li>
+<li>④ 90일 — 넓은 범위도 접지 않고 위처럼 항상 펼침(권장, 10-10 「폭 ≥60% 접음」을 되돌림) / 넓으면 지금처럼 접음</li>
+<li>⑤ 애널리스트 — 국내 목표가 추이 계단선·해외 월별 분포 막대는 남김(권장) / 뺌</li>
+<li>나머지(요청 2·4·5·6)와 ③은 위 그대로 구현합니다.</li>
+</ol></div>
+</div>
+</body>
+</html>

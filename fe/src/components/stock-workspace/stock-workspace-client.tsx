@@ -478,6 +478,8 @@ export function StockWorkspaceClient({
               scenario={scenario}
               scenarioLoading={scenarioLoading}
               communityPosts={community.posts}
+              reddit={reddit}
+              onOpenReddit={() => setTab("reddit")}
             />
           )}
 

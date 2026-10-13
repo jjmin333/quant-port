@@ -10,7 +10,6 @@ import {
   type AnalystData,
   type AnalystHistoryPoint,
   type AnalystReport,
-  type AnalystTrend,
 } from "@/lib/analyst-api";
 import { formatPrice } from "@/lib/format";
 import { ratingLabel, type AnalystConsensus } from "@/lib/stock-signals-api";
@@ -35,13 +34,12 @@ const SCALE_TICKS = ["강력매도", "매도", "보유", "매수", "강력매수
  * 투자 권유가 아니라 증권사 의견의 요약이다 — 출처와 기준일을 늘 밝힌다.
  *
  * 10-07에 더 자세히 한 것(전부 이미 받는 값으로 — 새 수집 없음):
- *   · 한 문장 결론 — 「N명 중 M명(xx%)이 매수 이상」 또는 「평균 의견 매수 · 목표가까지 +x%」
- *   · 의견 척도 막대 — 평균 의견이 1~5 위 어디인지
- *   · 목표가 막대 — 현재가에서 목표가까지의 거리
- *   · 분포 — 명수와 비율을 함께
+ *   · 한 문장 결론 — 해외 「N명 중 M명(xx%)이 매수 이상, 매도 K명」 · 국내 「5단계 중 n단계 · 목표가는 지금의 x배」
+ *   · 목표가 · 현재가 · 목표가까지 세 칸, 의견 다섯 단계 중 하나를 칠한 줄(10-13, 그전엔 1~5 척도 막대)
+ *   · 분포 — 명수
  *
  * 같은 날 이어서(사용자 요청 「추이를 보여 주는 표 + 전문적으로 활용」 — 099 이력 표):
- *   · 「의견 변화」 칩 — 약 90일 전보다 의견·목표가·매수 비중·인원이 어떻게 움직였나(`analystTrend`)
+ *   · 의견 변화 — 약 90일 전보다 목표가·매수 비중·인원이 어떻게 움직였나(`analystTrend`, 10-13부터 칩 대신 결론 문장 안에)
  *   · 추이 차트 — 해외는 월별 의견 분포 막대, 국내는 목표가 계단선
  *   · 최근 증권사 리포트 — 증권사 · 제목 · 날짜, 원문은 네이버로
  *
@@ -80,26 +78,52 @@ function AnalystConsensusCard({
   price?: number;
   currency: "KRW" | "USD";
 }) {
-  // 컨센서스 없이 리포트만 있는 종목(커버리지가 얇다)도 리포트 목록은 보여 준다.
   const analyst: AnalystConsensus = data.consensus ?? { symbol: "", source: "naver", fetchedAt: "" };
   const trend = analystTrend(data.history);
+  const ref = trend ? data.history.find((h) => h.asOf === trend.sinceDate) : undefined;
+  const latest = data.history[data.history.length - 1];
   const counts = analyst.counts;
   const total = counts?.reduce((a, b) => a + b, 0) ?? 0;
   const buyers = counts ? counts[0] + counts[1] : 0;
+  const sellers = counts ? counts[3] + counts[4] : 0;
   const upside =
     analyst.targetMean && price && price > 0 ? (analyst.targetMean / price - 1) * 100 : undefined;
-  const sourceLabel = analyst.source === "naver" ? "네이버 증권 컨센서스" : "Finnhub 추천 추이";
+  const sourceLabel = analyst.source === "naver" ? "네이버 증권" : "Finnhub";
   const targetCurrency = (analyst.targetCurrency as "KRW" | "USD") || currency;
+  const step = analyst.rating != null ? Math.min(5, Math.max(1, Math.round(analyst.rating))) : null;
+  const [now] = useState(() => Date.now());
+  const recentReports = data.reports.filter(
+    (r) => r.published && now - Date.parse(r.published) <= 30 * 86_400_000,
+  ).length;
 
-  const verdict =
-    total > 0
-      ? `애널리스트 ${total}명 중 ${buyers}명(${Math.round((buyers / total) * 100)}%)이 매수 이상 의견입니다.`
-      : analyst.rating != null
-        ? `평균 의견은 「${ratingLabel(analyst.rating)}」${upside != null ? `, 평균 목표가는 지금보다 ${upside >= 0 ? "+" : ""}${upside.toFixed(1)}% ${upside >= 0 ? "위" : "아래"}입니다.` : "입니다."}`
-        : null;
+  /*
+    10-13 요청 3 — 「평균 4.00 / 5」 척도 막대·변화 칩 대신, 몇 명이 · 얼마를 · 최근 어떻게 바뀌었나를
+    문장과 숫자로 (시안 `docs/mockups/stock-overview-v2.html` ⑤).
+  */
+  const ratio = upside != null && analyst.targetMean && price ? analyst.targetMean / price : undefined;
+  const targetPhrase =
+    upside == null
+      ? null
+      : ratio != null && ratio >= 2
+        ? `평균 목표가는 지금 주가의 ${ratio.toFixed(1)}배입니다`
+        : `평균 목표가는 지금 주가보다 ${Math.abs(upside).toFixed(1)}% ${upside >= 0 ? "높습니다" : "낮습니다"}`;
+
+  // 비교 시점의 모습 — 해외는 「N개월 전(M월)에는 a명 중 b명(c%)」, 국내는 「목표가는 날짜 값 → 날짜 값」.
+  let change: string | null = null;
+  if (trend && ref && latest) {
+    if (ref.counts && latest.counts) {
+      const refTotal = ref.counts.reduce((a, b) => a + b, 0);
+      const refBuy = ref.counts[0] + ref.counts[1];
+      if (refTotal > 0) {
+        change = `${monthsAgo(ref.asOf, latest.asOf)}(${Number(ref.asOf.slice(5, 7))}월)에는 ${refTotal}명 중 ${refBuy}명(${Math.round((refBuy / refTotal) * 100)}%)`;
+      }
+    } else if (ref.targetMean && latest.targetMean) {
+      change = `목표가는 ${md(ref.asOf)} ${formatPrice(ref.targetMean, targetCurrency)} → ${md(latest.asOf)} ${formatPrice(latest.targetMean, targetCurrency)}`;
+    }
+  }
 
   return (
-    <Card className="space-y-3 p-3">
+    <Card className="space-y-2.5 p-3">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
         <Users className="h-3.5 w-3.5 shrink-0 text-[var(--brand)]" aria-hidden />
         <h3 className="text-cell font-semibold text-[var(--text-primary)]">애널리스트 의견</h3>
@@ -119,145 +143,160 @@ function AnalystConsensusCard({
         )}
         <span className="ml-auto text-micro text-[var(--text-muted)]">
           {sourceLabel}
-          {analyst.asOf ? ` · ${analyst.asOf}` : ""}
+          {analyst.asOf
+            ? ` · ${analyst.source === "naver" ? `${md(analyst.asOf)} 기준` : `${Number(analyst.asOf.slice(5, 7))}월 집계`}`
+            : ""}
         </span>
       </div>
 
-      {verdict && <p className="text-cell leading-relaxed text-[var(--text-secondary)]">{verdict}</p>}
-      {/* 2026-10-10 사업화 검토 N5 — 「매수 · +88%」가 이 서비스의 권유처럼 읽히지 않게 누구의 말인지 적는다. */}
-      <p className="text-micro text-[var(--text-muted)]">
-        증권사 의견을 모은 것이며 Quant Port의 판단이나 투자 권유가 아닙니다.
-      </p>
-
-      {analyst.rating != null && <RatingScale rating={analyst.rating} />}
-
       {analyst.targetMean != null && (
-        <div className="space-y-1">
-          <p className="flex flex-wrap items-baseline gap-x-2 text-cell">
-            <span className="text-micro text-[var(--text-muted)]">평균 목표가</span>
-            <b className="tabular-nums text-[var(--text-primary)]">{formatPrice(analyst.targetMean, targetCurrency)}</b>
-            {price != null && price > 0 && (
-              <span className="text-micro tabular-nums text-[var(--text-muted)]">
-                현재가 {formatPrice(price, currency)}
-              </span>
-            )}
-            {upside != null && (
-              <span
-                className={cn(
-                  "ml-auto text-cell font-semibold tabular-nums",
-                  upside >= 0 ? "text-[var(--profit)]" : "text-[var(--loss)]",
-                )}
-              >
-                {upside >= 0 ? "+" : ""}
-                {upside.toFixed(1)}%
-              </span>
-            )}
-          </p>
-          {upside != null && <TargetBar upside={upside} />}
+        <div className="grid grid-cols-3 gap-1.5">
+          <Kpi label="평균 목표가" value={formatPrice(analyst.targetMean, targetCurrency)} />
+          {price != null && price > 0 && <Kpi label="현재가" value={formatPrice(price, currency)} />}
+          {upside != null && (
+            <Kpi
+              label="목표가까지"
+              value={`${upside >= 0 ? "+" : "−"}${Math.abs(upside).toFixed(0)}%`}
+              tone={upside >= 0 ? "text-[var(--profit)]" : "text-[var(--loss)]"}
+            />
+          )}
         </div>
       )}
 
+      {counts && total > 0 ? (
+        <p className="text-cell leading-relaxed text-[var(--text-secondary)]">
+          애널리스트{" "}
+          <b className="text-[var(--text-primary)]">
+            {total}명 중 {buyers}명({Math.round((buyers / total) * 100)}%)
+          </b>
+          이 매수 이상, <b className="text-[var(--text-primary)]">매도 {sellers}명</b>입니다.
+          {change && trend?.buyShareDelta != null && (
+            <>
+              {" "}
+              {change} — 매수 비중 <Signed v={trend.buyShareDelta} unit="%p" digits={0} />
+              {trend.analystsDelta ? (
+                <>
+                  , 참여 <Signed v={trend.analystsDelta} unit="명" digits={0} />
+                </>
+              ) : null}
+              .
+            </>
+          )}
+        </p>
+      ) : (
+        analyst.rating != null && (
+          <p className="text-cell leading-relaxed text-[var(--text-secondary)]">
+            증권사들은 평균적으로{" "}
+            <b className="text-[var(--text-primary)]">
+              「{ratingLabel(analyst.rating)}」(5단계 중 {step}단계)
+            </b>{" "}
+            의견이며{targetPhrase ? `, ${targetPhrase}` : "입니다"}.
+            {recentReports > 0 && (
+              <>
+                {" "}
+                최근 30일 리포트 <b className="text-[var(--text-primary)]">{recentReports}건</b>
+                {change && trend?.targetPct != null ? "," : "."}
+              </>
+            )}
+            {change && trend?.targetPct != null && (
+              <>
+                {" "}
+                {change}(<Signed v={trend.targetPct} unit="%" digits={1} />).
+              </>
+            )}
+          </p>
+        )
+      )}
+
+      {step != null && <RatingSteps step={step} />}
+
       {counts && total > 0 && (
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           <div className="flex h-2 overflow-hidden rounded-full bg-[var(--surface-elevated)]" aria-hidden>
             {counts.map((n, i) =>
               n > 0 ? <span key={i} className={COUNT_TONE[i]} style={{ width: `${(n / total) * 100}%` }} /> : null,
             )}
           </div>
-          <ul className="grid grid-cols-5 gap-1 text-center">
+          <ul className="flex flex-wrap justify-between gap-x-2 text-micro tabular-nums text-[var(--text-muted)]">
             {counts.map((n, i) => (
-              <li key={i} className="rounded-md bg-[var(--surface-elevated)]/60 px-1 py-1">
-                <span className="block text-micro text-[var(--text-muted)]">{COUNT_LABELS[i]}</span>
-                <b className="block text-cell tabular-nums text-[var(--text-primary)]">{n}</b>
-                <span className="block text-micro tabular-nums text-[var(--text-muted)]">
-                  {Math.round((n / total) * 100)}%
-                </span>
+              <li
+                key={i}
+                className={cn(i < 2 && n > 0 && "text-[var(--profit)]", i > 2 && n > 0 && "text-[var(--loss)]")}
+              >
+                {COUNT_LABELS[i]} <b className="font-semibold">{n}</b>
               </li>
             ))}
           </ul>
         </div>
       )}
+      {analyst.source !== "naver" && analyst.targetMean == null && (
+        <p className="text-micro text-[var(--text-muted)]">
+          해외 종목은 무료 목표가 출처가 없어 목표가를 싣지 않습니다.
+        </p>
+      )}
 
-      {trend && <TrendChips trend={trend} />}
       {data.history.length >= 2 && <HistoryChart history={data.history} currency={currency} />}
       {data.reports.length > 0 && <ReportList reports={data.reports} />}
+      {/* 2026-10-10 사업화 검토 N5 — 「매수 · +88%」가 이 서비스의 권유처럼 읽히지 않게 누구의 말인지 적는다. */}
+      <p className="text-micro text-[var(--text-muted)]">
+        증권사 의견을 모은 것이며 Quant Port의 판단이나 투자 권유가 아닙니다.
+      </p>
     </Card>
   );
 }
 
-/** 평균 의견(1~5)이 척도 위 어디인지. 막대 색은 매도(파랑) → 매수(빨강)로 이 앱의 등락 색과 같다. */
-function RatingScale({ rating }: { rating: number }) {
-  const pos = ((Math.min(5, Math.max(1, rating)) - 1) / 4) * 100;
+function md(d: string): string {
+  const [, m, day] = d.split("-");
+  return m && day ? `${Number(m)}/${Number(day)}` : d;
+}
+
+function monthsAgo(from: string, to: string): string {
+  const n = Math.max(1, Math.round((Date.parse(to) - Date.parse(from)) / (30.4 * 86_400_000)));
+  return `${n}개월 전`;
+}
+
+function Signed({ v, unit, digits }: { v: number; unit: string; digits: number }) {
+  const r = Number(v.toFixed(digits));
   return (
-    <div className="space-y-1">
-      <div
-        className="relative h-2 rounded-full"
-        style={{ background: "linear-gradient(90deg, var(--loss) 0%, var(--muted) 50%, var(--profit) 100%)", opacity: 0.85 }}
-        aria-hidden
-      >
+    <span
+      className={cn("font-semibold tabular-nums", r > 0 ? "text-[var(--profit)]" : r < 0 ? "text-[var(--loss)]" : "")}
+    >
+      {r > 0 ? "+" : r < 0 ? "−" : ""}
+      {Math.abs(r).toFixed(digits)}
+      {unit}
+    </span>
+  );
+}
+
+function Kpi({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  return (
+    <div className="min-w-0 rounded-md border border-[var(--border)] px-2 py-1">
+      <span className="block truncate text-micro text-[var(--text-muted)]">{label}</span>
+      <span className={cn("block truncate text-note font-bold tabular-nums", tone ?? "text-[var(--text-primary)]")}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/** 평균 의견(1~5)을 가장 가까운 단계 하나로 칠한다 — 「평균 4.00 / 5」보다 바로 읽힌다(10-13 요청 3). */
+function RatingSteps({ step }: { step: number }) {
+  const onTone = step >= 4 ? "bg-[var(--profit)]" : step <= 2 ? "bg-[var(--loss)]" : "bg-[var(--text-muted)]";
+  return (
+    <div className="grid grid-cols-5 gap-0.5 text-center text-micro" aria-label={`5단계 중 ${step}단계`}>
+      {SCALE_TICKS.map((t, i) => (
         <span
-          className="absolute top-1/2 h-4 w-1 -translate-x-1/2 -translate-y-1/2 rounded-sm border border-[var(--card)] bg-[var(--text-primary)]"
-          style={{ left: `${pos}%` }}
-        />
-      </div>
-      <div className="flex justify-between text-micro text-[var(--text-muted)]">
-        {SCALE_TICKS.map((t) => (
-          <span key={t}>{t}</span>
-        ))}
-      </div>
-      <p className="text-right text-micro tabular-nums text-[var(--text-muted)]">평균 {rating.toFixed(2)} / 5</p>
-    </div>
-  );
-}
-
-/** 현재가(왼쪽 끝)에서 목표가까지 — ±50%를 막대 끝으로 잘라 그린다. */
-function TargetBar({ upside }: { upside: number }) {
-  const width = Math.min(100, (Math.abs(upside) / 50) * 100);
-  return (
-    <div className="h-1.5 overflow-hidden rounded-full bg-[var(--surface-elevated)]" aria-hidden>
-      <div
-        className={cn("h-full rounded-full", upside >= 0 ? "bg-[var(--profit)]" : "bg-[var(--loss)]")}
-        style={{ width: `${Math.max(2, width)}%` }}
-      />
-    </div>
-  );
-}
-
-/** 「의견 변화」 — 약 90일 전(이력이 짧으면 가장 오래된 시점) 대비. 움직임이 없는 항목은 칩을 안 단다. */
-function TrendChips({ trend }: { trend: AnalystTrend }) {
-  const chips: { label: string; value: string; up: boolean }[] = [];
-  if (trend.ratingDelta != null && Math.abs(trend.ratingDelta) >= 0.01) {
-    chips.push({ label: "의견", value: `${trend.ratingDelta > 0 ? "+" : ""}${trend.ratingDelta.toFixed(2)}`, up: trend.ratingDelta > 0 });
-  }
-  if (trend.targetPct != null && Math.abs(trend.targetPct) >= 0.1) {
-    chips.push({ label: "목표가", value: `${trend.targetPct > 0 ? "+" : ""}${trend.targetPct.toFixed(1)}%`, up: trend.targetPct > 0 });
-  }
-  if (trend.buyShareDelta != null && Math.abs(trend.buyShareDelta) >= 0.5) {
-    chips.push({ label: "매수 비중", value: `${trend.buyShareDelta > 0 ? "+" : ""}${trend.buyShareDelta.toFixed(0)}%p`, up: trend.buyShareDelta > 0 });
-  }
-  if (trend.analystsDelta) {
-    chips.push({ label: "애널리스트", value: `${trend.analystsDelta > 0 ? "+" : ""}${trend.analystsDelta}명`, up: trend.analystsDelta > 0 });
-  }
-  return (
-    <div className="space-y-1">
-      <p className="text-micro text-[var(--text-muted)]">{trend.sinceDate} 이후 변화</p>
-      {chips.length === 0 ? (
-        <p className="text-cell text-[var(--text-secondary)]">의견·목표가에 변화가 없습니다.</p>
-      ) : (
-        <div className="flex flex-wrap gap-1.5">
-          {chips.map((c) => (
-            <span
-              key={c.label}
-              className={cn(
-                "rounded-md px-1.5 py-0.5 text-micro font-semibold tabular-nums",
-                c.up ? "bg-[var(--profit)]/10 text-[var(--profit)]" : "bg-[var(--loss)]/10 text-[var(--loss)]",
-              )}
-            >
-              {c.label} {c.value}
-            </span>
-          ))}
-        </div>
-      )}
+          key={t}
+          className={cn(
+            "rounded py-0.5",
+            i + 1 === step
+              ? cn(onTone, "font-semibold text-white")
+              : "bg-[var(--surface-elevated)] text-[var(--text-muted)]",
+          )}
+        >
+          {t}
+        </span>
+      ))}
     </div>
   );
 }
