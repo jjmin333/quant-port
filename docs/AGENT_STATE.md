@@ -20,6 +20,8 @@
 - **Toss 스펙 감시**: `.github/workflows/toss-spec-watch.yml`이 매일 09:00 KST 공식 openapi.json·asyncapi.json을 `be/docs/toss-*.json` 기준본과 비교해 다르면 GitHub 이슈를 연다(판마다 한 번). 처리 = 기준본 갱신·영향 검토·커밋. 기준본 1.2.24(REST)·1.2.2(WS).
 - 10-11 로그 개선: 시세 `GetPrices`가 스펙 밖 심볼(BAC^B·BRK/B, 카탈로그 400개) 제외 · 폴러가 404 stock-not-found도 격리 · DART corpCode 받기 실패 시 옛 목록 유지 + 10분 재시도 간격(점검 800 중 종목마다 재다운로드하던 것) · EDGAR 「분기 없음/facts 없음」은 not_found(30일 쿨다운, 은행·무매출 바이오·펀드 1,393종목).
 
+- **홈 세 카드 높이 맞춤(10-13)**: 점수 카드 바닥 「종가 기준」 줄 → 제목 옆 작은 글씨(카드 폭 30rem 미만이면 숨김), 실적 일정 big 7줄(BE `highlightsBigLimit`, 캐시 키 v4). 1672·1280·800px에서 세 카드 278px·7줄 실측.
+
 ## BLOCKERS
 - 없음
 

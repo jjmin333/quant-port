@@ -310,7 +310,7 @@ function ScoreTopBody({
     `priceAsOf`가 없거나 날짜가 아니면(`live`) 예전처럼 점수 날짜로 적는다.
   */
   const asOf = tradeDateLabel(
-    first?.priceAsOf && /^d{4}-d{2}-d{2}/.test(first.priceAsOf)
+    first?.priceAsOf && /^\d{4}-\d{2}-\d{2}/.test(first.priceAsOf)
       ? first.priceAsOf
       : (first?.tradeDate ?? seed?.tradeDate),
   );
@@ -336,7 +336,22 @@ function ScoreTopBody({
         일곱으로 통일한 그 작업의 마지막 12px이 이것이었다. 날짜는 「더보기」가 가는
         `/analysis`에 그대로 있다.
       */
-      title="실시간 AI 점수 순위 TOP"
+      /*
+        기준일은 **제목 옆 작은 글씨**다 (2026-10-13 사용자 요청 — 바닥 줄은 옆 두 카드 밑에
+        같은 높이의 빈칸을 만들었다). 칸이 좁으면(태블릿 2열) 숨긴다 — 제목이 두 줄로
+        접히면 같은 행 카드가 다시 어긋난다. 그때도 줄마다 툴팁에 가격 날짜가 있다.
+      */
+      className="@container/card"
+      title={
+        <>
+          실시간 AI 점수 순위 TOP
+          {asOf && (
+            <span className="ml-1.5 hidden whitespace-nowrap text-micro font-normal text-muted-foreground @[30rem]/card:inline">
+              {asOf}
+            </span>
+          )}
+        </>
+      }
       action={
         <MiniToggle
           options={[
@@ -353,7 +368,6 @@ function ScoreTopBody({
        * 바로 왼쪽 제목과 같은 말이라, 좁은 홈 칸에서 제목이 「AI 추 / 천 랭 / 킹 TOP」
        * 세 줄로 접히는 값을 치르고 아무 정보도 더하지 않았다.
        */
-      footer={asOf ? <span>{asOf}</span> : undefined}
     >
       {block.status === "loading" ? (
         <SectionSkeleton rows={DASHBOARD_RANK_ROWS} />

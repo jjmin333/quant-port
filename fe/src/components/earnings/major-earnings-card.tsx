@@ -109,7 +109,7 @@ export function MajorEarningsCard({
       action={action}
     >
       {rows === null ? (
-        <SectionSkeleton rows={home ? 6 : 4} />
+        <SectionSkeleton rows={home ? 7 : 4} />
       ) : rows.length === 0 ? (
         <SectionEmpty text="예정된 발표가 없습니다" />
       ) : (
