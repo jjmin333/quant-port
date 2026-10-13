@@ -2,7 +2,6 @@
 
 import { useCallback, useState } from "react";
 import { EtfCheckCard } from "@/components/analysis/etf-check-card";
-import { StockQuestionChips } from "@/components/analysis/stock-question-chips";
 import { isDomesticEtf } from "@/lib/etf-score-api";
 import {
   METRICS_GRID_VISIBILITY,
@@ -24,7 +23,9 @@ import type { StockScoreData } from "@/lib/stock-score-api";
 import type { StockSummaryData } from "@/lib/stock-summary-types";
 import type { QuoteDetail, StockInfo } from "@/lib/quotes-types";
 import { Card } from "@/components/ui/card";
-import { NextEarningsCard, StockWhyLine, WatchPrompt } from "@/components/stock-workspace/stock-overview-parts";
+import { NextEarningsCard, StockWhyLine } from "@/components/stock-workspace/stock-overview-parts";
+import { StockRedditOverviewCard } from "@/components/community/stock-reddit-panel";
+import type { StockSignals } from "@/lib/stock-signals-api";
 import { cn } from "@/lib/utils";
 
 type StockOverviewTabProps = {
@@ -48,6 +49,9 @@ type StockOverviewTabProps = {
   scenarioLoading?: boolean;
   /** 최근 커뮤니티 글 3건 — 워크스페이스가 탭 노출 판단과 함께 한 번 받는다. `null`은 받는 중. */
   communityPosts?: CommunityPost[] | null;
+  /** 해외 종목의 레딧 자료 — 워크스페이스가 「레딧」 탭과 함께 한 번 받는다. 없으면 카드를 안 그린다. */
+  reddit?: StockSignals | null;
+  onOpenReddit?: () => void;
 };
 
 export function StockOverviewTab({
@@ -65,6 +69,8 @@ export function StockOverviewTab({
   scenario = null,
   scenarioLoading = false,
   communityPosts = null,
+  reddit = null,
+  onOpenReddit,
 }: StockOverviewTabProps) {
   const communityVisible = useCommunityVisible();
   /*
@@ -77,7 +83,7 @@ export function StockOverviewTab({
 
   /*
     AI 분석 탭과 **같은 카드**다 (2026-09-13 사용자 요청 2). 오른쪽 위 토글로
-    「간단」(요약 한 문단)과 「상세」(이어진 본문)를 오간다 — 기본값은 상세(10-07).
+    「간단」(요약 한 문단)과 「상세」(이어진 본문)를 오간다 — 개요 기본값은 간단(10-13 요청 5).
     `hideWithoutLLM`은 여기서만 켠다: 이유는 카드 머리글에.
   */
   const aiCard = (
@@ -86,6 +92,7 @@ export function StockOverviewTab({
       loading={aiSummaryLoading}
       compact={compact}
       hideWithoutLLM
+      defaultDetail="brief"
       // 종목명·코드를 되풀이하는 태그를 걸러내려면 무엇이 그 값인지 알아야 한다.
       symbol={stock.symbol}
       name={stock.name}
@@ -94,14 +101,16 @@ export function StockOverviewTab({
   const showScenario = scenarioLoading || Boolean(scenario && !scenario.unavailable);
 
   /*
-    순서 (2026-10-10 사용자 결정 — 시안 `docs/mockups/business-w4-v1.html` A안):
-    왜 움직였나 → 점수(레이더·순위) → 다음 실적 | 90일 범위 → 관심 등록 안내 → AI 요약(다 펼침) → …
-    이 서비스만의 것(점수·근거)을 첫 화면에 세운다. 10-07에는 LLM 글이 있으면 맨 위였는데, A안을 고르면서
-    점수 아래로 내렸다 — 글은 **접지 않는다**(같은 날 사용자 지시).
+    순서 (2026-10-13 요청 2·4·5·6 — 시안 `docs/mockups/stock-overview-v2.html`, 10-10 A안을 고침):
+    최근 핵심 사건 → AI 요약(간단) → 점수 → 다음 실적 | 90일 범위 → 애널리스트 → 일봉·지표·커뮤니티 → 레딧(해외).
+    관심 등록 안내·질문 칩은 뺐다.
   */
   return (
     <div className={cn("space-y-3 p-3", compact && "p-2")}>
       <StockWhyLine symbol={stock.symbol} />
+
+      {aiCard}
+
       {showEtfCheck ? (
         <EtfCheckCard symbol={stock.symbol} onMissing={onEtfMissing} />
       ) : (
@@ -117,13 +126,6 @@ export function StockOverviewTab({
           </Card>
         )}
       </div>
-
-      <WatchPrompt symbol={stock.symbol} name={stock.name} />
-
-      {aiCard}
-
-      {/* 질문 칩 — 규칙 기반 종목 Q&A(2026-09-24). 국내 ETF는 주식 점수가 없어 「점수가 왜」를 뺀다. */}
-      <StockQuestionChips symbol={stock.symbol} hideScore={showEtfCheck} />
 
       {/* 애널리스트 의견 — 자료 없으면 안 그린다. */}
       <AnalystConsensusSection
@@ -153,6 +155,9 @@ export function StockOverviewTab({
       {communityVisible && (
         <StockCommunityCard symbol={stock.symbol} name={stock.name} posts={communityPosts} />
       )}
+
+      {/* 레딧 분위기 — 해외 종목에 레딧 자료가 있을 때만, 맨 아래(10-13 요청 6). */}
+      {reddit && <StockRedditOverviewCard signals={reddit} onOpen={onOpenReddit} />}
 
     </div>
   );

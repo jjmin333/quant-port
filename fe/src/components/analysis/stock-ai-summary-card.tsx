@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
  * (국내/해외를 고를 때 쓰는 `MiniToggle` 그대로 — 이 앱에서 「두 갈래 중 하나」는
  * 언제나 이 모양이다).
  *
- * # 기본값은 양쪽 다 「상세」 (2026-10-07 사용자 요청 6 — 그전엔 「간단」)
+ * # 기본값: AI 분석 탭 「상세」(10-07 요청 6) · 개요 「간단」(10-13 요청 5, `defaultDetail`)
  *
  * 상태를 저장하지 않는다. LLM 글이 있는 종목은 4%뿐이라, 그 글이 있으면 본문을 바로
  * 펴 두는 쪽이 낫다는 판단이다 — 개요에서는 이 카드가 맨 위로 올라간다(`stock-overview-tab`).
@@ -96,6 +96,8 @@ type StockAISummaryCardProps = {
    * AI 분석 탭은 반대다 — 그 탭을 연 사람에게 빈 화면을 주는 것이 더 나쁘다.
    */
   hideWithoutLLM?: boolean;
+  /** 처음 펼 쪽. 개요는 「간단」(2026-10-13 요청 5), AI 분석 탭은 「상세」. */
+  defaultDetail?: DetailLevel;
   className?: string;
 };
 
@@ -107,9 +109,10 @@ export function StockAISummaryCard({
   name,
   compact = false,
   hideWithoutLLM = false,
+  defaultDetail = "full",
   className,
 }: StockAISummaryCardProps) {
-  const [detail, setDetail] = useState<DetailLevel>("full");
+  const [detail, setDetail] = useState<DetailLevel>(defaultDetail);
 
   /*
     한 번이라도 LLM이 쓴 적이 있으면 `source`는 `"llm"`으로 남는다 — 서버가 그때의
