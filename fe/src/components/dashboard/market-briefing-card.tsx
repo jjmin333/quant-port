@@ -56,8 +56,10 @@ import { buttonVariants } from "@/components/ui/button";
  * 화면에서도 한 번 더 거른다 — 브리핑은 배치가 만들어 저장한 것이라, 문턱을 올린
  * 직후에는 **10건 기준으로 저장된 브리핑**이 아직 남아 있다. 각주는 25건이라고
  * 적으면서 칩은 12건짜리를 보여 주는 프레임이 생기지 않게 한다.
+ *
+ * 국내만 20건(2026-10-13 사용자 요청) — 25건을 넘는 국내 종목은 대개 삼성전자·SK하이닉스뿐이었다.
  */
-const MENTION_MIN_COUNT = 25;
+const MENTION_MIN_COUNT = { domestic: 20, us: 25 } as const;
 
 export type BriefingPair = {
   domestic: NewsMarketBriefing | null;
@@ -193,6 +195,7 @@ export function MarketBriefingCard({
   const preferred = openMarket && briefings[openMarket] ? openMarket : available;
   const active = market ?? preferred;
   const briefing = active === "us" ? briefings.us : briefings.domestic;
+  const mentionMin = MENTION_MIN_COUNT[active === "us" ? "us" : "domestic"];
 
   const [expanded, setExpanded] = useState(false);
   /*
@@ -208,7 +211,7 @@ export function MarketBriefingCard({
   const { indices: live } = useMarketIndices();
   // 훅은 아래 이른 반환보다 **위에** 있어야 한다 — 브리핑이 없는 날 훅 수가 달라진다.
   const mentionChips = useChipCollapse(
-    briefing?.facts.topMentioned?.filter((m) => m.mentions >= MENTION_MIN_COUNT).length ?? 0,
+    briefing?.facts.topMentioned?.filter((m) => m.mentions >= mentionMin).length ?? 0,
   );
 
   /*
@@ -228,9 +231,9 @@ export function MarketBriefingCard({
   const mentionSymbols = useMemo(
     () =>
       (briefing?.facts.topMentioned ?? [])
-        .filter((m) => m.mentions >= MENTION_MIN_COUNT)
+        .filter((m) => m.mentions >= mentionMin)
         .map((m) => m.symbol),
-    [briefing],
+    [briefing, mentionMin],
   );
   const liveQuotes = useLiveQuotes(mentionSymbols);
 
@@ -280,7 +283,7 @@ export function MarketBriefingCard({
   const watchPoints = briefing.watchPoints ?? [];
   // 문턱은 서버가 이미 걸지만, 예전 문턱으로 저장된 브리핑을 만나면 화면이 각주와
   // 다른 목록을 보여 준다 — 그래서 여기서도 같은 수로 한 번 더 거른다.
-  const mentions = (facts.topMentioned ?? []).filter((m) => m.mentions >= MENTION_MIN_COUNT);
+  const mentions = (facts.topMentioned ?? []).filter((m) => m.mentions >= mentionMin);
   const mentionSample = facts.mentionSample ?? 0;
 
   return (
@@ -399,7 +402,7 @@ export function MarketBriefingCard({
               <p className="text-cell font-semibold text-muted-foreground">많이 언급된 종목</p>
               {mentionSample > 0 && (
                 <span className="text-micro text-muted-foreground">
-                  최근 {mentionSample.toLocaleString("ko-KR")}건 중 {MENTION_MIN_COUNT}건 이상
+                  최근 {mentionSample.toLocaleString("ko-KR")}건 중 {mentionMin}건 이상
                 </span>
               )}
               <ChipCollapseToggle state={mentionChips} />

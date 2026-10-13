@@ -17,6 +17,7 @@ import { fetchCommunityPosts } from "@/lib/community-api";
 import type { CommunityPost, CommunityPostPage } from "@/lib/community-types";
 import { toUserMessage } from "@/lib/error-message";
 import { cn } from "@/lib/utils";
+import { ASSET_FEATURES_HIDDEN } from "@/lib/hidden-features";
 import { TOPIC_FILTERS, isContentTopic, type ContentTopic } from "@/lib/topics";
 
 type Tab = "latest" | "popular" | "mine";
@@ -50,7 +51,7 @@ export function CommunityListClient({
   const symbol = (params.get("symbol") ?? initialSymbol ?? "").toUpperCase();
   // 주제 필터(2026-10-09 요청 9) — 종목 필터처럼 주소에 둔다.
   const rawTopic = params.get("topic");
-  const topic: ContentTopic | "" = isContentTopic(rawTopic) ? rawTopic : "";
+  const topic: ContentTopic | "" = !ASSET_FEATURES_HIDDEN && isContentTopic(rawTopic) ? rawTopic : "";
 
   const [tab, setTab] = useState<Tab>("latest");
   const [items, setItems] = useState<CommunityPost[]>(initialPage?.items ?? []);
@@ -131,7 +132,7 @@ export function CommunityListClient({
             <div>
               <h1 className="text-xl font-bold text-[var(--text-primary)]">커뮤니티</h1>
               <p className="text-cell text-[var(--text-muted)]">
-                주식·부동산·금융상품 이야기를 나눠요. 종목·단지·상품을 태그하면 시세와 AI 점수가 함께 보입니다.
+                주식 이야기를 나눠요. 종목을 태그하면 시세와 AI 점수가 함께 보입니다.
               </p>
             </div>
             <Link
@@ -151,14 +152,16 @@ export function CommunityListClient({
                 setLoading(true);
               }}
             />
-            <FilterGroup
-              options={TOPIC_FILTERS}
-              value={topic}
-              onChange={(id) => {
-                setParam("topic", id || null);
-                setLoading(true);
-              }}
-            />
+            {!ASSET_FEATURES_HIDDEN && (
+              <FilterGroup
+                options={TOPIC_FILTERS}
+                value={topic}
+                onChange={(id) => {
+                  setParam("topic", id || null);
+                  setLoading(true);
+                }}
+              />
+            )}
             {symbolName && (
               <button
                 type="button"

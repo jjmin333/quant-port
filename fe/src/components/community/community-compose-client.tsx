@@ -19,6 +19,7 @@ import { StockAvatar } from "@/components/stocks/stock-avatar";
 import { Card } from "@/components/ui/card";
 import { createCommunityPost, uploadCommunityImage } from "@/lib/community-api";
 import { TopicPicker } from "@/components/common/topic-ui";
+import { ASSET_FEATURES_HIDDEN } from "@/lib/hidden-features";
 import { TOPIC_TAG_HINT, isContentTopic, type ContentTopic } from "@/lib/topics";
 import { fitImageSize } from "@/lib/community-text";
 import { COMMUNITY_LIMITS, type CommunityImage } from "@/lib/community-types";
@@ -53,7 +54,7 @@ export function CommunityComposeClient() {
   // 주제(2026-10-09 요청 9) — 목록에서 주제를 고른 채 들어오면 그 주제로 시작한다.
   const [topic, setTopic] = useState<ContentTopic>(() => {
     const t = params.get("topic");
-    return isContentTopic(t) ? t : "stock";
+    return !ASSET_FEATURES_HIDDEN && isContentTopic(t) ? t : "stock";
   });
   const [symbols, setSymbols] = useState<PickedSymbol[]>([]);
   const [articles, setArticles] = useState<PickedArticle[]>([]);

@@ -32,6 +32,7 @@ import {
 } from "@/lib/research-types";
 import { cn } from "@/lib/utils";
 import { TopicBadge } from "@/components/common/topic-ui";
+import { ASSET_FEATURES_HIDDEN } from "@/lib/hidden-features";
 import { TOPIC_FILTERS, type ContentTopic } from "@/lib/topics";
 import { buttonVariants } from "@/components/ui/button";
 
@@ -149,11 +150,13 @@ export function ResearchClient({ initialCalls = [] }: { initialCalls?: ResearchC
             {/* 왼쪽은 "무엇을 보느냐"(의견), 오른쪽 끝은 "어떤 순서로 보느냐"(정렬).
                 좁은 화면에서는 정렬 그룹이 아래 줄로 내려가되 계속 오른쪽에 붙는다. */}
             <div className="flex flex-wrap items-center gap-1.5">
-              <FilterGroup
-                options={TOPIC_FILTERS}
-                value={topicFilter}
-                onChange={(id) => setTopicFilter(id as ContentTopic | "")}
-              />
+              {!ASSET_FEATURES_HIDDEN && (
+                <FilterGroup
+                  options={TOPIC_FILTERS}
+                  value={topicFilter}
+                  onChange={(id) => setTopicFilter(id as ContentTopic | "")}
+                />
+              )}
               <FilterGroup
                 options={DIRECTION_FILTERS}
                 value={directionFilter}

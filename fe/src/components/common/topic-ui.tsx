@@ -2,8 +2,9 @@
 
 import { CONTENT_TOPICS, TOPIC_BADGE_CLASS, isContentTopic, topicLabel, type ContentTopic } from "@/lib/topics";
 import { cn } from "@/lib/utils";
+import { ASSET_FEATURES_HIDDEN } from "@/lib/hidden-features";
 
-/** 글 주제 고르기 — 커뮤니티·리포트·메모장 글쓰기 공통(2026-10-09 요청 9). */
+/** 글 주제 고르기 — 커뮤니티·리포트·메모장 글쓰기 공통(2026-10-09 요청 9). 자산 기능을 숨긴 동안은 주식뿐이라 그리지 않는다(10-13). */
 export function TopicPicker({
   value,
   onChange,
@@ -13,6 +14,7 @@ export function TopicPicker({
   onChange: (t: ContentTopic) => void;
   className?: string;
 }) {
+  if (ASSET_FEATURES_HIDDEN) return null;
   return (
     <div className={cn("flex items-center gap-2", className)}>
       <span className="text-cell font-semibold text-[var(--text-secondary)]">주제</span>

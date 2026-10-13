@@ -1,19 +1,20 @@
 # Agent State
 
 > 현재 상태만 담는다. **150줄 이하, 매 세션 덮어쓴다(앞에 쌓지 않는다).** 이력은 `docs/archive/sessions.md`, 원칙은 `docs/PRINCIPLES.md`, 결정·함정은 메모리.
-> 갱신: 2026-10-13 (커뮤니티·리포트 다시 전체 공개)
+> 갱신: 2026-10-13 (커뮤니티·리포트 주제 주식만 · 국내 언급 문턱 20)
 
 ## NOW
 - **코드는 GitHub에 있다** — `jjmin333/quant-port` public, `master`. 10-10에 09-15 이후 미커밋 전부를 3개 커밋으로 push(비밀값 점검 끝: `be/.env`·`be/secrets/`·워치독 설정은 git 밖). 이후 작업도 커밋·push 한다. 클라우드 세션 규칙은 `AGENTS.md` 「Cloud sessions」(배포는 PC 세션만).
 - 사업화 단계표는 `docs/BUSINESS_REVIEW.md` §9(+「2차 검토 반영」), 경쟁사는 `docs/COMPETITORS.md`.
 - **메뉴**(10-10 결정 A + 10-12 요청 3, 메모리 `menu_sections_1010`): 실시간 차트 · **AI 점수 순위** · **종목 스크리너** · **오늘의 변화**(내 종목 배지) · 뉴스(국내·해외) · 실적(국내·해외·서프라이즈) + 보유·관심·메모장. 업종·스타일만 메뉴에서 보류(주소·사이트맵 산다). 태블릿 768~1023px에 접힌 아이콘 레일(햄버거는 드로어).
-- **커뮤니티·투자 리포트 = 전체 공개(10-13, 10-12~13 관리자 전용이었다)**: 스위치는 BE `router.go` communityGate(지금 통과, 닫으려면 RequireAdmin) + FE `ADMIN_ONLY_ROUTE_PREFIXES`(지금 빈 목록 — 메뉴·사이트맵·`AdminOnlyGate`·`useCommunityVisible`이 따른다) + `robots.ts`. 기존 글(seed-preview 시험 글 포함)은 그대로 공개됐다. 리포트 검토 노트는 LLM 없이 규칙 노트만. 부동산·금융상품·목표가 예측은 계속 숨김. 탭 줄 `section-tabs.tsx`는 뉴스·실적만, 14px·36px.
+- **커뮤니티·투자 리포트 = 전체 공개(10-13, 10-12~13 관리자 전용이었다)**: 스위치는 BE `router.go` communityGate(지금 통과, 닫으려면 RequireAdmin) + FE `ADMIN_ONLY_ROUTE_PREFIXES`(지금 빈 목록 — 메뉴·사이트맵·`AdminOnlyGate`·`useCommunityVisible`이 따른다) + `robots.ts`. 기존 글(seed-preview 시험 글 포함)은 그대로 공개됐다. 리포트 검토 노트는 LLM 없이 규칙 노트만. 부동산·금융상품·목표가 예측은 계속 숨김. **커뮤니티·리포트 주제도 주식만**(10-13): `ASSET_FEATURES_HIDDEN`이면 `TopicPicker`가 안 그려지고 목록 주제 필터·`?topic=`도 무시(기존 글 전부 stock). 탭 줄 `section-tabs.tsx`는 뉴스·실적만, 14px·36px.
 - **뉴스 칩(10-12)**: 국내 칩 전체·주식·부동산·「금리·예금·대출」(필터 값 `finance` → BE `topic IN (rates,deposit,loan)`). 홈 실시간 뉴스 기본 칩 = 주식. 뉴스 Pill은 `buttonVariants` 없이 직접 색(다크 덮어쓰기·그림자 테두리 잘림 수정).
 - 롱테일 SSR 페이지(사이트맵 포함): `/stocks/sector/<kr|us>/<업종>`(22) · `/stocks/style/<slug>`(6, 이름표 `lib/stock-style.ts`) · `/compare/<a>-vs-<b>`(정렬된 쌍 하나, 사이트맵은 업종 1위×2~5위 79개, 종목 페이지가 가까운 순위 셋과 링크) · `/earnings/surprises`(색인 대상만). 점수 일괄은 `fetchIndexableScored`(batch 200씩 5회, 1시간 캐시).
 - 종목 서버 본문(접힌 요약 바)에 AI 요약 문단·다섯 축·스타일 이름표·업종 순위·비교 링크 추가. 홈 title/설명/OG가 점수 포지셔닝 문구.
 - worker-asset 예약 7→3: `re_trades`·`onbid`·`asset_scores`·`asset_ai` 중지(예약 주석 + 감시표 manual + catch-up 허용 목록 제외 — 셋 다 해야 워치독이 되살리지 않는다). 금융상품·R-ONE·ECOS는 돈다. 되살리는 법은 `be/internal/workers/asset/asset.go` 주석.
 - KRX 휴장일 목록 보정(`calendar/holidays_krx.json` +12일: 2025·2026 근로자의 날·선거일·한글날, 2026-08-17, 2027 대체휴일·부처님오신날). 전에는 10-09를 거래일로 보고 전 종목 종가 재수집(4,278)을 반복했다.
 - **홈 비로그인 블록 축소(10-11)**: 대표 종목 카드 6장·오늘 바뀐 종목·다가오는 실적·소개 카드 3장 제거, 히어로(질문·검색·종목 칩·대표 레이더)만 남김. 지수 흐름 띠(`IndexTickerStrip`)를 홈 맨 위로. 서버 선반입도 대표 점수 하나만(변화·실적·백테스트 요청 제거).
+- 브리핑 「많이 언급된 종목」 문턱: **국내 20 · 해외 25**(10-13, BE `briefingMentionMinCount(market)` = FE `MENTION_MIN_COUNT`). 저장된 브리핑은 다음 슬롯부터 20 기준.
 - 화면 문구: 90일 시나리오 폭 ≥60%면 접음 · 애널리스트 카드 「증권사 의견, 권유 아님」 · 브리핑 금리 칩 bp.
 
 - **Toss 스펙 감시**: `.github/workflows/toss-spec-watch.yml`이 매일 09:00 KST 공식 openapi.json·asyncapi.json을 `be/docs/toss-*.json` 기준본과 비교해 다르면 GitHub 이슈를 연다(판마다 한 번). 처리 = 기준본 갱신·영향 검토·커밋. 기준본 1.2.24(REST)·1.2.2(WS).
@@ -38,6 +39,9 @@
 ## CONSTRAINTS (원본 위치만)
 - 프로젝트 규칙 `AGENTS.md` · 저장·캐시·LLM·목록 원칙 `docs/PRINCIPLES.md` · 운영 함정은 MEMORY.md 색인
 - 배포 스크립트 출력을 파이프로 받지 말 것(메모리 `deploy_script_pipe_breaks_it`) — 10-10에 한 번 어겼고 nginx는 무사했다
+
+## VERIFY (10-13 저녁 실측)
+- tsc·eslint(손댄 6파일)·vitest 512·go build·service 시험 통과 · 배포 api+fe+worker-content(이미지 일치), health 200, panic 0 · 공개 /community 새 문구, 주제 필터 없음
 
 ## VERIFY (10-13 실측)
 - go build·middleware 시험·tsc·vitest 512 통과 · 배포 api+fe(워커는 코드 무관이라 재생성 안 함 — 이미지 id가 api와 다름), health 200, panic 0
