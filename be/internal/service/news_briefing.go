@@ -104,14 +104,17 @@ const (
 		    (실측 2026-09-03) — 그 정도면 「오늘 화제인 종목」이 아니라 「오늘 뉴스에
 		    나온 종목」이다. 25회로 올리면 국내 8·해외 5개가 남고(같은 표본), 그게
 		    사람이 훑어보고 「오늘은 이것들이었구나」 하는 크기다(사용자 결정).
+		    **국내만 20회**(2026-10-13 사용자 요청) — 국내는 25회를 넘는 종목이 대개
+		    삼성전자·SK하이닉스 둘뿐이라 목록이 비었다. 해외는 25회로도 충분히 많다.
 		    **화면도 같은 수로 한 번 더 거른다** — 문턱을 바꾸면 예전 문턱으로 저장된
 		    브리핑이 남아 있어서, 각주와 칩이 어긋나는 프레임이 생긴다.
 		  - Count 30 — 문턱을 넘은 종목을 **다 준다**. 문턱을 넘긴 종목이 많은 날은
 		    스무 개도 나오는데, 그걸 서버에서 잘라 버리면 화면이 「전체 보기」로
 		    펼칠 것이 없다. 접는 일은 화면이 한다(market-briefing-card.tsx).
 	*/
-	briefingMentionMinCount = 25
-	briefingMentionCount    = 30
+	briefingMentionMinCountDomestic = 20
+	briefingMentionMinCountUS       = 25
+	briefingMentionCount            = 30
 	// briefingHistoryCount / briefingHistoryChars — how much of the previous
 	// briefings the next prompt reads back. Ten truncated summaries of the
 	// same morning cost more than the facts they were meant to support; three
@@ -572,7 +575,7 @@ func (s *NewsBriefingService) briefingIndices(ctx context.Context, market string
 }
 
 /*
-topMentioned은 최근 1,000건에서 briefingMentionMinCount회 이상 언급된 종목을 세고, 각 종목에 지금 시세를
+topMentioned은 최근 1,000건에서 briefingMentionMinCount(market)회 이상 언급된 종목을 세고, 각 종목에 지금 시세를
 붙인다. 두 번째 반환값은 **실제로 센 기사 수**다 — 화면 각주가 「최근 N건 중」이라고
 적을 때 요청한 수가 아니라 있었던 수를 써야 한다.
 
@@ -584,6 +587,13 @@ topMentioned은 최근 1,000건에서 briefingMentionMinCount회 이상 언급�
 이름은 SQL이 stocks를 조인해 함께 준다 — 국내 화면에 엔비디아가 올라오던 것도 그
 조인이 막는다(asset_type='domestic').
 */
+func briefingMentionMinCount(market string) int {
+	if market == "domestic" {
+		return briefingMentionMinCountDomestic
+	}
+	return briefingMentionMinCountUS
+}
+
 func (s *NewsBriefingService) topMentioned(
 	ctx context.Context,
 	market string,
@@ -591,7 +601,7 @@ func (s *NewsBriefingService) topMentioned(
 	if s.news == nil {
 		return nil, 0
 	}
-	top, err := s.news.TopSymbolsAbove(ctx, market, briefingMentionMinCount, briefingMentionCount)
+	top, err := s.news.TopSymbolsAbove(ctx, market, briefingMentionMinCount(market), briefingMentionCount)
 	if err != nil || len(top.Symbols) == 0 {
 		return nil, top.ArticleCount
 	}

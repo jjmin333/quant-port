@@ -6,6 +6,7 @@ import { PageScrollShell } from "@/components/layout/page-content-shell";
 import { TopicPicker } from "@/components/common/topic-ui";
 import { ResearchCompose } from "@/components/research/research-compose";
 import { ResearchNoteCompose } from "@/components/research/research-note-compose";
+import { ASSET_FEATURES_HIDDEN } from "@/lib/hidden-features";
 import { isContentTopic, type ContentTopic } from "@/lib/topics";
 
 /**
@@ -16,7 +17,7 @@ export function ResearchComposeEntry() {
   const params = useSearchParams();
   const [topic, setTopic] = useState<ContentTopic>(() => {
     const t = params.get("topic");
-    return !params.get("symbol") && isContentTopic(t) ? t : "stock";
+    return !ASSET_FEATURES_HIDDEN && !params.get("symbol") && isContentTopic(t) ? t : "stock";
   });
   const picker = <TopicPicker value={topic} onChange={setTopic} className="px-1" />;
 
