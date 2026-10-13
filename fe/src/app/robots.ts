@@ -22,8 +22,9 @@ import { SITE_URL } from "@/lib/seo";
 const PUBLIC_API_PREFIXES = [
   "/api/v1/news/",
   "/api/v1/earnings/",
-  // research·community는 뺐다 — 10-12부터 관리자 전용(`lib/hidden-features` ADMIN_ONLY_ROUTE_PREFIXES).
-  // 공개로 되돌리면 "/api/v1/research/"·"/api/v1/community/"를 여기에 다시 넣는다.
+  // research·community는 10-12~13 관리자 전용 기간에 뺐다가 공개로 되돌렸다 — 다시 닫으면 뺄 것.
+  "/api/v1/research/",
+  "/api/v1/community/",
   "/api/v1/stocks/",
   "/api/v1/quotes/",
   "/api/v1/rankings/",
@@ -54,10 +55,10 @@ export default function robots(): MetadataRoute.Robots {
         "/login",
         "/signup",
         "/welcome",
-        // 관리자 전용 기간(10-12~)에는 화면 전체를 막는다. 공개로 되돌리면 글쓰기 화면
-        // (`/reports/new`·`/community/new`)만 막는다 — 본문·작성자 페이지는 색인 대상이었다.
-        "/reports",
-        "/community",
+        // 글쓰기 화면. 리포트·커뮤니티 본문과 작성자 페이지는 공개 색인 대상이다.
+        // 관리자 전용으로 다시 닫으면 화면 전체("/reports"·"/community")를 막는다.
+        "/reports/new",
+        "/community/new",
       ],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,

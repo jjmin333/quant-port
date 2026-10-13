@@ -33,12 +33,11 @@ export function isHiddenRoute(pathname: string): boolean {
 export const ASSET_FEATURES_HIDDEN = isHiddenRoute("/real-estate");
 
 /**
- * 관리자에게만 여는 경로 (2026-10-12 사용자 결정) — 커뮤니티·투자 리포트를 가상 데이터로 채워
- * 화면을 시험하는 동안 일반 방문자·검색엔진에는 닫는다. 진짜 차단은 BE(`router.go` communityGate)이고,
- * FE는 메뉴·사이트맵·robots에서 빼고 비관리자를 홈으로 돌려보낸다(`AdminOnlyGate`).
- * 공개로 되돌릴 때는 이 목록을 비우고 BE의 communityGate를 걷는다.
+ * 관리자에게만 여는 경로 — 진짜 차단은 BE(`router.go` communityGate)이고, FE는 메뉴·사이트맵에서 빼고
+ * 비관리자를 홈으로 돌려보낸다(`AdminOnlyGate`·`useCommunityVisible`). 커뮤니티·리포트는 10-12에 넣었다가
+ * 10-13에 다시 공개했다 — 다시 닫으려면 "/community"·"/reports"를 넣고 BE communityGate를 RequireAdmin으로.
  */
-export const ADMIN_ONLY_ROUTE_PREFIXES = ["/community", "/reports"] as const;
+export const ADMIN_ONLY_ROUTE_PREFIXES: readonly string[] = [];
 
 export function isAdminOnlyRoute(pathname: string): boolean {
   return ADMIN_ONLY_ROUTE_PREFIXES.some(

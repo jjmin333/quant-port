@@ -80,11 +80,11 @@ func (s *Server) routes() http.Handler {
 
 
 		/*
-			communityGate — 커뮤니티·투자 리포트를 관리자에게만 연다(2026-10-12 사용자 결정: 가상 데이터로
-			화면을 시험하는 동안 일반 방문자·검색엔진에 닫는다). 공개로 되돌릴 때는 이 줄을 통과 미들웨어로
-			바꾸고 FE lib/hidden-features.ts의 ADMIN_ONLY_ROUTE_PREFIXES를 비운다.
+			communityGate — 커뮤니티·투자 리포트 문. 10-12에 관리자 전용(RequireAdmin)으로 닫았다가
+			10-13 사용자 요청으로 다시 모두에게 열었다(통과). 다시 닫을 때는 middleware.RequireAdmin(s.users)로
+			바꾸고 FE lib/hidden-features.ts의 ADMIN_ONLY_ROUTE_PREFIXES를 채운다.
 		*/
-		communityGate := middleware.RequireAdmin(s.users)
+		communityGate := func(next http.Handler) http.Handler { return next }
 
 		// Public market data (optional auth enriches watchlist/held flags)
 		api.Group(func(public chi.Router) {

@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/providers/auth-provider";
 import { isAdminSession } from "@/lib/admin-features";
+import { isAdminOnlyRoute } from "@/lib/hidden-features";
 
 /**
  * 관리자 전용 화면의 문(2026-10-12, `lib/hidden-features` ADMIN_ONLY_ROUTE_PREFIXES).
@@ -13,7 +14,7 @@ import { isAdminSession } from "@/lib/admin-features";
 export function AdminOnlyGate({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
   const router = useRouter();
-  const allowed = isAdminSession(session);
+  const allowed = !isAdminOnlyRoute(usePathname()) || isAdminSession(session);
 
   useEffect(() => {
     if (!loading && !allowed) router.replace("/");
