@@ -20,6 +20,10 @@ import (
 type EarningsHighlights struct {
 	// Big — 다가오는 대형 발표(시가총액 순).
 	Big []model.EarningsEvent `json:"big"`
+	// RecentBig — 최근 발표된 대형 실적(시가총액 순). 홈 카드만 쓴다: 다가오는 발표가
+	// 일곱에 못 미치면 그 아래를 채운다(2026-10-13 사용자 요청 — 카드 밑이 비지 않게).
+	// 레일은 「다가오는」만 말하는 자리라 쓰지 않는다.
+	RecentBig []model.EarningsEvent `json:"recentBig"`
 	// Divergent — 서프라이즈와 주가가 반대로 간 발표.
 	Divergent []model.EarningsEvent `json:"divergent"`
 	// Consistent — 최근 8분기 컨센서스 적중률 상위 기업.
@@ -38,7 +42,7 @@ const (
 	// 만든다. 재료가 배치로만 들어오므로 30분 낡은 레일은 문제가 되지 않는다.
 	earningsHighlightsTTL    = 30 * time.Minute
 	earningsHighlightsKeep   = 36 * time.Hour
-	earningsHighlightsKeyFmt = "earnings:highlights:v4:%s"
+	earningsHighlightsKeyFmt = "earnings:highlights:v6:%s"
 
 	// 대형 발표는 앞으로 2주를 본다 — 그보다 멀면 「다가오는」이 아니다.
 	highlightsUpcomingDays = 14
@@ -53,6 +57,8 @@ const (
 	highlightsUpcomingFallbackDays = 100
 	// 엇갈린 발표·적중 이력은 최근 실적 시즌을 덮어야 한다.
 	highlightsDivergentDays  = 45
+	// 최근 발표는 실적 시즌 한 번을 덮는다 — 시즌 사이(국내 10월 중순 등)에도 지난 시즌이 남게.
+	highlightsRecentDays = 100
 	highlightsConsistentDays = 730
 
 	highlightsLimit = 6
@@ -84,6 +90,7 @@ func (s *EarningsCalendarService) Highlights(
 ) (EarningsHighlights, error) {
 	out := EarningsHighlights{
 		Big:        []model.EarningsEvent{},
+		RecentBig:  []model.EarningsEvent{},
 		Divergent:  []model.EarningsEvent{},
 		Consistent: []model.EarningsConsistency{},
 	}
@@ -100,6 +107,7 @@ func (s *EarningsCalendarService) Highlights(
 	build := func(buildCtx context.Context) {
 		fresh := EarningsHighlights{
 			Big:        s.upcomingBig(buildCtx, today, market),
+			RecentBig:  s.recentBig(buildCtx, today, market),
 			Divergent:  s.divergentAnnouncements(buildCtx, today, market),
 			Consistent: s.consistentBeaters(buildCtx, today, market),
 		}
@@ -126,6 +134,7 @@ func (s *EarningsCalendarService) Highlights(
 	}
 	// Redis가 없거나 쓰기에 실패했다 — 직접 만들어 준다.
 	out.Big = s.upcomingBig(ctx, today, market)
+	out.RecentBig = s.recentBig(ctx, today, market)
 	out.Divergent = s.divergentAnnouncements(ctx, today, market)
 	out.Consistent = s.consistentBeaters(ctx, today, market)
 	return out, nil
@@ -155,11 +164,52 @@ func (s *EarningsCalendarService) highlightsRefresh() *quoteRefreshCoordinator {
 func (s *EarningsCalendarService) upcomingBig(
 	ctx context.Context, today time.Time, market string,
 ) []model.EarningsEvent {
-	if found := s.upcomingBigWithin(ctx, today, market, highlightsUpcomingDays); len(found) > 0 {
-		return found
+	near := s.upcomingBigWithin(ctx, today, market, highlightsUpcomingDays)
+	if len(near) >= highlightsBigLimit {
+		return near
 	}
-	// 시즌 사이라 2주 안이 비었다. 넓혀서 「다음에 올 것」을 보여준다.
-	return s.upcomingBigWithin(ctx, today, market, highlightsUpcomingFallbackDays)
+	// 2주 안이 모자라다(시즌 사이엔 0건). 넓힌 창의 「다음에 올 것」으로 나머지를 채운다 —
+	// 2주 안의 것은 시가총액이 작아도 앞에 남긴다.
+	seen := make(map[string]bool, len(near))
+	for _, ev := range near {
+		seen[ev.Symbol+"|"+ev.Date] = true
+	}
+	for _, ev := range s.upcomingBigWithin(ctx, today, market, highlightsUpcomingFallbackDays) {
+		if len(near) >= highlightsBigLimit {
+			break
+		}
+		if !seen[ev.Symbol+"|"+ev.Date] {
+			near = append(near, ev)
+		}
+	}
+	return near
+}
+
+// recentBig — 최근 발표된 대형 실적을 시가총액 순으로. 홈 카드가 다가오는 발표로
+// 일곱 줄을 못 채울 때 아래를 채운다.
+func (s *EarningsCalendarService) recentBig(
+	ctx context.Context, today time.Time, market string,
+) []model.EarningsEvent {
+	from := today.AddDate(0, 0, -highlightsRecentDays)
+	rows, err := s.events.Announced(ctx, model.ExpandUSQueryFrom(from, market), today, market)
+	if err != nil {
+		return []model.EarningsEvent{}
+	}
+	rows = s.prepareCalendarRows(ctx, rows, from, today, market)
+	s.AttachMarketCaps(ctx, rows)
+	// 종목마다 가장 최근 발표 하나 — 100일 창엔 국내 잠정·확정이나 두 분기가 함께 든다
+	// (실측: 삼성전자 10-08·07-07이 나란히 섰다).
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Date > rows[j].Date })
+	seen := make(map[string]bool, len(rows))
+	sized := make([]model.EarningsEvent, 0, len(rows))
+	for _, ev := range rows {
+		if ev.MarketCap != nil && !seen[ev.Symbol] {
+			seen[ev.Symbol] = true
+			sized = append(sized, ev)
+		}
+	}
+	sort.SliceStable(sized, func(i, j int) bool { return *sized[i].MarketCap > *sized[j].MarketCap })
+	return trimEvents(sized, highlightsBigLimit)
 }
 
 func (s *EarningsCalendarService) upcomingBigWithin(
