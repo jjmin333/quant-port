@@ -38,7 +38,7 @@ const (
 	// 만든다. 재료가 배치로만 들어오므로 30분 낡은 레일은 문제가 되지 않는다.
 	earningsHighlightsTTL    = 30 * time.Minute
 	earningsHighlightsKeep   = 36 * time.Hour
-	earningsHighlightsKeyFmt = "earnings:highlights:v3:%s"
+	earningsHighlightsKeyFmt = "earnings:highlights:v4:%s"
 
 	// 대형 발표는 앞으로 2주를 본다 — 그보다 멀면 「다가오는」이 아니다.
 	highlightsUpcomingDays = 14
@@ -56,6 +56,9 @@ const (
 	highlightsConsistentDays = 730
 
 	highlightsLimit = 6
+	// 다가오는 대형 발표만 7 — 홈에서 옆 두 카드(점수·거래대금, FE DASHBOARD_RANK_ROWS)와
+	// 줄 수가 같아야 카드 밑이 비지 않는다(2026-10-13 사용자 요청).
+	highlightsBigLimit = 7
 	// 적중률을 말하려면 표본이 있어야 한다. 2분기짜리 「2/2 100%」가 8분기
 	// 「7/8」보다 위에 오면 목록이 쓸모없어진다.
 	highlightsMinQuarters = 4
@@ -194,7 +197,7 @@ func (s *EarningsCalendarService) upcomingBigWithin(
 		}
 	}
 	sort.SliceStable(sized, func(i, j int) bool { return *sized[i].MarketCap > *sized[j].MarketCap })
-	return trimEvents(sized, highlightsLimit)
+	return trimEvents(sized, highlightsBigLimit)
 }
 
 // divergentAnnouncements — 서프라이즈와 주가가 **반대로** 간 발표 (R2).

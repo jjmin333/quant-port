@@ -3245,3 +3245,4 @@
 - 2026-10-13: 커뮤니티·투자 리포트 관리자 전용 해제 — communityGate 통과·ADMIN_ONLY_ROUTE_PREFIXES 비움·AdminOnlyGate/useCommunityVisible이 목록을 따름·robots 복원, 기존 글 유지 · api+fe 배포(워커 재생성 안 함)
 - 2026-10-13: 커뮤니티·리포트 주제 주식만(부동산·금융상품 선택·필터 숨김) · 브리핑 많이 언급된 종목 국내 문턱 25→20 · 배포 api+fe+worker-content
 - 2026-10-13: 종목 개요 v2 — 최근 핵심 사건·AI 요약 간단 기본 위로·점수 레이더+다섯 막대·전일 칩 머리줄·다음 실적 표·90일 범위 숫자화·애널리스트 결론 문장·해외 레딧 카드, 관심 안내·질문 칩 삭제 (시안 stock-overview-v2) · fe 배포(api 재생성), health 200
+- 2026-10-13: 홈 점수·거래대금·실적 카드 높이 맞춤(기준일 제목 옆·실적 7줄·priceAsOf 정규식 수정) · api+fe 배포
