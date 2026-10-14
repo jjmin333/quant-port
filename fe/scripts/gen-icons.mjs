@@ -1,4 +1,4 @@
-// `favicon.ico` · `apple-icon.png` 를 `src/app/icon.svg` 와 같은 도형으로 다시 굽는다.
+// `favicon.ico` · `apple-icon.png` · PWA 아이콘(public/icon-*.png)을 `src/app/icon.svg` 와 같은 도형으로 다시 굽는다.
 //   node scripts/gen-icons.mjs src/app
 // 정식 로고가 나오면 이 스크립트째로 지우고 디자이너가 준 파일을 넣으면 된다.
 
@@ -23,8 +23,12 @@ function roundRectCovers(x, y, rx0, ry0, w, h, r) {
   return (x - cx) ** 2 + (y - cy) ** 2 <= r * r;
 }
 
-/** size x size RGBA. rounded=false 면 모서리를 깎지 않는다(애플 아이콘은 iOS가 깎는다). */
-function raster(size, rounded) {
+/**
+ * size x size RGBA. rounded=false 면 모서리를 깎지 않는다(애플 아이콘은 iOS가 깎는다).
+ * inset < 1 이면 막대를 가운데로 줄인다 — maskable 아이콘은 런처가 원·물방울로
+ * 잘라도 남는 안전 영역(지름 80%) 안에 도형이 있어야 한다.
+ */
+function raster(size, rounded, inset = 1) {
   const S = 4; // 4x 슈퍼샘플링
   const out = Buffer.alloc(size * size * 4);
   const k = 32 / size;
@@ -36,8 +40,9 @@ function raster(size, rounded) {
           const x = (px + (sx + 0.5) / S) * k;
           const y = (py + (sy + 0.5) / S) * k;
           if (rounded ? roundRectCovers(x, y, 0, 0, 32, 32, PANEL_R) : true) panel++;
+          const ix = 16 + (x - 16) / inset, iy = 16 + (y - 16) / inset;
           for (const [bx, by, bw, bh] of BARS) {
-            if (roundRectCovers(x, y, bx, by, bw, bh, BAR_R)) { bar++; break; }
+            if (roundRectCovers(ix, iy, bx, by, bw, bh, BAR_R)) { bar++; break; }
           }
         }
       }
@@ -134,4 +139,8 @@ fs.writeFileSync(`${app}/favicon.ico`, ico([
   { size: 48, data: raster(48, true) },
 ]));
 fs.writeFileSync(`${app}/apple-icon.png`, png(180, raster(180, false)));
-console.log("wrote favicon.ico, apple-icon.png");
+// PWA 매니페스트(src/app/manifest.ts)가 가리키는 파일. 실행 위치는 fe/.
+fs.writeFileSync("public/icon-192.png", png(192, raster(192, true)));
+fs.writeFileSync("public/icon-512.png", png(512, raster(512, true)));
+fs.writeFileSync("public/icon-maskable-512.png", png(512, raster(512, false, 0.72)));
+console.log("wrote favicon.ico, apple-icon.png, public/icon-{192,512,maskable-512}.png");

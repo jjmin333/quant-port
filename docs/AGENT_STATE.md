@@ -1,7 +1,7 @@
 # Agent State
 
 > 현재 상태만 담는다. **150줄 이하, 매 세션 덮어쓴다(앞에 쌓지 않는다).** 이력은 `docs/archive/sessions.md`, 원칙은 `docs/PRINCIPLES.md`, 결정·함정은 메모리.
-> 갱신: 2026-10-13 밤 (종목 개요 v2 — 시안 `docs/mockups/stock-overview-v2.html`)
+> 갱신: 2026-10-14 (PWA 1단계 — 설치 가능 + 오프라인 안내)
 
 ## NOW
 - **코드는 GitHub에 있다** — `jjmin333/quant-port` public, `master`. 10-10에 09-15 이후 미커밋 전부를 3개 커밋으로 push(비밀값 점검 끝: `be/.env`·`be/secrets/`·워치독 설정은 git 밖). 이후 작업도 커밋·push 한다. 클라우드 세션 규칙은 `AGENTS.md` 「Cloud sessions」(배포는 PC 세션만).
@@ -21,6 +21,8 @@
 - 10-11 로그 개선: 시세 `GetPrices`가 스펙 밖 심볼(BAC^B·BRK/B, 카탈로그 400개) 제외 · 폴러가 404 stock-not-found도 격리 · DART corpCode 받기 실패 시 옛 목록 유지 + 10분 재시도 간격(점검 800 중 종목마다 재다운로드하던 것) · EDGAR 「분기 없음/facts 없음」은 not_found(30일 쿨다운, 은행·무매출 바이오·펀드 1,393종목).
 
 - **홈 세 카드 높이 맞춤(10-13)**: 점수 카드 바닥 「종가 기준」 줄 → 제목 옆 작은 글씨(카드 폭 30rem 미만이면 숨김), 실적 일정 7줄 보장: 2주 안이 모자라면 100일 창으로 채우고, 그래도 모자라면 홈만 `recentBig`(최근 100일 발표·종목당 최신 1건·시총 순)을 아래에 「N일 전」으로(캐시 키 v6). 1672·1280·800px에서 세 카드 278px·7줄 실측.
+
+- **PWA 1단계(10-14)**: `app/manifest.ts`(→ `/manifest.webmanifest`) · 아이콘 `public/icon-{192,512,maskable-512}.png`(`scripts/gen-icons.mjs`가 굽는다) · `public/sw.js`는 **화면 이동이 네트워크 실패할 때만** `offline.html`을 준다(다른 요청은 안 건드림, navigation preload 켬, offline.html 고치면 `CACHE` 판 올리기) · 등록은 `layout.tsx` 운영 빌드에서만 lazyOnload. 웹 푸시는 안 함(알림 채널 결정 대기). 앱 출시 검토: Flutter 재작성 X → PWA → 안드로이드 TWA/Capacitor → iOS Capacitor+푸시, 그 전에 서버 이전.
 
 ## BLOCKERS
 - 없음
@@ -42,6 +44,9 @@
 - 프로젝트 규칙 `AGENTS.md` · 저장·캐시·LLM·목록 원칙 `docs/PRINCIPLES.md` · 운영 함정은 MEMORY.md 색인
 - 배포 스크립트 출력을 파이프로 받지 말 것(메모리 `deploy_script_pipe_breaks_it`) — 10-10에 한 번 어겼고 nginx는 무사했다
 
+## VERIFY (10-14 실측)
+- tsc·eslint 통과 · fe 재빌드(api 같이 재생성, 워커 코드 무관), health 200, panic 0 · 공개 도메인 manifest·sw.js·offline.html·아이콘 200, 홈 `<link rel=manifest>` · 브라우저: SW activated·페이지 제어·preload on·offline-v1 캐시, 종목 페이지 정상, 콘솔 오류 0. **실제 오프라인 전환은 못 해 봤다**(브라우저 패널에 네트워크 끄기 없음)
+
 ## VERIFY (10-13 밤 실측)
 - tsc·vitest 512 통과, 손댄 파일 eslint 신규 0(workspace-client set-state-in-effect 3건은 기존) · fe 재빌드(api 같이 재생성, 워커는 코드 무관이라 그대로), health 200, panic 0
 - 브라우저: AMD(데스크톱)·000660(375px) 개요 순서·전일 ▲5 칩·간단 기본·레딧 카드(해외만), 375px 가로 넘침 0
@@ -57,11 +62,8 @@
 - go test service·repository·handler·model 통과(service 첫 실행 1회 실패, 재실행 2회 통과 — 병렬 실행 간섭 의심) · vitest 512 · tsc 통과
 - 반응형: 14화면 × 360/768/1024/1440 가로 넘침 0(공개 도메인, 배포 전). 768에서 순위 목록이 전폭으로 늘어나는 것은 남김
 
-## VERIFY (10-11 저녁 실측)
-- go test ./... 통과(낡은 휴장일 기대값 3건 08-17→08-18 정정) · 배포 api+워커 4(이미지 일치), health 200, panic 0, api 네트워크 1
-
 ## NEXT
-- 앱 출시·메뉴 이름 복원은 사용자가 진행 안 함(10-12). 앱인토스는 정책 3-5·3-6으로 핵심 기능 입점 불가
+- 메뉴 이름 복원은 사용자가 진행 안 함(10-12). 앱은 10-14에 PWA부터 착수(다음: 웹 푸시는 알림 채널 결정 뒤, 스토어는 서버 이전·사업자 등록 뒤). 앱인토스는 정책 3-5·3-6으로 핵심 기능 입점 불가
 - 10-12 09:00 이후: Actions 「Toss API spec watch」 첫 cron 실행 성공 확인(이슈 없음이 정상) · 10-12 09:00 financials_overseas 실패 수가 161에서 크게 줄었는지 · 10-12 20:00 insider_domestic·22:00 financials_domestic 정상(10-09·10은 DART 점검 800으로 전 종목 실패)
 - Toss 새 sectors API 5종(1.2.24) — 지금 DART/SEC로 하는 업종 분류를 대체할지 검토(사용자 결정)
 - 홈 `/` React #418(하이드레이션 텍스트 불일치) 하루 ~9건 — 일부는 가짜 UA 봇, 시간 의존 문구 의심

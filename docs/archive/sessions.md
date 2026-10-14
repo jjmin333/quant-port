@@ -3247,3 +3247,4 @@
 - 2026-10-13: 종목 개요 v2 — 최근 핵심 사건·AI 요약 간단 기본 위로·점수 레이더+다섯 막대·전일 칩 머리줄·다음 실적 표·90일 범위 숫자화·애널리스트 결론 문장·해외 레딧 카드, 관심 안내·질문 칩 삭제 (시안 stock-overview-v2) · fe 배포(api 재생성), health 200
 - 2026-10-13: 홈 점수·거래대금·실적 카드 높이 맞춤(기준일 제목 옆·실적 7줄·priceAsOf 정규식 수정) · api+fe 배포
 - 2026-10-13: 홈 실적 일정 7줄 보장(2주 창 부족분을 100일 창으로·최근 발표 recentBig로 채움) · api+fe+worker-content·stock 배포
+- 2026-10-14: PWA 1단계 — manifest·아이콘 3종(gen-icons.mjs)·sw.js(내비게이션 실패 시 offline.html만)·운영 빌드 등록, 앱 출시 방식 검토(Flutter X → PWA→TWA/Capacitor) · fe 배포(api 재생성)

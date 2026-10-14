@@ -179,6 +179,10 @@ function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
 gtag('config', '${GA_MEASUREMENT_ID}');`}
             </Script>
+            {/* PWA 서비스 워커(public/sw.js) — 오프라인 안내만 한다. dev에서는 등록하지 않는다. */}
+            <Script id="sw-register" strategy="lazyOnload">
+              {`if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");`}
+            </Script>
           </>
         )}
         <AuthProvider>
