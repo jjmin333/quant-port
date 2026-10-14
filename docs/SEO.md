@@ -74,6 +74,7 @@ Next 기본(Vercel) 파비콘이 그대로 나가고 있었다. **정식 로고�
 - `fe/src/app/icon.svg` — **원본**. 이걸 고치면 나머지 둘을 다시 구워야 한다.
 - `fe/src/app/favicon.ico` — 16·32·48 세 벌
 - `fe/src/app/apple-icon.png` — 180×180
+- `fe/public/icon-{192,512,maskable-512}.png` — PWA 매니페스트(`src/app/manifest.ts`)용. maskable은 막대를 안전 영역 안으로 줄였다
 
 ```
 cd fe && node scripts/gen-icons.mjs src/app
