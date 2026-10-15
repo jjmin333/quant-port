@@ -187,6 +187,8 @@ func BootstrapWorker(ctx context.Context) (*WorkerDeps, error) {
 		Provider: cfg.LLM.Provider,
 		BaseURL:  cfg.LLM.BaseURL,
 		Model:    cfg.LLM.Model,
+		// 지수 해설은 503이면 대체 모델로 한 번 더(chatCompletionWithFallback).
+		FallbackModel: cfg.LLM.FallbackModel,
 	}, cfg.LLM.KeyKR, cfg.LLM.KeyUS, apiBudget))
 
 	earnings := NewEarningsIngestService(

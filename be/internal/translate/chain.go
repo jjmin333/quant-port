@@ -131,6 +131,13 @@ func (c *Chain) TranslateENtoKO(ctx context.Context, texts []string) ([]string, 
 			}
 			continue
 		}
+		/*
+			이 엔진은 **대답했다**. 앞 엔진의 오류(Azure 예산 소진)를 끝까지 들고 가면,
+			뒤 엔진이 대답했는데 전부 거절된 묶음이 「예산 소진」으로 보고된다 —
+			호출부는 그것을 「못 보냈다」로 읽어 시도 횟수를 안 세고, 같은 제목을
+			2분마다 영원히 다시 보낸다(10-15, 하루 56줄). 대답은 왔고 못 쓴 것이다.
+		*/
+		lastErr = nil
 
 		next := pending[:0:0]
 		for j, i := range pending {

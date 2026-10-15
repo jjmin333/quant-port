@@ -1,7 +1,7 @@
 # Agent State
 
 > 현재 상태만 담는다. **150줄 이하, 매 세션 덮어쓴다(앞에 쌓지 않는다).** 이력은 `docs/archive/sessions.md`, 원칙은 `docs/PRINCIPLES.md`, 결정·함정은 메모리.
-> 갱신: 2026-10-14 (PWA 1단계 — 설치 가능 + 오프라인 안내)
+> 갱신: 2026-10-15 (운영 로그 점검 — LLM 503 재시도·번역·로그 잡음)
 
 ## NOW
 - **코드는 GitHub에 있다** — `jjmin333/quant-port` public, `master`. 10-10에 09-15 이후 미커밋 전부를 3개 커밋으로 push(비밀값 점검 끝: `be/.env`·`be/secrets/`·워치독 설정은 git 밖). 이후 작업도 커밋·push 한다. 클라우드 세션 규칙은 `AGENTS.md` 「Cloud sessions」(배포는 PC 세션만).
@@ -24,6 +24,8 @@
 
 - **PWA 1단계(10-14)**: `app/manifest.ts`(→ `/manifest.webmanifest`) · 아이콘 `public/icon-{192,512,maskable-512}.png`(`scripts/gen-icons.mjs`가 굽는다) · `public/sw.js`는 **화면 이동이 네트워크 실패할 때만** `offline.html`을 준다(다른 요청은 안 건드림, navigation preload 켬, offline.html 고치면 `CACHE` 판 올리기) · 등록은 `layout.tsx` 운영 빌드에서만 lazyOnload. 웹 푸시는 안 함(알림 채널 결정 대기). 앱 출시 검토: Flutter 재작성 X → PWA → 안드로이드 TWA/Capacitor → iOS Capacitor+푸시, 그 전에 서버 이전.
 
+- **운영 로그 점검(10-15)**: nginx·api 5xx는 27시간 0건(502 1건은 fe 재기동 순간), 스캐너 400/404뿐. 「503」은 Gemini high demand — ① AI 요약 배치가 503·타임아웃 실패만 끝에서 10분 뒤 한 바퀴 더(`batchPass`, `llm.IsTransient`, 같은 주 모델) ② 지수 해설은 브리핑처럼 503이면 대체 모델(`chatCompletionWithFallback`, worker 풀에 FallbackModel) ③ 번역 사슬이 뒤 엔진이 대답했는데 앞 엔진의 예산 소진을 보고하던 것 → 같은 제목 2분마다 무한 재시도·로그 반복이 원인 ④ Toss 한도 「observed」 로그를 값마다 한 번(MARKET_INDICATOR 10↔5로 하루 400줄). 뉴스 목록 「rebuild slow」(0.5~0.7s, 배경 예열)·fe 「Failed to find Server Action "x"」(봇 탐침)는 둠.
+
 ## BLOCKERS
 - 없음
 
@@ -44,25 +46,15 @@
 - 프로젝트 규칙 `AGENTS.md` · 저장·캐시·LLM·목록 원칙 `docs/PRINCIPLES.md` · 운영 함정은 MEMORY.md 색인
 - 배포 스크립트 출력을 파이프로 받지 말 것(메모리 `deploy_script_pipe_breaks_it`) — 10-10에 한 번 어겼고 nginx는 무사했다
 
+## VERIFY (10-15 실측)
+- go build·vet, llm·translate·toss·service 시험 통과(IsTransient·사슬 오류 보고 시험 추가) · 배포 api+worker-content+worker-market(이미지 일치), health 200, panic 0 · 재기동 뒤 한도 로그 그룹·값당 1줄
+- **worker-stock은 재생성 안 함** — financials_domestic(22:00 KST 시작, 보통 ~4시간)이 돌고 있었다. 지수 해설 대체 모델은 다음 재생성부터
+
 ## VERIFY (10-14 실측)
 - tsc·eslint 통과 · fe 재빌드(api 같이 재생성, 워커 코드 무관), health 200, panic 0 · 공개 도메인 manifest·sw.js·offline.html·아이콘 200, 홈 `<link rel=manifest>` · 브라우저: SW activated·페이지 제어·preload on·offline-v1 캐시, 종목 페이지 정상, 콘솔 오류 0. **실제 오프라인 전환은 못 해 봤다**(브라우저 패널에 네트워크 끄기 없음)
 
-## VERIFY (10-13 밤 실측)
-- tsc·vitest 512 통과, 손댄 파일 eslint 신규 0(workspace-client set-state-in-effect 3건은 기존) · fe 재빌드(api 같이 재생성, 워커는 코드 무관이라 그대로), health 200, panic 0
-- 브라우저: AMD(데스크톱)·000660(375px) 개요 순서·전일 ▲5 칩·간단 기본·레딧 카드(해외만), 375px 가로 넘침 0
-
-## VERIFY (10-13 저녁 실측)
-- tsc·eslint(손댄 6파일)·vitest 512·go build·service 시험 통과 · 배포 api+fe+worker-content(이미지 일치), health 200, panic 0 · 공개 /community 새 문구, 주제 필터 없음
-
-## VERIFY (10-13 실측)
-- go build·middleware 시험·tsc·vitest 512 통과 · 배포 api+fe(워커는 코드 무관이라 재생성 안 함 — 이미지 id가 api와 다름), health 200, panic 0
-- 공개 도메인 비로그인: community·research API 200, /community 글 40, 사이드바에 커뮤니티·리포트, robots Allow research·community API·Disallow /new만, 사이트맵에 268줄
-
-## VERIFY (10-12 오후 실측)
-- go test service·repository·handler·model 통과(service 첫 실행 1회 실패, 재실행 2회 통과 — 병렬 실행 간섭 의심) · vitest 512 · tsc 통과
-- 반응형: 14화면 × 360/768/1024/1440 가로 넘침 0(공개 도메인, 배포 전). 768에서 순위 목록이 전폭으로 늘어나는 것은 남김
-
 ## NEXT
+- 10-16 02:00 KST 이후 financials_domestic 끝나면 `docker compose up -d --no-build --no-deps --force-recreate worker-stock`(이미지 id를 api와 대조) · 다음 국내 요약 배치(17:20 KST) 로그에 `retrying N transient failures`가 나오면 끝 줄 failed가 줄었는지 · api 로그 「예산 소진」이 하루 몇 줄로 줄었는지
 - 메뉴 이름 복원은 사용자가 진행 안 함(10-12). 앱은 10-14에 PWA부터 착수(다음: 웹 푸시는 알림 채널 결정 뒤, 스토어는 서버 이전 없이 진행 — 10-14 결정, 메모리 `app_store_launch_order_1014`: 사업자 등록(사용자 진행 중) → D-U-N-S → 개발자 계정 → 안드로이드 → iOS). 앱인토스는 정책 3-5·3-6으로 핵심 기능 입점 불가
 - 10-12 09:00 이후: Actions 「Toss API spec watch」 첫 cron 실행 성공 확인(이슈 없음이 정상) · 10-12 09:00 financials_overseas 실패 수가 161에서 크게 줄었는지 · 10-12 20:00 insider_domestic·22:00 financials_domestic 정상(10-09·10은 DART 점검 800으로 전 종목 실패)
 - Toss 새 sectors API 5종(1.2.24) — 지금 DART/SEC로 하는 업종 분류를 대체할지 검토(사용자 결정)

@@ -71,7 +71,7 @@ const indexNoteSystemPrompt = `당신은 한국 투자자를 위한 시장 지�
 
 // GenerateIndexNote turns one index's computed indicators into a paragraph.
 func (c *Client) GenerateIndexNote(ctx context.Context, factsJSON string) (*IndexNoteLLMOutput, error) {
-	content, used, err := c.chatCompletion(
+	content, used, _, err := c.chatCompletionWithFallback(
 		ctx,
 		indexNoteSystemPrompt,
 		factsJSON,

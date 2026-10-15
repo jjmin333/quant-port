@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -135,6 +136,14 @@ func IsBudgetExhausted(err error) bool {
 // make it four attempts for one slot.
 func IsUnavailable(err error) bool { return isLLMUnavailable(err) }
 
+// IsTransient reports failures a later call can plausibly fix: the capacity
+// 503 and a network timeout (Gemini under load can sit past our 45s client
+// timeout before sending headers). Never true for a spent budget.
+func IsTransient(err error) bool {
+	var ne net.Error
+	return isLLMUnavailable(err) || (errors.As(err, &ne) && ne.Timeout())
+}
+
 // chatCompletion sends a single system+user message to the chat completions
 // endpoint and returns the raw response content plus the tokens the call
 // actually cost. Shared by every Client method that talks to the LLM —
@@ -170,7 +179,8 @@ func (c *Client) chatCompletion(
 // 쓴다. 시도 횟수는 그대로 둘이다.
 //
 // Opt-in per caller: 대량 배치(종목 AI 요약)가 여기에 붙으면 대체 모델의
-// 무료 한도를 브리핑 몫까지 먹는다. 지금은 시장 브리핑만 쓴다.
+// 무료 한도를 브리핑 몫까지 먹는다. 지금은 시장 브리핑과 지수 해설(하루 열세
+// 콜, 10-14 밤 503으로 9개가 비었다)만 쓴다.
 func (c *Client) chatCompletionWithFallback(
 	ctx context.Context,
 	systemPrompt, userContent string,

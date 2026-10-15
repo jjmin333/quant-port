@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/enact/quant-port/be/internal/llm"
 	"github.com/enact/quant-port/be/internal/marketdata/calendar"
 	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/toss"
@@ -502,33 +504,75 @@ func (s *StockSummaryService) executeBatch(
 ) []string {
 	run.StopReason = cutReason
 	spacing := s.batchSpacing(ctx, window.schedule.market)
+	retry, remaining := s.batchPass(ctx, window, planned, run, &spacing, false)
+	if remaining != nil || len(retry) == 0 {
+		return remaining
+	}
+	/*
+		**일시 실패만 끝에서 한 번 더 부른다.**
 
-	for i, target := range planned {
+		Gemini의 503 「high demand」와 응답 헤더 타임아웃은 몇 분짜리 혼잡이다.
+		10-15 국내 배치는 220건 중 29건(삼성전자 포함)이 이것으로 실패했고 몰린
+		시간은 20분 남짓이었다 — 그 종목들은 하루 내내 어제 글로 남았다. 같은 주
+		모델로 한 바퀴만 더 돈다(대체 모델은 브리핑·지수 해설 몫이라 쓰지 않는다).
+		503은 한도를 깎지 않으니 지출은 성공한 만큼만 는다.
+	*/
+	log.Printf("llm batch %s: retrying %d transient failures after %s", window.schedule.market, len(retry), llmBatchRetryDelay)
+	select {
+	case <-ctx.Done():
+		run.StopReason = model.LLMBatchStopShutdown
+		return nil
+	case <-time.After(llmBatchRetryDelay):
+	}
+	_, remaining = s.batchPass(ctx, window, retry, run, &spacing, true)
+	return remaining
+}
+
+// llmBatchRetryDelay is the pause before the retry pass — long enough for a
+// provider capacity spike to pass. Tests shorten it.
+var llmBatchRetryDelay = 10 * time.Minute
+
+// batchPass runs targets in order. It returns the targets that failed for a
+// transient reason (worth one more try) and, when it stopped early, the
+// symbols it never reached. On a retry pass each result replaces the failed
+// one the first pass recorded.
+func (s *StockSummaryService) batchPass(
+	ctx context.Context,
+	window batchRunWindow,
+	targets []model.LLMBatchTarget,
+	run *model.LLMBatchRun,
+	spacing *time.Duration,
+	retrying bool,
+) (retry []model.LLMBatchTarget, remaining []string) {
+	for i, target := range targets {
 		if ctx.Err() != nil {
 			run.StopReason = model.LLMBatchStopShutdown
-			return remainingSymbols(planned[i:])
+			return nil, remainingSymbols(targets[i:])
 		}
 		// Stop before the call that would run past the market open rather
 		// than after it: a summary that lands post-open is worth less than
 		// the quota it cost.
-		if time.Now().Add(spacing).After(window.deadline) {
+		if time.Now().Add(*spacing).After(window.deadline) {
 			run.StopReason = model.LLMBatchStopDeadline
-			return remainingSymbols(planned[i:])
+			return nil, remainingSymbols(targets[i:])
 		}
 		if reason, ok := s.batchBudgetExhausted(ctx, window.schedule.market); ok {
 			run.StopReason = reason
-			return remainingSymbols(planned[i:])
+			return nil, remainingSymbols(targets[i:])
 		}
 
 		if i > 0 {
 			select {
 			case <-ctx.Done():
 				run.StopReason = model.LLMBatchStopShutdown
-				return remainingSymbols(planned[i:])
-			case <-time.After(spacing):
+				return nil, remainingSymbols(targets[i:])
+			case <-time.After(*spacing):
 			}
 		}
 
+		if retrying {
+			run.Failed--
+		}
 		result := model.LLMBatchSymbolResult{Symbol: target.Symbol, Name: target.Name}
 		view, stats, err := s.refreshSymbol(ctx, target.Symbol, true)
 		switch {
@@ -543,6 +587,9 @@ func (s *StockSummaryService) executeBatch(
 			result.Source = view.Source
 			result.Error = stats.llmErr.Error()
 			run.Failed++
+			if llm.IsTransient(stats.llmErr) {
+				retry = append(retry, target)
+			}
 		default:
 			result.Status = model.LLMBatchSymbolDone
 			result.Source = view.Source
@@ -552,13 +599,18 @@ func (s *StockSummaryService) executeBatch(
 
 		if stats.llmTokens > 0 {
 			run.TokensUsed += stats.llmTokens
-			spacing = s.recordBatchTokens(ctx, stats.llmTokens, window.schedule.market)
+			*spacing = s.recordBatchTokens(ctx, stats.llmTokens, window.schedule.market)
 		}
-		run.Symbols = append(run.Symbols, result)
+		j := slices.IndexFunc(run.Symbols, func(r model.LLMBatchSymbolResult) bool { return r.Symbol == target.Symbol })
+		if retrying && j >= 0 {
+			run.Symbols[j] = result
+		} else {
+			run.Symbols = append(run.Symbols, result)
+		}
 		s.storeBatchRun(ctx, window.schedule.market, run.TradeDate, run)
 	}
 
-	return nil
+	return retry, nil
 }
 
 // batchBudgetExhausted reports whether the day's remaining allowance has run
