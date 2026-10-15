@@ -3,11 +3,14 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/enact/quant-port/be/internal/marketdata/apibudget"
 )
 
 func withFastUnavailableRetry(t *testing.T) {
@@ -143,5 +146,30 @@ func TestChatCompletionDoesNotRetry429(t *testing.T) {
 	}
 	if n := hits.Load(); n != 1 {
 		t.Fatalf("hits=%d want 1 (429 must not retry)", n)
+	}
+}
+
+// 배치가 끝에서 다시 부르는 것은 503과 타임아웃뿐이다 — 예산 소진(429)은 다시 물어도 같은 대답이다.
+func TestIsTransient(t *testing.T) {
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+	}))
+	defer slow.Close()
+	_, timeoutErr := (&http.Client{Timeout: 20 * time.Millisecond}).Get(slow.URL)
+
+	cases := []struct {
+		err  error
+		want bool
+	}{
+		{fmt.Errorf("llm api 503: high demand"), true},
+		{timeoutErr, true},
+		{apibudget.Exhaustedf("llm api 429: quota"), false},
+		{fmt.Errorf("llm api 400: bad request"), false},
+		{nil, false},
+	}
+	for _, c := range cases {
+		if got := IsTransient(c.err); got != c.want {
+			t.Errorf("IsTransient(%v) = %v, want %v", c.err, got, c.want)
+		}
 	}
 }

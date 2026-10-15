@@ -85,17 +85,20 @@ logFirstSeenLimit — 그룹마다 한도를 **처음 본 순간 한 번** 남�
 
 Toss는 어떤 그룹에도 한도 숫자를 공표하지 않는다(헤더에만 있다). 새 버킷을 쓰기 시작할
 때(2026-09-24 STOCK_TRADING_TREND) 「그 버킷의 한도가 얼마인가」를 로그 한 줄로 알 수 있게
-한다 — 같은 그룹의 한도가 달라지면 그때 한 번 더 찍힌다.
+한다 — 같은 그룹에 처음 보는 한도 값이 오면 그때 한 번 더 찍힌다.
+
+**값마다 한 번이다.** 한 그룹 안에서도 경로마다 한도가 다르다(MARKET_INDICATOR는 10과
+5가 번갈아 온다). 「마지막 값과 다르면 찍기」였을 때는 그 둘이 오갈 때마다 찍혀 하루
+400줄이 됐다(10-15).
 */
-var seenLimits sync.Map // group|key → limit
+var seenLimits sync.Map // group|key|limit → struct{}
 
 func logFirstSeenLimit(group, key string, limit int) {
 	if limit <= 0 {
 		return
 	}
-	if prev, loaded := seenLimits.LoadOrStore(group+"|"+key, limit); loaded && prev.(int) == limit {
+	if _, loaded := seenLimits.LoadOrStore(group+"|"+key+"|"+strconv.Itoa(limit), struct{}{}); loaded {
 		return
 	}
-	seenLimits.Store(group+"|"+key, limit)
 	log.Printf("toss api rate-limit observed: group=%s key=%s limit=%d", group, key, limit)
 }

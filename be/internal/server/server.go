@@ -294,7 +294,7 @@ func New(cfg *config.Config) (*Server, error) {
 		Provider: cfg.LLM.Provider,
 		BaseURL:  cfg.LLM.BaseURL,
 		Model:    cfg.LLM.Model,
-		// 503 대체 모델은 시장 브리핑만 쓴다(chatCompletionWithFallback).
+		// 503 대체 모델은 시장 브리핑·지수 해설만 쓴다(chatCompletionWithFallback).
 		FallbackModel: cfg.LLM.FallbackModel,
 	}, cfg.LLM.KeyKR, cfg.LLM.KeyUS, apiBudget)
 	newsStore := service.NewNewsStore(cfg.News, naverNews, kakaoNews, rssNews, finnhubNews, rssUSNews, googleNews, newsRepo, keywordRepo, pollSettingsRepo, stockRepo, watchlistRepo, userHoldingsRepo, redis.Client())

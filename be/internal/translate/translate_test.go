@@ -2,6 +2,7 @@ package translate
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -193,9 +194,29 @@ func TestChainOnlyRetriesWhatFailed(t *testing.T) {
 	}
 }
 
+// 앞 엔진이 오류(예산 소진)를 내고 뒤 엔진은 대답했지만 전부 거절됐으면, 앞 엔진의
+// 오류를 보고하면 안 된다 — 호출부가 「못 보냈다」로 읽고 같은 제목을 영원히 다시 보낸다.
+func TestChainDoesNotReportEarlierErrorWhenLaterEngineAnswered(t *testing.T) {
+	exhausted := &stubTranslator{name: "azure", err: errors.New("budget exhausted")}
+	rejecting := &stubTranslator{name: "local", out: []string{"Nvidia stock slips"}}
+	got, err := NewChain(exhausted, rejecting).TranslateENtoKO(t.Context(), []string{"Nvidia stock slips"})
+	if err != nil {
+		t.Fatalf("뒤 엔진이 대답했는데 오류가 왔다: %v", err)
+	}
+	if got[0] != "" {
+		t.Fatalf("거절된 번역이 들어갔다: %q", got[0])
+	}
+
+	// 모든 엔진이 오류면 그 오류는 그대로 올라간다.
+	if _, err := NewChain(exhausted).TranslateENtoKO(t.Context(), []string{"x y"}); err == nil {
+		t.Fatal("전부 실패했는데 오류가 없다")
+	}
+}
+
 type stubTranslator struct {
 	name    string
 	out     []string
+	err     error
 	lastLen int
 }
 
@@ -203,6 +224,9 @@ func (s *stubTranslator) Name() string    { return s.name }
 func (s *stubTranslator) Available() bool { return true }
 func (s *stubTranslator) TranslateENtoKO(_ context.Context, texts []string) ([]string, error) {
 	s.lastLen = len(texts)
+	if s.err != nil {
+		return nil, s.err
+	}
 	out := make([]string, len(texts))
 	copy(out, s.out)
 	return out, nil
