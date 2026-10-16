@@ -1,5 +1,6 @@
 import type { ContentTopic } from "@/lib/topics";
 import { apiRequest } from "@/lib/api-client";
+import { asPersona } from "@/lib/bot-admin";
 import type {
   CommunityComment,
   CommunityCreateInput,
@@ -39,8 +40,9 @@ export function fetchCommunityPost(id: number): Promise<CommunityPost> {
   return apiRequest<CommunityPost>(`/api/v1/community/posts/${id}`);
 }
 
-export function createCommunityPost(input: CommunityCreateInput): Promise<CommunityPost> {
-  return apiRequest<CommunityPost>("/api/v1/community/posts", {
+/** personaId — 관리자가 게시 계정으로 올릴 때(`lib/bot-admin.ts`). */
+export function createCommunityPost(input: CommunityCreateInput, personaId?: number): Promise<CommunityPost> {
+  return apiRequest<CommunityPost>(asPersona("/api/v1/community/posts", personaId), {
     method: "POST",
     headers: JSON_HEADERS,
     body: JSON.stringify(input),
@@ -85,8 +87,9 @@ export function addCommunityComment(
   id: number,
   body: string,
   parentId?: number,
+  personaId?: number,
 ): Promise<CommunityComment> {
-  return apiRequest<CommunityComment>(`/api/v1/community/posts/${id}/comments`, {
+  return apiRequest<CommunityComment>(asPersona(`/api/v1/community/posts/${id}/comments`, personaId), {
     method: "POST",
     headers: JSON_HEADERS,
     body: JSON.stringify({ body, parentId }),

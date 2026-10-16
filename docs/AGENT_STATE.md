@@ -1,7 +1,7 @@
 # Agent State
 
 > 현재 상태만 담는다. **150줄 이하, 매 세션 덮어쓴다(앞에 쌓지 않는다).** 이력은 `docs/archive/sessions.md`, 원칙은 `docs/PRINCIPLES.md`, 결정·함정은 메모리.
-> 갱신: 2026-10-15 (운영 로그 점검 — LLM 503 재시도·번역·로그 잡음)
+> 갱신: 2026-10-16 (관리자 「봇 초안」 · 게시 계정)
 
 ## NOW
 - **코드는 GitHub에 있다** — `jjmin333/quant-port` public, `master`. 10-10에 09-15 이후 미커밋 전부를 3개 커밋으로 push(비밀값 점검 끝: `be/.env`·`be/secrets/`·워치독 설정은 git 밖). 이후 작업도 커밋·push 한다. 클라우드 세션 규칙은 `AGENTS.md` 「Cloud sessions」(배포는 PC 세션만).
@@ -25,6 +25,8 @@
 - **PWA 1단계(10-14)**: `app/manifest.ts`(→ `/manifest.webmanifest`) · 아이콘 `public/icon-{192,512,maskable-512}.png`(`scripts/gen-icons.mjs`가 굽는다) · `public/sw.js`는 **화면 이동이 네트워크 실패할 때만** `offline.html`을 준다(다른 요청은 안 건드림, navigation preload 켬, offline.html 고치면 `CACHE` 판 올리기) · 등록은 `layout.tsx` 운영 빌드에서만 lazyOnload. 웹 푸시는 안 함(알림 채널 결정 대기). 앱 출시 검토: Flutter 재작성 X → PWA → 안드로이드 TWA/Capacitor → iOS Capacitor+푸시, 그 전에 서버 이전.
 
 - **운영 로그 점검(10-15)**: nginx·api 5xx는 27시간 0건(502 1건은 fe 재기동 순간), 스캐너 400/404뿐. 「503」은 Gemini high demand — ① AI 요약 배치가 503·타임아웃 실패만 끝에서 10분 뒤 한 바퀴 더(`batchPass`, `llm.IsTransient`, 같은 주 모델) ② 지수 해설은 브리핑처럼 503이면 대체 모델(`chatCompletionWithFallback`, worker 풀에 FallbackModel) ③ 번역 사슬이 뒤 엔진이 대답했는데 앞 엔진의 예산 소진을 보고하던 것 → 같은 제목 2분마다 무한 재시도·로그 반복이 원인 ④ Toss 한도 「observed」 로그를 값마다 한 번(MARKET_INDICATOR 10↔5로 하루 400줄). 뉴스 목록 「rebuild slow」(0.5~0.7s, 배경 예열)·fe 「Failed to find Server Action "x"」(봇 탐침)는 둠.
+
+- **봇 초안 · 게시 계정(10-16, 메모리 `bot_drafts_personas_1016`)**: worker-stock `bot_drafts` 잡이 KST 3시간마다(00·03·…·21시) 브리핑 많이 언급된 종목·오늘의 변화·2일 안 실적 프리뷰에서 가중 랜덤으로 커뮤니티 5 · 리포트 2 초안(짧은/긴 글)을 `bot_drafts`에 쌓는다. LLM 없음, 미게시 24시간 뒤 삭제, 24시간 안 같은 종목 제외. 관리자 `/admin/bots`(탭 둘) → 「편집해서 게시」가 `/community/new?draft=` · `/reports/new?draft=`를 열고 **게시 계정**(users `role='persona'`, `badge`, `@persona.invalid`, 빈 비밀번호)을 골라 올린다. 쓰기는 기존 핸들러를 `/admin/personas/{id}/as/...`(ActAs, persona만 통과) 아래 재사용 — 쿨다운·리포트 하루 5건·종목 30일 규칙 그대로. 게시 계정은 관리자 뱃지만(활동·새내기 뱃지 없음, 「운영」 표시 없음 — 사용자 결정). 같은 화면에 게시 계정 글의 7일 댓글 + 그 계정으로 답글.
 
 ## BLOCKERS
 - 없음
@@ -50,11 +52,13 @@
 - go build·vet, llm·translate·toss·service 시험 통과(IsTransient·사슬 오류 보고 시험 추가) · 배포 api+worker-content+worker-market(이미지 일치), health 200, panic 0 · 재기동 뒤 한도 로그 그룹·값당 1줄
 - **worker-stock은 재생성 안 함** — financials_domestic(22:00 KST 시작, 보통 ~4시간)이 돌고 있었다. 지수 해설 대체 모델은 다음 재생성부터
 
-## VERIFY (10-14 실측)
-- tsc·eslint 통과 · fe 재빌드(api 같이 재생성, 워커 코드 무관), health 200, panic 0 · 공개 도메인 manifest·sw.js·offline.html·아이콘 200, 홈 `<link rel=manifest>` · 브라우저: SW activated·페이지 제어·preload on·offline-v1 캐시, 종목 페이지 정상, 콘솔 오류 0. **실제 오프라인 전환은 못 해 봤다**(브라우저 패널에 네트워크 끄기 없음)
+## VERIFY (10-16 실측)
+- go build·vet, service·handler·repository 시험(봇 초안 슬롯·가중 뽑기·본문에 #/@·매수/매도 없음·업종 이름) · tsc 통과, vitest 512 통과, 새 파일 eslint 0(기존 파일의 set-state-in-effect 4건은 원래 있던 것) · 105 마이그레이션 적용 · 배포 api+fe+worker-stock(이미지 일치), health 200, panic 0 · 수동 실행 3회 각 커뮤니티 5·리포트 2(후보 306) — 본문 실측으로 업종 키→한국어, 규칙 종가 문장 제외, 머리 두 문장으로 고침 · `/admin/bot-drafts` 비로그인 401
+- **관리자 화면·게시·답글은 브라우저로 못 봤다**(관리자 계정 로그인 불가) — 사용자가 `/admin/bots`에서 한 번 올려 보기
 
 ## NEXT
-- 10-16 02:00 KST 이후 financials_domestic 끝나면 `docker compose up -d --no-build --no-deps --force-recreate worker-stock`(이미지 id를 api와 대조) · 다음 국내 요약 배치(17:20 KST) 로그에 `retrying N transient failures`가 나오면 끝 줄 failed가 줄었는지 · api 로그 「예산 소진」이 하루 몇 줄로 줄었는지
+- 10-16 15:00 KST `bot_drafts` 첫 예약 실행이 원장에 schedule로 남는지(감시의 「12:00 늦음」이 풀리는지) · 관리자 화면에서 게시 계정 만들기→초안 게시→답글 한 바퀴 · worker-content·market·asset은 10-16 이미지가 아니다(코드 경로 무관)
+- 다음 국내 요약 배치(17:20 KST) 로그에 `retrying N transient failures`가 나오면 끝 줄 failed가 줄었는지 · api 로그 「예산 소진」이 하루 몇 줄로 줄었는지
 - 메뉴 이름 복원은 사용자가 진행 안 함(10-12). 앱은 10-14에 PWA부터 착수(다음: 웹 푸시는 알림 채널 결정 뒤, 스토어는 서버 이전 없이 진행 — 10-14 결정, 메모리 `app_store_launch_order_1014`: 사업자 등록(사용자 진행 중) → D-U-N-S → 개발자 계정 → 안드로이드 → iOS). 앱인토스는 정책 3-5·3-6으로 핵심 기능 입점 불가
 - 10-12 09:00 이후: Actions 「Toss API spec watch」 첫 cron 실행 성공 확인(이슈 없음이 정상) · 10-12 09:00 financials_overseas 실패 수가 161에서 크게 줄었는지 · 10-12 20:00 insider_domestic·22:00 financials_domestic 정상(10-09·10은 DART 점검 800으로 전 종목 실패)
 - Toss 새 sectors API 5종(1.2.24) — 지금 DART/SEC로 하는 업종 분류를 대체할지 검토(사용자 결정)

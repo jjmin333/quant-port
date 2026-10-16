@@ -87,6 +87,7 @@ type Server struct {
 	closesBatch      *handler.ClosesBatchHandler
 	seoStocks        *handler.SEOStocksHandler
 	adminGrowth      *handler.AdminGrowthHandler
+	adminBots        *handler.AdminBotHandler
 	priceScenario    *handler.PriceScenarioHandler
 	symbolContext    *handler.SymbolContextHandler
 	holdingsDiag     *handler.HoldingsDiagnosisHandler
@@ -857,6 +858,7 @@ func New(cfg *config.Config) (*Server, error) {
 		closesBatch: handler.NewClosesBatchHandler(mysql.DB()),
 		seoStocks:   handler.NewSEOStocksHandler(mysql.DB()),
 		adminGrowth: handler.NewAdminGrowthHandler(growth.NewReportReader(mysql.DB())),
+		adminBots:   handler.NewAdminBotHandler(repository.NewBotDraftRepo(mysql.DB())),
 		scoreCustom: handler.NewScoreCustomHandler(
 			service.NewCustomRankingService(repository.NewUserScoreWeightsRepo(mysql.DB()), scoreSettingsStore),
 			repository.NewUserScoreWeightsRepo(mysql.DB()),

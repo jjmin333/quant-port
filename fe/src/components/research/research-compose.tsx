@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, Loader2, Sparkles } from "lucide-react";
+import { PersonaSelect } from "@/components/admin/persona-select";
 import { PageScrollShell } from "@/components/layout/page-content-shell";
 import { Card } from "@/components/ui/card";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
@@ -18,6 +19,7 @@ import {
 } from "@/components/research/research-shared";
 import { ResearchThumbnailPicker } from "@/components/research/research-thumbnail-picker";
 import { useConfirm } from "@/components/providers/confirm-provider";
+import { fetchBotDraft, markBotDraftPublished } from "@/lib/bot-admin";
 import { previewResearchClient, publishResearchClient } from "@/lib/research-api";
 import {
   clearResearchDraft,
@@ -93,6 +95,26 @@ export function ResearchCompose({ header }: { header?: React.ReactNode } = {}) {
   // The draft is injected once per symbol. Re-injecting on every preview would
   // wipe whatever the author has already written.
   const draftedFor = useRef<string | null>(null);
+
+  // 봇 초안(관리자, 2026-10-16) — `?draft=`면 종목·제목·본문을 채우고 게시 계정으로 발행한다.
+  // 방향·목표가는 초안에 없다 — 발행하는 사람이 정한다.
+  const botDraftId = Number(params.get("draft")) || null;
+  const [personaId, setPersonaId] = useState<number | null>(null);
+  useEffect(() => {
+    if (!botDraftId) return;
+    let alive = true;
+    fetchBotDraft(botDraftId)
+      .then((d) => {
+        if (!alive) return;
+        setSymbol(d.symbol.toUpperCase());
+        setTitle(d.title);
+        setBody(d.body);
+      })
+      .catch(() => setError("초안을 불러오지 못했습니다."));
+    return () => {
+      alive = false;
+    };
+  }, [botDraftId]);
 
   const targetPrice = parsePrice(targetInput);
   const stopPrice = parsePrice(stopInput);
@@ -178,7 +200,8 @@ export function ResearchCompose({ header }: { header?: React.ReactNode } = {}) {
     같은 종목 30일 쿨다운을 소모한다.
   */
   const canPublish =
-    Boolean(symbol) && Boolean(preview) && !boundsError && !missingBody && !publishing;
+    Boolean(symbol) && Boolean(preview) && !boundsError && !missingBody && !publishing &&
+    (!botDraftId || personaId !== null);
 
   /*
     작성 중인 내용을 종목별로 저장한다 (§A-5). 저장 자체가 사용자에게 보이는 행동은
@@ -290,18 +313,25 @@ export function ResearchCompose({ header }: { header?: React.ReactNode } = {}) {
     setPublishing(true);
     setError(null);
     try {
-      const created = await publishResearchClient({
-        symbol,
-        title,
-        direction,
-        targetPrice,
-        stopPrice,
-        horizonDays,
-        conviction,
-        bodyMd: publishableBody,
-        thumbnailUrl,
-        visibility,
-      });
+      const persona = botDraftId && personaId ? personaId : undefined;
+      const created = await publishResearchClient(
+        {
+          symbol,
+          title,
+          direction,
+          targetPrice,
+          stopPrice,
+          horizonDays,
+          conviction,
+          bodyMd: publishableBody,
+          thumbnailUrl,
+          visibility,
+        },
+        persona,
+      );
+      if (botDraftId && persona) {
+        await markBotDraftPublished(botDraftId, created.id, persona).catch(() => {});
+      }
       clearResearchDraft(symbol);
       router.push(`/reports/${created.id}`);
     } catch (err) {
@@ -327,6 +357,13 @@ export function ResearchCompose({ header }: { header?: React.ReactNode } = {}) {
           )}
         >
         {header}
+        {botDraftId && (
+          <PersonaSelect
+            value={personaId}
+            onChange={setPersonaId}
+            className="mb-3 rounded-lg border border-dashed border-[var(--brand)] p-3"
+          />
+        )}
         {/* ---- 1. 종목 ---- */}
         <Card className="space-y-3 p-4">
           <SectionLabel step={1} title="종목" />

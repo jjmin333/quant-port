@@ -77,6 +77,8 @@ type ResearchCall struct {
 	ID         int64          `json:"id"`
 	UserID     int64          `json:"userId"`
 	AuthorName string         `json:"authorName,omitempty"`
+	// AuthorBadge — 게시 계정(role=persona)의 뱃지 문구. 일반 사용자는 빈 값.
+	AuthorBadge string `json:"authorBadge,omitempty"`
 	// Topic — stock | real_estate | finance (model.Topic*). stock이 아니면 Symbol은 빈 값이다.
 	Topic      string         `json:"topic"`
 	Symbol     string         `json:"symbol"`
@@ -378,6 +380,7 @@ type ResearchComment struct {
 	ParentID   *int64            `json:"parentId,omitempty"`
 	UserID     int64             `json:"userId"`
 	AuthorName string            `json:"authorName,omitempty"`
+	AuthorBadge string           `json:"authorBadge,omitempty"`
 	Body       string            `json:"body"`
 	Deleted    bool              `json:"deleted"`
 	CanEdit    bool              `json:"canEdit"`

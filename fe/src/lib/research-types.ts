@@ -172,6 +172,8 @@ export type ResearchCall = {
   id: number;
   userId: number;
   authorName?: string;
+  /** 게시 계정의 뱃지 문구(관리자가 정한다). 일반 사용자는 없다. */
+  authorBadge?: string;
   /** 주식이 아니면 분석 리포트다(status "note", symbol 빈 값). 옛 응답에는 없다 — 없으면 주식. */
   topic?: ContentTopic;
   symbol: string;
@@ -265,6 +267,7 @@ export type ResearchComment = {
   parentId?: number;
   userId: number;
   authorName?: string;
+  authorBadge?: string;
   body: string;
   deleted: boolean;
   canEdit: boolean;

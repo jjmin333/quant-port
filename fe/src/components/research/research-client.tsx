@@ -306,6 +306,11 @@ function ReportCard({ call }: { call: ResearchCall }) {
           {call.authorName && (
             <span className="font-medium text-[var(--text-secondary)]">{call.authorName}</span>
           )}
+          {call.authorBadge && (
+            <span className="rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-1.5 py-px text-micro font-semibold text-[var(--text-secondary)]">
+              {call.authorBadge}
+            </span>
+          )}
           <span>{formatDateKST(call.publishedAt)}</span>
           <span className="inline-flex items-center gap-1">
             <Clock3 className="h-3 w-3" />

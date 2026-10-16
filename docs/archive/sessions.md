@@ -3249,3 +3249,4 @@
 - 2026-10-13: 홈 실적 일정 7줄 보장(2주 창 부족분을 100일 창으로·최근 발표 recentBig로 채움) · api+fe+worker-content·stock 배포
 - 2026-10-14: PWA 1단계 — manifest·아이콘 3종(gen-icons.mjs)·sw.js(내비게이션 실패 시 offline.html만)·운영 빌드 등록, 앱 출시 방식 검토(Flutter X → PWA→TWA/Capacitor) · fe 배포(api 재생성)
 - 2026-10-15: 운영 로그 점검 — AI 요약 배치 503·타임아웃 재시도 한 바퀴, 지수 해설 503 대체 모델, 번역 사슬 예산 소진 오보(무한 재시도) 수정, Toss 한도 로그 값마다 1회 · api+worker-content·market 배포(worker-stock은 financials_domestic 진행 중이라 보류)
+- 2026-10-16: 관리자 「봇 초안」(worker-stock `bot_drafts` 3시간마다 커뮤니티 5·리포트 2, LLM 없음) + 게시 계정(users role=persona·badge, `/admin/personas/{id}/as` 아래 기존 쓰기 핸들러 재사용) + 리포트 작성자 뱃지 · 배포 api+fe+worker-stock, 105 적용, 수동 실행 3회 확인(관리자 화면은 브라우저 미확인)

@@ -149,7 +149,7 @@ func (r *ResearchRepo) ToggleReaction(
 // Comments returns a call's thread, parents first with replies attached.
 func (r *ResearchRepo) Comments(ctx context.Context, callID, viewerID int64) ([]model.ResearchComment, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT c.id, c.call_id, c.parent_id, c.user_id, COALESCE(u.display_name, ''),
+		SELECT c.id, c.call_id, c.parent_id, c.user_id, COALESCE(u.display_name, ''), COALESCE(u.badge, ''),
 		       c.body, c.deleted_at, c.created_at, c.updated_at
 		  FROM research_comments c
 		  LEFT JOIN users u ON u.id = c.user_id
@@ -169,7 +169,7 @@ func (r *ResearchRepo) Comments(ctx context.Context, callID, viewerID int64) ([]
 			createdAt time.Time
 			updatedAt time.Time
 		)
-		if err := rows.Scan(&c.ID, &c.CallID, &parentID, &c.UserID, &c.AuthorName,
+		if err := rows.Scan(&c.ID, &c.CallID, &parentID, &c.UserID, &c.AuthorName, &c.AuthorBadge,
 			&c.Body, &deletedAt, &createdAt, &updatedAt); err != nil {
 			return nil, err
 		}
@@ -182,6 +182,7 @@ func (r *ResearchRepo) Comments(ctx context.Context, callID, viewerID int64) ([]
 			// The row survives so replies keep their anchor, but the text does not.
 			c.Body = ""
 			c.AuthorName = ""
+			c.AuthorBadge = ""
 		}
 		c.CanEdit = !c.Deleted && viewerID > 0 && viewerID == c.UserID
 		c.CreatedAt = createdAt.UTC()
@@ -446,11 +447,11 @@ func (r *ResearchRepo) comment(ctx context.Context, id, viewerID int64) (model.R
 		updatedAt time.Time
 	)
 	err := r.db.QueryRowContext(ctx, `
-		SELECT c.id, c.call_id, c.parent_id, c.user_id, COALESCE(u.display_name, ''),
+		SELECT c.id, c.call_id, c.parent_id, c.user_id, COALESCE(u.display_name, ''), COALESCE(u.badge, ''),
 		       c.body, c.deleted_at, c.created_at, c.updated_at
 		  FROM research_comments c LEFT JOIN users u ON u.id = c.user_id
 		 WHERE c.id = ?`, id).
-		Scan(&c.ID, &c.CallID, &parentID, &c.UserID, &c.AuthorName, &c.Body,
+		Scan(&c.ID, &c.CallID, &parentID, &c.UserID, &c.AuthorName, &c.AuthorBadge, &c.Body,
 			&deletedAt, &createdAt, &updatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return model.ResearchComment{}, ErrResearchCommentNotFound

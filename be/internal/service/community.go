@@ -702,6 +702,13 @@ func CommunityBadges(st *repository.CommunityAuthorStats, heldSymbols []string, 
 	if st.Role == model.RoleAdmin {
 		out = append(out, model.CommunityBadge{Key: "admin", Emoji: "🛡", Label: "운영자"})
 	}
+	// 게시 계정은 관리자가 정한 뱃지만 단다(2026-10-16 사용자 결정 — 활동·새내기 뱃지도 붙이지 않는다).
+	if st.Role == repository.RolePersona {
+		if st.Badge != "" {
+			out = append(out, model.CommunityBadge{Key: "custom", Label: st.Badge})
+		}
+		return out
+	}
 	for _, sym := range heldSymbols {
 		out = append(out, model.CommunityBadge{Key: "holder", Emoji: "🌱", Label: "주주", Symbol: sym})
 	}

@@ -29,7 +29,7 @@ type ResearchRepo struct {
 
 func NewResearchRepo(db *sql.DB) *ResearchRepo { return &ResearchRepo{db: db} }
 
-const researchCols = `c.id, c.user_id, COALESCE(u.display_name, ''), c.topic, c.symbol, c.symbol_name,
+const researchCols = `c.id, c.user_id, COALESCE(u.display_name, ''), COALESCE(u.badge, ''), c.topic, c.symbol, c.symbol_name,
 	c.asset_type, c.currency, c.title, c.published_at, c.trade_date, c.benchmark_id,
 	c.direction, c.base_price, c.target_price, c.stop_price, c.horizon_days, c.conviction,
 	c.score_at_pub, c.grade_at_pub, c.contrarian, c.evidence, c.context, c.chart,
@@ -87,7 +87,7 @@ func scanResearch(row interface{ Scan(dest ...any) error }) (model.ResearchCall,
 		updatedAt    time.Time
 	)
 	if err := row.Scan(
-		&c.ID, &c.UserID, &c.AuthorName, &c.Topic, &c.Symbol, &c.SymbolName, &assetType, &currency,
+		&c.ID, &c.UserID, &c.AuthorName, &c.AuthorBadge, &c.Topic, &c.Symbol, &c.SymbolName, &assetType, &currency,
 		&c.Title, &publishedAt, &tradeDate, &c.BenchmarkID, &direction, &c.BasePrice,
 		&targetPrice, &stopPrice, &c.HorizonDays, &c.Conviction, &scoreAtPub, &gradeAtPub,
 		&contrarian, &evidenceJSON, &ctxJSON, &chartJSON, &c.BodyMD, &c.BodyRev, &c.ThumbnailURL, &tagsJSON,

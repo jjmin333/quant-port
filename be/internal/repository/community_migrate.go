@@ -107,3 +107,17 @@ func MigrateNotificationsIfNeeded(ctx context.Context, db *sql.DB, migrationsDir
 	}
 	return applyMigrationFile(ctx, db, migrationsDir, "104_notifications.sql", "앱 안 알림")
 }
+
+// MigrateBotDraftsIfNeeded applies 105 — 봇 초안 표 · users.badge(2026-10-16). 두 마커 중 하나라도 없으면
+// 통째로 돈다(CREATE IF NOT EXISTS · 중복 열은 마이그레이터가 건너뛴다).
+func MigrateBotDraftsIfNeeded(ctx context.Context, db *sql.DB, migrationsDir string) error {
+	hasTable, err := tableExists(ctx, db, "bot_drafts")
+	if err != nil {
+		return err
+	}
+	hasCol, err := columnExists(ctx, db, "users", "badge")
+	if err != nil || (hasTable && hasCol) {
+		return err
+	}
+	return applyMigrationFile(ctx, db, migrationsDir, "105_bot_drafts.sql", "봇 초안 · 게시 계정")
+}
