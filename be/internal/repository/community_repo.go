@@ -720,6 +720,7 @@ func (r *CommunityRepo) Comments(ctx context.Context, postID int64) ([]Community
 type CommunityAuthorStats struct {
 	DisplayName   string
 	Role          string
+	Badge         string // 게시 계정(role=persona)의 뱃지 문구 — 관리자가 정한다
 	JoinedAt      time.Time
 	Posts         int
 	Comments      int
@@ -780,7 +781,7 @@ func (r *CommunityRepo) AuthorStats(ctx context.Context, userIDs []int64) (map[i
 		rows.Close()
 	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, display_name, COALESCE(role, ''), created_at FROM users WHERE id IN (`+in+`)`, args...)
+		SELECT id, display_name, COALESCE(role, ''), badge, created_at FROM users WHERE id IN (`+in+`)`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -788,11 +789,11 @@ func (r *CommunityRepo) AuthorStats(ctx context.Context, userIDs []int64) (map[i
 	for rows.Next() {
 		var id int64
 		var st CommunityAuthorStats
-		if err := rows.Scan(&id, &st.DisplayName, &st.Role, &st.JoinedAt); err != nil {
+		if err := rows.Scan(&id, &st.DisplayName, &st.Role, &st.Badge, &st.JoinedAt); err != nil {
 			return nil, err
 		}
 		if s, ok := out[id]; ok {
-			s.DisplayName, s.Role, s.JoinedAt = st.DisplayName, st.Role, st.JoinedAt
+			s.DisplayName, s.Role, s.Badge, s.JoinedAt = st.DisplayName, st.Role, st.Badge, st.JoinedAt
 		}
 	}
 	return out, rows.Err()

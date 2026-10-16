@@ -310,6 +310,11 @@ export function ResearchDetailClient({
                 {call.authorName}
               </Link>
             )}
+            {call.authorBadge && (
+              <span className="rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-1.5 py-px text-micro font-semibold text-[var(--text-secondary)]">
+                {call.authorBadge}
+              </span>
+            )}
             <span>{formatDateTimeKST(call.publishedAt)}</span>
             <span className="inline-flex items-center gap-1">
               <Clock3 className="h-3 w-3" />

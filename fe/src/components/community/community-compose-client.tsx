@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ImagePlus, Loader2, Newspaper, X } from "lucide-react";
 import { toast } from "sonner";
+import { PersonaSelect } from "@/components/admin/persona-select";
 import { communityErrorText } from "@/components/community/community-bits";
 import { CommunityPostPreview } from "@/components/community/community-post-preview";
 import { useMentionAssist } from "@/components/mentions/mention-assist";
@@ -17,6 +18,7 @@ import { PageScrollShell } from "@/components/layout/page-content-shell";
 import { StockCatalogSearchField } from "@/components/market/stock-catalog-search-field";
 import { StockAvatar } from "@/components/stocks/stock-avatar";
 import { Card } from "@/components/ui/card";
+import { fetchBotDraft, markBotDraftPublished } from "@/lib/bot-admin";
 import { createCommunityPost, uploadCommunityImage } from "@/lib/community-api";
 import { TopicPicker } from "@/components/common/topic-ui";
 import { ASSET_FEATURES_HIDDEN } from "@/lib/hidden-features";
@@ -70,10 +72,30 @@ export function CommunityComposeClient() {
   const previewBody = useDebouncedValue(body);
   const assist = useMentionAssist({ textareaRef: bodyRef, value: body, onChange: setBody });
   const restored = useRef(false);
+  // 봇 초안(관리자, 2026-10-16) — `?draft=`면 초안을 채우고 게시 계정으로 올린다. 이 기기 임시 저장은 건드리지 않는다.
+  const draftId = Number(params.get("draft")) || null;
+  const [personaId, setPersonaId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!draftId) return;
+    let alive = true;
+    fetchBotDraft(draftId)
+      .then((d) => {
+        if (!alive) return;
+        setTitle(d.title);
+        setBody(d.body);
+        setSymbols([{ symbol: d.symbol, name: d.symbolName || d.symbol }]);
+        setArticles(d.articles.slice(0, COMMUNITY_LIMITS.articles).map((a) => ({ id: a.id, title: a.title })));
+      })
+      .catch((e) => toast.error(toUserMessage(e, "초안을 불러오지 못했습니다.")));
+    return () => {
+      alive = false;
+    };
+  }, [draftId]);
 
   // 공유 진입 · 임시 저장 복원 — 마운트 한 번.
   useEffect(() => {
-    if (restored.current) return;
+    if (restored.current || draftId) return;
     restored.current = true;
     const articleId = params.get("article");
     const next: Partial<{ title: string; body: string }> = {};
@@ -110,9 +132,10 @@ export function CommunityComposeClient() {
           .catch(() => {});
       }
     });
-  }, [params]);
+  }, [params, draftId]);
 
   useEffect(() => {
+    if (draftId) return;
     const t = window.setTimeout(() => {
       try {
         if (title || body) localStorage.setItem(DRAFT_KEY, JSON.stringify({ title, body }));
@@ -121,7 +144,7 @@ export function CommunityComposeClient() {
       }
     }, 500);
     return () => window.clearTimeout(t);
-  }, [title, body]);
+  }, [title, body, draftId]);
 
   // 붙인 종목의 최근 기사 — 기사 붙이기 후보.
   const symbolKey = symbols.map((s) => s.symbol).join(",");
@@ -167,7 +190,8 @@ export function CommunityComposeClient() {
     titleLen <= COMMUNITY_LIMITS.titleMax &&
     body.trim() !== "" &&
     bodyLen <= COMMUNITY_LIMITS.bodyMax &&
-    uploading === 0;
+    uploading === 0 &&
+    (!draftId || personaId !== null);
 
   function addSymbol(stock: StockInfo) {
     const sym = stock.symbol.toUpperCase();
@@ -216,18 +240,27 @@ export function CommunityComposeClient() {
     if (!ready) return;
     setSubmitting(true);
     try {
-      const post = await createCommunityPost({
-        title: title.trim(),
-        topic,
-        body,
-        symbols: topic === "stock" ? symbols.map((s) => s.symbol) : [],
-        articleIds: articles.map((a) => a.id),
-        images,
-      });
-      try {
-        localStorage.removeItem(DRAFT_KEY);
-      } catch {
-        // 무시
+      const persona = draftId && personaId ? personaId : undefined;
+      const post = await createCommunityPost(
+        {
+          title: title.trim(),
+          topic,
+          body,
+          symbols: topic === "stock" ? symbols.map((s) => s.symbol) : [],
+          articleIds: articles.map((a) => a.id),
+          images,
+        },
+        persona,
+      );
+      if (draftId && persona) {
+        // 기록 실패는 글을 되돌리지 않는다 — 초안 목록에 남을 뿐이다.
+        await markBotDraftPublished(draftId, post.id, persona).catch(() => {});
+      } else {
+        try {
+          localStorage.removeItem(DRAFT_KEY);
+        } catch {
+          // 무시
+        }
       }
       toast.success("글을 올렸습니다.");
       router.push(`/community/${post.id}`);
@@ -254,7 +287,14 @@ export function CommunityComposeClient() {
           커뮤니티
         </Link>
         <Card className="space-y-4 p-4 sm:p-6">
-          <h1 className="text-lg font-bold text-[var(--text-primary)]">글쓰기</h1>
+          <h1 className="text-lg font-bold text-[var(--text-primary)]">{draftId ? "봇 초안 게시" : "글쓰기"}</h1>
+          {draftId && (
+            <PersonaSelect
+              value={personaId}
+              onChange={setPersonaId}
+              className="rounded-lg border border-dashed border-[var(--brand)] p-3"
+            />
+          )}
           <TopicPicker value={topic} onChange={setTopic} />
           <label className="block">
             <input

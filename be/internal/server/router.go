@@ -436,6 +436,22 @@ func (s *Server) routes() http.Handler {
 			admin.Put("/batch/schedule", s.admin.PutBatchSchedule)
 			admin.Post("/batch/run", s.admin.RunBatchJob)
 			admin.Post("/batch/run-overdue", s.admin.RunOverdueBatches)
+			// 봇 초안 · 게시 계정 (handler/admin_bots.go 머리글). 게시는 기존 글쓰기 핸들러를 ActAs 아래에 다시 건다.
+			admin.Get("/bot-drafts", s.adminBots.ListDrafts)
+			admin.Get("/bot-drafts/{id}", s.adminBots.GetDraft)
+			admin.Post("/bot-drafts/{id}/discard", s.adminBots.DiscardDraft)
+			admin.Post("/bot-drafts/{id}/published", s.adminBots.MarkPublished)
+			admin.Get("/personas", s.adminBots.ListPersonas)
+			admin.Post("/personas", s.adminBots.CreatePersona)
+			admin.Get("/personas/activity", s.adminBots.Activity)
+			admin.Put("/personas/{id}", s.adminBots.UpdatePersona)
+			admin.Route("/personas/{personaId}/as", func(as chi.Router) {
+				as.Use(s.adminBots.ActAs)
+				as.Post("/community/posts", s.community.Create)
+				as.Post("/community/posts/{id}/comments", s.community.AddComment)
+				as.Post("/research/calls", s.research.Publish)
+				as.Post("/research/calls/{id}/comments", s.research.AddComment)
+			})
 			// 검색 유입 보고서(worker-growth가 만든다 · 읽기만).
 			admin.Get("/growth/reports", s.adminGrowth.List)
 			admin.Get("/growth/reports/{id}", s.adminGrowth.Get)

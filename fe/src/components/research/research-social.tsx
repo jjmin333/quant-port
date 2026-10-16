@@ -509,7 +509,8 @@ function CommentRow({
 
   const name = comment.authorName || `사용자 ${comment.userId}`;
   const isAuthor = authorUserId !== undefined && comment.userId === authorUserId;
-  const badge = activityBadge(comment.authorActivity);
+  // 게시 계정은 관리자가 정한 뱃지만(2026-10-16) — 활동 수 뱃지 대신.
+  const badge = comment.authorBadge || activityBadge(comment.authorActivity);
   /*
     상대 시각이 안 되는 날짜(하루 초과·못 읽는 값)에는 원래 표기로 돌아간다.
     「9일 전」은 그게 언제인지 세어 봐야 알고, 댓글은 보통 글과 같은 주에 몰린다.

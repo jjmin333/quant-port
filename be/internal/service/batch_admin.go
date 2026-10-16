@@ -474,6 +474,15 @@ var batchJobCatalog = []model.BatchJobSpec{
 		AcceptsLimit: true,
 	},
 	{
+		ID:       model.BatchBotDrafts,
+		Category: model.CategoryDerive,
+		Label:    "봇 초안 (커뮤니티·리포트)",
+		Purpose:  "그 시각의 브리핑 「많이 언급된 종목」·오늘의 변화·실적 프리뷰에서 종목을 가중 랜덤으로 골라 커뮤니티 초안 5개와 투자 리포트 초안 2개를 만듭니다.",
+		Cost:     model.CostFree,
+		Schedule: "KST 00·03·06·09·12·15·18·21시 (worker-stock) · 수동 실행 가능",
+		Note:     "LLM을 부르지 않습니다 — 저장된 AI 요약·브리핑·점수를 템플릿에 엮습니다. 초안은 바로 올라가지 않고 관리자 「봇 초안」 화면에서 고쳐서 게시 계정으로 올립니다. 게시하지 않은 초안은 24시간 뒤 지웁니다. 최근 24시간에 초안을 만든 종목은 다시 고르지 않습니다.",
+	},
+	{
 		ID:       model.BatchResearchVerdict,
 		Category: model.CategoryDerive,
 		Label:    "투자 리포트 판정",

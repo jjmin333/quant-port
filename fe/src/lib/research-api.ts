@@ -1,5 +1,6 @@
 import type { ContentTopic } from "@/lib/topics";
 import { apiRequest } from "@/lib/api-client";
+import { asPersona } from "@/lib/bot-admin";
 import type {
   ResearchAuthorProfile,
   ResearchCall,
@@ -78,8 +79,9 @@ export async function previewResearchClient(input: ResearchPreviewInput): Promis
   return apiRequest<ResearchPreview>("/api/v1/research/preview", { method: "POST", ...jsonBody(input) });
 }
 
-export async function publishResearchClient(input: ResearchPublishInput): Promise<ResearchCall> {
-  return apiRequest<ResearchCall>("/api/v1/research/calls", { method: "POST", ...jsonBody(input) });
+/** personaId — 관리자가 게시 계정으로 발행할 때(`lib/bot-admin.ts`). */
+export async function publishResearchClient(input: ResearchPublishInput, personaId?: number): Promise<ResearchCall> {
+  return apiRequest<ResearchCall>(asPersona("/api/v1/research/calls", personaId), { method: "POST", ...jsonBody(input) });
 }
 
 export async function updateResearchClient(id: number, input: ResearchUpdateInput): Promise<ResearchCall> {
@@ -120,8 +122,9 @@ export async function addResearchCommentClient(
   id: number,
   body: string,
   parentId?: number,
+  personaId?: number,
 ): Promise<ResearchComment> {
-  return apiRequest<ResearchComment>(`/api/v1/research/calls/${id}/comments`, {
+  return apiRequest<ResearchComment>(asPersona(`/api/v1/research/calls/${id}/comments`, personaId), {
     method: "POST",
     ...jsonBody({ body, parentId: parentId ?? null }),
   });

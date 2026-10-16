@@ -195,6 +195,11 @@ var batchExpectations = map[model.BatchJobID]batchExpectation{
 		// 사이트맵 약 1,000 URL × (0.5초 간격 · 동시 2) ≈ 10분 + URL 검사 200 × 0.3초.
 		at: []string{"07:30"}, grace: 3 * time.Hour, maxRuntime: time.Hour,
 	},
+	model.BatchBotDrafts: {
+		// DB 읽기 수십 번 — 몇 초. 회차가 지나면 다음 회차가 같은 일을 하므로 catch-up 대상이 아니다.
+		at: []string{"00:00", "03:00", "06:00", "09:00", "12:00", "15:00", "18:00", "21:00"},
+		grace: 2 * time.Hour, maxRuntime: 10 * time.Minute,
+	},
 	model.BatchFinancialsOverseas: {
 		at: []string{"09:00"}, grace: 3 * time.Hour,
 	},

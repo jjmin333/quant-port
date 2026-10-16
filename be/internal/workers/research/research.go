@@ -54,10 +54,19 @@ func nextRun(now time.Time) time.Time {
 func Run(ctx context.Context, deps *service.WorkerDeps) {
 	// 이 워커의 잡은 이 프로세스만 돌린다 — 재기동 전에 끊긴 실행을 지금 닫아 만회가 다시 넣게 한다.
 	service.CloseInterruptedRuns(ctx, deps.Runs, model.BatchResearchVerdict)
+	service.CloseInterruptedRuns(ctx, deps.Runs, model.BatchBotDrafts)
 
 	go runSchedule(ctx, deps)
 
-	log.Println("worker-research: running (daily 07:00 KST + manual queue)")
+	// 봇 초안(2026-10-16) — 같은 「글」 갈래라 이 역할에 둔다. DB만 읽는다.
+	bots := service.NewBotDraftService(deps.MySQL.DB())
+	go runBotSchedule(ctx, deps, bots)
+	go service.RunBatchQueueWorker(ctx, deps.Runs, model.BatchBotDrafts,
+		func(ctx context.Context, params map[string]any) (map[string]any, string, error) {
+			return bots.Run(ctx)
+		})
+
+	log.Println("worker-research: running (daily 07:00 KST · bot drafts every 3h KST + manual queues)")
 	service.RunBatchQueueWorker(ctx, deps.Runs, model.BatchResearchVerdict,
 		func(ctx context.Context, params map[string]any) (map[string]any, string, error) {
 			return deps.Research.RunVerdicts(ctx)
@@ -75,6 +84,24 @@ func runSchedule(ctx context.Context, deps *service.WorkerDeps) {
 		service.RunScheduledJob(ctx, deps.Runs, model.BatchResearchVerdict,
 			func(ctx context.Context) (map[string]any, string, error) {
 				return deps.Research.RunVerdicts(ctx)
+			})
+	}
+}
+
+func runBotSchedule(ctx context.Context, deps *service.WorkerDeps, bots *service.BotDraftService) {
+	// 한 슬롯은 한 번만(service.SlotGate 머리글).
+	gate := service.NewSlotGate()
+	for {
+		slot := service.BotNextSlot(time.Now())
+		if !service.WaitForSlot(ctx, slot) {
+			return
+		}
+		if !gate.Allow(slot) {
+			continue
+		}
+		service.RunScheduledJob(ctx, deps.Runs, model.BatchBotDrafts,
+			func(ctx context.Context) (map[string]any, string, error) {
+				return bots.Run(ctx)
 			})
 	}
 }

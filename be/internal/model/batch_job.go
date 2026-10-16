@@ -177,6 +177,12 @@ const (
 	*/
 	BatchGrowthAudit BatchJobID = "growth_audit"
 	/*
+		BatchBotDrafts — 커뮤니티·투자 리포트 봇 초안(worker-stock, KST 3시간마다 하루 8번). 저장된 브리핑·종목 요약·
+		실적 프리뷰·점수만 읽고 LLM은 부르지 않는다. 바로 올라가지 않는다 — 관리자가 고쳐서 게시한다
+		(service/bot_drafts.go).
+	*/
+	BatchBotDrafts BatchJobID = "bot_drafts"
+	/*
 		BatchWatchdog는 다른 잡들이 제때 돌았는지 판정한다.
 
 		자기도 예약 잡이라 원장에 남고, 그래서 **자기 침묵도 판정 대상**이 된다 —

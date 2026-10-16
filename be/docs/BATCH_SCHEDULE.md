@@ -80,6 +80,7 @@
 | KRX 마감+20분 | 실시간 차트 · AI 추천 랭킹 | `daily_close_domestic` | worker-market | — | 전 종목 | 종가. 스탬프·투자 리포트·목표가도 읽음 |
 | US 마감+20분 | 실시간 차트 · AI 추천 랭킹 | `daily_close_overseas` | worker-market | — | 전 종목 | 종가. 스탬프·투자 리포트·목표가도 읽음 |
 | 마감 배치 이후 | 투자 리포트 | `research_verdict` | worker-stock | — | 열린 콜 | |
+| KST 00·03·06·09·12·15·18·21시 | 관리자 「봇 초안」 | `bot_drafts` | worker-stock | — (DB만, LLM 없음) | 회차당 커뮤니티 5 · 리포트 2 | 2026-10-16. 브리핑 많이 언급된 종목·오늘의 변화·2일 안 실적 프리뷰에서 가중 랜덤. 바로 올라가지 않는다 — 관리자가 고쳐 게시 계정으로 올린다. 미게시 초안 24시간 뒤 삭제. 재처리 허용 목록 밖(회차가 지나면 다음 회차가 같은 일) |
 | KRX 마감 후 16:30~18:30 | AI 추천 랭킹 · 종목 · AI 분석 | `llm_summary_domestic` | worker-content | `llm_kr` | 3층 · 최대 350 | 종가 적재(15:50~16:15) 뒤 |
 | US 마감 후 18:00~20:00 ET | AI 추천 랭킹 · 종목 · AI 분석 | `llm_summary_overseas` | worker-content | `llm_us` | 3층 · 최대 350 | 종가 적재(≈17:37 ET) 뒤 |
 | 07:10 | 국내·해외 실적 일정 | `earnings_preview_domestic` · `earnings_preview_overseas` | worker-content | `llm_feat_earnings`(기능 버킷 60콜·12만) + `llm_kr`/`llm_us` | 향후 7일 발표(국내는 작년 발표일 추정 포함) · 시장당 최대 30(보유·관심 먼저) | 「이번 주 실적 관전 포인트」(2026-09-27). 같은 사실표면 건너뜀 · AI 글 3일 유지 · 발표 전날 한 번 새로 · 규칙 문장은 다음 회차에 AI로 재시도. 재처리 허용 목록 밖(LLM 비용) |
