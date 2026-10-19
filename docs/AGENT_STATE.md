@@ -1,7 +1,7 @@
 # Agent State
 
 > 현재 상태만 담는다. **150줄 이하, 매 세션 덮어쓴다(앞에 쌓지 않는다).** 이력은 `docs/archive/sessions.md`, 원칙은 `docs/PRINCIPLES.md`, 결정·함정은 메모리.
-> 갱신: 2026-10-19 (봇 초안 LLM 다시 쓰기 · 게시 계정 뱃지 고르기·말투·조회수)
+> 갱신: 2026-10-20 (봇 초안 작성자 유형 실가동 확인 · 리포트 초안 화면 오류 수정)
 
 ## NOW
 - **코드는 GitHub에 있다** — `jjmin333/quant-port` public, `master`. 10-10에 09-15 이후 미커밋 전부를 3개 커밋으로 push(비밀값 점검 끝: `be/.env`·`be/secrets/`·워치독 설정은 git 밖). 이후 작업도 커밋·push 한다. 클라우드 세션 규칙은 `AGENTS.md` 「Cloud sessions」(배포는 PC 세션만).
@@ -52,6 +52,9 @@
 - go build·vet, llm·translate·toss·service 시험 통과(IsTransient·사슬 오류 보고 시험 추가) · 배포 api+worker-content+worker-market(이미지 일치), health 200, panic 0 · 재기동 뒤 한도 로그 그룹·값당 1줄
 - **worker-stock은 재생성 안 함** — financials_domestic(22:00 KST 시작, 보통 ~4시간)이 돌고 있었다. 지수 해설 대체 모델은 다음 재생성부터
 
+## VERIFY (10-20 새벽 실측)
+- financials_domestic(01:34 끝)·warnings_sync 끝난 뒤 worker-stock 재생성(api 이미지 일치) · 수동 실행: 다시 쓰기 20·버림 0 — 유형 섞임 확인(감정형 58자·한 줄 68자·초보 질문·숫자 정리 목록·신중파·장문 525자·메모 300자·위험 764자·정석 967자 평균), 숫자는 사실 그대로 · 「주말을 맞아」(평일) 발견 → 유형 설명의 시간 표현 제거 + 「요일·시간대는 쓰지 않는다」 규칙, 재배포 api+worker-stock · 05:46 실행은 Gemini 503(1건만), 06:00 회차 9건 뒤 `llm_feat_bot` 80콜 소진(태평양 10-19 하루에 수동 시험 포함)
+
 ## VERIFY (10-19 실측)
 - go build·vet, service(검증: 지어낸·반올림 숫자·금지어·길이·#/@, 말투 프롬프트)·handler·repository·llm·apibudget 시험 · tsc·vitest 512 · 새 파일 eslint 0 · 106 적용 · 배포 api+fe+worker-stock(이미지 일치), health 200, panic 0, 관리자 새 API 비로그인 401
 - 실제 실행: 첫 회 다시 쓰기 13·버림 12 — 버림은 전부 `ErrPacing`(간격을 호출 시작부터 쟀다) → 응답 끝부터 재도록 고치고 잘못 붙은 메모 12건 지움 → 둘째 회 **다시 쓰기 24·버림 1**(사실에 없는 숫자 30). 오늘 llm_feat_bot 38콜·3.9만 토큰(건당 ~1K). 품질: 커뮤니티는 구어체, 리포트는 소제목 다섯, 숫자는 사실 그대로 — 단 과거 사건을 「앞두고」로 쓴 의미 오류 1건 봄(숫자 검증으로는 못 잡는다 → 관리자 검수 몫)
@@ -63,7 +66,7 @@
 - **관리자 화면·게시·답글은 브라우저로 못 봤다**(관리자 계정 로그인 불가) — 사용자가 `/admin/bots`에서 한 번 올려 보기
 
 ## NEXT
-- **worker-stock 재생성 대기**: 10-19 밤 financials_domestic(22:00 KST 시작)이 돌고 있어 작성자 유형 코드가 아직 안 올라갔다 — 끝나면 `docker compose up -d --no-build --no-deps --force-recreate worker-stock`(이미지 id를 api와 대조) 뒤 `bot_drafts` 한 번 돌려 유형별 글 확인
+- 10-20 16:00 KST(태평양 자정) 뒤 회차가 남은 템플릿 초안(10-20 새벽 예산 소진분)을 이어 쓰는지 · `llm_feat_bot` 80콜이 평소(회차 7×8=56 + 밀린 것)에 모자라면 올린다(10-19는 수동 시험 3회가 같은 날에 잡혀 다 썼다)
 - 봇 초안: 밤 회차(21·00·03시)가 503으로 템플릿에 남았다가 06·09시 회차에 이어 쓰이는지 · 관리자 API 화면 `llm_feat_bot`·`llm_sub` 하루 사용량 · 버린 비율(note)이 높으면 프롬프트·숫자 허용 규칙 조정 · 게시 계정마다 말투를 적어야 글 말투가 갈린다(비면 기본 말투) · worker-content·market·asset은 10-19 이미지가 아니다(코드 경로 무관)
 - 다음 국내 요약 배치(17:20 KST) 로그에 `retrying N transient failures`가 나오면 끝 줄 failed가 줄었는지 · api 로그 「예산 소진」이 하루 몇 줄로 줄었는지
 - 메뉴 이름 복원은 사용자가 진행 안 함(10-12). 앱은 10-14에 PWA부터 착수(다음: 웹 푸시는 알림 채널 결정 뒤, 스토어는 서버 이전 없이 진행 — 10-14 결정, 메모리 `app_store_launch_order_1014`: 사업자 등록(사용자 진행 중) → D-U-N-S → 개발자 계정 → 안드로이드 → iOS). 앱인토스는 정책 3-5·3-6으로 핵심 기능 입점 불가
