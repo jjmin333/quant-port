@@ -43,9 +43,6 @@ const (
 	botResearchPerRun  = 2
 	botSlotHours       = 3
 	botDraftTTL        = 24 * time.Hour
-	// 긴 글 비율 — 커뮤니티는 짧은 글이 기본, 리포트는 긴 글이 기본.
-	botCommunityLongShare = 0.4
-	botResearchLongShare  = 0.7
 )
 
 type BotDraftService struct {
@@ -175,16 +172,21 @@ func (s *BotDraftService) Run(ctx context.Context) (map[string]any, string, erro
 	if err := s.enrich(ctx, picked, now); err != nil {
 		return nil, "", err
 	}
+	// 초안마다 작성자 유형을 뽑는다(bot_archetypes.go) — 한 줄 글부터 컬럼까지. 유형이 템플릿 길이도 정한다.
 	drafts := make([]repository.BotDraft, 0, len(picked))
 	for _, c := range community {
-		long := s.rnd.Float64() < botCommunityLongShare
-		drafts = append(drafts, buildBotCommunityDraft(s.rnd, c, moods[c.Market], long, slot))
+		a := pickBotArchetype(s.rnd, repository.BotDraftCommunity)
+		d := buildBotCommunityDraft(s.rnd, c, moods[c.Market], a.Long, slot)
+		d.Archetype = a.Key
+		drafts = append(drafts, d)
 	}
 	for _, c := range research {
-		long := s.rnd.Float64() < botResearchLongShare
-		drafts = append(drafts, buildBotResearchDraft(s.rnd, c, long, slot))
+		a := pickBotArchetype(s.rnd, repository.BotDraftResearch)
+		d := buildBotResearchDraft(s.rnd, c, a.Long, slot)
+		d.Archetype = a.Key
+		drafts = append(drafts, d)
 	}
-	// 초안마다 게시 계정을 하나 배정한다 — 그 말투로 다시 쓰고, 게시 화면이 그 계정을 먼저 고른다.
+	// 초안마다 게시 계정을 하나 배정한다 — 게시 화면이 그 계정을 먼저 고른다(말투는 계정이 아니라 유형이 정한다).
 	personas, err := s.repo.Personas(ctx)
 	if err != nil {
 		return nil, "", err
@@ -198,7 +200,7 @@ func (s *BotDraftService) Run(ctx context.Context) (map[string]any, string, erro
 	if err := s.repo.Insert(ctx, drafts); err != nil {
 		return nil, "", err
 	}
-	rw := s.rewritePending(ctx, now, personas)
+	rw := s.rewritePending(ctx, now)
 	summary := fmt.Sprintf("커뮤니티 %d · 리포트 %d (후보 %d, 정리 %d) · AI 다시 쓰기 %d · 버림 %d%s",
 		len(community), len(research), len(cands), pruned, rw.Rewritten, rw.Rejected, rw.stopText())
 	log.Printf("bot drafts: %s", summary)

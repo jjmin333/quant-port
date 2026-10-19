@@ -18,13 +18,15 @@ export type BotDraft = {
   symbolName: string;
   market: string;
   length: "short" | "long";
+  /** 작성자 유형 키(BE `service/bot_archetypes.go`) — 길이·말투·형식을 정한다. 10-19 이전 초안은 빈 값. */
+  archetype: string;
   /** template — 템플릿 그대로 · llm — 배정한 게시 계정 말투로 AI가 다시 썼다. */
   source: "template" | "llm";
   reason: string;
   title: string;
   body: string;
   articles: { id: string; title: string }[];
-  /** 초안을 만들 때 배정한 게시 계정(그 말투로 썼다). 게시 화면이 먼저 고른다. */
+  /** 초안을 만들 때 배정한 게시 계정. 게시 화면이 먼저 고른다. */
   personaId?: number;
   /** AI 다시 쓰기를 버린 이유(숫자 검증 등). */
   note?: string;
@@ -39,7 +41,7 @@ export type BotPersona = {
   displayName: string;
   /** 뱃지 키 — `fetchPersonaBadges` 목록 중에서. */
   badges: string[];
-  /** 말투 설명 — AI가 이 계정 이름으로 쓸 때 따른다. */
+  /** 옛 말투 칸(10-19 오후부터 쓰지 않는다 — 말투는 초안의 작성자 유형이 정한다). 저장할 때 그대로 돌려보낸다. */
   style: string;
   posts: number;
   calls: number;

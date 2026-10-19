@@ -201,7 +201,9 @@ func (s *MentionService) Preview(ctx context.Context, body string) (model.Mentio
 	if err != nil {
 		return set, err
 	}
-	set.Tokens = tokens
+	// 덮어쓰지 않고 붙인다 — 태그가 없으면 tokens가 nil이라 JSON이 null이 되고, 화면이 그 length를 읽다
+	// 죽었다(2026-10-19 리포트 본문의 「## 소제목」만 있는 글 → 「#」 때문에 미리보기를 부른다).
+	set.Tokens = append(set.Tokens, tokens...)
 	order := mentionSymbolOrder(tokens)
 	snaps := s.snapshot(ctx, order)
 	for _, sym := range order {

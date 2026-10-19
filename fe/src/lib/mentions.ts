@@ -115,7 +115,8 @@ export async function previewMentions(body: string): Promise<MentionSet> {
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body }) },
     "태그를 확인하지 못했습니다",
   );
-  return data ?? { tokens: [], symbols: [] };
+  // 서버가 빈 목록을 null로 줄 때가 있었다(2026-10-19) — 받는 쪽에서도 배열로 맞춘다.
+  return { ...data, tokens: data?.tokens ?? [], symbols: data?.symbols ?? [] };
 }
 
 /**

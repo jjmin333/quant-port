@@ -131,3 +131,12 @@ func MigrateBotLLMIfNeeded(ctx context.Context, db *sql.DB, migrationsDir string
 	}
 	return applyMigrationFile(ctx, db, migrationsDir, "106_bot_llm.sql", "봇 초안 LLM · 게시 계정 말투")
 }
+
+// MigrateBotArchetypeIfNeeded applies 107 — 봇 초안 작성자 유형(2026-10-19).
+func MigrateBotArchetypeIfNeeded(ctx context.Context, db *sql.DB, migrationsDir string) error {
+	has, err := columnExists(ctx, db, "bot_drafts", "archetype")
+	if err != nil || has {
+		return err
+	}
+	return applyMigrationFile(ctx, db, migrationsDir, "107_bot_archetype.sql", "봇 초안 작성자 유형")
+}

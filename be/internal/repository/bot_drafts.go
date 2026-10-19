@@ -42,7 +42,8 @@ type BotDraft struct {
 	SymbolName   string       `json:"symbolName"`
 	Market       string       `json:"market"`
 	Length       string       `json:"length"`
-	Source       string       `json:"source"` // template | llm
+	Archetype    string       `json:"archetype"` // 작성자 유형 키(service/bot_archetypes.go)
+	Source       string       `json:"source"`    // template | llm
 	Reason       string       `json:"reason"`
 	Title        string       `json:"title"`
 	Body         string       `json:"body"`
@@ -67,9 +68,9 @@ func (r *BotDraftRepo) Insert(ctx context.Context, drafts []BotDraft) error {
 		}
 		ids, _ := json.Marshal(d.Articles)
 		if _, err := r.db.ExecContext(ctx, `
-			INSERT INTO bot_drafts (kind, slot_at, symbol, symbol_name, market, length, reason, title, body, facts, persona_id, articles)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			d.Kind, d.SlotAt.UTC(), d.Symbol, clipRunes(d.SymbolName, 100), d.Market, d.Length,
+			INSERT INTO bot_drafts (kind, slot_at, symbol, symbol_name, market, length, archetype, reason, title, body, facts, persona_id, articles)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			d.Kind, d.SlotAt.UTC(), d.Symbol, clipRunes(d.SymbolName, 100), d.Market, d.Length, d.Archetype,
 			clipRunes(d.Reason, 200), clipRunes(d.Title, 200), d.Body, d.Body, d.PersonaID, string(ids)); err != nil {
 			return fmt.Errorf("bot draft insert: %w", err)
 		}
@@ -77,14 +78,14 @@ func (r *BotDraftRepo) Insert(ctx context.Context, drafts []BotDraft) error {
 	return nil
 }
 
-const botDraftCols = `id, kind, slot_at, symbol, symbol_name, market, length, source, reason, title, body,
+const botDraftCols = `id, kind, slot_at, symbol, symbol_name, market, length, archetype, source, reason, title, body,
 	COALESCE(facts, body), persona_id, note, articles, status, published_ref, published_by, created_at`
 
 func scanBotDraft(row interface{ Scan(...any) error }) (BotDraft, error) {
 	var d BotDraft
 	var ids []byte
 	var ref, by, persona sql.NullInt64
-	if err := row.Scan(&d.ID, &d.Kind, &d.SlotAt, &d.Symbol, &d.SymbolName, &d.Market, &d.Length, &d.Source, &d.Reason,
+	if err := row.Scan(&d.ID, &d.Kind, &d.SlotAt, &d.Symbol, &d.SymbolName, &d.Market, &d.Length, &d.Archetype, &d.Source, &d.Reason,
 		&d.Title, &d.Body, &d.Facts, &persona, &d.Note, &ids, &d.Status, &ref, &by, &d.CreatedAt); err != nil {
 		return d, err
 	}

@@ -49,7 +49,7 @@ func (r botRewriteResult) stopText() string {
 	return ""
 }
 
-func (s *BotDraftService) rewritePending(ctx context.Context, now time.Time, personas []repository.BotPersona) botRewriteResult {
+func (s *BotDraftService) rewritePending(ctx context.Context, now time.Time) botRewriteResult {
 	var res botRewriteResult
 	if s.llm == nil || !s.llm.Enabled() || s.budget == nil {
 		res.Stop = "no_llm"
@@ -60,21 +60,13 @@ func (s *BotDraftService) rewritePending(ctx context.Context, now time.Time, per
 		log.Printf("bot drafts: pending rewrites: %v", err)
 		return res
 	}
-	byID := map[int64]repository.BotPersona{}
-	for _, p := range personas {
-		byID[p.ID] = p
-	}
 	interval := s.llm.Limits().MinInterval
 	var last time.Time
 	for _, d := range pending {
 		if wait := interval - time.Since(last); !last.IsZero() && wait > 0 && !s.sleep(ctx, wait) {
 			break
 		}
-		style := ""
-		if d.PersonaID != nil {
-			style = byID[*d.PersonaID].Style
-		}
-		system, input := botRewritePrompt(d, style)
+		system, input := botRewritePrompt(d)
 		if err := s.budget.CheckTokens(ctx, apibudget.ProviderLLMFeatBot, llm.EstimateBotDraftTokens(system, input)); err != nil {
 			res.Stop = "budget"
 			break
@@ -122,54 +114,33 @@ func (s *BotDraftService) rewritePending(ctx context.Context, now time.Time, per
 	return res
 }
 
-// botPickPersona — 말투가 적힌 계정을 먼저(없으면 아무 계정). 계정이 없으면 nil — 기본 말투로 쓴다.
+// botPickPersona — 아무 게시 계정이나 하나. 계정이 없으면 nil(게시할 때 고른다).
 func botPickPersona(rnd *rand.Rand, personas []repository.BotPersona) *repository.BotPersona {
-	pool := []repository.BotPersona{}
-	for _, p := range personas {
-		if strings.TrimSpace(p.Style) != "" {
-			pool = append(pool, p)
-		}
-	}
-	if len(pool) == 0 {
-		pool = personas
-	}
-	if len(pool) == 0 {
+	if len(personas) == 0 {
 		return nil
 	}
-	p := pool[rnd.IntN(len(pool))]
+	p := personas[rnd.IntN(len(personas))]
 	return &p
 }
 
 const botRewriteRules = `규칙:
+- 사실을 다 쓸 필요는 없다. 이 작성자라면 실제로 언급할 만큼만 골라 쓴다(한 줄 글이면 하나도 충분하다).
 - 「사실」에 적힌 숫자·사건·날짜만 쓴다. 새 숫자(가격·비율·배수·날짜·순위·전망치)를 만들지 않는다. 숫자는 적힌 그대로 옮기고 반올림하지 않는다.
 - 사실에 없는 차트 모양(꼬리·지지선 등)·호가·소문·개인 경험(샀다·팔았다·물렸다)을 지어내지 않는다.
 - 날짜가 붙은 사건은 그 날의 일로 쓴다. 서로 다른 날의 숫자를 한 문장에 섞지 않는다.
 - 매수·매도 권유, 목표가, 수익 보장, 「지금 사라/팔아라」 같은 표현을 쓰지 않는다. 의견은 「~로 보인다」, 「궁금하다」 정도로.
-- AI가 쓴 티를 내지 않는다: 「~을 보여주고 있습니다」 반복, 「결론적으로」, 「요약하자면」, 이모지, 과한 칭찬.
+- AI가 쓴 티를 내지 않는다: 「~을 보여주고 있습니다」 반복, 「결론적으로」, 「요약하자면」, 이모지, 과한 칭찬, 모든 글을 질문으로 끝내기.
+- 욕설·비하·특정인 공격은 쓰지 않는다.
 - 출력은 JSON 하나: {"title": "...", "body": "..."}`
 
-var botDefaultStyle = map[string]string{
-	repository.BotDraftCommunity: "30대 직장인 개인투자자. 존댓말 기반의 커뮤니티 말투에 가끔 「~더라고요」, 「~인 듯」 같은 구어체를 섞는다.",
-	repository.BotDraftResearch:  "증권사 출신의 차분한 개인 애널리스트. 단정하지 않고 근거 → 해석 → 위험 순으로 쓴다.",
-}
-
-func botRewritePrompt(d repository.BotDraft, style string) (system, input string) {
-	if strings.TrimSpace(style) == "" {
-		style = botDefaultStyle[d.Kind]
+func botRewritePrompt(d repository.BotDraft) (system, input string) {
+	a := botArchetypeOf(d.Kind, d.Archetype, d.Length)
+	where := "주식 커뮤니티 게시판 글. 본문은 일반 텍스트(마크다운·#·@ 기호 금지)."
+	if d.Kind == repository.BotDraftResearch {
+		where = "투자 리포트 게시판 글. 본문은 마크다운. 매수·매도 방향과 목표가는 쓰지 않는다 — 게시하는 사람이 정한다."
 	}
-	var form string
-	switch {
-	case d.Kind == repository.BotDraftResearch && d.Length == "long":
-		form = "투자 리포트. 제목 60자 이내. 본문은 마크다운으로 ## 소제목 4~6개(요약·근거·해석·위험 포함), 1,200~2,500자. 매수·매도 방향과 목표가는 쓰지 않는다 — 게시하는 사람이 정한다."
-	case d.Kind == repository.BotDraftResearch:
-		form = "짧은 투자 리포트. 제목 60자 이내. 본문은 마크다운으로 ## 소제목 3개 안팎, 400~800자. 매수·매도 방향과 목표가는 쓰지 않는다."
-	case d.Length == "long":
-		form = "주식 커뮤니티 글. 제목 40자 이내. 본문은 일반 텍스트(마크다운·#·@ 기호 금지), 짧은 문단 4~7개. 마지막은 읽는 사람에게 묻는 한 문장."
-	default:
-		form = "짧은 주식 커뮤니티 글. 제목 40자 이내. 본문은 일반 텍스트(마크다운·#·@ 기호 금지), 3~6문장. 마지막은 읽는 사람에게 묻는 한 문장."
-	}
-	system = "너는 한국 주식 커뮤니티에 글을 쓰는 개인 투자자다. 아래 말투로, 주어진 사실만으로 글을 쓴다.\n" +
-		"말투: " + style + "\n형식: " + form + "\n\n" + botRewriteRules
+	system = "너는 한국 주식 커뮤니티의 수많은 사용자 중 한 명이다. 이번 글을 쓰는 사람은 아래와 같다. 주어진 사실만으로 그 사람이 실제로 쓸 법한 글을 쓴다.\n" +
+		"어떤 사람: " + a.Who + "\n어디에: " + where + "\n무엇을 얼마나: " + a.Form + "\n\n" + botRewriteRules
 	input = fmt.Sprintf("종목: %s (%s)\n고른 이유: %s\n\n사실:\n%s", d.SymbolName, d.Symbol, d.Reason, d.Facts)
 	return system, input
 }
@@ -197,11 +168,12 @@ validateBotRewrite — LLM 출력을 받을지. 받으면 (정리한 본문, "")
 기호: 커뮤니티 본문의 #·@는 태그로 읽히니 전각으로 바꾸고, 리포트는 @만 바꾼다(## 소제목은 살린다).
 */
 func validateBotRewrite(d repository.BotDraft, out llm.BotDraftRewrite) (string, string) {
-	minBody, maxBody, maxTitle := 60, 3000, 60
+	a := botArchetypeOf(d.Kind, d.Archetype, d.Length)
+	minBody, maxBody, maxTitle := a.MinBody, a.MaxBody, 60
 	if d.Kind == repository.BotDraftResearch {
-		minBody, maxBody, maxTitle = 200, 5000, 100
+		maxTitle = 100
 	}
-	if n := utf8.RuneCountInString(out.Title); n < 4 || n > maxTitle {
+	if n := utf8.RuneCountInString(out.Title); n < 2 || n > maxTitle {
 		return "", fmt.Sprintf("제목 길이 %d자", n)
 	}
 	if n := utf8.RuneCountInString(out.Body); n < minBody || n > maxBody {
