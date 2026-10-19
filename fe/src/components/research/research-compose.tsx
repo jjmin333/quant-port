@@ -109,6 +109,7 @@ export function ResearchCompose({ header }: { header?: React.ReactNode } = {}) {
         setSymbol(d.symbol.toUpperCase());
         setTitle(d.title);
         setBody(d.body);
+        setPersonaId((cur) => cur ?? d.personaId ?? null);
       })
       .catch(() => setError("초안을 불러오지 못했습니다."));
     return () => {

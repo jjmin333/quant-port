@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { BadgePicker } from "@/components/admin/persona-select";
 import { PageHeader } from "@/components/layout/header";
 import { PageScrollShell } from "@/components/layout/page-content-shell";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -16,8 +17,11 @@ import {
   discardBotDraft,
   fetchBotDrafts,
   fetchPersonaActivity,
+  fetchPersonaPosts,
   fetchPersonas,
+  setPersonaPostViews,
   updatePersona,
+  type PersonaPost,
   type BotActivity,
   type BotDraft,
   type BotDraftKind,
@@ -46,6 +50,7 @@ export function AdminBotsPanel() {
   const [drafts, setDrafts] = useState<BotDraft[] | null>(null);
   const [personas, setPersonas] = useState<BotPersona[]>([]);
   const [activity, setActivity] = useState<BotActivity[]>([]);
+  const [posts, setPosts] = useState<PersonaPost[]>([]);
 
   const loadDrafts = useCallback(async () => {
     try {
@@ -58,9 +63,10 @@ export function AdminBotsPanel() {
 
   const loadSide = useCallback(async () => {
     try {
-      const [p, a] = await Promise.all([fetchPersonas(), fetchPersonaActivity()]);
+      const [p, a, ps] = await Promise.all([fetchPersonas(), fetchPersonaActivity(), fetchPersonaPosts()]);
       setPersonas(p);
       setActivity(a);
+      setPosts(ps);
     } catch (e) {
       toast.error(toUserMessage(e, "게시 계정을 불러오지 못했습니다."));
     }
@@ -115,7 +121,7 @@ export function AdminBotsPanel() {
     <>
       <PageHeader
         title="봇 초안"
-        subtitle="3시간마다 커뮤니티 5개 · 리포트 2개 — 고쳐서 게시 계정으로 올립니다. 게시하지 않은 초안은 24시간 뒤 사라집니다"
+        subtitle="3시간마다 커뮤니티 5개 · 리포트 2개 — 배정한 게시 계정 말투로 AI가 다시 쓰고, 고쳐서 올립니다. 게시하지 않은 초안은 24시간 뒤 사라집니다"
       />
       <PageScrollShell bare>
         <div className="space-y-4">
@@ -149,6 +155,7 @@ export function AdminBotsPanel() {
 
           <PersonaList personas={personas} onSaved={() => void loadSide()} />
           <ActivityList items={activity} onReplied={() => void loadSide()} />
+          <ViewsList items={posts} onSaved={() => void loadSide()} />
         </div>
       </PageScrollShell>
     </>
@@ -176,6 +183,7 @@ function DraftCard({ draft, personas, onDiscard }: { draft: BotDraft; personas: 
   const [open, setOpen] = useState(false);
   const href = draft.kind === "community" ? `/community/new?draft=${draft.id}` : `/reports/new?draft=${draft.id}`;
   const by = personas.find((p) => p.id === draft.publishedBy);
+  const assigned = personas.find((p) => p.id === draft.personaId);
   return (
     <li>
       <Card className="space-y-2 p-4">
@@ -192,12 +200,24 @@ function DraftCard({ draft, personas, onDiscard }: { draft: BotDraft; personas: 
           >
             {draft.length === "long" ? "긴 글" : "짧은 글"}
           </span>
+          <span
+            className={cn(
+              "rounded px-1.5 font-semibold",
+              draft.source === "llm" ? "bg-violet-500/10 text-violet-700 dark:text-violet-300" : "bg-[var(--surface-elevated)]",
+            )}
+            title={draft.note ? `AI 글을 버렸습니다: ${draft.note}` : undefined}
+          >
+            {draft.source === "llm" ? `AI 작성${assigned ? ` · ${assigned.displayName} 말투` : ""}` : draft.note ? "템플릿 (AI 버림)" : "템플릿"}
+          </span>
           {draft.reason && <span className="min-w-0 truncate">고른 이유: {draft.reason}</span>}
         </div>
         <h3 className="text-note font-semibold text-[var(--text-primary)]">{draft.title}</h3>
         <p className={cn("whitespace-pre-wrap text-cell text-[var(--text-secondary)]", !open && "line-clamp-4")}>
           {draft.body}
         </p>
+        {draft.note && draft.source !== "llm" && (
+          <p className="text-micro text-amber-700 dark:text-amber-400">AI 글을 버린 이유: {draft.note}</p>
+        )}
         {draft.articles.length > 0 && (
           <p className="text-micro text-[var(--text-muted)]">붙일 기사: {draft.articles.map((a) => a.title).join(" · ")}</p>
         )}
@@ -252,11 +272,13 @@ function PersonaList({ personas, onSaved }: { personas: BotPersona[]; onSaved: (
 
 function PersonaRow({ persona, onSaved }: { persona: BotPersona; onSaved: () => void }) {
   const [name, setName] = useState(persona.displayName);
-  const [badge, setBadge] = useState(persona.badge);
-  const dirty = name !== persona.displayName || badge !== persona.badge;
+  const [badges, setBadges] = useState<string[]>(persona.badges);
+  const [style, setStyle] = useState(persona.style);
+  const dirty =
+    name !== persona.displayName || style !== persona.style || badges.join(",") !== persona.badges.join(",");
   async function save() {
     try {
-      await updatePersona(persona.id, name.trim(), badge.trim());
+      await updatePersona(persona.id, { displayName: name.trim(), badges, style: style.trim() });
       toast.success("저장했습니다.");
       onSaved();
     } catch (e) {
@@ -264,20 +286,87 @@ function PersonaRow({ persona, onSaved }: { persona: BotPersona; onSaved: () => 
     }
   }
   return (
-    <li className="flex flex-wrap items-center gap-2 px-4 py-2.5 text-cell">
-      <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} className="h-8 w-40" aria-label="이름" />
-      <Input
-        value={badge}
-        onChange={(e) => setBadge(e.target.value)}
-        maxLength={20}
-        placeholder="뱃지 없음"
-        className="h-8 w-44"
-        aria-label="뱃지"
+    <li className="space-y-2 px-4 py-3 text-cell">
+      <div className="flex flex-wrap items-center gap-2">
+        <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} className="h-8 w-40" aria-label="이름" />
+        <span className="text-micro text-[var(--text-muted)]">
+          글 {persona.posts} · 리포트 {persona.calls}
+        </span>
+        {dirty && (
+          <Button type="button" size="sm" onClick={() => void save()}>
+            저장
+          </Button>
+        )}
+      </div>
+      <BadgePicker value={badges} onChange={setBadges} />
+      <textarea
+        value={style}
+        onChange={(e) => setStyle(e.target.value)}
+        maxLength={500}
+        rows={2}
+        placeholder="말투 — 예) 40대 자영업자. 반말 섞인 짧은 문장, 숫자를 꼼꼼히 짚고 걱정이 많은 편. 비워 두면 기본 말투."
+        aria-label="말투"
+        className="w-full resize-y rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-cell outline-none focus:border-[var(--brand)]"
       />
+    </li>
+  );
+}
+
+function ViewsList({ items, onSaved }: { items: PersonaPost[]; onSaved: () => void }) {
+  return (
+    <Card className="p-0">
+      <h2 className="border-b border-[var(--border)] px-4 py-2.5 text-note font-semibold">
+        게시 계정 글 조회수 {items.length}
+        <span className="ml-2 text-micro font-normal text-[var(--text-muted)]">
+          게시 계정 글만 바꿀 수 있습니다 — 이후 실제 조회는 이 값에서 더해집니다
+        </span>
+      </h2>
+      {items.length === 0 ? (
+        <p className="px-4 py-4 text-cell text-[var(--text-muted)]">게시 계정으로 올린 글이 없습니다.</p>
+      ) : (
+        <ul className="divide-y divide-[var(--border)]">
+          {items.map((p) => (
+            <ViewsRow key={`${p.kind}-${p.id}`} post={p} onSaved={onSaved} />
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function ViewsRow({ post, onSaved }: { post: PersonaPost; onSaved: () => void }) {
+  const [value, setValue] = useState(String(post.views));
+  const n = Number(value);
+  const valid = value.trim() !== "" && Number.isInteger(n) && n >= 0 && n <= 10_000_000;
+  const href = post.kind === "community" ? `/community/${post.id}` : `/reports/${post.id}`;
+  async function save() {
+    try {
+      await setPersonaPostViews(post.kind, post.id, n);
+      toast.success("조회수를 바꿨습니다.");
+      onSaved();
+    } catch (e) {
+      toast.error(toUserMessage(e, "조회수를 바꾸지 못했습니다."));
+    }
+  }
+  return (
+    <li className="flex flex-wrap items-center gap-2 px-4 py-2.5 text-cell">
+      <span className="rounded bg-[var(--surface-elevated)] px-1.5 text-micro font-semibold">{KIND_LABEL[post.kind]}</span>
+      <Link href={href} className="min-w-0 flex-1 truncate font-semibold text-[var(--text-secondary)] hover:text-[var(--brand)]">
+        {post.title}
+      </Link>
       <span className="text-micro text-[var(--text-muted)]">
-        글 {persona.posts} · 리포트 {persona.calls}
+        {post.personaName} · {formatDateTimeKST(post.createdAt)}
       </span>
-      {dirty && (
+      <Input
+        type="number"
+        min={0}
+        max={10_000_000}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="h-8 w-28"
+        aria-label="조회수"
+      />
+      {valid && n !== post.views && (
         <Button type="button" size="sm" onClick={() => void save()}>
           저장
         </Button>

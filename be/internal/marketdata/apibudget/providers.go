@@ -71,6 +71,8 @@ const (
 	ProviderLLMSub Provider = "llm_sub"
 	// ProviderLLMFeatAsset — 자산 AI 기능 버킷(금리 한 줄·지역·단지·우대조건).
 	ProviderLLMFeatAsset Provider = "llm_feat_asset"
+	// ProviderLLMFeatBot — 봇 초안 다시 쓰기(2026-10-19). 자산 전용 키(llm_sub) 위에서 돈다.
+	ProviderLLMFeatBot Provider = "llm_feat_bot"
 )
 
 // Limits documents enforced quotas. See be/docs/api-quotas.md for sources.
@@ -440,6 +442,14 @@ var DefaultLimits = map[Provider]Limits{
 	ProviderLLMFeatAsset: {
 		DailyQuota:   250,
 		TokensPerDay: 600_000,
+	},
+	/*
+		봇 초안 다시 쓰기 — 회차당 7건 × 8회 = 56콜(+밤 503 뒤 따라잡기). 콜당 실측 1~1.5K(10-19),
+		말투 지시가 붙어도 3K 안. 자산 AI(250콜·60만)와 합쳐도 llm_sub 하루 500콜·100만 안이다.
+	*/
+	ProviderLLMFeatBot: {
+		DailyQuota:   80,
+		TokensPerDay: 300_000,
 	},
 }
 

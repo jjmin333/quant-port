@@ -12,6 +12,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/enact/quant-port/be/internal/llm"
+	"github.com/enact/quant-port/be/internal/marketdata/apibudget"
 	"github.com/enact/quant-port/be/internal/model"
 	"github.com/enact/quant-port/be/internal/repository"
 )
@@ -29,6 +31,11 @@ LLM을 부르지 않는다 — 문장은 이미 배치가 써 둔 것(브리핑 
   - 2일 안에 실적 발표가 있는 종목(프리뷰 있음)    2
   - 최근 24시간 안에 같은 종류 초안이 있던 종목은 뺀다(회차마다 같은 종목 반복 금지).
 리포트는 종목 AI 요약이 있는 후보에서만 뽑는다 — 긴 글의 몸통이 그것이다.
+
+LLM 다시 쓰기(2026-10-19 사용자 요청) — 템플릿 초안을 저장한 뒤, 같은 회차에서 초안마다 배정한 게시 계정의 말투로
+다시 쓴다(자산 전용 키 · 기능 버킷 llm_feat_bot). 템플릿 본문은 facts로 남고 그것이 LLM 입력이다. 출력은 믿지 않는다:
+사실에 없는 숫자, 권유·목표가 표현, 길이 이탈이면 버리고 템플릿을 둔다(이유는 note에). 503·시간 초과는 멈추고
+다음 회차가 12시간 안의 템플릿 초안을 이어 쓴다 — 밤(KST 22~03시) 회차가 그렇게 메워진다.
 */
 
 const (
@@ -51,6 +58,16 @@ type BotDraftService struct {
 	stocks     *repository.StockRepo
 	now        func() time.Time
 	rnd        *rand.Rand
+	// 다시 쓰기 — 둘 다 있어야 돈다(없으면 템플릿만).
+	llm    *llm.Client
+	budget *apibudget.Manager
+	sleep  func(context.Context, time.Duration) bool
+}
+
+// WithLLM — 다시 쓰기에 쓸 클라이언트(자산 전용 키)와 예산. client가 nil이면 템플릿만 만든다.
+func (s *BotDraftService) WithLLM(client *llm.Client, budget *apibudget.Manager) *BotDraftService {
+	s.llm, s.budget = client, budget
+	return s
 }
 
 func NewBotDraftService(db *sql.DB) *BotDraftService {
@@ -64,6 +81,14 @@ func NewBotDraftService(db *sql.DB) *BotDraftService {
 		stocks:     repository.NewStockRepo(db),
 		now:        time.Now,
 		rnd:        rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), 0x9e3779b97f4a7c15)),
+		sleep: func(ctx context.Context, d time.Duration) bool {
+			select {
+			case <-ctx.Done():
+				return false
+			case <-time.After(d):
+				return true
+			}
+		},
 	}
 }
 
@@ -159,14 +184,28 @@ func (s *BotDraftService) Run(ctx context.Context) (map[string]any, string, erro
 		long := s.rnd.Float64() < botResearchLongShare
 		drafts = append(drafts, buildBotResearchDraft(s.rnd, c, long, slot))
 	}
+	// 초안마다 게시 계정을 하나 배정한다 — 그 말투로 다시 쓰고, 게시 화면이 그 계정을 먼저 고른다.
+	personas, err := s.repo.Personas(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	for i := range drafts {
+		if p := botPickPersona(s.rnd, personas); p != nil {
+			id := p.ID
+			drafts[i].PersonaID = &id
+		}
+	}
 	if err := s.repo.Insert(ctx, drafts); err != nil {
 		return nil, "", err
 	}
-	summary := fmt.Sprintf("커뮤니티 %d · 리포트 %d (후보 %d, 정리 %d)", len(community), len(research), len(cands), pruned)
+	rw := s.rewritePending(ctx, now, personas)
+	summary := fmt.Sprintf("커뮤니티 %d · 리포트 %d (후보 %d, 정리 %d) · AI 다시 쓰기 %d · 버림 %d%s",
+		len(community), len(research), len(cands), pruned, rw.Rewritten, rw.Rejected, rw.stopText())
 	log.Printf("bot drafts: %s", summary)
 	return map[string]any{
 		"community": len(community), "research": len(research), "candidates": len(cands), "pruned": pruned,
-		"slot": slot.Format(time.RFC3339),
+		"slot": slot.Format(time.RFC3339), "rewritten": rw.Rewritten, "rejected": rw.Rejected, "tokens": rw.Tokens,
+		"stop": rw.Stop,
 	}, summary, nil
 }
 
@@ -226,7 +265,7 @@ func (s *BotDraftService) candidates(ctx context.Context, now time.Time) ([]*bot
 			c := get(e.Symbol, e.Name, e.AssetType)
 			c.Weight += w
 			if len(c.Events) < 4 && e.Title != "" {
-				c.Events = append(c.Events, e.Title)
+				c.Events = append(c.Events, botDateLabel(e.EventDate)+" "+e.Title)
 			}
 			if e.Kind == "score_jump" && c.ScoreJump == "" {
 				c.ScoreJump = e.Title
@@ -374,7 +413,7 @@ func botReason(c *botCandidate) string {
 		parts = append(parts, c.ScoreJump)
 	}
 	for _, e := range c.Events {
-		if e != c.ScoreJump && len(parts) < 3 {
+		if (c.ScoreJump == "" || !strings.HasSuffix(e, c.ScoreJump)) && len(parts) < 3 {
 			parts = append(parts, e)
 		}
 	}
@@ -476,16 +515,15 @@ func botAxesLine(v *model.StockScoreView) string {
 	return strings.Join(parts, " · ")
 }
 
+// botChangeLine — 등락률에 「언제의 값인지」를 붙인다(브리핑 시점의 실시간 값 / 그날 종가).
 func botChangeLine(c *botCandidate) string {
-	rate := c.ChangeRate
-	if rate == nil && c.CloseAI.TradeDate != "" {
-		r := c.CloseAI.ChangeRate
-		rate = &r
+	switch {
+	case c.ChangeRate != nil:
+		return fmt.Sprintf("등락률 %+.2f%% (브리핑 시점)", *c.ChangeRate)
+	case c.CloseAI.TradeDate != "":
+		return fmt.Sprintf("등락률 %+.2f%% (%s 종가)", c.CloseAI.ChangeRate, botDateLabel(c.CloseAI.TradeDate))
 	}
-	if rate == nil {
-		return ""
-	}
-	return fmt.Sprintf("등락률 %+.2f%%", *rate)
+	return ""
 }
 
 // botFirstSentences — 저장된 AI 문단을 n문장까지(짧은 글용).

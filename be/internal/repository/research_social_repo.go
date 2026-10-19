@@ -177,6 +177,7 @@ func (r *ResearchRepo) Comments(ctx context.Context, callID, viewerID int64) ([]
 			v := parentID.Int64
 			c.ParentID = &v
 		}
+		c.AuthorBadge = model.PersonaBadgeText(c.AuthorBadge)
 		c.Deleted = deletedAt.Valid
 		if c.Deleted {
 			// The row survives so replies keep their anchor, but the text does not.
@@ -463,6 +464,7 @@ func (r *ResearchRepo) comment(ctx context.Context, id, viewerID int64) (model.R
 		v := parentID.Int64
 		c.ParentID = &v
 	}
+	c.AuthorBadge = model.PersonaBadgeText(c.AuthorBadge)
 	c.Deleted = deletedAt.Valid
 	c.CanEdit = !c.Deleted && viewerID > 0 && viewerID == c.UserID
 	c.CreatedAt = createdAt.UTC()

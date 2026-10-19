@@ -121,3 +121,13 @@ func MigrateBotDraftsIfNeeded(ctx context.Context, db *sql.DB, migrationsDir str
 	}
 	return applyMigrationFile(ctx, db, migrationsDir, "105_bot_drafts.sql", "봇 초안 · 게시 계정")
 }
+
+// MigrateBotLLMIfNeeded applies 106 — 게시 계정 말투 · 뱃지 키 · 초안 출처(2026-10-19). 마지막 열(note)을 마커로 본다 —
+// 중간에 끊겨도 다시 돌면 중복 열은 건너뛰고 MODIFY는 같은 결과다.
+func MigrateBotLLMIfNeeded(ctx context.Context, db *sql.DB, migrationsDir string) error {
+	has, err := columnExists(ctx, db, "bot_drafts", "note")
+	if err != nil || has {
+		return err
+	}
+	return applyMigrationFile(ctx, db, migrationsDir, "106_bot_llm.sql", "봇 초안 LLM · 게시 계정 말투")
+}

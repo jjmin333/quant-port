@@ -699,34 +699,35 @@ func CommunityBadges(st *repository.CommunityAuthorStats, heldSymbols []string, 
 	if st == nil {
 		return out
 	}
-	if st.Role == model.RoleAdmin {
-		out = append(out, model.CommunityBadge{Key: "admin", Emoji: "🛡", Label: "운영자"})
-	}
-	// 게시 계정은 관리자가 정한 뱃지만 단다(2026-10-16 사용자 결정 — 활동·새내기 뱃지도 붙이지 않는다).
+	// 게시 계정은 관리자가 고른 뱃지만 단다(2026-10-16·19 사용자 결정 — 서비스에 있는 뱃지 중에서 고른다).
 	if st.Role == repository.RolePersona {
-		if st.Badge != "" {
-			out = append(out, model.CommunityBadge{Key: "custom", Label: st.Badge})
-		}
-		return out
+		return model.PersonaBadges(st.Badge)
+	}
+	badge := func(key string) model.CommunityBadge {
+		b, _ := model.CommunityBadgeByKey(key)
+		return b
+	}
+	if st.Role == model.RoleAdmin {
+		out = append(out, badge("admin"))
 	}
 	for _, sym := range heldSymbols {
 		out = append(out, model.CommunityBadge{Key: "holder", Emoji: "🌱", Label: "주주", Symbol: sym})
 	}
 	activity := false
-	add := func(ok bool, key, emoji, label string) {
+	add := func(ok bool, key string) {
 		if ok {
-			out = append(out, model.CommunityBadge{Key: key, Emoji: emoji, Label: label})
+			out = append(out, badge(key))
 			activity = true
 		}
 	}
-	add(st.LikesReceived >= 100, "liked", "❤", "인기 글쓴이")
-	add(st.Posts >= 10, "writer", "✍", "글쟁이")
-	add(st.Comments >= 50, "talker", "💬", "수다쟁이")
-	add(st.Reads >= 500, "reader", "🔍", "눈팅 장인")
-	add(st.JudgedStamps >= 10, "forecaster", "🎯", "예측 기록가")
-	add(st.Notes >= 30, "journaler", "📝", "메모 습관")
+	add(st.LikesReceived >= 100, "liked")
+	add(st.Posts >= 10, "writer")
+	add(st.Comments >= 50, "talker")
+	add(st.Reads >= 500, "reader")
+	add(st.JudgedStamps >= 10, "forecaster")
+	add(st.Notes >= 30, "journaler")
 	if !activity && !st.JoinedAt.IsZero() && now.Sub(st.JoinedAt) < 14*24*time.Hour {
-		out = append(out, model.CommunityBadge{Key: "newbie", Emoji: "🐣", Label: "새내기"})
+		out = append(out, badge("newbie"))
 	}
 	return out
 }

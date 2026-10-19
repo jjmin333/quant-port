@@ -200,6 +200,11 @@ var catalog = map[Provider]CatalogEntry{
 		Label:   "기능: 자산 AI 해설",
 		Purpose: "금리 한 줄·시군구/단지 시장 해설·예적금 우대조건 구조화(asset_ai 잡). 여러 항목을 한 콜에 묶는다.",
 	},
+	ProviderLLMFeatBot: {
+		Provider: ProviderLLMFeatBot, Category: CategoryLLM,
+		Label:   "LLM 기능 · 봇 초안 다시 쓰기",
+		Purpose: "관리자 「봇 초안」을 게시 계정 말투로 다시 쓴다(3시간마다 7건, 자산 전용 키). 숫자 검증을 못 넘거나 다 쓰면 템플릿 초안이 남는다.",
+	},
 	ProviderLLMFeatSocial: {
 		Provider: ProviderLLMFeatSocial, Category: CategoryLLM,
 		Label:   "LLM 기능 · Reddit 커뮤니티 요약",

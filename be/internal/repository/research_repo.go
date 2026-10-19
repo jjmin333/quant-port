@@ -96,6 +96,8 @@ func scanResearch(row interface{ Scan(dest ...any) error }) (model.ResearchCall,
 	); err != nil {
 		return model.ResearchCall{}, err
 	}
+	// users.badge는 뱃지 키 목록이다(게시 계정, 2026-10-19) — 작성자 칩 하나에 담을 글자로.
+	c.AuthorBadge = model.PersonaBadgeText(c.AuthorBadge)
 
 	c.AssetType = model.QuoteAssetType(assetType)
 	c.Currency = model.QuoteCurrency(currency)

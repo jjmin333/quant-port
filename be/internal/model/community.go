@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // 커뮤니티 (2026-09-27 사용자 요청 4) — migrations/088_community.sql.
 
@@ -108,4 +111,47 @@ type CommunityComment struct {
 type CommunityPostPage struct {
 	Items      []CommunityPost `json:"items"`
 	NextCursor string          `json:"nextCursor,omitempty"`
+}
+
+// CommunityBadgeCatalog — 서비스에 있는 뱃지 전부(「주주」는 종목마다 달라 뺐다). 활동으로 붙는 뱃지(service.CommunityBadges)와
+// 관리자가 게시 계정에 고르는 뱃지(2026-10-19)가 이 한 목록을 쓴다 — 이름·이모지가 두 곳에서 갈라지지 않게.
+var CommunityBadgeCatalog = []CommunityBadge{
+	{Key: "admin", Emoji: "🛡", Label: "운영자"},
+	{Key: "liked", Emoji: "❤", Label: "인기 글쓴이"},
+	{Key: "writer", Emoji: "✍", Label: "글쟁이"},
+	{Key: "talker", Emoji: "💬", Label: "수다쟁이"},
+	{Key: "reader", Emoji: "🔍", Label: "눈팅 장인"},
+	{Key: "forecaster", Emoji: "🎯", Label: "예측 기록가"},
+	{Key: "journaler", Emoji: "📝", Label: "메모 습관"},
+	{Key: "newbie", Emoji: "🐣", Label: "새내기"},
+}
+
+// CommunityBadgeByKey — 목록에서 key의 뱃지. 없으면 false.
+func CommunityBadgeByKey(key string) (CommunityBadge, bool) {
+	for _, b := range CommunityBadgeCatalog {
+		if b.Key == key {
+			return b, true
+		}
+	}
+	return CommunityBadge{}, false
+}
+
+// PersonaBadges — users.badge(쉼표로 이은 키)를 뱃지로. 모르는 키는 버린다.
+func PersonaBadges(csv string) []CommunityBadge {
+	out := []CommunityBadge{}
+	for _, k := range strings.Split(csv, ",") {
+		if b, ok := CommunityBadgeByKey(strings.TrimSpace(k)); ok {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
+// PersonaBadgeText — 리포트 작성자 칸처럼 칩 하나에 담는 글자(「✍ 글쟁이 · ❤ 인기 글쓴이」).
+func PersonaBadgeText(csv string) string {
+	parts := []string{}
+	for _, b := range PersonaBadges(csv) {
+		parts = append(parts, b.Emoji+" "+b.Label)
+	}
+	return strings.Join(parts, " · ")
 }
