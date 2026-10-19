@@ -18,10 +18,16 @@ export type BotDraft = {
   symbolName: string;
   market: string;
   length: "short" | "long";
+  /** template — 템플릿 그대로 · llm — 배정한 게시 계정 말투로 AI가 다시 썼다. */
+  source: "template" | "llm";
   reason: string;
   title: string;
   body: string;
   articles: { id: string; title: string }[];
+  /** 초안을 만들 때 배정한 게시 계정(그 말투로 썼다). 게시 화면이 먼저 고른다. */
+  personaId?: number;
+  /** AI 다시 쓰기를 버린 이유(숫자 검증 등). */
+  note?: string;
   status: BotDraftStatus;
   publishedRef?: number;
   publishedBy?: number;
@@ -31,7 +37,10 @@ export type BotDraft = {
 export type BotPersona = {
   id: number;
   displayName: string;
-  badge: string;
+  /** 뱃지 키 — `fetchPersonaBadges` 목록 중에서. */
+  badges: string[];
+  /** 말투 설명 — AI가 이 계정 이름으로 쓸 때 따른다. */
+  style: string;
   posts: number;
   calls: number;
   createdAt: string;
@@ -82,19 +91,50 @@ export function fetchPersonas(): Promise<BotPersona[]> {
   return apiRequest<BotPersona[] | null>("/api/v1/admin/personas").then((d) => d ?? []);
 }
 
-export function createPersona(displayName: string, badge: string): Promise<{ id: number }> {
+export type PersonaInput = { displayName: string; badges: string[]; style: string };
+
+export function createPersona(input: PersonaInput): Promise<{ id: number }> {
   return apiRequest<{ id: number }>("/api/v1/admin/personas", {
     method: "POST",
     headers: JSON_HEADERS,
-    body: JSON.stringify({ displayName, badge }),
+    body: JSON.stringify(input),
   });
 }
 
-export function updatePersona(id: number, displayName: string, badge: string): Promise<unknown> {
+export function updatePersona(id: number, input: PersonaInput): Promise<unknown> {
   return apiRequest(`/api/v1/admin/personas/${id}`, {
     method: "PUT",
     headers: JSON_HEADERS,
-    body: JSON.stringify({ displayName, badge }),
+    body: JSON.stringify(input),
+  });
+}
+
+/** 서비스에 있는 뱃지 전부(BE `model.CommunityBadgeCatalog`) — 게시 계정에 고른다. */
+export type PersonaBadgeOption = { key: string; emoji: string; label: string };
+
+export function fetchPersonaBadges(): Promise<PersonaBadgeOption[]> {
+  return apiRequest<PersonaBadgeOption[] | null>("/api/v1/admin/personas/badges").then((d) => d ?? []);
+}
+
+export type PersonaPost = {
+  kind: BotDraftKind;
+  id: number;
+  title: string;
+  personaName: string;
+  views: number;
+  createdAt: string;
+};
+
+export function fetchPersonaPosts(): Promise<PersonaPost[]> {
+  return apiRequest<PersonaPost[] | null>("/api/v1/admin/personas/posts").then((d) => d ?? []);
+}
+
+/** 게시 계정 글의 조회수만 바뀐다(실제 사용자 글은 404). 이후 실제 조회는 이 값에서 더해진다. */
+export function setPersonaPostViews(kind: BotDraftKind, id: number, views: number): Promise<unknown> {
+  return apiRequest(`/api/v1/admin/personas/posts/${kind}/${id}/views`, {
+    method: "PUT",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ views }),
   });
 }
 

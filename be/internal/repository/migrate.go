@@ -346,6 +346,9 @@ func ensureSchema(ctx context.Context, db *sql.DB, migrationsDir string) error {
 		if err := MigrateBotDraftsIfNeeded(ctx, db, migrationsDir); err != nil {
 			return err
 		}
+		if err := MigrateBotLLMIfNeeded(ctx, db, migrationsDir); err != nil {
+			return err
+		}
 		log.Println("mysql: schema ok (all required tables present)")
 		CheckInnoDBBufferPool(ctx, db)
 		go migrateCandleBarsAsync(db)
@@ -558,6 +561,9 @@ func ensureSchema(ctx context.Context, db *sql.DB, migrationsDir string) error {
 		return err
 	}
 	if err := MigrateBotDraftsIfNeeded(ctx, db, migrationsDir); err != nil {
+		return err
+	}
+	if err := MigrateBotLLMIfNeeded(ctx, db, migrationsDir); err != nil {
 		return err
 	}
 	go migrateCandleBarsAsync(db)

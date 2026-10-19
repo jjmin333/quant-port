@@ -3250,3 +3250,4 @@
 - 2026-10-14: PWA 1단계 — manifest·아이콘 3종(gen-icons.mjs)·sw.js(내비게이션 실패 시 offline.html만)·운영 빌드 등록, 앱 출시 방식 검토(Flutter X → PWA→TWA/Capacitor) · fe 배포(api 재생성)
 - 2026-10-15: 운영 로그 점검 — AI 요약 배치 503·타임아웃 재시도 한 바퀴, 지수 해설 503 대체 모델, 번역 사슬 예산 소진 오보(무한 재시도) 수정, Toss 한도 로그 값마다 1회 · api+worker-content·market 배포(worker-stock은 financials_domestic 진행 중이라 보류)
 - 2026-10-16: 관리자 「봇 초안」(worker-stock `bot_drafts` 3시간마다 커뮤니티 5·리포트 2, LLM 없음) + 게시 계정(users role=persona·badge, `/admin/personas/{id}/as` 아래 기존 쓰기 핸들러 재사용) + 리포트 작성자 뱃지 · 배포 api+fe+worker-stock, 105 적용, 수동 실행 3회 확인(관리자 화면은 브라우저 미확인)
+- 2026-10-19: 봇 초안 LLM 다시 쓰기(자산 전용 키·llm_feat_bot 80콜/30만, 게시 계정 말투, 숫자·금지어 검증, ErrPacing 간격 수정) + 게시 계정 뱃지=서비스 뱃지 키 고르기·말투 칸 + persona 글 조회수 지정 · 106 적용, 배포 api+fe+worker-stock, 실행 2회(둘째 24/25 채택)

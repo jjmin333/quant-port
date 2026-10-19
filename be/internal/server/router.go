@@ -444,6 +444,9 @@ func (s *Server) routes() http.Handler {
 			admin.Get("/personas", s.adminBots.ListPersonas)
 			admin.Post("/personas", s.adminBots.CreatePersona)
 			admin.Get("/personas/activity", s.adminBots.Activity)
+			admin.Get("/personas/badges", s.adminBots.Badges)
+			admin.Get("/personas/posts", s.adminBots.PersonaPosts)
+			admin.Put("/personas/posts/{kind}/{id}/views", s.adminBots.SetPersonaPostViews)
 			admin.Put("/personas/{id}", s.adminBots.UpdatePersona)
 			admin.Route("/personas/{personaId}/as", func(as chi.Router) {
 				as.Use(s.adminBots.ActAs)

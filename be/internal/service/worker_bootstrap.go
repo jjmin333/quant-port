@@ -70,6 +70,9 @@ type WorkerDeps struct {
 	// AssetScores · AssetAI — 부동산·금융상품·공매 점수와 AI 해설(2026-10-01, worker-asset).
 	AssetScores *AssetScoreService
 	AssetAI     *AssetAIService
+	// BotLLM · Budget — 봇 초안 다시 쓰기(2026-10-19). 자산 전용 키 클라이언트(키가 없으면 nil — 템플릿만).
+	BotLLM *llm.Client
+	Budget *apibudget.Manager
 	// ETFScores는 국내 ETF 일별 지표를 받고 ETF 점검 점수를 매긴다(KRX 하루 1호출).
 	ETFScores *ETFScoreService
 	// NewsSentiment는 기사 제목에 로컬 감성 모델 라벨을 붙인다(점수 배치의 첫 단계).
@@ -305,6 +308,8 @@ func BootstrapWorker(ctx context.Context) (*WorkerDeps, error) {
 		// 뉴스 주제 기사(2026-10-09 요청 5): 점수는 근거 칸만, AI는 제목 몇 줄만 받는다.
 		AssetScores: NewAssetScoreService(repository.NewPublicDataRepo(mysql.DB()), repository.NewFinProductRepo(mysql.DB()),
 			repository.NewAssetIntelRepo(mysql.DB())).WithNews(repository.NewNewsRepo(mysql.DB())),
+		BotLLM: assetLLM(cfg, apiBudget),
+		Budget: apiBudget,
 		AssetAI: NewAssetAIService(assetLLM(cfg, apiBudget), apiBudget, repository.NewAssetIntelRepo(mysql.DB()),
 			repository.NewPublicDataRepo(mysql.DB()), repository.NewFinProductRepo(mysql.DB()), repository.NewWealthRepo(mysql.DB())).
 			WithNews(repository.NewNewsRepo(mysql.DB())),

@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/enact/quant-port/be/internal/model"
 )
 
 /*
@@ -40,9 +42,13 @@ type BotDraft struct {
 	SymbolName   string       `json:"symbolName"`
 	Market       string       `json:"market"`
 	Length       string       `json:"length"`
+	Source       string       `json:"source"` // template | llm
 	Reason       string       `json:"reason"`
 	Title        string       `json:"title"`
 	Body         string       `json:"body"`
+	Facts        string       `json:"-"`                   // 다시 쓰기 전 템플릿 본문(LLM 입력)
+	PersonaID    *int64       `json:"personaId,omitempty"` // 배정한 게시 계정(그 말투로 썼다)
+	Note         string       `json:"note,omitempty"`      // 다시 쓰기를 버린 이유
 	Articles     []BotArticle `json:"articles"`
 	Status       string       `json:"status"`
 	PublishedRef *int64       `json:"publishedRef,omitempty"`
@@ -61,26 +67,29 @@ func (r *BotDraftRepo) Insert(ctx context.Context, drafts []BotDraft) error {
 		}
 		ids, _ := json.Marshal(d.Articles)
 		if _, err := r.db.ExecContext(ctx, `
-			INSERT INTO bot_drafts (kind, slot_at, symbol, symbol_name, market, length, reason, title, body, articles)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			INSERT INTO bot_drafts (kind, slot_at, symbol, symbol_name, market, length, reason, title, body, facts, persona_id, articles)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			d.Kind, d.SlotAt.UTC(), d.Symbol, clipRunes(d.SymbolName, 100), d.Market, d.Length,
-			clipRunes(d.Reason, 200), clipRunes(d.Title, 200), d.Body, string(ids)); err != nil {
+			clipRunes(d.Reason, 200), clipRunes(d.Title, 200), d.Body, d.Body, d.PersonaID, string(ids)); err != nil {
 			return fmt.Errorf("bot draft insert: %w", err)
 		}
 	}
 	return nil
 }
 
-const botDraftCols = `id, kind, slot_at, symbol, symbol_name, market, length, reason, title, body, articles,
-	status, published_ref, published_by, created_at`
+const botDraftCols = `id, kind, slot_at, symbol, symbol_name, market, length, source, reason, title, body,
+	COALESCE(facts, body), persona_id, note, articles, status, published_ref, published_by, created_at`
 
 func scanBotDraft(row interface{ Scan(...any) error }) (BotDraft, error) {
 	var d BotDraft
 	var ids []byte
-	var ref, by sql.NullInt64
-	if err := row.Scan(&d.ID, &d.Kind, &d.SlotAt, &d.Symbol, &d.SymbolName, &d.Market, &d.Length, &d.Reason,
-		&d.Title, &d.Body, &ids, &d.Status, &ref, &by, &d.CreatedAt); err != nil {
+	var ref, by, persona sql.NullInt64
+	if err := row.Scan(&d.ID, &d.Kind, &d.SlotAt, &d.Symbol, &d.SymbolName, &d.Market, &d.Length, &d.Source, &d.Reason,
+		&d.Title, &d.Body, &d.Facts, &persona, &d.Note, &ids, &d.Status, &ref, &by, &d.CreatedAt); err != nil {
 		return d, err
+	}
+	if persona.Valid {
+		d.PersonaID = &persona.Int64
 	}
 	_ = json.Unmarshal(ids, &d.Articles)
 	if d.Articles == nil {
@@ -143,6 +152,40 @@ func (r *BotDraftRepo) Discard(ctx context.Context, id int64) error {
 		return ErrBotDraftNotFound
 	}
 	return nil
+}
+
+// PendingRewrites — 아직 템플릿인 초안(최근 것부터). 밤 503으로 못 쓴 회차를 다음 회차가 이어 쓴다.
+func (r *BotDraftRepo) PendingRewrites(ctx context.Context, since time.Time, limit int) ([]BotDraft, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT `+botDraftCols+` FROM bot_drafts
+		WHERE status = 'draft' AND source = 'template' AND note = '' AND created_at >= ?
+		ORDER BY created_at DESC, id ASC LIMIT ?`, since.UTC(), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []BotDraft{}
+	for rows.Next() {
+		d, err := scanBotDraft(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+// ApplyRewrite — LLM이 쓴 제목·본문으로 바꾼다(facts는 그대로 남는다).
+func (r *BotDraftRepo) ApplyRewrite(ctx context.Context, id int64, title, body string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE bot_drafts SET title = ?, body = ?, source = 'llm', note = '' WHERE id = ? AND status = 'draft'`,
+		clipRunes(title, 200), body, id)
+	return err
+}
+
+// SetNote — 다시 쓰기를 버린 이유. 메모가 있는 초안은 다시 시도하지 않는다(같은 사실이면 같은 실수를 한다).
+func (r *BotDraftRepo) SetNote(ctx context.Context, id int64, note string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE bot_drafts SET note = ? WHERE id = ?`, clipRunes(note, 200), id)
+	return err
 }
 
 func (r *BotDraftRepo) MarkPublished(ctx context.Context, id, ref, by int64) error {
@@ -250,7 +293,8 @@ func (r *BotDraftRepo) RecentArticles(ctx context.Context, symbol string, since 
 type BotPersona struct {
 	ID          int64     `json:"id"`
 	DisplayName string    `json:"displayName"`
-	Badge       string    `json:"badge"`
+	Badges      []string  `json:"badges"` // 뱃지 키(model.CommunityBadgeCatalog)
+	Style       string    `json:"style"`  // 말투 설명 — LLM이 따른다
 	Posts       int       `json:"posts"`
 	Calls       int       `json:"calls"`
 	CreatedAt   time.Time `json:"createdAt"`
@@ -258,7 +302,7 @@ type BotPersona struct {
 
 func (r *BotDraftRepo) Personas(ctx context.Context) ([]BotPersona, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT u.id, u.display_name, u.badge, u.created_at,
+		SELECT u.id, u.display_name, u.badge, u.persona_style, u.created_at,
 		       (SELECT COUNT(*) FROM community_posts p WHERE p.user_id = u.id AND p.status <> 'deleted'),
 		       (SELECT COUNT(*) FROM research_calls c WHERE c.user_id = u.id)
 		  FROM users u WHERE u.role = 'persona' ORDER BY u.id`)
@@ -269,8 +313,13 @@ func (r *BotDraftRepo) Personas(ctx context.Context) ([]BotPersona, error) {
 	out := []BotPersona{}
 	for rows.Next() {
 		var p BotPersona
-		if err := rows.Scan(&p.ID, &p.DisplayName, &p.Badge, &p.CreatedAt, &p.Posts, &p.Calls); err != nil {
+		var badges string
+		if err := rows.Scan(&p.ID, &p.DisplayName, &badges, &p.Style, &p.CreatedAt, &p.Posts, &p.Calls); err != nil {
 			return nil, err
+		}
+		p.Badges = []string{}
+		for _, b := range model.PersonaBadges(badges) {
+			p.Badges = append(p.Badges, b.Key)
 		}
 		out = append(out, p)
 	}
@@ -278,15 +327,15 @@ func (r *BotDraftRepo) Personas(ctx context.Context) ([]BotPersona, error) {
 }
 
 // CreatePersona — 비밀번호가 빈 값이라 bcrypt 비교가 늘 실패한다(로그인 불가).
-func (r *BotDraftRepo) CreatePersona(ctx context.Context, displayName, badge string) (int64, error) {
+func (r *BotDraftRepo) CreatePersona(ctx context.Context, displayName string, badges []string, style string) (int64, error) {
 	var b [6]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		return 0, err
 	}
 	email := "persona-" + hex.EncodeToString(b[:]) + "@persona.invalid"
 	res, err := r.db.ExecContext(ctx, `
-		INSERT INTO users (email, display_name, password_hash, role, badge) VALUES (?, ?, '', 'persona', ?)`,
-		email, displayName, badge)
+		INSERT INTO users (email, display_name, password_hash, role, badge, persona_style) VALUES (?, ?, '', 'persona', ?, ?)`,
+		email, displayName, strings.Join(badges, ","), clipRunes(style, 500))
 	if err != nil {
 		if isDuplicateKey(err) {
 			return 0, duplicateUserErr(err)
@@ -296,9 +345,10 @@ func (r *BotDraftRepo) CreatePersona(ctx context.Context, displayName, badge str
 	return res.LastInsertId()
 }
 
-func (r *BotDraftRepo) UpdatePersona(ctx context.Context, id int64, displayName, badge string) error {
+func (r *BotDraftRepo) UpdatePersona(ctx context.Context, id int64, displayName string, badges []string, style string) error {
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE users SET display_name = ?, badge = ? WHERE id = ? AND role = 'persona'`, displayName, badge, id)
+		`UPDATE users SET display_name = ?, badge = ?, persona_style = ? WHERE id = ? AND role = 'persona'`,
+		displayName, strings.Join(badges, ","), clipRunes(style, 500), id)
 	if err != nil {
 		if isDuplicateKey(err) {
 			return duplicateUserErr(err)
@@ -322,6 +372,66 @@ func (r *BotDraftRepo) IsPersona(ctx context.Context, id int64) (bool, error) {
 	var n int
 	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE id = ? AND role = 'persona'`, id).Scan(&n)
 	return n > 0, err
+}
+
+// BotPersonaPost — 게시 계정이 올린 글 하나(조회수 지정 화면용).
+type BotPersonaPost struct {
+	Kind        string    `json:"kind"` // community | research
+	ID          int64     `json:"id"`
+	Title       string    `json:"title"`
+	PersonaName string    `json:"personaName"`
+	Views       int       `json:"views"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+func (r *BotDraftRepo) PersonaPosts(ctx context.Context, limit int) ([]BotPersonaPost, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT * FROM (
+		  SELECT 'community' k, p.id, p.title, u.display_name, p.view_count, p.created_at
+		    FROM community_posts p JOIN users u ON u.id = p.user_id AND u.role = 'persona'
+		   WHERE p.status <> 'deleted'
+		  UNION ALL
+		  SELECT 'research', c.id, c.title, u.display_name, c.view_count, c.created_at
+		    FROM research_calls c JOIN users u ON u.id = c.user_id AND u.role = 'persona'
+		) t ORDER BY created_at DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("persona posts: %w", err)
+	}
+	defer rows.Close()
+	out := []BotPersonaPost{}
+	for rows.Next() {
+		var p BotPersonaPost
+		if err := rows.Scan(&p.Kind, &p.ID, &p.Title, &p.PersonaName, &p.Views, &p.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// SetPersonaPostViews — 게시 계정 글의 조회수만 바꾼다(실제 사용자 글은 0행). 이후 실제 조회는 이 값에서 더해진다.
+func (r *BotDraftRepo) SetPersonaPostViews(ctx context.Context, kind string, id int64, views int) error {
+	table := "community_posts"
+	if kind == BotDraftResearch {
+		table = "research_calls"
+	}
+	res, err := r.db.ExecContext(ctx, `UPDATE `+table+` t JOIN users u ON u.id = t.user_id AND u.role = 'persona'
+		SET t.view_count = ? WHERE t.id = ?`, views, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		// 같은 값이어도 0 — 게시 계정 글인지 따로 본다.
+		var ok int
+		if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+table+` t
+			JOIN users u ON u.id = t.user_id AND u.role = 'persona' WHERE t.id = ?`, id).Scan(&ok); err != nil {
+			return err
+		}
+		if ok == 0 {
+			return ErrBotDraftNotFound
+		}
+	}
+	return nil
 }
 
 // BotActivity — 게시 계정이 쓴 글에 다른 사람이 단 댓글(최근 것부터).

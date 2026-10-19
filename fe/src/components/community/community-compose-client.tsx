@@ -86,6 +86,8 @@ export function CommunityComposeClient() {
         setBody(d.body);
         setSymbols([{ symbol: d.symbol, name: d.symbolName || d.symbol }]);
         setArticles(d.articles.slice(0, COMMUNITY_LIMITS.articles).map((a) => ({ id: a.id, title: a.title })));
+        // 초안을 쓴 말투의 계정을 먼저 고른다(바꿀 수 있다).
+        setPersonaId((cur) => cur ?? d.personaId ?? null);
       })
       .catch((e) => toast.error(toUserMessage(e, "초안을 불러오지 못했습니다.")));
     return () => {

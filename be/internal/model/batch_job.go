@@ -178,8 +178,8 @@ const (
 	BatchGrowthAudit BatchJobID = "growth_audit"
 	/*
 		BatchBotDrafts — 커뮤니티·투자 리포트 봇 초안(worker-stock, KST 3시간마다 하루 8번). 저장된 브리핑·종목 요약·
-		실적 프리뷰·점수만 읽고 LLM은 부르지 않는다. 바로 올라가지 않는다 — 관리자가 고쳐서 게시한다
-		(service/bot_drafts.go).
+		실적 프리뷰·점수로 템플릿을 만들고, 자산 전용 LLM 키(llm_feat_bot)로 게시 계정 말투에 맞춰 다시 쓴다(10-19).
+		바로 올라가지 않는다 — 관리자가 고쳐서 게시한다(service/bot_drafts.go · bot_rewrite.go).
 	*/
 	BatchBotDrafts BatchJobID = "bot_drafts"
 	/*

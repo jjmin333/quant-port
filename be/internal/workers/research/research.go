@@ -59,7 +59,7 @@ func Run(ctx context.Context, deps *service.WorkerDeps) {
 	go runSchedule(ctx, deps)
 
 	// 봇 초안(2026-10-16) — 같은 「글」 갈래라 이 역할에 둔다. DB만 읽는다.
-	bots := service.NewBotDraftService(deps.MySQL.DB())
+	bots := service.NewBotDraftService(deps.MySQL.DB()).WithLLM(deps.BotLLM, deps.Budget)
 	go runBotSchedule(ctx, deps, bots)
 	go service.RunBatchQueueWorker(ctx, deps.Runs, model.BatchBotDrafts,
 		func(ctx context.Context, params map[string]any) (map[string]any, string, error) {
