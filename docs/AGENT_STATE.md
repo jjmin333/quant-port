@@ -26,7 +26,7 @@
 
 - **운영 로그 점검(10-15)**: nginx·api 5xx는 27시간 0건(502 1건은 fe 재기동 순간), 스캐너 400/404뿐. 「503」은 Gemini high demand — ① AI 요약 배치가 503·타임아웃 실패만 끝에서 10분 뒤 한 바퀴 더(`batchPass`, `llm.IsTransient`, 같은 주 모델) ② 지수 해설은 브리핑처럼 503이면 대체 모델(`chatCompletionWithFallback`, worker 풀에 FallbackModel) ③ 번역 사슬이 뒤 엔진이 대답했는데 앞 엔진의 예산 소진을 보고하던 것 → 같은 제목 2분마다 무한 재시도·로그 반복이 원인 ④ Toss 한도 「observed」 로그를 값마다 한 번(MARKET_INDICATOR 10↔5로 하루 400줄). 뉴스 목록 「rebuild slow」(0.5~0.7s, 배경 예열)·fe 「Failed to find Server Action "x"」(봇 탐침)는 둠.
 
-- **봇 초안 · 게시 계정(10-16, 메모리 `bot_drafts_personas_1016`)**: worker-stock `bot_drafts` 잡이 KST 3시간마다(00·03·…·21시) 브리핑 많이 언급된 종목·오늘의 변화·2일 안 실적 프리뷰에서 가중 랜덤으로 커뮤니티 5 · 리포트 2 초안(짧은/긴 글)을 `bot_drafts`에 쌓는다. 미게시 24시간 뒤 삭제, 24시간 안 같은 종목 제외. **10-19부터 LLM 다시 쓰기**(`service/bot_rewrite.go`): 템플릿(facts, 사건·등락에 날짜)을 저장하고 초안마다 게시 계정을 배정(말투 있는 계정 우선) → 자산 전용 키 `llm_sub` + 기능 버킷 `llm_feat_bot`(80콜·30만)으로 그 말투로 다시 씀. 출력 숫자가 facts에 없거나(한 자리 정수만 허용) 권유 표현·길이 이탈이면 버리고 note에 이유. 503·시간 초과는 멈추고 다음 회차가 12시간 안 템플릿을 이어 씀. 게시 계정 `badge` = 서비스 뱃지 키 목록(`model.CommunityBadgeCatalog`, 활동 뱃지 계산도 같은 목록), `persona_style` = 말투. 게시 계정 글 조회수는 `/admin/personas/posts/{kind}/{id}/views`로 지정(실제 사용자 글은 404). 관리자 `/admin/bots`(탭 둘) → 「편집해서 게시」가 `/community/new?draft=` · `/reports/new?draft=`를 열고 **게시 계정**(users `role='persona'`, `badge`, `@persona.invalid`, 빈 비밀번호)을 골라 올린다. 쓰기는 기존 핸들러를 `/admin/personas/{id}/as/...`(ActAs, persona만 통과) 아래 재사용 — 쿨다운·리포트 하루 5건·종목 30일 규칙 그대로. 게시 계정은 관리자가 고른 뱃지만(활동 계산 없음, 「운영」 표시 없음 — 사용자 결정). 같은 화면에 게시 계정 글의 7일 댓글 + 그 계정으로 답글.
+- **봇 초안 · 게시 계정(10-16, 메모리 `bot_drafts_personas_1016`)**: worker-stock `bot_drafts` 잡이 KST 3시간마다(00·03·…·21시) 브리핑 많이 언급된 종목·오늘의 변화·2일 안 실적 프리뷰에서 가중 랜덤으로 커뮤니티 5 · 리포트 2 초안(짧은/긴 글)을 `bot_drafts`에 쌓는다. 미게시 24시간 뒤 삭제, 24시간 안 같은 종목 제외. **10-19부터 LLM 다시 쓰기**(`service/bot_rewrite.go`): 템플릿(facts, 사건·등락에 날짜)을 저장하고 초안마다 **작성자 유형**(`service/bot_archetypes.go` — 커뮤니티: 한 줄·감정형·초보 질문·직장인·뉴스 공유·숫자 정리·신중파·장문 분석, 리포트: 짧은 메모·체크리스트·정석·컬럼·위험 점검, 가중 랜덤, `bot_drafts.archetype`)을 뽑고 게시 계정은 아무거나 배정 → 자산 전용 키 `llm_sub` + 기능 버킷 `llm_feat_bot`(80콜·30만)으로 그 유형대로 다시 씀(유형마다 길이 검증 범위가 다르다 — 한 줄은 5자부터). 계정별 말투(`persona_style`)는 10-19 오후 사용자 결정으로 쓰지 않는다(열은 남김). 출력 숫자가 facts에 없거나(한 자리 정수만 허용) 권유 표현·길이 이탈이면 버리고 note에 이유. 503·시간 초과는 멈추고 다음 회차가 12시간 안 템플릿을 이어 씀. 게시 계정 `badge` = 서비스 뱃지 키 목록(`model.CommunityBadgeCatalog`, 활동 뱃지 계산도 같은 목록), `persona_style` = 말투. 게시 계정 글 조회수는 `/admin/personas/posts/{kind}/{id}/views`로 지정(실제 사용자 글은 404). 관리자 `/admin/bots`(탭 둘) → 「편집해서 게시」가 `/community/new?draft=` · `/reports/new?draft=`를 열고 **게시 계정**(users `role='persona'`, `badge`, `@persona.invalid`, 빈 비밀번호)을 골라 올린다. 쓰기는 기존 핸들러를 `/admin/personas/{id}/as/...`(ActAs, persona만 통과) 아래 재사용 — 쿨다운·리포트 하루 5건·종목 30일 규칙 그대로. 게시 계정은 관리자가 고른 뱃지만(활동 계산 없음, 「운영」 표시 없음 — 사용자 결정). 같은 화면에 게시 계정 글의 7일 댓글 + 그 계정으로 답글.
 
 ## BLOCKERS
 - 없음
@@ -55,13 +55,15 @@
 ## VERIFY (10-19 실측)
 - go build·vet, service(검증: 지어낸·반올림 숫자·금지어·길이·#/@, 말투 프롬프트)·handler·repository·llm·apibudget 시험 · tsc·vitest 512 · 새 파일 eslint 0 · 106 적용 · 배포 api+fe+worker-stock(이미지 일치), health 200, panic 0, 관리자 새 API 비로그인 401
 - 실제 실행: 첫 회 다시 쓰기 13·버림 12 — 버림은 전부 `ErrPacing`(간격을 호출 시작부터 쟀다) → 응답 끝부터 재도록 고치고 잘못 붙은 메모 12건 지움 → 둘째 회 **다시 쓰기 24·버림 1**(사실에 없는 숫자 30). 오늘 llm_feat_bot 38콜·3.9만 토큰(건당 ~1K). 품질: 커뮤니티는 구어체, 리포트는 소제목 다섯, 숫자는 사실 그대로 — 단 과거 사건을 「앞두고」로 쓴 의미 오류 1건 봄(숫자 검증으로는 못 잡는다 → 관리자 검수 몫)
-- **관리자 화면(뱃지 칩·말투·조회수 칸·AI 표시)은 브라우저로 못 봤다**(관리자 로그인 불가)
+- **관리자 화면(뱃지 칩·조회수 칸·AI·유형 표시)은 브라우저로 못 봤다**(관리자 로그인 불가)
+- 10-19 밤: 「편집해서 게시」(리포트) 화면이 죽던 것 = `/mentions/preview`가 태그 없는 본문에 `tokens: null`(## 소제목의 #가 미리보기를 부른다) → FE `mentionMarkdownRenderer`가 length를 읽다 렌더 오류. BE는 빈 배열, FE `previewMentions`도 배열로 맞춤. 원인은 api 로그의 `client error: kind=render` 스택으로 찾았다. 배포 api+fe(107 적용), worker-stock은 보류(위)
 
 ## VERIFY (10-16 실측)
 - go build·vet, service·handler·repository 시험(봇 초안 슬롯·가중 뽑기·본문에 #/@·매수/매도 없음·업종 이름) · tsc 통과, vitest 512 통과, 새 파일 eslint 0(기존 파일의 set-state-in-effect 4건은 원래 있던 것) · 105 마이그레이션 적용 · 배포 api+fe+worker-stock(이미지 일치), health 200, panic 0 · 수동 실행 3회 각 커뮤니티 5·리포트 2(후보 306) — 본문 실측으로 업종 키→한국어, 규칙 종가 문장 제외, 머리 두 문장으로 고침 · `/admin/bot-drafts` 비로그인 401
 - **관리자 화면·게시·답글은 브라우저로 못 봤다**(관리자 계정 로그인 불가) — 사용자가 `/admin/bots`에서 한 번 올려 보기
 
 ## NEXT
+- **worker-stock 재생성 대기**: 10-19 밤 financials_domestic(22:00 KST 시작)이 돌고 있어 작성자 유형 코드가 아직 안 올라갔다 — 끝나면 `docker compose up -d --no-build --no-deps --force-recreate worker-stock`(이미지 id를 api와 대조) 뒤 `bot_drafts` 한 번 돌려 유형별 글 확인
 - 봇 초안: 밤 회차(21·00·03시)가 503으로 템플릿에 남았다가 06·09시 회차에 이어 쓰이는지 · 관리자 API 화면 `llm_feat_bot`·`llm_sub` 하루 사용량 · 버린 비율(note)이 높으면 프롬프트·숫자 허용 규칙 조정 · 게시 계정마다 말투를 적어야 글 말투가 갈린다(비면 기본 말투) · worker-content·market·asset은 10-19 이미지가 아니다(코드 경로 무관)
 - 다음 국내 요약 배치(17:20 KST) 로그에 `retrying N transient failures`가 나오면 끝 줄 failed가 줄었는지 · api 로그 「예산 소진」이 하루 몇 줄로 줄었는지
 - 메뉴 이름 복원은 사용자가 진행 안 함(10-12). 앱은 10-14에 PWA부터 착수(다음: 웹 푸시는 알림 채널 결정 뒤, 스토어는 서버 이전 없이 진행 — 10-14 결정, 메모리 `app_store_launch_order_1014`: 사업자 등록(사용자 진행 중) → D-U-N-S → 개발자 계정 → 안드로이드 → iOS). 앱인토스는 정책 3-5·3-6으로 핵심 기능 입점 불가

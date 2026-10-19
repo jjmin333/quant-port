@@ -36,6 +36,22 @@ import { cn } from "@/lib/utils";
 
 const KIND_LABEL: Record<BotDraftKind, string> = { community: "커뮤니티", research: "투자 리포트" };
 const MARKET_LABEL: Record<string, string> = { domestic: "국내", us: "해외" };
+/** 작성자 유형(BE `service/bot_archetypes.go`) — 한 줄 글부터 컬럼까지. */
+const ARCHETYPE_LABEL: Record<string, string> = {
+  oneline: "한 줄",
+  feeling: "감정형",
+  question: "초보 질문",
+  office: "직장인 짧은 글",
+  news: "뉴스 공유",
+  numbers: "숫자 정리",
+  skeptic: "신중파",
+  longform: "장문 분석",
+  memo: "짧은 메모",
+  checklist: "체크리스트",
+  analyst: "정석 리포트",
+  column: "컬럼",
+  risk: "위험 점검",
+};
 
 /**
  * 봇 초안 (2026-10-16 사용자 요청) — 3시간마다(하루 8번) 커뮤니티 5개 · 리포트 2개가 쌓인다.
@@ -121,7 +137,7 @@ export function AdminBotsPanel() {
     <>
       <PageHeader
         title="봇 초안"
-        subtitle="3시간마다 커뮤니티 5개 · 리포트 2개 — 배정한 게시 계정 말투로 AI가 다시 쓰고, 고쳐서 올립니다. 게시하지 않은 초안은 24시간 뒤 사라집니다"
+        subtitle="3시간마다 커뮤니티 5개 · 리포트 2개 — 초안마다 작성자 유형(한 줄 글~컬럼)을 뽑아 AI가 그 사람처럼 다시 씁니다. 게시하지 않은 초안은 24시간 뒤 사라집니다"
       />
       <PageScrollShell bare>
         <div className="space-y-4">
@@ -183,7 +199,6 @@ function DraftCard({ draft, personas, onDiscard }: { draft: BotDraft; personas: 
   const [open, setOpen] = useState(false);
   const href = draft.kind === "community" ? `/community/new?draft=${draft.id}` : `/reports/new?draft=${draft.id}`;
   const by = personas.find((p) => p.id === draft.publishedBy);
-  const assigned = personas.find((p) => p.id === draft.personaId);
   return (
     <li>
       <Card className="space-y-2 p-4">
@@ -198,7 +213,7 @@ function DraftCard({ draft, personas, onDiscard }: { draft: BotDraft; personas: 
               draft.length === "long" ? "bg-sky-500/10 text-sky-700 dark:text-sky-400" : "bg-[var(--surface-elevated)]",
             )}
           >
-            {draft.length === "long" ? "긴 글" : "짧은 글"}
+            {ARCHETYPE_LABEL[draft.archetype] ?? (draft.length === "long" ? "긴 글" : "짧은 글")}
           </span>
           <span
             className={cn(
@@ -207,7 +222,7 @@ function DraftCard({ draft, personas, onDiscard }: { draft: BotDraft; personas: 
             )}
             title={draft.note ? `AI 글을 버렸습니다: ${draft.note}` : undefined}
           >
-            {draft.source === "llm" ? `AI 작성${assigned ? ` · ${assigned.displayName} 말투` : ""}` : draft.note ? "템플릿 (AI 버림)" : "템플릿"}
+            {draft.source === "llm" ? "AI 작성" : draft.note ? "템플릿 (AI 버림)" : "템플릿"}
           </span>
           {draft.reason && <span className="min-w-0 truncate">고른 이유: {draft.reason}</span>}
         </div>
@@ -273,12 +288,10 @@ function PersonaList({ personas, onSaved }: { personas: BotPersona[]; onSaved: (
 function PersonaRow({ persona, onSaved }: { persona: BotPersona; onSaved: () => void }) {
   const [name, setName] = useState(persona.displayName);
   const [badges, setBadges] = useState<string[]>(persona.badges);
-  const [style, setStyle] = useState(persona.style);
-  const dirty =
-    name !== persona.displayName || style !== persona.style || badges.join(",") !== persona.badges.join(",");
+  const dirty = name !== persona.displayName || badges.join(",") !== persona.badges.join(",");
   async function save() {
     try {
-      await updatePersona(persona.id, { displayName: name.trim(), badges, style: style.trim() });
+      await updatePersona(persona.id, { displayName: name.trim(), badges, style: persona.style });
       toast.success("저장했습니다.");
       onSaved();
     } catch (e) {
@@ -299,15 +312,6 @@ function PersonaRow({ persona, onSaved }: { persona: BotPersona; onSaved: () => 
         )}
       </div>
       <BadgePicker value={badges} onChange={setBadges} />
-      <textarea
-        value={style}
-        onChange={(e) => setStyle(e.target.value)}
-        maxLength={500}
-        rows={2}
-        placeholder="말투 — 예) 40대 자영업자. 반말 섞인 짧은 문장, 숫자를 꼼꼼히 짚고 걱정이 많은 편. 비워 두면 기본 말투."
-        aria-label="말투"
-        className="w-full resize-y rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-cell outline-none focus:border-[var(--brand)]"
-      />
     </li>
   );
 }

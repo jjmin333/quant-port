@@ -1,6 +1,7 @@
 package service
 
 import (
+	"math/rand/v2"
 	"strings"
 	"testing"
 
@@ -46,13 +47,34 @@ func TestValidateBotRewrite(t *testing.T) {
 	}
 }
 
-func TestBotRewritePromptUsesStyle(t *testing.T) {
-	d := repository.BotDraft{Kind: repository.BotDraftCommunity, Length: "short", Symbol: "NVDA", SymbolName: "엔비디아", Facts: "사실"}
-	sys, in := botRewritePrompt(d, "50대 은퇴자, 느긋한 말투")
-	if !strings.Contains(sys, "50대 은퇴자") || !strings.Contains(in, "엔비디아 (NVDA)") || !strings.Contains(in, "사실") {
+func TestBotRewritePromptUsesArchetype(t *testing.T) {
+	d := repository.BotDraft{Kind: repository.BotDraftCommunity, Archetype: "oneline", Symbol: "NVDA", SymbolName: "엔비디아", Facts: "사실"}
+	sys, in := botRewritePrompt(d)
+	one := botArchetypeOf(repository.BotDraftCommunity, "oneline", "")
+	if !strings.Contains(sys, one.Who) || !strings.Contains(sys, one.Form) || !strings.Contains(in, "엔비디아 (NVDA)") {
 		t.Errorf("prompt missing parts:\n%s\n%s", sys, in)
 	}
-	if sys, _ := botRewritePrompt(d, ""); !strings.Contains(sys, botDefaultStyle[repository.BotDraftCommunity]) {
-		t.Error("empty style must fall back to the default")
+	// 한 줄 글은 5자부터 받는다 — 일반 글 기준(40자)으로 버리면 한 줄 유형이 늘 템플릿으로 남는다.
+	if _, note := validateBotRewrite(d, llm.BotDraftRewrite{Title: "엔비디아 ㄷㄷ", Body: "오늘 뉴스 엄청 나오네"}); note != "" {
+		t.Errorf("one-liner rejected: %s", note)
+	}
+	// 키가 없는 옛 초안은 길이로 유형을 고른다.
+	if a := botArchetypeOf(repository.BotDraftResearch, "", "long"); a.Key != "analyst" {
+		t.Errorf("legacy long research → %s", a.Key)
+	}
+}
+
+func TestPickBotArchetypeCoversAll(t *testing.T) {
+	rnd := rand.New(rand.NewPCG(7, 8))
+	for _, kind := range []string{repository.BotDraftCommunity, repository.BotDraftResearch} {
+		seen := map[string]int{}
+		for i := 0; i < 3000; i++ {
+			seen[pickBotArchetype(rnd, kind).Key]++
+		}
+		for _, a := range botArchetypesFor(kind) {
+			if seen[a.Key] == 0 {
+				t.Errorf("%s archetype %s never picked", kind, a.Key)
+			}
+		}
 	}
 }

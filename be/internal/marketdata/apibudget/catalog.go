@@ -203,7 +203,7 @@ var catalog = map[Provider]CatalogEntry{
 	ProviderLLMFeatBot: {
 		Provider: ProviderLLMFeatBot, Category: CategoryLLM,
 		Label:   "LLM 기능 · 봇 초안 다시 쓰기",
-		Purpose: "관리자 「봇 초안」을 게시 계정 말투로 다시 쓴다(3시간마다 7건, 자산 전용 키). 숫자 검증을 못 넘거나 다 쓰면 템플릿 초안이 남는다.",
+		Purpose: "관리자 「봇 초안」을 작성자 유형(한 줄 글~컬럼)대로 다시 쓴다(3시간마다 7건, 자산 전용 키). 숫자 검증을 못 넘거나 다 쓰면 템플릿 초안이 남는다.",
 	},
 	ProviderLLMFeatSocial: {
 		Provider: ProviderLLMFeatSocial, Category: CategoryLLM,
