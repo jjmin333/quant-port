@@ -74,6 +74,10 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      # 단위 테스트(512개, 3초). 로컬에서만 돌고 CI에는 빠져 있었다(2026-10-20).
+      - name: Unit tests
+        run: npx vitest run
+
       # 빌드는 BE에 붙지 않는다 — 페이지가 서버 컴포넌트에서 fetch를 하더라도
       # 실패는 잡아서 넘기도록 되어 있고, rewrite 대상은 빌드 시점에 필요 없다.
       - name: Build

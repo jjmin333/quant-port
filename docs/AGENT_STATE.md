@@ -1,7 +1,7 @@
 # Agent State
 
 > 현재 상태만 담는다. **150줄 이하, 매 세션 덮어쓴다(앞에 쌓지 않는다).** 이력은 `docs/archive/sessions.md`, 원칙은 `docs/PRINCIPLES.md`, 결정·함정은 메모리.
-> 갱신: 2026-10-20 (봇 초안 작성자 유형 실가동 확인 · 리포트 초안 화면 오류 수정)
+> 갱신: 2026-10-20 밤 (전체 점검: 변화 감지 컬럼 폭 · 내부자 거래 발행사 검증 · research 이중 실행 · CI vitest)
 
 ## NOW
 - **코드는 GitHub에 있다** — `jjmin333/quant-port` public, `master`. 10-10에 09-15 이후 미커밋 전부를 3개 커밋으로 push(비밀값 점검 끝: `be/.env`·`be/secrets/`·워치독 설정은 git 밖). 이후 작업도 커밋·push 한다. 클라우드 세션 규칙은 `AGENTS.md` 「Cloud sessions」(배포는 PC 세션만).
@@ -39,6 +39,9 @@
 - 운영 서버 이전(OCI) · 데이터 원천 법률 검토(`docs/DATA_SOURCES_LICENSE.md`: Toss 시세 재배포, 네이버 컨센서스, FnGuide, Reddit) · 사업자 등록 후 개인정보처리방침 운영자 정보.
 - 행안부 법정동코드 활용신청 · 운영 DB 변경(`088` 중복 인덱스, `ranking_snapshot_entries` DROP) · Cloudflare sitemap 캐시·Tunnel 결정.
 - 외부 유통(텔레그램 채널·네이버 블로그) 게시 승인.
+- **원본 서버가 IP로 직접 열린다**(10-20 점검): nginx `server_name _`가 아무 Host에나 사이트 전체를 준다(`Host: 218.233.8.175` → 200, 실제로 `http://218.233.8.175/`에서 클라이언트 오류 보고가 왔다). Cloudflare WAF·캐시를 우회하는 길 — 기본 서버 `return 444` + 공유기 포워딩을 Cloudflare IP로 제한(또는 Tunnel). nginx 변경이라 승인 필요.
+- **잘못 붙은 내부자 거래 행 정리**(10-20): EDGAR submissions가 회사가 *보고자*인 Form 4(남의 회사 지분)를 싣는데 발행사 검증이 없어 MDT(Medtronic의 MiniMed 처분 −2.5억 주)·AXP·UBER·BAC·HOOD 등에 붙었다. 새 적재는 고쳤고(`parseForm4`), 기존 행은 점수 심리 축(180일 순매매 비율)을 왜곡한다 — 삭제 승인 필요.
+- 중복 인덱스 DROP: `financial_periods.idx_financial_symbol_period`(= `uk_financial_period`, 위 `088`) · `research_revisions.idx_rr_call`(= `uniq_rr_call_rev`).
 
 ## DECISIONS (현재 영향 있는 것만 — 원문은 메모리)
 - 10-10 메뉴 통합 A → `menu_sections_1010` · 기능 비노출 → `hidden_features_1010` · 종목 A안·홈 비로그인 → `stock_page_a_home_guest_1010` · 요약 대상·번역 → `llm_targets_and_translation_1010`
@@ -51,6 +54,12 @@
 ## VERIFY (10-15 실측)
 - go build·vet, llm·translate·toss·service 시험 통과(IsTransient·사슬 오류 보고 시험 추가) · 배포 api+worker-content+worker-market(이미지 일치), health 200, panic 0 · 재기동 뒤 한도 로그 그룹·값당 1줄
 - **worker-stock은 재생성 안 함** — financials_domestic(22:00 KST 시작, 보통 ~4시간)이 돌고 있었다. 지수 해설 대체 모델은 다음 재생성부터
+
+## VERIFY (10-20 밤 전체 점검)
+- go build·vet·test 전 패키지 통과 · tsc·vitest 512 통과 · eslint 71 → 64(남은 것은 React 컴파일러 권고 `set-state-in-effect`·`preserve-manual-memoization`, CI 비차단) · 5xx 24시간 0건 · 비밀값 추적 파일 없음
+- `change_detect`가 10-18·19에 `magnitude` 범위 초과로 실패(내부자 순매매 1억 주 초과) → 108로 DECIMAL(20,4), 배포 api(108 적용 로그 확인). 그 이틀은 주말이라 10-16 목록은 남아 있었다
+- research 판정이 07:00 몇 초 전·07:00 두 번 돌던 것 → `WaitForSlot`+`SlotGate`. 내부자 발행사 검증 시험 `TestParseForm4KeepsOnlyIssuerFilings`
+- 배포 api+fe. **worker-stock은 financials_domestic(22:00 시작)이 끝난 뒤 재생성** — 그 전까지 내부자·research 수정은 옛 코드
 
 ## VERIFY (10-20 새벽 실측)
 - financials_domestic(01:34 끝)·warnings_sync 끝난 뒤 worker-stock 재생성(api 이미지 일치) · 수동 실행: 다시 쓰기 20·버림 0 — 유형 섞임 확인(감정형 58자·한 줄 68자·초보 질문·숫자 정리 목록·신중파·장문 525자·메모 300자·위험 764자·정석 967자 평균), 숫자는 사실 그대로 · 「주말을 맞아」(평일) 발견 → 유형 설명의 시간 표현 제거 + 「요일·시간대는 쓰지 않는다」 규칙, 재배포 api+worker-stock · 05:46 실행은 Gemini 503(1건만), 06:00 회차 9건 뒤 `llm_feat_bot` 80콜 소진(태평양 10-19 하루에 수동 시험 포함)
@@ -66,6 +75,7 @@
 - **관리자 화면·게시·답글은 브라우저로 못 봤다**(관리자 계정 로그인 불가) — 사용자가 `/admin/bots`에서 한 번 올려 보기
 
 ## NEXT
+- 10-21 00:28 `change_detect` 성공(10-20분) · 07:00 research_verdict가 한 번만 · insider_overseas 뒤 새 행에 남의 회사 Form 4가 없는지
 - 10-20 16:00 KST(태평양 자정) 뒤 회차가 남은 템플릿 초안(10-20 새벽 예산 소진분)을 이어 쓰는지 · `llm_feat_bot` 80콜이 평소(회차 7×8=56 + 밀린 것)에 모자라면 올린다(10-19는 수동 시험 3회가 같은 날에 잡혀 다 썼다)
 - 봇 초안: 밤 회차(21·00·03시)가 503으로 템플릿에 남았다가 06·09시 회차에 이어 쓰이는지 · 관리자 API 화면 `llm_feat_bot`·`llm_sub` 하루 사용량 · 버린 비율(note)이 높으면 프롬프트·숫자 허용 규칙 조정 · 게시 계정마다 말투를 적어야 글 말투가 갈린다(비면 기본 말투) · worker-content·market·asset은 10-19 이미지가 아니다(코드 경로 무관)
 - 다음 국내 요약 배치(17:20 KST) 로그에 `retrying N transient failures`가 나오면 끝 줄 failed가 줄었는지 · api 로그 「예산 소진」이 하루 몇 줄로 줄었는지
@@ -84,5 +94,6 @@
 - 종목 「전망」 탭(목표가 추이·추정 EPS·범위) — 국내 목표가 라이선스 먼저 · 시장 히트맵 · 날짜별 상위 점수
 - 지수 이력: btc·gold 백필 소스 · usd-krw
 - 확장: Redis Pub/Sub SSE fan-out · 폴러 리더 선출 · 프로세스 간 공용 리미터 · prod migration(goose)
-- 배치: 상류 5xx 실패 잡 재처리 구멍 · worker-filings SlotGate 누락
-- 정리: e2e 테스트 계정(메모리 `e2e_accounts_in_users_table`) · 메뉴에서 내린 옛 화면(`/targets`·`/stamps`·`/dashboard`)
+- 배치: 상류 5xx 실패 잡 재처리 구멍 · EDGAR 파생거래만 있는 Form 4는 행이 없어 known에 안 잡혀 매 순환 다시 받는다(종목당 20건 상한)
+- 정리: e2e 테스트 계정(메모리 `e2e_accounts_in_users_table`) · 메뉴에서 내린 옛 화면(`/targets`·`/stamps`·`/dashboard`) · gofmt 미준수 443파일(독립 커밋 한 번) · eslint 컴파일러 권고 64건 · Docker 빌드 캐시 21GB 회수 가능(디스크 여유 943GB라 급하지 않음)
+- 운영: worker-content·market·asset은 10-15 이미지(코드 경로 무관) · translator 메모리 상한 10G 중 9.2G(WSL CUDA 익명 메모리, 문서화된 값)

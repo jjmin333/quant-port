@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Candle, CandleInterval, ChartStyle } from "@/lib/quotes-types";
+import type { Candle, CandleInterval } from "@/lib/quotes-types";
 import { candleTimeSortKey, mergeCandlesByTime } from "@/lib/chart-time";
 import {
   fetchCandleSnapshotClient,

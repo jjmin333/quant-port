@@ -632,11 +632,21 @@ func MigrateChangeEventsIfNeeded(ctx context.Context, db *sql.DB, migrationsDir 
 	if err != nil {
 		return err
 	}
-	if exists {
-		return nil
+	if !exists {
+		if err := applyMigrationFile(ctx, db, migrationsDir,
+			"080_stock_change_events.sql", "종목 변화 이벤트"); err != nil {
+			return err
+		}
 	}
-	return applyMigrationFile(ctx, db, migrationsDir,
-		"080_stock_change_events.sql", "종목 변화 이벤트")
+	// 108 — magnitude DECIMAL(12,4) → (20,4). 내부자 순매매 1억 주가 그날 배치를 통째로 깼다.
+	var precision int
+	if err := db.QueryRowContext(ctx, `
+		SELECT NUMERIC_PRECISION FROM information_schema.columns
+		WHERE table_schema = DATABASE() AND table_name = 'stock_change_events' AND column_name = 'magnitude'`,
+	).Scan(&precision); err != nil || precision >= 20 {
+		return err
+	}
+	return applyMigrationFile(ctx, db, migrationsDir, "108_change_magnitude_wide.sql", "변화 이벤트 magnitude 폭")
 }
 
 // ChangeSocialRow — 레딧 언급 스냅샷 + 그날 점수 행의 추세 재료(과열 판정용).

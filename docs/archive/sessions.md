@@ -3253,3 +3253,4 @@
 - 2026-10-19: 봇 초안 LLM 다시 쓰기(자산 전용 키·llm_feat_bot 80콜/30만, 게시 계정 말투, 숫자·금지어 검증, ErrPacing 간격 수정) + 게시 계정 뱃지=서비스 뱃지 키 고르기·말투 칸 + persona 글 조회수 지정 · 106 적용, 배포 api+fe+worker-stock, 실행 2회(둘째 24/25 채택)
 - 2026-10-19 밤: 리포트 초안 게시 화면 렌더 오류(mentions/preview tokens:null) 수정 + 봇 초안 작성자 유형 13종(한 줄~컬럼, archetype 열·107) · 배포 api+fe, worker-stock은 financials_domestic 진행 중이라 보류
 - 2026-10-20: worker-stock 재생성(작성자 유형 실가동) · 유형 섞임·숫자 확인, 「주말을 맞아」 → 시간 표현 금지 규칙 · 배포 api+worker-stock · llm_feat_bot 80콜 소진(수동 시험 포함)
+- 2026-10-20 밤: 전체 점검 — change_detect magnitude 범위 초과(10-18·19 실패) → 108 DECIMAL(20,4) · EDGAR Form 4 발행사 CIK 검증(회사가 보고자인 공시가 MDT 등에 붙던 것) · research_verdict 하루 두 번 → SlotGate · CI에 vitest · FE 미사용 import 정리 · 배포 api+fe, worker-stock은 financials_domestic 뒤

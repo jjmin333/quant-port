@@ -138,6 +138,7 @@ type edgarSubmissions struct {
 
 type ownershipDocumentXML struct {
 	PeriodOfReport     string                `xml:"periodOfReport"`
+	IssuerCIK          string                `xml:"issuer>issuerCik"`
 	ReportingOwners    []reportingOwnerXML   `xml:"reportingOwner"`
 	NonDerivativeTable nonDerivativeTableXML `xml:"nonDerivativeTable"`
 }
@@ -267,12 +268,27 @@ func (e *EdgarClient) fetchForm4Transactions(ctx context.Context, cikInt, access
 		return nil, fmt.Errorf("edgar form4: status %d", res.StatusCode)
 	}
 
-	var doc ownershipDocumentXML
-	if err := xml.NewDecoder(res.Body).Decode(&doc); err != nil {
+	txns, err := parseForm4(res.Body, cikInt)
+	if err != nil {
 		return nil, err
 	}
 	if e.budget != nil {
 		e.budget.Record(ctx, e.provider)
+	}
+	return txns, nil
+}
+
+// parseForm4 turns one ownership XML into rows for the issuer cikInt.
+//
+// submissions.json은 이 회사가 **보고자**인 Form 4도 싣는다 — Medtronic(10% 주주)이 MiniMed 주식을
+// 처분한 공시가 MDT의 「내부자 순매도 2.5억 주」로 들어왔다(2026-10-15). 발행사가 이 종목이 아니면 버린다.
+func parseForm4(r io.Reader, cikInt string) ([]model.InsiderTransaction, error) {
+	var doc ownershipDocumentXML
+	if err := xml.NewDecoder(r).Decode(&doc); err != nil {
+		return nil, err
+	}
+	if issuer := strings.TrimLeft(strings.TrimSpace(doc.IssuerCIK), "0"); issuer != "" && issuer != cikInt {
+		return nil, nil
 	}
 
 	var reporterName, relation string

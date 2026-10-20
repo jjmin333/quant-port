@@ -253,7 +253,6 @@ export async function fetchStockNews(params: {
   limit?: number;
 }): Promise<NewsArticle[]> {
   const symbol = params.symbol.trim();
-  const name = params.name.trim();
   const limit = params.limit ?? 12;
 
   if (params.market === "domestic") {
