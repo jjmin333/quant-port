@@ -58,7 +58,7 @@
 - go build·vet·test 전 패키지 통과 · tsc·vitest 512 통과 · eslint 71 → 64(남은 것은 React 컴파일러 권고 `set-state-in-effect`·`preserve-manual-memoization`, CI 비차단) · 5xx 24시간 0건 · 비밀값 추적 파일 없음
 - `change_detect`가 10-18·19에 `magnitude` 범위 초과로 실패(내부자 순매매 1억 주 초과) → 108로 DECIMAL(20,4), 배포 api(108 적용 로그 확인). 그 이틀은 주말이라 10-16 목록은 남아 있었다
 - research 판정이 07:00 몇 초 전·07:00 두 번 돌던 것 → `WaitForSlot`+`SlotGate`. 내부자 발행사 검증 시험 `TestParseForm4KeepsOnlyIssuerFilings`
-- 배포 api+fe. worker-stock은 financials_domestic 끝난 뒤 재생성 · 10-21 00:35 `change_detect` 성공(10-20분 595건)
+- 배포 api+fe · 10-21 00:35 `change_detect` 성공(10-20분 595건) · **10-21 01:55 worker-stock 재생성**(api 이미지 `51a8bf83a825` 일치, panic 0). 01:30~07:26은 잡이 끊김 없이 이어져(warnings→ext_metrics→analyst) 빈 틈이 없고, 07:00 insider_overseas가 옛 코드로 지운 행을 되넣기 전이어야 해서 `social_posts` 끝난 순간 재생성 → `warnings_sync` 하나가 잘림 → 유예 5시간(06:30)을 기다리지 않고 catchup으로 다시 큐에 넣음(02:06 시작)
 - **10-21 내부자 오귀속 행 삭제(사용자 승인)**: SEC company_tickers 회사명 = 보고자 이름인 후보 478쌍 → 공시 XML의 issuerCik로 하나씩 확인 → 종목 CIK와 다른 406공시·109종목·**1,079행** 삭제(180일 안 445행·52종목 — 다음 00:25 점수부터 심리 축 반영). 자기 회사가 보고자인 5건(COLD·NVRI·SCLX·SCLXW·SHAK)은 발행사가 맞아 남김. 백업 `be/backups/insider_misattributed_20261021.sql`(INSERT, git 밖). 파생 변화 이벤트 0건. 이름이 다른 자회사 명의 공동 보고는 못 잡았다(새 적재는 issuerCik로 막힘)
 
 ## VERIFY (10-20 새벽 실측)
