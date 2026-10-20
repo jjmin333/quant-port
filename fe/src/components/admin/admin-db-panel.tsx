@@ -14,7 +14,6 @@ import {
   fetchAdminDBTable,
   fetchAdminDBTables,
   updateAdminDBRow,
-  type DBColumnInfo,
   type DBRow,
   type DBRowPage,
   type DBTableDetail,

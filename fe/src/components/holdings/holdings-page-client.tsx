@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MenuEmptyState } from "@/components/common/menu-empty-state";
 import { AddHoldingDialog } from "@/components/holdings/add-holding-dialog";
-import { LoadErrorState } from "@/components/common/load-error-state";
 import { menuIcon } from "@/components/common/menu-icon";
 import {
   SampleModeButton,

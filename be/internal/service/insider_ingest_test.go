@@ -1,10 +1,29 @@
 package service
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/enact/quant-port/be/internal/model"
 )
+
+// 회사가 **보고자**인 Form 4(다른 회사 지분 처분)는 그 회사 종목의 내부자 거래가 아니다.
+func TestParseForm4KeepsOnlyIssuerFilings(t *testing.T) {
+	doc := `<ownershipDocument><periodOfReport>2026-10-15</periodOfReport>
+<issuer><issuerCik>0002066877</issuerCik></issuer>
+<reportingOwner><reportingOwnerId><rptOwnerName>Medtronic plc</rptOwnerName></reportingOwnerId></reportingOwner>
+<nonDerivativeTable><nonDerivativeTransaction>
+<transactionAmounts><transactionShares><value>252813348</value></transactionShares>
+<transactionAcquiredDisposedCode><value>D</value></transactionAcquiredDisposedCode></transactionAmounts>
+</nonDerivativeTransaction></nonDerivativeTable></ownershipDocument>`
+	if txns, err := parseForm4(strings.NewReader(doc), "1613103"); err != nil || len(txns) != 0 {
+		t.Fatalf("reporting-owner filing under MDT: got %d rows, err %v", len(txns), err)
+	}
+	txns, err := parseForm4(strings.NewReader(doc), "2066877")
+	if err != nil || len(txns) != 1 || *txns[0].SharesChange != -252813348 {
+		t.Fatalf("issuer filing: got %+v, err %v", txns, err)
+	}
+}
 
 // 같은 날 같은 보고자의 서로 다른 보고가 다른 키를 받아야 한다 — 같은 키가
 // 나오면 한 건이 다른 건을 덮어써 이력이 조용히 사라진다.

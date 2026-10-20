@@ -96,6 +96,26 @@ export function AnalysisClient({ defaultSymbol, rankingSeed }: AnalysisClientPro
     [rankingParams],
   );
 
+  /*
+    「이 랭킹의 성적」을 펴 두었는가 (2026-09-18 사용자 결정). selectSymbol이 닫으므로 그보다 먼저 선언한다.
+
+    # 자동으로 열지 않는 이유
+
+    넓은 화면은 주소에 종목이 없으면 **기본 종목(005930)을 자동으로 연다**(위
+    `workspaceSymbol`). 그래서 「빈 오른쪽 칸」은 코드에는 있어도 사용자에게는 거의
+    닿지 않는다 — 그 자리에 성적을 놓겠다는 첫 설계는 그 사실을 못 보고 세운 것이었다.
+
+    지금은 **목록 툴바 아래의 접힌 한 줄**이 문이다. 진입 동작은 그대로 두고(열면 종목이
+    떠 있다), 그 줄을 누르면 오른쪽 칸이 성적으로 바뀐다. 종목을 고르면 다시 닫힌다 —
+    고르는 행동의 뜻은 「이 종목을 보겠다」이지 「성적을 닫겠다」가 아니지만, 결과는
+    같아야 한다.
+
+    기본값을 성적으로 바꾸고 싶으면 `workspaceSymbol`의 `defaultSymbol` 갈래를 지우면
+    된다 — 한 줄이다.
+  */
+  // `?backtest=1`로 열고 들어올 수 있다 — 종목 점수 카드의 「이 점수의 과거 성적」 링크(2026-10-10).
+  const [backtestOpen, setBacktestOpen] = useState(() => searchParams.get("backtest") === "1");
+
   const selectSymbol = useCallback(
     (symbol: string) => {
       setListPinned(false);
@@ -153,25 +173,6 @@ export function AnalysisClient({ defaultSymbol, rankingSeed }: AnalysisClientPro
     return () => registerStockPickHandler(null);
   }, [registerStockPickHandler, selectSymbol]);
 
-  /*
-    「이 랭킹의 성적」을 펴 두었는가 (2026-09-18 사용자 결정).
-
-    # 자동으로 열지 않는 이유
-
-    넓은 화면은 주소에 종목이 없으면 **기본 종목(005930)을 자동으로 연다**(아래
-    `workspaceSymbol`). 그래서 「빈 오른쪽 칸」은 코드에는 있어도 사용자에게는 거의
-    닿지 않는다 — 그 자리에 성적을 놓겠다는 첫 설계는 그 사실을 못 보고 세운 것이었다.
-
-    지금은 **목록 툴바 아래의 접힌 한 줄**이 문이다. 진입 동작은 그대로 두고(열면 종목이
-    떠 있다), 그 줄을 누르면 오른쪽 칸이 성적으로 바뀐다. 종목을 고르면 다시 닫힌다 —
-    고르는 행동의 뜻은 「이 종목을 보겠다」이지 「성적을 닫겠다」가 아니지만, 결과는
-    같아야 한다.
-
-    기본값을 성적으로 바꾸고 싶으면 `workspaceSymbol`의 `defaultSymbol` 갈래를 지우면
-    된다 — 한 줄이다.
-  */
-  // `?backtest=1`로 열고 들어올 수 있다 — 종목 점수 카드의 「이 점수의 과거 성적」 링크(2026-10-10).
-  const [backtestOpen, setBacktestOpen] = useState(() => searchParams.get("backtest") === "1");
   // 「내 기준」 목록을 펴 두었는가 (2026-09-23 사용자 결정). 켜면 목록 자리를 대신한다.
   const [myWeightsOn, setMyWeightsOn] = useState(false);
   // 「국내 ETF」 탭 (2026-09-24 사용자 결정). ETF는 주식 점수와 잣대가 달라 목록을 바꿔 끼운다.

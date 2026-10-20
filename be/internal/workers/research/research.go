@@ -74,12 +74,16 @@ func Run(ctx context.Context, deps *service.WorkerDeps) {
 }
 
 func runSchedule(ctx context.Context, deps *service.WorkerDeps) {
+	// 한 슬롯은 한 번만(service.SlotGate 머리글) — time.After로 기다리던 때는 몇 초 일찍 깨서
+	// 06:59:5x와 07:00에 매일 두 번 돌았다(10-17~20 batch_job_runs).
+	gate := service.NewSlotGate()
 	for {
-		wait := time.Until(nextRun(time.Now()))
-		select {
-		case <-ctx.Done():
+		slot := nextRun(time.Now())
+		if !service.WaitForSlot(ctx, slot) {
 			return
-		case <-time.After(wait):
+		}
+		if !gate.Allow(slot) {
+			continue
 		}
 		service.RunScheduledJob(ctx, deps.Runs, model.BatchResearchVerdict,
 			func(ctx context.Context) (map[string]any, string, error) {
