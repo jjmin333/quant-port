@@ -40,7 +40,6 @@
 - 행안부 법정동코드 활용신청 · 운영 DB 변경(`088` 중복 인덱스, `ranking_snapshot_entries` DROP) · Cloudflare sitemap 캐시·Tunnel 결정.
 - 외부 유통(텔레그램 채널·네이버 블로그) 게시 승인.
 - **원본 서버가 IP로 직접 열린다**(10-20 점검): nginx `server_name _`가 아무 Host에나 사이트 전체를 준다(`Host: 218.233.8.175` → 200, 실제로 `http://218.233.8.175/`에서 클라이언트 오류 보고가 왔다). Cloudflare WAF·캐시를 우회하는 길 — 기본 서버 `return 444` + 공유기 포워딩을 Cloudflare IP로 제한(또는 Tunnel). nginx 변경이라 승인 필요.
-- **잘못 붙은 내부자 거래 행 정리**(10-20): EDGAR submissions가 회사가 *보고자*인 Form 4(남의 회사 지분)를 싣는데 발행사 검증이 없어 MDT(Medtronic의 MiniMed 처분 −2.5억 주)·AXP·UBER·BAC·HOOD 등에 붙었다. 새 적재는 고쳤고(`parseForm4`), 기존 행은 점수 심리 축(180일 순매매 비율)을 왜곡한다 — 삭제 승인 필요.
 - 중복 인덱스 DROP: `financial_periods.idx_financial_symbol_period`(= `uk_financial_period`, 위 `088`) · `research_revisions.idx_rr_call`(= `uniq_rr_call_rev`).
 
 ## DECISIONS (현재 영향 있는 것만 — 원문은 메모리)
@@ -59,7 +58,8 @@
 - go build·vet·test 전 패키지 통과 · tsc·vitest 512 통과 · eslint 71 → 64(남은 것은 React 컴파일러 권고 `set-state-in-effect`·`preserve-manual-memoization`, CI 비차단) · 5xx 24시간 0건 · 비밀값 추적 파일 없음
 - `change_detect`가 10-18·19에 `magnitude` 범위 초과로 실패(내부자 순매매 1억 주 초과) → 108로 DECIMAL(20,4), 배포 api(108 적용 로그 확인). 그 이틀은 주말이라 10-16 목록은 남아 있었다
 - research 판정이 07:00 몇 초 전·07:00 두 번 돌던 것 → `WaitForSlot`+`SlotGate`. 내부자 발행사 검증 시험 `TestParseForm4KeepsOnlyIssuerFilings`
-- 배포 api+fe. **worker-stock은 financials_domestic(22:00 시작)이 끝난 뒤 재생성** — 그 전까지 내부자·research 수정은 옛 코드
+- 배포 api+fe. worker-stock은 financials_domestic 끝난 뒤 재생성 · 10-21 00:35 `change_detect` 성공(10-20분 595건)
+- **10-21 내부자 오귀속 행 삭제(사용자 승인)**: SEC company_tickers 회사명 = 보고자 이름인 후보 478쌍 → 공시 XML의 issuerCik로 하나씩 확인 → 종목 CIK와 다른 406공시·109종목·**1,079행** 삭제(180일 안 445행·52종목 — 다음 00:25 점수부터 심리 축 반영). 자기 회사가 보고자인 5건(COLD·NVRI·SCLX·SCLXW·SHAK)은 발행사가 맞아 남김. 백업 `be/backups/insider_misattributed_20261021.sql`(INSERT, git 밖). 파생 변화 이벤트 0건. 이름이 다른 자회사 명의 공동 보고는 못 잡았다(새 적재는 issuerCik로 막힘)
 
 ## VERIFY (10-20 새벽 실측)
 - financials_domestic(01:34 끝)·warnings_sync 끝난 뒤 worker-stock 재생성(api 이미지 일치) · 수동 실행: 다시 쓰기 20·버림 0 — 유형 섞임 확인(감정형 58자·한 줄 68자·초보 질문·숫자 정리 목록·신중파·장문 525자·메모 300자·위험 764자·정석 967자 평균), 숫자는 사실 그대로 · 「주말을 맞아」(평일) 발견 → 유형 설명의 시간 표현 제거 + 「요일·시간대는 쓰지 않는다」 규칙, 재배포 api+worker-stock · 05:46 실행은 Gemini 503(1건만), 06:00 회차 9건 뒤 `llm_feat_bot` 80콜 소진(태평양 10-19 하루에 수동 시험 포함)
@@ -75,7 +75,7 @@
 - **관리자 화면·게시·답글은 브라우저로 못 봤다**(관리자 계정 로그인 불가) — 사용자가 `/admin/bots`에서 한 번 올려 보기
 
 ## NEXT
-- 10-21 00:28 `change_detect` 성공(10-20분) · 07:00 research_verdict가 한 번만 · insider_overseas 뒤 새 행에 남의 회사 Form 4가 없는지
+- 10-21 07:00 research_verdict가 한 번만 · insider_overseas 뒤 지운 공시(MDT `0001999371-26-022968` 등)가 다시 들어오지 않았는지 · 10-22 00:25 점수에서 MDT·AXP·UBER 심리 축이 바뀌었는지
 - 10-20 16:00 KST(태평양 자정) 뒤 회차가 남은 템플릿 초안(10-20 새벽 예산 소진분)을 이어 쓰는지 · `llm_feat_bot` 80콜이 평소(회차 7×8=56 + 밀린 것)에 모자라면 올린다(10-19는 수동 시험 3회가 같은 날에 잡혀 다 썼다)
 - 봇 초안: 밤 회차(21·00·03시)가 503으로 템플릿에 남았다가 06·09시 회차에 이어 쓰이는지 · 관리자 API 화면 `llm_feat_bot`·`llm_sub` 하루 사용량 · 버린 비율(note)이 높으면 프롬프트·숫자 허용 규칙 조정 · 게시 계정마다 말투를 적어야 글 말투가 갈린다(비면 기본 말투) · worker-content·market·asset은 10-19 이미지가 아니다(코드 경로 무관)
 - 다음 국내 요약 배치(17:20 KST) 로그에 `retrying N transient failures`가 나오면 끝 줄 failed가 줄었는지 · api 로그 「예산 소진」이 하루 몇 줄로 줄었는지
