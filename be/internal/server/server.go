@@ -820,7 +820,7 @@ func New(cfg *config.Config) (*Server, error) {
 		watchlist:        handler.NewWatchlistHandler(watchlistSvc),
 		journal:          handler.NewJournalHandler(journalSvc),
 		stamps:           handler.NewStampHandler(stampSvc),
-		sample:           handler.NewSampleHandler(quotesSvc, redis).WithSectors(repository.NewStockSectorRepo(mysql.DB())),
+		sample:           handler.NewSampleHandler(quotesSvc, redis).WithSectors(repository.NewStockSectorRepo(mysql.DB())).WithScores(scoreSvc),
 		research:         handler.NewResearchHandler(researchSvc),
 		community:        handler.NewCommunityHandler(communitySvc),
 		mentions:         handler.NewMentionHandler(mentionSvc),

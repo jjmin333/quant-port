@@ -29,6 +29,44 @@ type SampleHandler struct {
 	redis   *repository.Redis
 	flight  *sampleFlight
 	sectors *repository.StockSectorRepo
+	scores  sampleScores
+}
+
+// sampleScores — 예시 관심 목록의 점수를 실제 값으로 덮는다.
+type sampleScores interface {
+	GetMany(ctx context.Context, symbols []string) ([]model.StockScoreView, error)
+}
+
+/*
+WithScores — 예시 관심 목록 점수를 실제 저장 점수로 (2026-10-22 로그인 QA). 시드에 박힌 점수(NVIDIA 82 ·
+애플 70)가 같은 화면 옆 「관심종목 점수 변화」 카드(실제 52 · 54)와 어긋났다. 가격은 이미 실시세였다.
+*/
+func (h *SampleHandler) WithScores(s sampleScores) *SampleHandler {
+	h.scores = s
+	return h
+}
+
+func (h *SampleHandler) attachScores(ctx context.Context, rows []sample.WatchlistEntry) {
+	if h.scores == nil || len(rows) == 0 {
+		return
+	}
+	symbols := make([]string, len(rows))
+	for i, r := range rows {
+		symbols[i] = r.Symbol
+	}
+	views, err := h.scores.GetMany(ctx, symbols)
+	if err != nil {
+		return
+	}
+	by := make(map[string]model.StockScoreView, len(views))
+	for _, v := range views {
+		by[v.Symbol] = v
+	}
+	for i := range rows {
+		if v, ok := by[rows[i].Symbol]; ok && v.Score != nil {
+			rows[i].Score, rows[i].Grade = v.Score, v.Grade
+		}
+	}
 }
 
 func NewSampleHandler(quotes sample.Quotes, redis *repository.Redis) *SampleHandler {
@@ -65,8 +103,12 @@ func (h *SampleHandler) StampSummary(w http.ResponseWriter, r *http.Request) {
 // holdings 147, 나머지는 0쿼리 순수 픽스처).
 func (h *SampleHandler) Watchlist(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	h.write(w, sampleCached(ctx, h.redis, h.flight, "sample:v1:watchlist", sample.WatchlistSeedCount(),
-		func() []sample.WatchlistEntry { return sample.Watchlist(ctx, time.Now().UTC(), h.quotes) }))
+	h.write(w, sampleCached(ctx, h.redis, h.flight, "sample:v2:watchlist", sample.WatchlistSeedCount(),
+		func() []sample.WatchlistEntry {
+			rows := sample.Watchlist(ctx, time.Now().UTC(), h.quotes)
+			h.attachScores(ctx, rows)
+			return rows
+		}))
 }
 
 func (h *SampleHandler) Holdings(w http.ResponseWriter, r *http.Request) {
