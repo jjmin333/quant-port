@@ -323,6 +323,15 @@ var batchJobCatalog = []model.BatchJobSpec{
 		Note: "Toss 캔들 한도(초당 5회)를 앱과 공유합니다. 중단해도 진행분은 보존됩니다.",
 	},
 	{
+		ID:       model.BatchDailyCloseRefreshDomestic,
+		Category: model.CategoryIngest,
+		Label:    "일별 종가 — 국내 NXT 마감 뒤 재적재",
+		Purpose:  "그날 종가가 있는 국내 종목의 일봉을 NXT 마감 뒤 다시 받아 통합 최종가로 덮어씁니다.",
+		Cost:     model.CostRateLimited,
+		Schedule: "KRX 거래일 20:10 KST (worker-market)",
+		Note:     "15:50 적재는 NXT 애프터마켓 도중 값이라 임시값입니다(2026-10-21 QP-21). Toss 캔들 한도를 앱과 공유합니다.",
+	},
+	{
 		ID:           model.BatchDailyCloseFetchMissing,
 		Category:     model.CategoryIngest,
 		Label:        "일별 종가 — 미보유 종목 채우기",
@@ -712,7 +721,8 @@ func (s *BatchAdminService) coverageFor(ctx context.Context, id model.BatchJobID
 			return nil
 		}
 		return map[string]any{"symbols": symbols, "activeSymbols": total, "latestTradeDate": latest}
-	case model.BatchDailyCloseFetchStale, model.BatchDailyCloseFetchMissing, model.BatchDailyCloseFetchHistory:
+	case model.BatchDailyCloseFetchStale, model.BatchDailyCloseFetchMissing, model.BatchDailyCloseFetchHistory,
+		model.BatchDailyCloseRefreshDomestic:
 		symbols, total, latest, err := s.dailyCloses.CoverageSummary(ctx)
 		if err != nil {
 			return nil

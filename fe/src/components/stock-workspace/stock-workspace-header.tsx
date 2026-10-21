@@ -343,9 +343,6 @@ export function StockWorkspaceHeader({
               <p className="mt-0.5 truncate text-micro text-[var(--text-muted)]">
                 {updatedLabel} 기준
                 {afterHours && (stock.currency === "KRW" ? " · 시간외(NXT) 포함 최종가" : " · 시간외 포함 최종가")}
-                {afterHours && quote?.regularClose
-                  ? ` · 정규장 ${stock.currency === "KRW" ? `${quote.regularClose.toLocaleString("ko-KR")}원` : `$${quote.regularClose.toLocaleString("en-US")}`}`
-                  : ""}
                 <span className="hidden sm:inline"> · {QUOTE_CHANGE_BASIS_LABEL}</span>
               </p>
             )}

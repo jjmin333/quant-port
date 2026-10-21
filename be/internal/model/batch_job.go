@@ -18,6 +18,10 @@ const (
 	// BatchDailyCloseFetchStale fetches sessions missing from symbols that
 	// already have some history.
 	BatchDailyCloseFetchStale BatchJobID = "daily_close_fetch_stale"
+	// BatchDailyCloseRefreshDomestic re-fetches today's domestic daily candles at
+	// 20:10 KST, after NXT closes, so the stored close is the integrated final
+	// price instead of the 15:50 NXT snapshot (2026-10-21, ticket QP-21).
+	BatchDailyCloseRefreshDomestic BatchJobID = "daily_close_refresh_domestic"
 	// BatchDailyCloseFetchMissing fetches symbols with no stored close at all.
 	BatchDailyCloseFetchMissing BatchJobID = "daily_close_fetch_missing"
 	// BatchDailyCloseFetchHistory pages Toss daily candles backward until
