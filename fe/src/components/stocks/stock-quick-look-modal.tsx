@@ -128,7 +128,7 @@ export function StockQuickLookModal({
   // AI 핵심 요약의 간단/상세. 기본값 간단 — 이유는 그 자리의 주석에.
   const [aiDetail, setAiDetail] = useState<"brief" | "full">("brief");
 
-  const { points, times } = useSparklineCandles(symbol, open);
+  const { points, times, loading: candlesLoading } = useSparklineCandles(symbol, open);
 
   /*
     이 창이 떠 있는 동안은 **이 종목을 보고 있다** (2026-09-15 사용자 요청 4).
@@ -213,6 +213,14 @@ export function StockQuickLookModal({
   const windowed = chrono.slice(-activeStep);
   const chartPoints = usingCandleFallback ? points : windowed.map((r) => r.close);
   const chartTimes = usingCandleFallback ? times : windowed.map((r) => r.tradeDate);
+  const chartLoading = dailyRows === null || (usingCandleFallback && candlesLoading);
+  /*
+    신규 상장 종목은 일별 종가도 일봉도 2개가 안 된다. 차트는 점이 2개 미만이면
+    로딩 막대를 그리므로, 여기서 「다 받았는데 없다」를 문장으로 갈라 준다.
+  */
+  const chartEmpty = !chartLoading && chartPoints.filter((v) => v > 0).length < 2;
+  // 거래 이력이 짧은 종목(신규 상장 등)은 점수가 없는 까닭을 말해 준다.
+  const shortHistory = dailyRows != null && dailyRows.length < 20;
 
   /*
     「AI 핵심 요약」에 쓸 **가장 최신 LLM 추출값** (2026-09-05 사용자 요청 7-2).
@@ -366,8 +374,12 @@ export function StockQuickLookModal({
                     <DailyCloseRangeToggle steps={steps} active={activeStep} onChange={setBars} />
                   }
                 >
-                  {dailyRows === null ? (
+                  {chartLoading ? (
                     <div className="h-[96px] animate-pulse rounded bg-muted" />
+                  ) : chartEmpty ? (
+                    <p className="py-6 text-center text-cell text-muted-foreground">
+                      거래일이 쌓이면 차트가 표시됩니다
+                    </p>
                   ) : (
                     <PriceHistoryChart
                       points={chartPoints}
@@ -425,7 +437,9 @@ export function StockQuickLookModal({
                 >
                   {score?.score == null ? (
                     <p className="py-3 text-center text-cell text-muted-foreground">
-                      산출된 점수가 없습니다
+                      {shortHistory
+                        ? "거래 이력이 짧아 아직 점수가 없습니다"
+                        : "산출된 점수가 없습니다"}
                     </p>
                   ) : (
                     <div className="space-y-1">
