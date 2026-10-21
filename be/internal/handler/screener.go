@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -62,13 +63,21 @@ func (h *ScreenerHandler) Screen(w http.ResponseWriter, r *http.Request) {
 		response.JSON(w, http.StatusOK, map[string]any{"data": nil})
 		return
 	}
+	/*
+		거절 이유를 한 줄 남긴다 (2026-10-21 점검, 티켓 QP-06): 7일 POST 1,200건 중 360건이 400이었는데
+		프리셋·「닮은 종목」으로는 재현되지 않았고, nginx 로그에는 본문도 UA도 없었다.
+	*/
 	var q model.ScreenQuery
 	if err := json.NewDecoder(r.Body).Decode(&q); err != nil {
+		log.Printf("screen rejected: decode: %s ua=%q", sanitizeLogField(err.Error(), 200), sanitizeLogField(r.UserAgent(), 200))
 		response.Error(w, http.StatusBadRequest, "조건을 읽을 수 없습니다")
 		return
 	}
 	out, err := h.svc.Screen(r.Context(), q)
 	if err != nil {
+		log.Printf("screen rejected: market=%s rules=%d like=%q sort=%s: %s ua=%q",
+			sanitizeLogField(q.Market, 20), len(q.Rules), sanitizeLogField(q.Like, 20), sanitizeLogField(q.SortBy, 30),
+			sanitizeLogField(err.Error(), 200), sanitizeLogField(r.UserAgent(), 200))
 		writeServiceError(w, err)
 		return
 	}

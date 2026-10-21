@@ -5,7 +5,7 @@
 
     같은 도형을 세 곳이 따로 그린다 — 고치면 같이 고칠 것:
     `scripts/gen-icons.mjs`(favicon.ico·apple-icon.png·PWA 아이콘),
-    `opengraph-image.tsx`, `components/layout/header.tsx`(BrandLink).
+    `opengraph-image.tsx`, `components/layout/brand-mark.tsx`.
   -->
   <defs>
     <linearGradient id="qp-panel" x1="0" y1="0" x2="0" y2="1">

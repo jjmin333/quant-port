@@ -885,10 +885,27 @@ func (r *CommunityRepo) ModerationComments(ctx context.Context, limit int) ([]Co
 	return out, rows.Err()
 }
 
-// SitemapPosts lists visible post ids with their last change, newest first.
+/*
+testAuthorEmail — 시험 계정(e2e·seed-preview)의 메일. growth의 realUser와 같은 예약 도메인이되
+게시 계정(`@persona.invalid`)은 **빼지 않는다** — 그 글은 일부러 공개하는 글이다.
+
+2026-10-21 점검(티켓 QP-07): 공개 글 211개 중 209개가 `@quant-port.test` 시험 글이었고, 같은
+seed가 여러 번 들어가 자체 크롤 경고 452건 중 389건(고아·제목/설명 중복·얇은 본문)을 만들었다.
+*/
+const testAuthorEmail = `(u.email LIKE '%.test' OR u.email LIKE '%.example' OR u.email LIKE '%.localhost' OR u.email LIKE 'qae2e%')`
+
+// IsTestAuthor reports whether userID is a test account (see testAuthorEmail).
+func (r *CommunityRepo) IsTestAuthor(ctx context.Context, userID int64) (bool, error) {
+	var n int
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users u WHERE u.id = ? AND `+testAuthorEmail, userID).Scan(&n)
+	return n > 0, err
+}
+
+// SitemapPosts lists visible post ids with their last change, newest first. 시험 계정 글은 뺀다.
 func (r *CommunityRepo) SitemapPosts(ctx context.Context, limit int) ([]CommunitySitemapRow, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, updated_at FROM community_posts WHERE status = 'visible' ORDER BY id DESC LIMIT ?`, limit)
+		SELECT p.id, p.updated_at FROM community_posts p JOIN users u ON u.id = p.user_id
+		WHERE p.status = 'visible' AND NOT `+testAuthorEmail+` ORDER BY p.id DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
 	}

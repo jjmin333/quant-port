@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { SITE_URL } from "@/lib/seo";
 import { fetchResearchCallsServer } from "@/lib/research-api.server";
 import { fetchCommunitySitemapServer } from "@/lib/community-api.server";
+import { fetchDailyTopServer } from "@/lib/daily-top.server";
 import { isAdminOnlyRoute, isHiddenRoute } from "@/lib/hidden-features";
 import { fetchChangesServer } from "@/components/changes/changes-seo-list";
 import { fetchIndexableStocks } from "@/lib/stock-seo.server";
@@ -46,6 +47,7 @@ const ROUTES: { path: string; changeFrequency: MetadataRoute.Sitemap[number]["ch
   { path: "/stocks", changeFrequency: "daily", priority: 0.8 },
   { path: "/screener", changeFrequency: "daily", priority: 0.7 },
   { path: "/changes", changeFrequency: "daily", priority: 0.7 },
+  { path: "/market/heatmap", changeFrequency: "daily", priority: 0.7 },
   { path: "/finance/rates", changeFrequency: "daily", priority: 0.6 },
   { path: "/real-estate", changeFrequency: "weekly", priority: 0.6 },
   { path: "/real-estate/auctions", changeFrequency: "daily", priority: 0.5 },
@@ -134,8 +136,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.4,
   }));
 
+  // 날짜별 「AI 점수 상위」 보관(2026-10-21 티켓 QP-12) — 지난 날은 바뀌지 않는다.
+  const rankingUrls = ((await fetchDailyTopServer())?.dates ?? []).map((d) => ({
+    url: `${SITE_URL}/rankings/${d}`,
+    lastModified: new Date(`${d}T09:00:00+09:00`),
+    changeFrequency: "monthly" as const,
+    priority: 0.4,
+  }));
+
   // 노출을 끈 기능(lib/hidden-features, 2026-10-10)의 주소는 싣지 않는다 — 열면 홈으로 간다.
-  return [...staticUrls, ...reportUrls, ...authorUrls, ...communityUrls, ...changeUrls, ...listUrls, ...stockUrls]
+  return [...staticUrls, ...reportUrls, ...authorUrls, ...communityUrls, ...changeUrls, ...rankingUrls, ...listUrls, ...stockUrls]
     .filter((entry) => {
       const path = new URL(entry.url).pathname;
       return !isHiddenRoute(path) && !isAdminOnlyRoute(path);

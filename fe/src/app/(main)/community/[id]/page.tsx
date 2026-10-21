@@ -32,6 +32,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     ...pageMetadata({ title: post.title, description: describe(post), path: `/community/${id}` }),
     authors: post.author.displayName ? [{ name: post.author.displayName }] : undefined,
+    ...(post.noindex ? { robots: NOINDEX } : {}),
   };
 }
 

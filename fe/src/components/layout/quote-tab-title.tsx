@@ -44,6 +44,13 @@ import type { QuoteCurrency } from "@/lib/quotes-types";
 그만 보면 기억해 둔 그 제목으로 돌아간다.
 */
 
+/*
+검색 로봇에게는 제목을 덮어쓰지 않는다 (2026-10-21 점검, 티켓 QP-05). Google은 JS를 돌린 뒤의
+제목을 검색 결과에 쓰는 일이 많아, 종목 화면의 「삼성전자 (005930) 주가·AI 점수 · Quant Port」가
+그때그때의 「224,000원 +7.18% | 삼성전자」로 바뀌어 브랜드·검색어가 빠진다.
+*/
+const SEARCH_BOT_UA = /bot|crawl|spider|slurp|yeti|daum|lighthouse|headlesschrome/i;
+
 /** 전일 종가를 다시 받는 주기 — 날이 바뀌면 기준가가 달라진다. */
 const SNAPSHOT_REFRESH_MS = 5 * 60_000;
 
@@ -154,6 +161,7 @@ function useTabTitleOverride(desired: string): void {
   const baseRef = useRef<string>("");
 
   useEffect(() => {
+    if (SEARCH_BOT_UA.test(navigator.userAgent)) return;
     if (baseRef.current === "") baseRef.current = document.title;
 
     if (!desired) {

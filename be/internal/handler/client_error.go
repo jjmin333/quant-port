@@ -1,10 +1,15 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
+	"time"
+
+	"github.com/redis/go-redis/v9"
 
 	"github.com/enact/quant-port/be/pkg/response"
 )
@@ -21,11 +26,17 @@ ClientErrorHandler — 브라우저에서 난 오류를 **로그로만** 받는�
 프로덕션이었다면 사용자가 말해 주기 전까지 몰랐을 것이다(그 건의 원인은
 사용자 브라우저 확장이 페이지 스크립트에 주입한 코드였다).
 
-# DB에 쓰지 않는다
+# DB에 쓰지 않는다 — 하루 집계만 Redis에
 
 인프라가 OCI Always Free이고 DB가 1 ECPU다. 오류 리포트는 **폭주하는 성질**이
 있어서(위 사례가 1초에 69건이다) 테이블에 넣으면 장애 때 DB가 먼저 넘어간다.
-구조화 로그로만 남기고, 집계가 필요해지면 로그 수집 쪽에서 한다.
+
+그런데 로그만으로는 **재배포마다 원문이 사라졌다**(2026-10-21 점검: 7일 1,283건이 들어왔는데
+남은 것은 재생성 뒤 2건, 티켓 QP-06). 그래서 원문은 로그에 두고, 「종류 | 경로 | 메시지 모양」별
+**하루 건수만** Redis 해시 `client_errors:YYYY-MM-DD`(KST, 35일)에 센다. 하루 필드 수는
+`clientErrorMaxFields`로 막고 넘치면 `<종류>|_overflow`에 더한다. 보는 법:
+
+	docker exec quant-port-redis redis-cli HGETALL client_errors:2026-10-22
 
 # 신뢰하지 않는 입력이다
 
@@ -37,9 +48,14 @@ ClientErrorHandler — 브라우저에서 난 오류를 **로그로만** 받는�
 
 레이트 리밋은 라우터의 공개 그룹 리미터가 IP 단위로 건다.
 */
-type ClientErrorHandler struct{}
+type ClientErrorHandler struct {
+	rdb *redis.Client
+}
 
-func NewClientErrorHandler() *ClientErrorHandler { return &ClientErrorHandler{} }
+// NewClientErrorHandler — rdb가 nil이면 로그만 남긴다.
+func NewClientErrorHandler(rdb *redis.Client) *ClientErrorHandler {
+	return &ClientErrorHandler{rdb: rdb}
+}
 
 const (
 	clientErrorMaxBody    = 16 * 1024
@@ -47,6 +63,8 @@ const (
 	clientErrorMaxStack   = 3000
 	clientErrorMaxPath    = 200
 	clientErrorMaxKind    = 40
+	clientErrorMaxFields  = 500
+	clientErrorTTL        = 35 * 24 * time.Hour
 )
 
 type clientErrorBody struct {
@@ -115,6 +133,8 @@ func (h *ClientErrorHandler) Report(w http.ResponseWriter, r *http.Request) {
 		sanitizeLogField(body.Stack, clientErrorMaxStack),
 	)
 
+	h.count(r.Context(), sanitizeLogField(body.Kind, clientErrorMaxKind), body.Pathname, message)
+
 	// 본문 없는 204 — 화면은 이 응답을 기다리지 않는다(sendBeacon).
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -137,4 +157,42 @@ func sanitizeLogField(s string, n int) string {
 		return string(runes[:n]) + "…"
 	}
 	return s
+}
+
+var (
+	clientErrorDigits = regexp.MustCompile(`[0-9]+`)
+	// 종목·날짜·쌍처럼 값이 바뀌는 경로 조각 — 숫자나 대문자가 든 조각.
+	clientErrorVarSeg = regexp.MustCompile(`[0-9A-Z]`)
+)
+
+// clientErrorField — 하루 집계의 필드. 같은 오류가 종목·숫자만 달리 들어와도 한 줄로 모인다.
+func clientErrorField(kind, path, message string) string {
+	segs := strings.Split(strings.Trim(sanitizeLogField(path, clientErrorMaxPath), "/"), "/")
+	for i, seg := range segs {
+		if clientErrorVarSeg.MatchString(seg) {
+			segs[i] = ":x"
+		}
+	}
+	msg := sanitizeLogField(clientErrorDigits.ReplaceAllString(message, "N"), 120)
+	return kind + "|/" + strings.Join(segs, "/") + "|" + msg
+}
+
+// count — 하루 건수를 Redis에 더한다. 실패해도 응답에는 영향이 없다.
+func (h *ClientErrorHandler) count(ctx context.Context, kind, path, message string) {
+	if h.rdb == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
+	defer cancel()
+	key := "client_errors:" + time.Now().In(kst).Format("2006-01-02")
+	field := clientErrorField(kind, path, message)
+	if n, err := h.rdb.HLen(ctx, key).Result(); err == nil && n >= clientErrorMaxFields {
+		if ok, _ := h.rdb.HExists(ctx, key, field).Result(); !ok {
+			field = kind + "|_overflow"
+		}
+	}
+	pipe := h.rdb.Pipeline()
+	pipe.HIncrBy(ctx, key, field, 1)
+	pipe.Expire(ctx, key, clientErrorTTL)
+	_, _ = pipe.Exec(ctx)
 }

@@ -344,6 +344,9 @@ func (s *CommunityService) GetPost(ctx context.Context, id int64) (model.Communi
 		return model.CommunityPost{}, err
 	}
 	post := rows[0].CommunityPost
+	if test, err := s.repo.IsTestAuthor(ctx, row.UserID); err == nil {
+		post.NoIndex = test
+	}
 	s.attachLiveSymbolData(ctx, post.Symbols)
 	post.Mentions = s.mentions.Load(ctx, model.MentionTargetCommunityPost, post.ID, post.Body)
 	return post, nil

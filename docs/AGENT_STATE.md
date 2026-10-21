@@ -1,9 +1,12 @@
 # Agent State
 
 > 현재 상태만 담는다. **150줄 이하, 매 세션 덮어쓴다(앞에 쌓지 않는다).** 이력은 `docs/archive/sessions.md`, 원칙은 `docs/PRINCIPLES.md`, 결정·함정은 메모리.
-> 갱신: 2026-10-21 저녁 (브랜드 마크 교체: 미드나이트 + Q 모노그램)
+> 갱신: 2026-10-21 밤 (전체 점검 티켓 처리: 로고 잔재·히트맵·날짜별 상위 점수·크롤 경고·오류 집계)
 
 ## NOW
+- **10-21 밤 신규 화면**: `/market/heatmap`(국내·미국 시총 상위 200, 색 = 등락률|점수 변화, BE `/market/heatmap` 프로세스 10분 캐시) · `/rankings/YYYY-MM-DD`(`score_ranking_history` 종합 상위 20·전일 순위, BE `/stocks/scores/daily-top`, `/rankings` = 최신). 종목 모음 「한눈에 보기」·같은 날 「변화」·사이트맵에서 들어온다.
+- **클라이언트 오류 하루 집계** = Redis `client_errors:YYYY-MM-DD`(KST, 35일, 필드 500 상한) — `docker exec quant-port-redis redis-cli HGETALL client_errors:<날짜>`. 원문은 여전히 api 로그. 스크리너 400은 `screen rejected:` 로그.
+- 시험 계정(`.test` 등) 커뮤니티 글은 사이트맵 제외 + noindex(`CommunityPost.noindex`), persona 글은 그대로 색인.
 - **브랜드 마크(10-21, 메모리 `brand_mark_midnight_q_1021`)**: 미드나이트 패널 + 흰 Q 고리 + 하늘색 꼬리. 원본 `fe/src/app/icon.svg`, 파비콘·애플·PWA는 `scripts/gen-icons.mjs`가 굽는다, 헤더 BrandLink는 마크 + 「Quant Port」, 홈 OG는 같은 톤. 사이트 UI `--brand`(#2563EB)는 그대로.
 - **코드는 GitHub에 있다** — `jjmin333/quant-port` public, `master`. 10-10에 09-15 이후 미커밋 전부를 3개 커밋으로 push(비밀값 점검 끝: `be/.env`·`be/secrets/`·워치독 설정은 git 밖). 이후 작업도 커밋·push 한다. 클라우드 세션 규칙은 `AGENTS.md` 「Cloud sessions」(배포는 PC 세션만).
 - 사업화 단계표는 `docs/BUSINESS_REVIEW.md` §9(+「2차 검토 반영」), 경쟁사는 `docs/COMPETITORS.md`.
@@ -33,6 +36,8 @@
 - 없음
 
 ## PENDING — 사용자 승인/행동 필요
+- **QP-21 국내 일별 종가(결정 필요)**: `daily_close_domestic` 15:50 적재가 Toss 통합 일봉의 그 시각 NXT 체결가를 종가로 굳힌다(삼성전자 10-21 DB 222,500 · KRX 223,500 · 시세 칸 정규장 종가 222,250, 국내 240종목 등락 0%). 선택지 ①20:10 재적재(통합 최종가, 추천) ②KRX 종가 외부 원천 ③적재를 20:10으로 이동 — `docs/TICKETS_2026-10-21.md` QP-21
+- nginx `log_format`에 시각·UA·referer 추가(QP-06, nginx 변경 승인) · 시험 계정 커뮤니티 글 209건 삭제 또는 숨김 여부(지금은 공개·noindex)
 - **Cloudflare**: `/api/v1/` 캐시 규칙 Edge TTL을 「헤더 없으면 우회」로(현재 헤더 없는 200을 캐시). 코드는 `DefaultNoStore`로 이미 방어(메모리 `cloudflare_caches_headerless_api`)
 - **측정 연결(3주+)**: GSC 서비스 계정 JSON(`be/secrets/`)·`GROWTH_GA4_PROPERTY_ID`·`GROWTH_BING_API_KEY`·GA 내부 트래픽 필터 · 네이버 서치어드바이저 사이트맵 제출(새 페이지 포함).
 - 워치독 알림 웹훅(`deploy/watchdog.config.json` `WebhookUrl`) — DB 장애는 이미 감지(10-10 06:05 로그)하지만 알릴 곳이 없다. MySQL80 자동 재시작(관리자: `sc.exe failure MySQL80 reset= 86400 actions= restart/60000/restart/60000/restart/60000`).
@@ -76,7 +81,7 @@
 - **관리자 화면·게시·답글은 브라우저로 못 봤다**(관리자 계정 로그인 불가) — 사용자가 `/admin/bots`에서 한 번 올려 보기
 
 ## NEXT
-- **작업 티켓 20건(10-21 전체 점검) = `docs/TICKETS_2026-10-21.md`** — 추천 순서 QP-01 측정 🙋 → QP-02 옛 글자 로고 5곳 → QP-03 원본 IP 🙋 → QP-04 정규장 종가 두 값 → QP-05 탭 제목·검색 제목. 끝낸 티켓은 그 문서에서 지운다.
+- **작업 티켓 = `docs/TICKETS_2026-10-21.md`**(진행 현황 표). 남은 Claude 몫 없음 — 사용자 몫 QP-01 측정·03 원본 IP·08 소셜·09 알림 채널·14 QA 계정·15 텔레그램·17 이전·20 UI 색 + QP-21 결정. 10-22 07:30 growth 크롤에서 경고 452 → 100 이하인지(시험 글 noindex·허브 분류) · `client_errors:2026-10-22` 상위 5
 - 10-21 07:00 research_verdict가 한 번만 · insider_overseas 뒤 지운 공시(MDT `0001999371-26-022968` 등)가 다시 들어오지 않았는지 · 10-22 00:25 점수에서 MDT·AXP·UBER 심리 축이 바뀌었는지
 - 10-20 16:00 KST(태평양 자정) 뒤 회차가 남은 템플릿 초안(10-20 새벽 예산 소진분)을 이어 쓰는지 · `llm_feat_bot` 80콜이 평소(회차 7×8=56 + 밀린 것)에 모자라면 올린다(10-19는 수동 시험 3회가 같은 날에 잡혀 다 썼다)
 - 봇 초안: 밤 회차(21·00·03시)가 503으로 템플릿에 남았다가 06·09시 회차에 이어 쓰이는지 · 관리자 API 화면 `llm_feat_bot`·`llm_sub` 하루 사용량 · 버린 비율(note)이 높으면 프롬프트·숫자 허용 규칙 조정 · 게시 계정마다 말투를 적어야 글 말투가 갈린다(비면 기본 말투) · worker-content·market·asset은 10-19 이미지가 아니다(코드 경로 무관)

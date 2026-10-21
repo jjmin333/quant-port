@@ -101,6 +101,12 @@ function AnalystConsensusCard({
     문장과 숫자로 (시안 `docs/mockups/stock-overview-v2.html` ⑤).
   */
   const ratio = upside != null && analyst.targetMean && price ? analyst.targetMean / price : undefined;
+  // 평균 목표가가 마지막으로 바뀐 날 — 기록이 같은 값으로 이어지면 처음 그 값이 된 날.
+  const targetPts = data.history.filter((h) => h.targetMean && h.targetMean > 0);
+  let lastTargetDate = targetPts[targetPts.length - 1]?.asOf;
+  for (let i = targetPts.length - 1; i > 0 && targetPts[i].targetMean === targetPts[i - 1].targetMean; i--) {
+    lastTargetDate = targetPts[i - 1].asOf;
+  }
   const targetPhrase =
     upside == null
       ? null
@@ -161,6 +167,17 @@ function AnalystConsensusCard({
             />
           )}
         </div>
+      )}
+
+      {/*
+        10-21 티켓 QP-13 — 삼성전자가 2주 새 276,000 → 209,000원으로 빠지는 동안 목표가 추이는 10/6에
+        멈춰 「+121% · 2.2배」가 크게 섰다. 차이가 50%를 넘으면 목표가가 언제 값인지 같이 적는다.
+      */}
+      {upside != null && Math.abs(upside) >= 50 && (
+        <p className="text-micro leading-relaxed text-[var(--text-muted)]">
+          목표가는 리포트가 나온 시점의 값이라 최근 주가 급변을 아직 반영하지 않았을 수 있습니다
+          {lastTargetDate ? ` (목표가 마지막 변동 ${md(lastTargetDate)})` : ""}.
+        </p>
       )}
 
       {counts && total > 0 ? (

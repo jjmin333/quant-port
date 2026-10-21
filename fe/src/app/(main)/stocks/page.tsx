@@ -63,6 +63,24 @@ export default async function StocksHubPage() {
               </Link>
             ))}
           </nav>
+          {/* 2026-10-21 티켓 QP-10·12 — 히트맵과 날짜별 상위 점수의 들어오는 길. */}
+          <nav className="flex flex-wrap items-center gap-1.5 pt-1" aria-label="한눈에 보기">
+            <span className="text-micro text-[var(--text-muted)]">한눈에 보기</span>
+            <Link
+              href="/market/heatmap"
+              prefetch={false}
+              className="rounded-full border border-[var(--border)] px-2.5 py-0.5 text-cell text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+            >
+              시장 히트맵
+            </Link>
+            <Link
+              href="/rankings"
+              prefetch={false}
+              className="rounded-full border border-[var(--border)] px-2.5 py-0.5 text-cell text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+            >
+              날짜별 AI 점수 상위
+            </Link>
+          </nav>
         </header>
 
         {stocks.length === 0 && (

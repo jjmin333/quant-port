@@ -15,6 +15,7 @@ import {
   loginIdProblem,
   passwordProblem,
 } from "@/lib/auth-rules";
+import { BrandLockup } from "@/components/layout/brand-mark";
 
 const INPUT_CLASS =
   "h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none aria-[invalid=true]:border-rose-400";
@@ -59,7 +60,7 @@ export default function SignupPage() {
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-8 shadow-xl">
       <div className="mb-8 text-center">
-        <p className="text-sm font-bold tracking-[0.18em] text-[var(--brand)]">QUANT PORT</p>
+        <BrandLockup className="justify-center" />
         <h1 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">회원가입</h1>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
           아이디 · 닉네임 · 비밀번호만 있으면 됩니다.

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Compass } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { BrandLockup } from "@/components/layout/brand-mark";
 
 /**
  * 없는 주소로 왔을 때.
@@ -20,7 +21,7 @@ export default function NotFound() {
         <Compass className="h-6 w-6" />
       </div>
       <div className="space-y-1.5">
-        <p className="text-sm font-bold tracking-[0.18em] text-[var(--brand)]">QUANT PORT</p>
+        <BrandLockup className="justify-center" />
         <h1 className="text-xl font-semibold text-[var(--text-primary)]">
           페이지를 찾을 수 없습니다
         </h1>

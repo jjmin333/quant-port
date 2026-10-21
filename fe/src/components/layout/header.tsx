@@ -25,6 +25,7 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { useHeaderSearch } from "@/components/providers/header-search-provider";
 import { useShellMode } from "@/components/providers/shell-mode-provider";
 import { cn } from "@/lib/utils";
+import { BrandMark } from "@/components/layout/brand-mark";
 
 type HeaderProps = {
   sidebarOpen: boolean;
@@ -104,16 +105,7 @@ function HeaderActions({ compact }: { compact?: boolean }) {
 function BrandLink({ compact }: { compact?: boolean }) {
   return (
     <Link href="/" className="flex shrink-0 items-center gap-1.5 whitespace-nowrap lg:gap-2.5">
-      {/* src/app/icon.svg 와 같은 마크. 이 크기에선 그라데이션이 안 보여 단색으로 칠한다. */}
-      <svg
-        viewBox="0 0 32 32"
-        className={compact ? "size-[18px]" : "size-[22px]"}
-        aria-hidden
-      >
-        <rect width="32" height="32" rx="7.5" fill="#141B30" />
-        <circle cx="15" cy="15" r="8" fill="none" stroke="#fff" strokeWidth="3.4" />
-        <path d="M20 20 25.5 25.5" stroke="#6E9BFF" strokeWidth="3.4" strokeLinecap="round" />
-      </svg>
+      <BrandMark className={compact ? "size-[18px]" : "size-[22px]"} />
       <span
         className={cn(
           "font-bold tracking-tight text-[var(--text-primary)]",

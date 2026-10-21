@@ -160,6 +160,8 @@ func (s *Server) routes() http.Handler {
 			public.With(edgeDaily).Get("/stocks/scores/top", s.scores.TopScores)
 			public.Get("/stocks/scores/batch", s.scores.GetMany)
 			public.With(edgeDaily).Get("/stocks/scores/changes", s.scores.Changes)
+			public.With(edgeDaily).Get("/stocks/scores/daily-top", s.dailyTop.Get)
+			public.With(edgeDaily).Get("/market/heatmap", s.heatmap.Get)
 			public.With(edgeSlow).Get("/stocks/scores/backtest", s.scoreBacktest.Run)
 			public.With(edgeSlow).Get("/stocks/scores/backtest/benchmarks", s.scoreBacktest.Benchmarks)
 			/*

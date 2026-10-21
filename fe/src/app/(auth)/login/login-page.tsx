@@ -6,6 +6,7 @@ import { FormEvent, useState } from "react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { toUserMessage } from "@/lib/error-message";
 import { signupHref } from "@/lib/auth-routes";
+import { BrandLockup } from "@/components/layout/brand-mark";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -31,7 +32,7 @@ export default function LoginPage() {
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-8 shadow-xl">
       <div className="mb-8 text-center">
-        <p className="text-sm font-bold tracking-[0.18em] text-[var(--brand)]">QUANT PORT</p>
+        <BrandLockup className="justify-center" />
         <h1 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">로그인</h1>
         <p className="mt-1 text-sm text-[var(--text-muted)]">통합 자산 관리 계정으로 접속하세요.</p>
       </div>
