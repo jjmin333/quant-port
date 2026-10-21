@@ -67,8 +67,10 @@ type CommunityImage struct {
 }
 
 type CommunityPost struct {
-	ID           int64              `json:"id"`
-	Author       CommunityAuthor    `json:"author"`
+	ID     int64           `json:"id"`
+	Author CommunityAuthor `json:"author"`
+	// NoIndex — 시험 계정이 쓴 글. 화면은 검색 색인에서 뺀다(2026-10-21 티켓 QP-07).
+	NoIndex      bool               `json:"noindex,omitempty"`
 	Title        string             `json:"title"`
 	Topic        string             `json:"topic"`
 	Body         string             `json:"body,omitempty"`

@@ -197,3 +197,69 @@ func MigrateScoreRankingHistoryIfNeeded(ctx context.Context, db *sql.DB, migrati
 	return applyMigrationFile(ctx, db, migrationsDir,
 		"075_score_ranking_history.sql", "AI 랭킹 날짜별 구성 (백테스트용)")
 }
+
+// DailyTopRow — 날짜별 상위 점수 보관 화면(`/rankings/YYYY-MM-DD`)의 한 줄.
+type DailyTopRow struct {
+	Rank   int    `json:"rank"`
+	Symbol string `json:"symbol"`
+	Name   string `json:"name"`
+	Score  int    `json:"score"`
+	// PrevRank — 직전 보관일의 순위. 그날 상위 n 밖이었으면 0.
+	PrevRank int `json:"prevRank,omitempty"`
+}
+
+// Dates lists the stored dates for one (market, axis), newest first.
+func (r *ScoreRankingHistoryRepo) Dates(ctx context.Context, market, axis string) ([]string, error) {
+	if r == nil || r.db == nil {
+		return nil, nil
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT DISTINCT DATE_FORMAT(trade_date, '%Y-%m-%d') d
+		  FROM score_ranking_history
+		 WHERE market = ? AND axis = ?
+		 ORDER BY d DESC`, market, axis)
+	if err != nil {
+		return nil, fmt.Errorf("ranking history dates: %w", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+// TopOn — date의 상위 n(이름 포함)과 prevDate의 순위. prevDate가 비면 PrevRank는 0이다.
+func (r *ScoreRankingHistoryRepo) TopOn(
+	ctx context.Context, market, axis, date, prevDate string, n int,
+) ([]DailyTopRow, error) {
+	if r == nil || r.db == nil {
+		return nil, nil
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT h.rank_no, h.symbol, COALESCE(s.name, h.symbol), h.score, COALESCE(p.rank_no, 0)
+		  FROM score_ranking_history h
+		  LEFT JOIN stocks s ON s.symbol = h.symbol
+		  LEFT JOIN score_ranking_history p
+		    ON p.trade_date = ? AND p.market = h.market AND p.axis = h.axis AND p.symbol = h.symbol AND p.rank_no <= ?
+		 WHERE h.trade_date = ? AND h.market = ? AND h.axis = ? AND h.rank_no <= ?
+		 ORDER BY h.rank_no`,
+		prevDate, n, date, market, axis, n)
+	if err != nil {
+		return nil, fmt.Errorf("ranking history top: %w", err)
+	}
+	defer rows.Close()
+	var out []DailyTopRow
+	for rows.Next() {
+		var row DailyTopRow
+		if err := rows.Scan(&row.Rank, &row.Symbol, &row.Name, &row.Score, &row.PrevRank); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}

@@ -5,7 +5,7 @@ import { PageScrollShell } from "@/components/layout/page-content-shell";
 import { JsonLd } from "@/components/seo/json-ld";
 import { ScoredStockTable, ScoreListFootnote } from "@/components/stocks/scored-stock-table";
 import { breadcrumbJsonLd, pageMetadata } from "@/lib/seo";
-import { assetTypeOfSegment, groupBySector, MARKET_SEGMENT_LABEL, sectorPath } from "@/lib/stock-seo";
+import { assetTypeOfSegment, comparePath, groupBySector, MARKET_SEGMENT_LABEL, sectorPath } from "@/lib/stock-seo";
 import { fetchIndexableScored } from "@/lib/stock-seo.server";
 
 /*
@@ -21,7 +21,14 @@ async function load(market: string, rawSector: string) {
   const all = await fetchIndexableScored();
   const rows = all.filter((s) => s.assetType === assetType && s.sectorLabel === sector).sort((a, b) => b.score - a.score);
   if (rows.length === 0) return null;
-  return { assetType, sector, rows, others: groupBySector(all, assetType).filter((g) => g.sector !== sector && g.sector !== "기타") };
+  const groups = groupBySector(all, assetType);
+  /*
+    사이트맵이 싣는 「업종 대표 비교」(그룹 1위 × 2~5위)를 여기서 잇는다. 전에는 사이트맵으로만
+    발견돼 자체 크롤이 고아 19건으로 잡았다(2026-10-21 티켓 QP-07). 같은 `groupBySector` 순서를 쓴다.
+  */
+  const group = groups.find((g) => g.sector === sector);
+  const pairs = group ? group.stocks.slice(1, 5).map((o) => ({ a: group.stocks[0], b: o })) : [];
+  return { assetType, sector, rows, pairs, others: groups.filter((g) => g.sector !== sector && g.sector !== "기타") };
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -64,6 +71,24 @@ export default async function SectorRankingPage({ params }: Props) {
         </header>
         <ScoredStockTable rows={data.rows} />
         <ScoreListFootnote />
+        {data.pairs.length > 0 && (
+          <nav aria-label="업종 대표 비교" className="space-y-1.5">
+            <h2 className="text-cell font-semibold text-[var(--text-secondary)]">{data.sector} 대표 종목 비교</h2>
+            <ul className="flex flex-wrap gap-1.5">
+              {data.pairs.map(({ a, b }) => (
+                <li key={b.symbol}>
+                  <Link
+                    href={comparePath(a.symbol, b.symbol)}
+                    prefetch={false}
+                    className="inline-flex rounded-full border border-[var(--border)] px-2 py-0.5 text-cell text-[var(--text-primary)] hover:bg-[var(--surface-elevated)]"
+                  >
+                    {a.name} vs {b.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
         {data.others.length > 0 && (
           <nav aria-label="다른 업종" className="space-y-1.5">
             <h2 className="text-cell font-semibold text-[var(--text-secondary)]">{label} 다른 업종</h2>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Compass, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BrandLockup } from "@/components/layout/brand-mark";
 
 /**
  * 이 페이지가 뜬 뒤 「다시 시도」를 몇 번 눌렀나. **모듈 스코프**에 둔다 —
@@ -74,7 +75,7 @@ export function ErrorScreen({
       </div>
 
       <div className="space-y-1.5">
-        <p className="text-sm font-bold tracking-[0.18em] text-[var(--brand)]">QUANT PORT</p>
+        <BrandLockup className="justify-center" />
         <h1 className="text-xl font-semibold text-[var(--text-primary)]">
           화면을 그리는 중 문제가 생겼습니다
         </h1>

@@ -42,6 +42,7 @@ import { fetchAdminBatchHealth } from "@/lib/admin";
 import { useAuth } from "@/components/providers/auth-provider";
 import { useShellMode } from "@/components/providers/shell-mode-provider";
 import { cn } from "@/lib/utils";
+import { BrandLockup } from "@/components/layout/brand-mark";
 
 /*
  * 메뉴 정의. `rail`은 **접힌 레일에서 아이콘 밑에 적을 이름**이다.
@@ -449,9 +450,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           data-sidebar-state="open"
         >
           <div className="flex h-14 shrink-0 items-center border-b border-sidebar-border px-4">
-            <span className="whitespace-nowrap text-sm font-bold tracking-[0.18em] text-sidebar-foreground">
-              QUANT PORT
-            </span>
+            <BrandLockup />
           </div>
           <SidebarNav onNavigate={handleNavigate} />
         </aside>

@@ -49,6 +49,8 @@ export type CommunityImage = { url: string; width: number; height: number };
 export type CommunityPost = {
   id: number;
   author: CommunityAuthor;
+  /** 시험 계정이 쓴 글 — 검색 색인에서 뺀다(2026-10-21 티켓 QP-07). */
+  noindex?: boolean;
   title: string;
   /** 주식·부동산·금융상품(2026-10-09 요청 9). 옛 응답에는 없을 수 있다 — 없으면 주식. */
   topic?: ContentTopic;

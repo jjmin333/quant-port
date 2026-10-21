@@ -3,6 +3,7 @@ import { getApiBaseUrl } from "@/lib/api-client";
 import type { ApiResponse } from "@/lib/api-types";
 import { fetchWithDeadline } from "@/lib/fetch-timeout";
 import { groupChanges, type ChangesResponse } from "@/lib/changes-api";
+import { fetchDailyTopServer } from "@/lib/daily-top.server";
 
 /*
 「오늘의 변화」의 **서버가 그리는 목록** (2026-10-10, BUSINESS_REVIEW §4.2).
@@ -34,7 +35,11 @@ const MARKETS = [
 ] as const;
 
 export async function ChangesSeoList({ date }: { date?: string }) {
-  const [domestic, us] = await Promise.all([fetchChangesServer("domestic", date), fetchChangesServer("us", date)]);
+  const [domestic, us, top] = await Promise.all([
+    fetchChangesServer("domestic", date),
+    fetchChangesServer("us", date),
+    fetchDailyTopServer(),
+  ]);
   const day = domestic?.date || us?.date;
   if (!day) return null;
   const sections = MARKETS.map((m) => ({
@@ -78,6 +83,13 @@ export async function ChangesSeoList({ date }: { date?: string }) {
             </ul>
           </section>
         ))}
+        {top?.dates.includes(day) && (
+          <p>
+            <Link href={`/rankings/${day}`} prefetch={false} className="text-[var(--brand)] hover:underline">
+              {day} AI 점수 상위 20종목 →
+            </Link>
+          </p>
+        )}
         {otherDates.length > 0 && (
           <nav aria-label="지난 변화">
             <h2 className="mb-1 text-micro font-semibold text-[var(--text-muted)]">지난 날짜</h2>

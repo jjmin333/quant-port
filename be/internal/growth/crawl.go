@@ -603,9 +603,11 @@ func pageType(rawURL string) string {
 	switch {
 	case p == "/":
 		return "home"
-	case strings.HasPrefix(p, "/stocks/"):
+	// 업종·스타일 허브(`/stocks/sector/kr/…`)와 작성자 화면(`/reports/authors/…`)은 목록이다 —
+	// 종목·리포트 검사(요약 줄·Article)를 걸면 거짓 경고가 난다(2026-10-21 티켓 QP-07, 39건).
+	case strings.HasPrefix(p, "/stocks/") && !strings.Contains(strings.TrimPrefix(p, "/stocks/"), "/"):
 		return "stock"
-	case strings.HasPrefix(p, "/reports/"):
+	case strings.HasPrefix(p, "/reports/") && !strings.HasPrefix(p, "/reports/authors/"):
 		return "report"
 	case strings.HasPrefix(p, "/news"):
 		return "news"

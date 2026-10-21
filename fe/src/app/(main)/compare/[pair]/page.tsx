@@ -79,13 +79,22 @@ function rows(a: Side, b: Side): [string, string, string][] {
   ];
 }
 
+/*
+제목은 「 · Quant Port」(13자)가 붙어 45자 안이어야 검색 결과에서 안 잘린다. 이름이 긴 쌍
+(「컨스텔레이션 에너지 vs 넥스트에라 에너지」)은 꼬리를 줄인다 — 2026-10-21 티켓 QP-07, 11건.
+*/
+function compareTitle(a: string, b: string): string {
+  const full = `${a} vs ${b} — AI 점수·재무 비교`;
+  return full.length + 13 <= 45 ? full : `${a} vs ${b} 점수 비교`;
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { pair } = await params;
   const data = await load(pair);
   if (!data) return { title: "찾을 수 없는 비교", robots: { index: false, follow: true } };
   const [a, b] = data;
   const meta = pageMetadata({
-    title: `${a.s.name} vs ${b.s.name} — AI 점수·재무 비교`,
+    title: compareTitle(a.s.name, b.s.name),
     description: `${a.s.name}(${a.s.symbol})와 ${b.s.name}(${b.s.symbol})를 AI 점수 다섯 축(추세·수익성·성장·가치·수급)과 PER·PBR·ROE·영업이익률로 나란히 비교합니다. 투자 권유 아님.`,
     path: comparePath(a.s.symbol, b.s.symbol),
   });

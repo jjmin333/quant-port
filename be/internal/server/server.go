@@ -79,6 +79,8 @@ type Server struct {
 	myToday          *handler.MyTodayHandler
 	reportCard       *handler.ScoreReportCardHandler
 	scoreCustom      *handler.ScoreCustomHandler
+	dailyTop         *handler.DailyTopHandler
+	heatmap          *handler.HeatmapHandler
 	holdingThesis    *handler.HoldingThesisHandler
 	etfScores        *handler.ETFScoreHandler
 	finProducts      *handler.FinProductHandler
@@ -859,6 +861,8 @@ func New(cfg *config.Config) (*Server, error) {
 		seoStocks:   handler.NewSEOStocksHandler(mysql.DB()),
 		adminGrowth: handler.NewAdminGrowthHandler(growth.NewReportReader(mysql.DB())),
 		adminBots:   handler.NewAdminBotHandler(repository.NewBotDraftRepo(mysql.DB())),
+		heatmap:     handler.NewHeatmapHandler(repository.NewHeatmapRepo(mysql.DB())),
+		dailyTop:    handler.NewDailyTopHandler(repository.NewScoreRankingHistoryRepo(mysql.DB())),
 		scoreCustom: handler.NewScoreCustomHandler(
 			service.NewCustomRankingService(repository.NewUserScoreWeightsRepo(mysql.DB()), scoreSettingsStore),
 			repository.NewUserScoreWeightsRepo(mysql.DB()),
@@ -867,7 +871,7 @@ func New(cfg *config.Config) (*Server, error) {
 		symbolContext: handler.NewSymbolContextHandler(symbolContextSvc),
 		holdingsDiag:  handler.NewHoldingsDiagnosisHandler(holdingsDiagSvc),
 		news:          handler.NewNewsHandler(newsStore, newsReader, newsBriefingSvc),
-		clientError:   handler.NewClientErrorHandler(),
+		clientError:   handler.NewClientErrorHandler(redis.Client()),
 		pageMeta:      handler.NewPageMetaHandler(pageMetaRepo),
 		admin: handler.NewAdminHandler(
 			keywordRepo, newsStore, apiBudget, marketDataSettings,
