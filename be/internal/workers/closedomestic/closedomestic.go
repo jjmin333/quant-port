@@ -28,6 +28,8 @@ func Run(ctx context.Context, deps *service.WorkerDeps) {
 	assetTypes := []model.QuoteAssetType{model.AssetDomestic}
 
 	go deps.Closes.RunMarketScheduler(ctx, model.BatchDailyCloseDomestic, deps.Runs, schedules, assetTypes)
+	// NXT 마감 뒤 재적재(20:10) — 큐에 넣기만 하고, 실행은 Toss 예산을 쥔 worker-fetch가 한다.
+	go deps.Closes.RunNXTFinalRefresh(ctx, deps.Runs)
 
 	log.Println("worker-close-domestic: running (KRX close +20m, weekday FX)")
 	service.RunBatchQueueWorker(ctx, deps.Runs, model.BatchDailyCloseDomestic,

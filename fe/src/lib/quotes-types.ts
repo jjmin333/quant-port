@@ -169,7 +169,8 @@ export type QuoteStreamEvent = {
  * 대비 −1.16%). 서버도 같은 규칙으로 계산한다(`computeQuoteChange`) — 여기서만
  * 다른 기준을 쓰면 같은 값의 등락률과 기준선이 어긋난다.
  *
- * `regularClose`는 「정규장 종가」 줄로 따로 보여 준다.
+ * `regularClose`는 이제 머리의 「시간외 포함」 표시 여부에만 쓴다 — 값 자체는 KRX 종가가 아니라
+ * 화면에 숫자로 내지 않는다(2026-10-21 사용자 결정, 티켓 QP-21).
  */
 export function quoteChangeBaseline(quote: Pick<QuoteDetail, "prevClose" | "regularClose" | "marketSession">): number {
   return quote.prevClose;

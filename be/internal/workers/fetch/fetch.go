@@ -38,6 +38,8 @@ const (
 	fetchStale fetchKind = iota
 	fetchMissing
 	fetchHistory
+	// fetchRefresh — 그날 종가가 있는 국내 종목을 NXT 마감 뒤 전부 다시 받는다(QP-21).
+	fetchRefresh
 )
 
 // Run starts this role's schedules and manual queues and blocks until ctx is done.
@@ -45,7 +47,8 @@ const (
 func Run(ctx context.Context, deps *service.WorkerDeps) {
 	// 이 워커의 잡은 이 프로세스만 돌린다 — 재기동 전에 끊긴 실행을 지금 닫아 만회가 다시 넣게 한다.
 	service.CloseInterruptedRuns(ctx, deps.Runs,
-		model.BatchDailyCloseFetchHistory, model.BatchDailyCloseFetchMissing, model.BatchDailyCloseFetchStale)
+		model.BatchDailyCloseFetchHistory, model.BatchDailyCloseFetchMissing, model.BatchDailyCloseFetchStale,
+		model.BatchDailyCloseRefreshDomestic)
 
 	if deps.Toss == nil {
 		log.Println("worker-fetch: Toss not configured — queue will accumulate until credentials are set")
@@ -58,6 +61,8 @@ func Run(ctx context.Context, deps *service.WorkerDeps) {
 	var tossMu sync.Mutex
 	go service.RunBatchQueueWorker(ctx, deps.Runs, model.BatchDailyCloseFetchStale,
 		handler(deps, fetchStale, &tossMu))
+	go service.RunBatchQueueWorker(ctx, deps.Runs, model.BatchDailyCloseRefreshDomestic,
+		handler(deps, fetchRefresh, &tossMu))
 	go service.RunBatchQueueWorker(ctx, deps.Runs, model.BatchDailyCloseFetchMissing,
 		handler(deps, fetchMissing, &tossMu))
 	service.RunBatchQueueWorker(ctx, deps.Runs, model.BatchDailyCloseFetchHistory,
@@ -110,6 +115,13 @@ func handler(deps *service.WorkerDeps, kind fetchKind, tossMu *sync.Mutex) servi
 			}
 			res, err = deps.Closes.FetchStaleCloses(ctx, deps.Toss, deps.Bars, asOf, since, limit, fetchDelay, 0, assetTypes...)
 			staleAsOf = asOf
+		case fetchRefresh:
+			asOf, _ := params["asOf"].(string)
+			if asOf == "" {
+				return nil, "", fmt.Errorf("asOf(세션 날짜)가 필요합니다")
+			}
+			res, since, err = deps.Closes.FetchRefreshCloses(ctx, deps.Toss, deps.Bars, asOf, fetchDelay, assetTypes...)
+			staleAsOf = asOf
 		case fetchMissing:
 			res, err = deps.Closes.FetchMissingCloses(ctx, deps.Toss, deps.Bars, since, limit, fetchDelay, 0, assetTypes...)
 		case fetchHistory:
@@ -146,7 +158,7 @@ func handler(deps *service.WorkerDeps, kind fetchKind, tossMu *sync.Mutex) servi
 
 			커버리지는 결과를 직접 재므로 그 종류의 회귀가 배치 화면에 바로 드러난다.
 		*/
-		if kind == fetchStale && staleAsOf != "" {
+		if (kind == fetchStale || kind == fetchRefresh) && staleAsOf != "" {
 			have, total, e := deps.Closes.SessionCloseCoverage(ctx, staleAsOf, assetTypes...)
 			if e != nil {
 				log.Printf("worker-fetch: coverage %s: %v", staleAsOf, e)

@@ -233,6 +233,11 @@ var batchExpectations = map[model.BatchJobID]batchExpectation{
 		schedule: calendar.ScheduleKRX,
 		at:       []string{"15:50"}, grace: 4 * time.Hour, maxRuntime: 2 * time.Hour,
 	},
+	model.BatchDailyCloseRefreshDomestic: {
+		// NXT 20:00 마감 +10분. 국내 약 4,300종목 × 캔들 1회 — 15:50 회차와 같은 약 27분.
+		schedule: calendar.ScheduleKRX,
+		at:       []string{"20:10"}, grace: 3 * time.Hour, maxRuntime: 90 * time.Minute,
+	},
 	model.BatchDailyCloseOverseas: {
 		// US 마감 +20분 = 05:20 KST(서머타임 기준). 겨울에는 한 시간 늦으므로
 		// 유예로 흡수한다 — 이 잡은 KST 벽시계로 도는 워커에 매달려 있다.

@@ -56,10 +56,12 @@ function buildQuoteMetricGroups(quote: QuoteDetail): MetricGroup[] {
     {
       title: "시세",
       rows: [
+        /*
+          「정규장 종가」 줄은 지웠다 (2026-10-21 사용자 결정, 티켓 QP-21). Toss 캔들은 KRX+NXT 통합이라
+          KRX 단독 종가 원천이 없고, 그 줄은 15:30 직전 1분봉(동시호가 체결이 빠진 값)이었다 — 삼성전자
+          10-21 222,250 vs 실제 KRX 223,500.
+        */
         { label: "전일", price: quote.prevClose },
-        ...(quote.regularClose != null && quote.regularClose > 0
-          ? [{ label: "정규장 종가", price: quote.regularClose } satisfies MetricRow]
-          : []),
         { label: "시가", price: quote.open },
         { label: "고가", price: quote.high },
         { label: "저가", price: quote.low },
