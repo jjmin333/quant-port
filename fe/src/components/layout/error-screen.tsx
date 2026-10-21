@@ -97,7 +97,7 @@ export function ErrorScreen({
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-2">
-        <Button onClick={retry} className="bg-[var(--brand)] text-white hover:opacity-90">
+        <Button onClick={retry} className="bg-[var(--brand)] text-[var(--brand-foreground)] hover:opacity-90">
           <RotateCw aria-hidden />
           {retried ? "새로고침" : "다시 시도"}
         </Button>

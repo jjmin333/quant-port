@@ -247,7 +247,7 @@ export function JournalNoteForm({
           disabled={saving || !gate.authed}
           className={cn(
             buttonVariants({ variant: "default", size: "default" }),
-            "bg-[var(--brand)] text-white hover:opacity-90 disabled:opacity-50",
+            "bg-[var(--brand)] text-[var(--brand-foreground)] hover:opacity-90 disabled:opacity-50",
             // 취소가 사라진 줄에서는 버튼 하나가 줄을 채운다 — 왼쪽에 붙여 두면
             // 오른쪽이 통째로 비어 「빠진 버튼이 있나」로 읽힌다.
             !gate.authed && "flex-1",

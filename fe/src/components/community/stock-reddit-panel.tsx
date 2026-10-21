@@ -201,7 +201,7 @@ function AISummaryCard({
   return (
     <div className="overflow-hidden rounded-xl border border-[var(--border)] border-l-4 border-l-[var(--brand)]/60 bg-[var(--surface)] shadow-sm">
       <div className="flex items-center gap-2 px-4 pt-3">
-        <span className="inline-flex items-center gap-0.5 rounded-full bg-[var(--brand)] px-2 py-0.5 text-micro font-bold text-white">
+        <span className="inline-flex items-center gap-0.5 rounded-full bg-[var(--brand)] px-2 py-0.5 text-micro font-bold text-[var(--brand-foreground)]">
           <Sparkles className="h-3 w-3" aria-hidden />
           AI
         </span>

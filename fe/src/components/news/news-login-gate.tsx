@@ -188,7 +188,7 @@ export function NewsGatedActionBar({
               </Link>
               <Link
                 href={loginHref}
-                className={cn(buttonVariants({ variant: "default", size: "sm" }), "flex-1 bg-[var(--brand)] text-center text-white hover:opacity-90")}
+                className={cn(buttonVariants({ variant: "default", size: "sm" }), "flex-1 bg-[var(--brand)] text-center text-[var(--brand-foreground)] hover:opacity-90")}
               >
                 <LogIn className="mr-1 inline size-3" />
                 로그인

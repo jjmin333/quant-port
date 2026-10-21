@@ -121,7 +121,7 @@ export function StockScoreChip({
             <Link
               href={analysisSymbolHref(symbol, "overview")}
               onClick={onNavigate}
-              className="mt-2 block rounded-lg bg-[var(--brand)] px-2 py-1.5 text-center text-cell font-semibold text-white hover:opacity-90"
+              className="mt-2 block rounded-lg bg-[var(--brand)] px-2 py-1.5 text-center text-cell font-semibold text-[var(--brand-foreground)] hover:opacity-90"
             >
               축별 점수 자세히 보기
             </Link>

@@ -306,7 +306,7 @@ export function StampRevealModal({
             type="button"
             disabled={busy}
             onClick={confirm}
-            className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-white disabled:opacity-40")}
+            className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-[var(--brand-foreground)] disabled:opacity-40")}
           >
             {busy ? "저장 중…" : remaining > 0 ? "확인하고 다음 →" : "확인"}
           </button>

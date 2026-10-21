@@ -34,7 +34,7 @@ export function SectionTabs() {
             className={cn(
               "inline-flex h-9 shrink-0 items-center rounded-full border px-4 text-sm font-medium transition-colors",
               active
-                ? "border-[var(--brand)] bg-[var(--brand)] font-semibold text-white"
+                ? "border-[var(--brand)] bg-[var(--brand)] font-semibold text-[var(--brand-foreground)]"
                 : "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
             )}
           >

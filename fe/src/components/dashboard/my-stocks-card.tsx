@@ -311,7 +311,7 @@ function MyStocksEmpty() {
       <span className="flex shrink-0 gap-2">
         <Link
           href="/welcome"
-          className="rounded-md bg-[var(--brand)] px-3 py-1.5 text-cell font-semibold text-white hover:opacity-90"
+          className="rounded-md bg-[var(--brand)] px-3 py-1.5 text-cell font-semibold text-[var(--brand-foreground)] hover:opacity-90"
         >
           관심 종목 고르기
         </Link>

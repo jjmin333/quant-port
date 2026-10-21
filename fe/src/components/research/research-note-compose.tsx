@@ -96,7 +96,7 @@ export function ResearchNoteCompose({ topic }: { topic: Exclude<ContentTopic, "s
           type="button"
           onClick={() => void publish()}
           disabled={!ready || publishing}
-          className={cn(buttonVariants({ variant: "default" }), "bg-[var(--brand)] text-white disabled:opacity-40")}
+          className={cn(buttonVariants({ variant: "default" }), "bg-[var(--brand)] text-[var(--brand-foreground)] disabled:opacity-40")}
         >
           {publishing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           발행하기

@@ -62,7 +62,7 @@ export function BadgeChip({ badge, symbols }: { badge: CommunityBadge; symbols?:
       title={BADGE_TITLES[badge.key] ?? badge.label}
       className={cn(
         "inline-flex shrink-0 items-center gap-0.5 rounded-md border px-1.5 py-px text-micro font-semibold",
-        badge.key === "admin" && "border-transparent bg-[var(--brand)] text-white",
+        badge.key === "admin" && "border-transparent bg-[var(--brand)] text-[var(--brand-foreground)]",
         badge.key === "holder" && "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
         badge.key !== "admin" && badge.key !== "holder" && "border-[var(--border)] bg-[var(--surface-elevated)] text-[var(--text-secondary)]",
       )}

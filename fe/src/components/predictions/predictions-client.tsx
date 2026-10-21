@@ -205,7 +205,7 @@ export function PredictionsClient() {
               title={gate.authed ? undefined : "로그인하면 예측을 세울 수 있습니다"}
               className={cn(
                 buttonVariants({ variant: "default", size: "sm" }),
-                "bg-[var(--brand)] text-white hover:opacity-90",
+                "bg-[var(--brand)] text-[var(--brand-foreground)] hover:opacity-90",
               )}
             >
               <Target className="size-3.5" />

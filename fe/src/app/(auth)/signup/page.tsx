@@ -122,7 +122,7 @@ export default function SignupPage() {
         <button
           type="submit"
           disabled={submitting || !ready}
-          className="h-11 w-full rounded-lg bg-[var(--brand)] text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+          className="h-11 w-full rounded-lg bg-[var(--brand)] text-sm font-semibold text-[var(--brand-foreground)] hover:opacity-90 disabled:opacity-50"
         >
           {submitting ? "가입 중…" : "회원가입"}
         </button>

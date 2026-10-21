@@ -33,7 +33,7 @@ export function LoginRequiredPanel({
           <div className="flex flex-wrap gap-2">
             <Link
               href={`/login${loginNext ? `?next=${encodeURIComponent(loginNext)}` : ""}`}
-              className={cn(buttonVariants({ variant: "default", size: "default" }), "h-9 bg-[var(--brand)] text-white hover:opacity-90")}
+              className={cn(buttonVariants({ variant: "default", size: "default" }), "h-9 bg-[var(--brand)] text-[var(--brand-foreground)] hover:opacity-90")}
             >
               로그인
             </Link>

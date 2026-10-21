@@ -350,7 +350,7 @@ export function AdminDBPanel() {
                 {canWrite && (
                   <button
                     onClick={openCreate}
-                    className="flex items-center gap-1 rounded bg-[var(--brand)] px-2 py-1.5 text-cell font-medium text-white"
+                    className="flex items-center gap-1 rounded bg-[var(--brand)] px-2 py-1.5 text-cell font-medium text-[var(--brand-foreground)]"
                   >
                     <Plus className="h-3.5 w-3.5" /> 행 추가
                   </button>
@@ -501,7 +501,7 @@ export function AdminDBPanel() {
                 <button
                   onClick={submitEditor}
                   disabled={busy}
-                  className="flex items-center gap-1 rounded bg-[var(--brand)] px-3 py-1.5 text-cell font-medium text-white disabled:opacity-50"
+                  className="flex items-center gap-1 rounded bg-[var(--brand)] px-3 py-1.5 text-cell font-medium text-[var(--brand-foreground)] disabled:opacity-50"
                 >
                   {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} 저장
                 </button>

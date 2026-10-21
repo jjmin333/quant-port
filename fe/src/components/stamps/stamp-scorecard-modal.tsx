@@ -202,7 +202,7 @@ export function StampScorecardModal({
                 onOpenChange(false);
                 onOpenReveal();
               }}
-              className={cn(buttonVariants({ variant: "default", size: "sm" }), "ml-auto bg-[var(--brand)] text-white")}
+              className={cn(buttonVariants({ variant: "default", size: "sm" }), "ml-auto bg-[var(--brand)] text-[var(--brand-foreground)]")}
             >
               개봉 대기 {dueCount}건 열기 →
             </button>

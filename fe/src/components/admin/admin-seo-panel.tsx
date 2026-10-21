@@ -456,7 +456,7 @@ export function AdminSeoPanel() {
                   disabled={busy}
                   className={cn(
                     buttonVariants({ variant: "default", size: "sm" }),
-                    "bg-[var(--brand)] text-white disabled:opacity-50",
+                    "bg-[var(--brand)] text-[var(--brand-foreground)] disabled:opacity-50",
                   )}
                 >
                   {busy ? (

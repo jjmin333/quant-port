@@ -487,7 +487,7 @@ export function CommunityComposeClient() {
               type="button"
               disabled={!ready || submitting}
               onClick={() => void submit()}
-              className="shrink-0 rounded-lg bg-[var(--brand)] px-4 py-2 text-cell font-semibold text-white hover:opacity-90 disabled:opacity-40"
+              className="shrink-0 rounded-lg bg-[var(--brand)] px-4 py-2 text-cell font-semibold text-[var(--brand-foreground)] hover:opacity-90 disabled:opacity-40"
             >
               {submitting ? "올리는 중…" : "올리기"}
             </button>

@@ -986,7 +986,7 @@ function TargetForm({
           type="button"
           onClick={onSave}
           disabled={!stock || !(Number(targetPrice) > 0)}
-          className="h-8 w-full rounded-lg bg-[var(--brand)] text-cell font-medium text-white hover:opacity-90 disabled:opacity-50"
+          className="h-8 w-full rounded-lg bg-[var(--brand)] text-cell font-medium text-[var(--brand-foreground)] hover:opacity-90 disabled:opacity-50"
         >
           {editingId ? "수정" : "추가"}
         </button>

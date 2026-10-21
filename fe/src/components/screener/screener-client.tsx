@@ -290,7 +290,7 @@ export function ScreenerClient({
               maxLength={60}
               className="w-28 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-cell outline-none focus:border-[var(--brand)]"
             />
-            <button type="button" onClick={() => void save()} className="rounded-md bg-[var(--brand)] px-2 py-1 text-cell font-semibold text-white">
+            <button type="button" onClick={() => void save()} className="rounded-md bg-[var(--brand)] px-2 py-1 text-cell font-semibold text-[var(--brand-foreground)]">
               저장
             </button>
           </span>

@@ -248,7 +248,7 @@ function LatestNewsCardBody({
               className={cn(
                 "shrink-0 rounded-full border px-2 py-0.5 text-micro transition-colors",
                 topic === c.id
-                  ? "border-[var(--brand)] bg-[var(--brand)] font-semibold text-white"
+                  ? "border-[var(--brand)] bg-[var(--brand)] font-semibold text-[var(--brand-foreground)]"
                   : "border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
               )}
             >

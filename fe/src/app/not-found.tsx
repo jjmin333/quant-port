@@ -33,7 +33,7 @@ export default function NotFound() {
       <div className="flex flex-wrap items-center justify-center gap-2">
         <Link
           href="/"
-          className={cn(buttonVariants({ variant: "default", size: "default" }), "bg-[var(--brand)] text-white hover:opacity-90")}
+          className={cn(buttonVariants({ variant: "default", size: "default" }), "bg-[var(--brand)] text-[var(--brand-foreground)] hover:opacity-90")}
         >
           홈으로
         </Link>

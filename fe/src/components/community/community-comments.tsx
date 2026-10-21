@@ -285,7 +285,7 @@ function Composer({
           type="button"
           disabled={busy || value.trim() === ""}
           onClick={onSubmit}
-          className="rounded-lg bg-[var(--brand)] px-3 py-1.5 text-cell font-semibold text-white hover:opacity-90 disabled:opacity-40"
+          className="rounded-lg bg-[var(--brand)] px-3 py-1.5 text-cell font-semibold text-[var(--brand-foreground)] hover:opacity-90 disabled:opacity-40"
         >
           {busy ? "등록 중…" : "등록"}
         </button>

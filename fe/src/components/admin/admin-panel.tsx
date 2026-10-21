@@ -261,7 +261,7 @@ export function AdminPanel() {
                 type="button"
                 onClick={() => void handleSavePollSettings()}
                 disabled={busy || !pollDraft}
-                className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-white disabled:opacity-50")}
+                className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-[var(--brand-foreground)] disabled:opacity-50")}
               >
                 저장
               </button>
@@ -320,7 +320,7 @@ export function AdminPanel() {
                 type="button"
                 onClick={() => void handleSaveMarketDataSettings()}
                 disabled={busy || !marketDataDraft}
-                className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-white disabled:opacity-50")}
+                className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-[var(--brand-foreground)] disabled:opacity-50")}
               >
                 저장
               </button>
@@ -463,7 +463,7 @@ export function AdminPanel() {
                 type="button"
                 onClick={() => void handleCreate()}
                 disabled={busy || !newKeyword.trim()}
-                className={cn(buttonVariants({ variant: "default", size: "default" }), "bg-[var(--brand)] text-white disabled:opacity-50")}
+                className={cn(buttonVariants({ variant: "default", size: "default" }), "bg-[var(--brand)] text-[var(--brand-foreground)] disabled:opacity-50")}
               >
                 <Plus className="h-4 w-4" />
                 추가

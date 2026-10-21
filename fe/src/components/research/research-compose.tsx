@@ -444,7 +444,7 @@ export function ResearchCompose({ header }: { header?: React.ReactNode } = {}) {
               <button
                 type="button"
                 onClick={restoreDraft}
-                className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-white hover:opacity-90")}
+                className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-[var(--brand-foreground)] hover:opacity-90")}
               >
                 이어쓰기
               </button>
@@ -788,7 +788,7 @@ export function ResearchCompose({ header }: { header?: React.ReactNode } = {}) {
                   type="button"
                   onClick={handlePublish}
                   disabled={!canPublish}
-                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--brand)] px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--brand)] px-4 py-2.5 text-sm font-medium text-[var(--brand-foreground)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
                 >
                   {publishing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   발행하기

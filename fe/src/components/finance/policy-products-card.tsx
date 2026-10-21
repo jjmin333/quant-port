@@ -15,7 +15,7 @@ export function PolicyProductsCard() {
         <summary className="flex cursor-pointer list-none flex-col gap-2 [&::-webkit-details-marker]:hidden sm:flex-row sm:items-center sm:gap-4">
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-[var(--brand)] px-2 py-0.5 text-micro font-semibold text-white">정부 정책상품</span>
+              <span className="rounded-full bg-[var(--brand)] px-2 py-0.5 text-micro font-semibold text-[var(--brand-foreground)]">정부 정책상품</span>
               <span className="text-micro text-[var(--text-muted)]">금융감독원 공시에 없는 상품 · 은행연합회 공시 기준</span>
             </div>
             <div className="text-base font-bold sm:text-lg">
@@ -25,7 +25,7 @@ export function PolicyProductsCard() {
               만 19~34세 청년 · 월 최대 50만원 · 3년 · 정부 저축장려금 + 이자 비과세
             </div>
           </div>
-          <span className="inline-flex shrink-0 items-center justify-center gap-1 rounded-md bg-[var(--brand)] px-3 py-2 text-cell font-semibold text-white">
+          <span className="inline-flex shrink-0 items-center justify-center gap-1 rounded-md bg-[var(--brand)] px-3 py-2 text-cell font-semibold text-[var(--brand-foreground)]">
             <span className="group-open:hidden">은행 {P.banks.length}곳 금리 비교 보기</span>
             <span className="hidden group-open:inline">접기</span>
             <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
