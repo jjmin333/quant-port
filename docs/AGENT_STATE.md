@@ -1,9 +1,10 @@
 # Agent State
 
 > 현재 상태만 담는다. **150줄 이하, 매 세션 덮어쓴다(앞에 쌓지 않는다).** 이력은 `docs/archive/sessions.md`, 원칙은 `docs/PRINCIPLES.md`, 결정·함정은 메모리.
-> 갱신: 2026-10-21 밤 (전체 점검 티켓 처리: 로고 잔재·히트맵·날짜별 상위 점수·크롤 경고·오류 집계)
+> 갱신: 2026-10-22 새벽 (원본 IP 차단·nginx 로그·QA 계정·UI 색 시안)
 
 ## NOW
+- **nginx(10-22)**: 알려진 Host만(www·apex·localhost·127.0.0.1·nginx), 그 밖 80 → 444 · 443 → ssl_reject_handshake. 로그 형식 끝에 `시각 cf=실제IP host= ref= ua=`(앞 다섯 칸은 그대로). **QA 계정** `qae2eqauser`·`qae2eqaadmin`(admin) — 비밀번호 `be/secrets/qa-accounts.json`, 로그인 QA는 http://localhost 로(공개 도메인에 비밀번호 입력 금지)
 - **국내 종가 20:10 재적재(10-21 QP-21 ①)**: `daily_close_refresh_domestic`(worker-market — close-domestic이 20:10 KST 거래일에 큐, fetch가 실행, 만회는 오늘 20:10 뒤 성공이 없을 때만). 15:50 적재는 임시값. 시세 칸 「정규장 종가」 줄 삭제(KRX 단독 종가 원천 없음). 남은 차이: Toss 시세 API의 현재가·전일 종가가 일봉과 다른 종목(LG에너지솔루션 시세 411,500 vs 일봉 412,500)
 - **10-21 밤 신규 화면**: `/market/heatmap`(국내·미국 시총 상위 200, 색 = 등락률|점수 변화, BE `/market/heatmap` 프로세스 10분 캐시) · `/rankings/YYYY-MM-DD`(`score_ranking_history` 종합 상위 20·전일 순위, BE `/stocks/scores/daily-top`, `/rankings` = 최신). 종목 모음 「한눈에 보기」·같은 날 「변화」·사이트맵에서 들어온다.
 - **클라이언트 오류 하루 집계** = Redis `client_errors:YYYY-MM-DD`(KST, 35일, 필드 500 상한) — `docker exec quant-port-redis redis-cli HGETALL client_errors:<날짜>`. 원문은 여전히 api 로그. 스크리너 400은 `screen rejected:` 로그.
@@ -37,7 +38,7 @@
 - 없음
 
 ## PENDING — 사용자 승인/행동 필요
-- nginx `log_format`에 시각·UA·referer 추가(QP-06, nginx 변경 승인) · 시험 계정 커뮤니티 글 209건 삭제 또는 숨김 여부(지금은 공개·noindex)
+- **QP-22 레이트 리밋 IP**: BE가 공개 방문자 전부를 172.18.0.1로 본다(nginx XFF = Docker NAT 주소). `CF-Connecting-IP` 사용 여부 결정 + 공유기 포워딩을 Cloudflare IP 대역으로 제한(사용자) · **QP-20 UI 색** 시안(지금·A 네이비·B 인디고·C 청록) 선택 대기 · QP-15 텔레그램 채널 용도 설명 후 결정
 - **Cloudflare**: `/api/v1/` 캐시 규칙 Edge TTL을 「헤더 없으면 우회」로(현재 헤더 없는 200을 캐시). 코드는 `DefaultNoStore`로 이미 방어(메모리 `cloudflare_caches_headerless_api`)
 - **측정 연결(3주+)**: GSC 서비스 계정 JSON(`be/secrets/`)·`GROWTH_GA4_PROPERTY_ID`·`GROWTH_BING_API_KEY`·GA 내부 트래픽 필터 · 네이버 서치어드바이저 사이트맵 제출(새 페이지 포함).
 - 워치독 알림 웹훅(`deploy/watchdog.config.json` `WebhookUrl`) — DB 장애는 이미 감지(10-10 06:05 로그)하지만 알릴 곳이 없다. MySQL80 자동 재시작(관리자: `sc.exe failure MySQL80 reset= 86400 actions= restart/60000/restart/60000/restart/60000`).
