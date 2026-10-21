@@ -345,7 +345,7 @@ export function CommunityDetailClient({ id, initialPost }: { id: number; initial
                   type="button"
                   disabled={saving}
                   onClick={() => void saveEdit()}
-                  className="rounded-lg bg-[var(--brand)] px-3 py-1.5 text-cell font-semibold text-white disabled:opacity-50"
+                  className="rounded-lg bg-[var(--brand)] px-3 py-1.5 text-cell font-semibold text-[var(--brand-foreground)] disabled:opacity-50"
                 >
                   {saving ? "저장 중…" : "저장"}
                 </button>

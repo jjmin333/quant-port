@@ -75,7 +75,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="h-11 w-full rounded-lg bg-[var(--brand)] text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+          className="h-11 w-full rounded-lg bg-[var(--brand)] text-sm font-semibold text-[var(--brand-foreground)] hover:opacity-90 disabled:opacity-50"
         >
           {submitting ? "로그인 중…" : "로그인"}
         </button>

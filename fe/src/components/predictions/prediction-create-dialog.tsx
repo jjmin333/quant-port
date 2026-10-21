@@ -543,7 +543,7 @@ export function PredictionCreateDialog({
                 type="button"
                 onClick={submit}
                 disabled={!gate.authed || !canSave}
-                className="flex-1 rounded-md bg-[var(--brand)] py-1.5 text-cell font-medium text-white disabled:opacity-40"
+                className="flex-1 rounded-md bg-[var(--brand)] py-1.5 text-cell font-medium text-[var(--brand-foreground)] disabled:opacity-40"
               >
                 {busy ? "저장 중…" : gate.label("예측 저장")}
               </button>

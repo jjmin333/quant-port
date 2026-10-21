@@ -340,7 +340,7 @@ export function LabComposer({ className }: { className?: string }) {
         <span className="min-w-0 flex-1 truncate text-sm text-[var(--text-muted)]">
           오늘 어떤 판단을 했나요 — 근거 · 지켜볼 것 · 손절 기준
         </span>
-        <span className="shrink-0 rounded-lg bg-[var(--brand)] px-2.5 py-1 text-cell font-medium text-white">
+        <span className="shrink-0 rounded-lg bg-[var(--brand)] px-2.5 py-1 text-cell font-medium text-[var(--brand-foreground)]">
           기록
         </span>
       </button>

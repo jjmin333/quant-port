@@ -54,7 +54,7 @@ export function AccountSettings() {
         </p>
         <Link
           href="/login?next=%2Fsettings"
-          className={cn(buttonVariants({ variant: "default", size: "sm" }), "mt-3 inline-block bg-[var(--brand)] text-white hover:opacity-90")}
+          className={cn(buttonVariants({ variant: "default", size: "sm" }), "mt-3 inline-block bg-[var(--brand)] text-[var(--brand-foreground)] hover:opacity-90")}
         >
           로그인
         </Link>
@@ -159,7 +159,7 @@ export function AccountSettings() {
             type="button"
             onClick={submitName}
             disabled={nameBusy || !name.trim() || name.trim() === session.user.displayName}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3.5 text-cell font-semibold text-white hover:opacity-90 disabled:opacity-40"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3.5 text-cell font-semibold text-[var(--brand-foreground)] hover:opacity-90 disabled:opacity-40"
           >
             {nameBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             저장
@@ -226,7 +226,7 @@ export function AccountSettings() {
           type="button"
           onClick={submitPassword}
           disabled={pwBusy || !current || next.length < 8 || !confirmNext}
-          className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3.5 text-cell font-semibold text-white hover:opacity-90 disabled:opacity-40"
+          className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3.5 text-cell font-semibold text-[var(--brand-foreground)] hover:opacity-90 disabled:opacity-40"
         >
           {pwBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           비밀번호 바꾸기

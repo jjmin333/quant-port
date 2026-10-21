@@ -82,7 +82,7 @@ export function LoadErrorState({
             type="button"
             onClick={onRetry}
             disabled={retrying}
-            className={cn(buttonVariants({ variant: "default", size: "sm" }), "mt-4 bg-[var(--brand)] text-white hover:opacity-90 disabled:opacity-50")}
+            className={cn(buttonVariants({ variant: "default", size: "sm" }), "mt-4 bg-[var(--brand)] text-[var(--brand-foreground)] hover:opacity-90 disabled:opacity-50")}
           >
             <RefreshCw className={cn("h-3.5 w-3.5", retrying && "animate-spin")} />
             다시 시도

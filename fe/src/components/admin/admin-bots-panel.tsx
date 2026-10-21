@@ -186,7 +186,7 @@ function Pill({ active, onClick, children }: { active: boolean; onClick: () => v
       className={cn(
         "rounded-full border px-3 py-1 text-cell font-semibold",
         active
-          ? "border-[var(--brand)] bg-[var(--brand)] text-white"
+          ? "border-[var(--brand)] bg-[var(--brand)] text-[var(--brand-foreground)]"
           : "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--brand)]",
       )}
     >

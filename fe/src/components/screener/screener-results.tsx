@@ -282,7 +282,7 @@ function LikeChips({
 }) {
   if (row.symbol === like.symbol) {
     return (
-      <span className="ml-1.5 rounded-full bg-[var(--brand)] px-1.5 text-micro font-semibold text-white">기준</span>
+      <span className="ml-1.5 rounded-full bg-[var(--brand)] px-1.5 text-micro font-semibold text-[var(--brand-foreground)]">기준</span>
     );
   }
   const diffs = likeDiffs(row.cells, like.values, fields);

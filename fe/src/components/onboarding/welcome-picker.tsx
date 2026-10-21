@@ -217,7 +217,7 @@ export function WelcomePicker({ next }: { next?: string }) {
               type="button"
               disabled={saving || picked.size === 0}
               onClick={() => void submit()}
-              className="h-10 rounded-lg bg-[var(--brand)] px-4 text-cell font-semibold text-white hover:opacity-90 disabled:opacity-40"
+              className="h-10 rounded-lg bg-[var(--brand)] px-4 text-cell font-semibold text-[var(--brand-foreground)] hover:opacity-90 disabled:opacity-40"
             >
               {saving ? "담는 중…" : picked.size > 0 ? `${picked.size}개 담고 시작하기` : "종목을 골라 주세요"}
             </button>

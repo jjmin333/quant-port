@@ -406,7 +406,7 @@ export function AdminScorePanel() {
                 type="button"
                 onClick={() => void handleSave()}
                 disabled={saving || !dirty}
-                className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-white disabled:opacity-50")}
+                className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-[var(--brand-foreground)] disabled:opacity-50")}
               >
                 {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                 저장
@@ -625,7 +625,7 @@ export function AdminScorePanel() {
                 type="button"
                 onClick={() => void handleAddSymbol()}
                 disabled={addingBusy || !newSymbol.trim()}
-                className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-white disabled:opacity-50")}
+                className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-[var(--brand-foreground)] disabled:opacity-50")}
               >
                 {addingBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                 추가

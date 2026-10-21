@@ -332,7 +332,7 @@ export function StampButton({
                 type="button"
                 onClick={saveNote}
                 disabled={saving || note === lastStamp.note}
-                className="rounded-md bg-[var(--brand)] px-3 text-cell font-medium text-white disabled:opacity-40"
+                className="rounded-md bg-[var(--brand)] px-3 text-cell font-medium text-[var(--brand-foreground)] disabled:opacity-40"
               >
                 {noteSaved ? "저장됨" : "저장"}
               </button>

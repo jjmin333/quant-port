@@ -208,7 +208,7 @@ export function JournalNoteModal({
                 {note.symbol && (
                   <Link
                     href={analysisSymbolHref(note.symbol)}
-                    className={cn(buttonVariants({ variant: "default", size: "sm" }), "ml-auto bg-[var(--brand)] text-white hover:opacity-90")}
+                    className={cn(buttonVariants({ variant: "default", size: "sm" }), "ml-auto bg-[var(--brand)] text-[var(--brand-foreground)] hover:opacity-90")}
                   >
                     종목 분석 보기
                     <ArrowRight className="size-3" />

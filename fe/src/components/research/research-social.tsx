@@ -184,7 +184,7 @@ export function RatingPanel({ call, onRated }: { call: ResearchCall; onRated: ()
                     className={cn(
                       "h-6 w-6 rounded text-cell tabular-nums transition-colors",
                       values[axis.id] === n
-                        ? "bg-[var(--brand)] text-white"
+                        ? "bg-[var(--brand)] text-[var(--brand-foreground)]"
                         : "bg-[var(--surface-elevated)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]",
                     )}
                   >
@@ -209,7 +209,7 @@ export function RatingPanel({ call, onRated }: { call: ResearchCall; onRated: ()
                 setSaving(false);
               }
             }}
-            className="w-full rounded-lg bg-[var(--brand)] py-1.5 text-cell font-medium text-white disabled:opacity-40"
+            className="w-full rounded-lg bg-[var(--brand)] py-1.5 text-cell font-medium text-[var(--brand-foreground)] disabled:opacity-40"
           >
             {call.myRating ? "평가 수정" : "평가 남기기"}
           </button>
@@ -346,7 +346,7 @@ export function CommentThread({
               type="button"
               onClick={() => submit(body)}
               disabled={busy || body.trim() === ""}
-              className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-white disabled:opacity-40")}
+              className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-[var(--brand-foreground)] disabled:opacity-40")}
             >
               등록
             </button>
@@ -430,7 +430,7 @@ export function CommentThread({
                       type="button"
                       onClick={() => submit(replyBody, comment.id)}
                       disabled={busy || replyBody.trim() === ""}
-                      className={cn(buttonVariants({ variant: "default", size: "xs" }), "bg-[var(--brand)] text-white disabled:opacity-40")}
+                      className={cn(buttonVariants({ variant: "default", size: "xs" }), "bg-[var(--brand)] text-[var(--brand-foreground)] disabled:opacity-40")}
                     >
                       등록
                     </button>
@@ -587,7 +587,7 @@ function CommentRow({
                   setEditing(false);
                   onChanged();
                 }}
-                className={cn(buttonVariants({ variant: "default", size: "xs" }), "bg-[var(--brand)] text-white")}
+                className={cn(buttonVariants({ variant: "default", size: "xs" }), "bg-[var(--brand)] text-[var(--brand-foreground)]")}
               >
                 저장
               </button>

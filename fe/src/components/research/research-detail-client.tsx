@@ -716,7 +716,7 @@ function EditPanel({
             type="button"
             onClick={save}
             disabled={saving || busy}
-            className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-white disabled:opacity-40")}
+            className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-[var(--brand-foreground)] disabled:opacity-40")}
           >
             {saving && <Loader2 className="h-3 w-3 animate-spin" />}
             저장

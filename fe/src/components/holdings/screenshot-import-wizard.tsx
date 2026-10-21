@@ -543,7 +543,7 @@ export function ScreenshotImportWizard({
             <button
               type="button"
               disabled={uploading || files.length === 0}
-              className={cn(buttonVariants({ variant: "default", size: "default" }), "bg-[var(--brand)] text-white disabled:opacity-50")}
+              className={cn(buttonVariants({ variant: "default", size: "default" }), "bg-[var(--brand)] text-[var(--brand-foreground)] disabled:opacity-50")}
               onClick={() => void startImport()}
             >
               {uploading ? "업로드 중…" : "불러오기"}
@@ -753,7 +753,7 @@ export function ScreenshotImportWizard({
             <button
               type="button"
               disabled={committing || !canManualSave}
-              className="w-full rounded-lg bg-[var(--brand)] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50 sm:w-auto"
+              className="w-full rounded-lg bg-[var(--brand)] px-4 py-2.5 text-sm font-medium text-[var(--brand-foreground)] disabled:opacity-50 sm:w-auto"
               onClick={() => void commit()}
             >
               {committing ? "저장 중…" : `${saveCount}개 저장`}
@@ -768,7 +768,7 @@ export function ScreenshotImportWizard({
           <p className="mt-2 text-sm text-[var(--text-muted)]">시세는 아래 목록에서 확인할 수 있습니다.</p>
           <button
             type="button"
-            className={cn(buttonVariants({ variant: "default", size: "default" }), "mt-4 bg-[var(--brand)] text-white")}
+            className={cn(buttonVariants({ variant: "default", size: "default" }), "mt-4 bg-[var(--brand)] text-[var(--brand-foreground)]")}
             onClick={closeWizard}
           >
             확인

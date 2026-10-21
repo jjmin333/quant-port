@@ -344,7 +344,7 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
                         <span
                           aria-label={`오늘 변화가 있는 내 종목 ${myChanges}개`}
                           className={cn(
-                            "ml-auto shrink-0 rounded-full bg-[var(--brand)] px-1.5 text-[10px] font-semibold leading-[18px] text-white",
+                            "ml-auto shrink-0 rounded-full bg-[var(--brand)] px-1.5 text-[10px] font-semibold leading-[18px] text-[var(--brand-foreground)]",
                             "group-data-[sidebar-state=collapsed]/sidebar:ml-0",
                           )}
                         >

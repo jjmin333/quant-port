@@ -143,7 +143,7 @@ export function StampsClient() {
               type="button"
               onClick={() => gate.run(() => setCreateOpen(true))}
               title={gate.authed ? undefined : "로그인하면 스탬프를 찍을 수 있습니다"}
-              className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-white hover:opacity-90")}
+              className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-[var(--brand-foreground)] hover:opacity-90")}
             >
               <StampIcon className="size-3.5" />
               {gate.label("스탬프 찍기")}

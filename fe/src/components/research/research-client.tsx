@@ -140,7 +140,7 @@ export function ResearchClient({ initialCalls = [] }: { initialCalls?: ResearchC
               />
               <Link
                 href="/reports/new"
-                className={cn(buttonVariants({ variant: "default", size: "default" }), "flex-1 bg-[var(--brand)] text-white transition-opacity hover:opacity-90 sm:flex-none")}
+                className={cn(buttonVariants({ variant: "default", size: "default" }), "flex-1 bg-[var(--brand)] text-[var(--brand-foreground)] transition-opacity hover:opacity-90 sm:flex-none")}
               >
                 <PenLine className="h-3.5 w-3.5" />
                 리포트 쓰기
@@ -376,7 +376,7 @@ function EmptyState({ scope, filtered }: { scope: ResearchScope; filtered: boole
       </p>
       <Link
         href="/reports/new"
-        className={cn(buttonVariants({ variant: "default", size: "default" }), "bg-[var(--brand)] text-white")}
+        className={cn(buttonVariants({ variant: "default", size: "default" }), "bg-[var(--brand)] text-[var(--brand-foreground)]")}
       >
         <PenLine className="h-3.5 w-3.5" />첫 리포트 쓰기
       </Link>

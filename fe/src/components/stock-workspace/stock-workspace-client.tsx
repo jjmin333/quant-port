@@ -410,7 +410,7 @@ export function StockWorkspaceClient({
         <div className="flex flex-wrap items-center justify-center gap-2">
           <Link
             href="/analysis"
-            className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-white hover:opacity-90")}
+            className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-[var(--brand-foreground)] hover:opacity-90")}
           >
             종목 찾아보기
           </Link>

@@ -61,7 +61,7 @@ export function MenuEmptyState({
                 key={step.title}
                 className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2"
               >
-                <span className="grid size-4 place-items-center rounded-full bg-[var(--brand)] text-micro font-bold text-white">
+                <span className="grid size-4 place-items-center rounded-full bg-[var(--brand)] text-micro font-bold text-[var(--brand-foreground)]">
                   {idx + 1}
                 </span>
                 <p className="mt-1.5 text-cell font-semibold text-[var(--text-primary)]">
@@ -79,7 +79,7 @@ export function MenuEmptyState({
           {"href" in primary ? (
             <Link
               href={primary.href}
-              className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-white hover:opacity-90")}
+              className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-[var(--brand-foreground)] hover:opacity-90")}
             >
               {primary.label}
             </Link>
@@ -87,7 +87,7 @@ export function MenuEmptyState({
             <button
               type="button"
               onClick={primary.onClick}
-              className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-white hover:opacity-90")}
+              className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-[var(--brand-foreground)] hover:opacity-90")}
             >
               {primary.label}
             </button>

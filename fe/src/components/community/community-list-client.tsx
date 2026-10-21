@@ -137,7 +137,7 @@ export function CommunityListClient({
             </div>
             <Link
               href={writeHref}
-              className={cn(buttonVariants({ variant: "default" }), "bg-[var(--brand)] text-white hover:opacity-90")}
+              className={cn(buttonVariants({ variant: "default" }), "bg-[var(--brand)] text-[var(--brand-foreground)] hover:opacity-90")}
             >
               <PenLine className="h-3.5 w-3.5" />
               글쓰기

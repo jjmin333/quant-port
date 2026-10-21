@@ -144,7 +144,7 @@ export function PredictionCard({
           <button
             type="button"
             onClick={onReveal}
-            className="flex-1 rounded-md bg-[var(--brand)] px-2.5 py-1.5 text-cell font-medium text-white hover:opacity-90"
+            className="flex-1 rounded-md bg-[var(--brand)] px-2.5 py-1.5 text-cell font-medium text-[var(--brand-foreground)] hover:opacity-90"
           >
             열어서 채점 보기
           </button>

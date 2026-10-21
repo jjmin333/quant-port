@@ -81,7 +81,7 @@ export function StampDetail({
           <button
             type="button"
             onClick={onOpen}
-            className={cn(buttonVariants({ variant: "default", size: "xs" }), "ml-auto bg-[var(--brand)] text-white")}
+            className={cn(buttonVariants({ variant: "default", size: "xs" }), "ml-auto bg-[var(--brand)] text-[var(--brand-foreground)]")}
           >
             개봉 확인
           </button>
@@ -403,7 +403,7 @@ export function StampDetail({
             type="button"
             disabled={saving || note === stamp.note}
             onClick={() => patch({ note })}
-            className="rounded-md bg-[var(--brand)] px-3 text-cell font-medium text-white disabled:opacity-40"
+            className="rounded-md bg-[var(--brand)] px-3 text-cell font-medium text-[var(--brand-foreground)] disabled:opacity-40"
           >
             저장
           </button>

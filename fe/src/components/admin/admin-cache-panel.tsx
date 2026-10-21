@@ -339,7 +339,7 @@ export function AdminCachePanel() {
                     type="button"
                     disabled={busy || detail.readOnly}
                     onClick={() => void handleSave()}
-                    className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-white disabled:opacity-50")}
+                    className={cn(buttonVariants({ variant: "default", size: "sm" }), "bg-[var(--brand)] text-[var(--brand-foreground)] disabled:opacity-50")}
                   >
                     <Save className="h-3.5 w-3.5" />
                     저장

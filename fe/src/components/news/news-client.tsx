@@ -724,7 +724,7 @@ function Pill({
       className={cn(
         "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 text-cell font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--brand)]/50",
         active
-          ? "border-[var(--brand)] bg-[var(--brand)] text-white"
+          ? "border-[var(--brand)] bg-[var(--brand)] text-[var(--brand-foreground)]"
           : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:border-[var(--text-muted)] hover:text-[var(--text-primary)]",
         disabled && "cursor-not-allowed opacity-50 hover:border-[var(--border)]",
       )}

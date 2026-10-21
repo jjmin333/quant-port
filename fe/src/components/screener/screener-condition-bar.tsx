@@ -242,7 +242,7 @@ function FieldEditor({
               className={cn(
                 "rounded-full border px-2.5 py-1 text-cell tabular-nums",
                 on
-                  ? "border-[var(--brand)] bg-[var(--brand)] font-semibold text-white"
+                  ? "border-[var(--brand)] bg-[var(--brand)] font-semibold text-[var(--brand-foreground)]"
                   : "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--brand)]",
               )}
             >
@@ -271,7 +271,7 @@ function FieldEditor({
         <button
           type="button"
           onClick={() => onApply({ field: field.id, min, max })}
-          className="ml-auto rounded-md bg-[var(--brand)] px-3 py-1.5 text-cell font-bold text-white"
+          className="ml-auto rounded-md bg-[var(--brand)] px-3 py-1.5 text-cell font-bold text-[var(--brand-foreground)]"
         >
           {min == null && max == null ? "열로만 보기" : "적용하고 찾기"}
         </button>
