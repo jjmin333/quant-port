@@ -31,13 +31,6 @@ const FONT_PATH = path.join(
   "node_modules/pretendard/dist/public/static/Pretendard-Bold.otf",
 );
 
-/** 아이콘과 같은 도형(오름차순 막대 셋). `src/app/icon.svg`와 비율을 맞췄다. */
-const BARS = [
-  { height: 96, opacity: 0.55 },
-  { height: 152, opacity: 0.78 },
-  { height: 216, opacity: 1 },
-];
-
 export default async function OpengraphImage() {
   const font = await readFile(FONT_PATH);
 
@@ -50,34 +43,28 @@ export default async function OpengraphImage() {
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          background: "#2563EB",
+          backgroundImage: "linear-gradient(160deg, #1C2541 0%, #0A0F1E 100%)",
           padding: "72px 80px",
           fontFamily: "Pretendard",
           color: "#fff",
         }}
       >
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 20 }}>
-          {BARS.map((bar) => (
-            <div
-              key={bar.height}
-              style={{
-                width: 56,
-                height: bar.height,
-                borderRadius: 16,
-                background: "#fff",
-                opacity: bar.opacity,
-              }}
-            />
-          ))}
+        {/* src/app/icon.svg 와 같은 마크 — 패널은 카드 배경이 대신한다. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+          <svg width="88" height="88" viewBox="0 0 32 32">
+            <rect width="32" height="32" rx="7.5" fill="#0A0F1E" stroke="rgba(255,255,255,0.14)" strokeWidth="0.5" />
+            <circle cx="15" cy="15" r="8" fill="none" stroke="#fff" strokeWidth="3.4" />
+            <path d="M20 20 25.5 25.5" stroke="#6E9BFF" strokeWidth="3.4" strokeLinecap="round" />
+          </svg>
+          <div style={{ fontSize: 40, color: "rgba(255,255,255,0.78)", letterSpacing: -0.5 }}>{SITE_NAME}</div>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <div style={{ fontSize: 40, opacity: 0.82, letterSpacing: -0.5 }}>{SITE_NAME}</div>
           <div style={{ fontSize: 76, lineHeight: 1.25, letterSpacing: -2 }}>
             이 종목, 같은 업종 안에서
           </div>
           <div style={{ fontSize: 76, lineHeight: 1.25, letterSpacing: -2 }}>몇 등일까</div>
-          <div style={{ marginTop: 26, fontSize: 32, opacity: 0.8, letterSpacing: -0.5 }}>
+          <div style={{ marginTop: 26, fontSize: 32, color: "#8FB0FF", letterSpacing: -0.5 }}>
             국내·미국 전 종목 AI 점수 · 바뀐 이유 · 과거 성적
           </div>
         </div>

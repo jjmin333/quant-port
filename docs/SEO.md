@@ -67,20 +67,20 @@ Next의 메타 병합은 **얕은 병합이고 같은 키는 통째로 덮인다
 
 ## 아이콘
 
-Next 기본(Vercel) 파비콘이 그대로 나가고 있었다. **정식 로고가 없어 자리표(placeholder)를
-만들었다** — 브랜드 파랑(`--brand` = `#2563EB`) 패널 위 오름차순 막대 셋. 16px에서도
-읽히도록 글자를 쓰지 않았다(「QP」 같은 모노그램은 파비콘 크기에서 뭉개진다).
+브랜드 마크(2026-10-21 사용자 선택, 6개 도형 × 6개 톤 중 「미드나이트 + Q」): 남색
+그라데이션 패널(`#1C2541`→`#0A0F1E`) 위 흰 고리 + 하늘색(`#6E9BFF`) 꼬리. Q이면서
+돋보기로 읽힌다. 헤더(`header.tsx` BrandLink)는 같은 마크 + 「Quant Port」, 홈 링크
+미리보기(`src/app/opengraph-image.tsx`)도 같은 톤이다. 사이트 UI 색 `--brand`는 그대로 뒀다.
 
 - `fe/src/app/icon.svg` — **원본**. 이걸 고치면 나머지 둘을 다시 구워야 한다.
 - `fe/src/app/favicon.ico` — 16·32·48 세 벌
 - `fe/src/app/apple-icon.png` — 180×180
-- `fe/public/icon-{192,512,maskable-512}.png` — PWA 매니페스트(`src/app/manifest.ts`)용. maskable은 막대를 안전 영역 안으로 줄였다
+- `fe/public/icon-{192,512,maskable-512}.png` — PWA 매니페스트(`src/app/manifest.ts`)용. maskable은 도형을 안전 영역 안으로 줄였다
 
 ```
 cd fe && node scripts/gen-icons.mjs src/app
 ```
 
-정식 로고가 나오면 `scripts/gen-icons.mjs`째로 지우고 디자이너 파일을 넣으면 된다.
 
 ## 남은 일
 
