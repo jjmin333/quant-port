@@ -1,9 +1,10 @@
 # Agent State
 
 > 현재 상태만 담는다. **150줄 이하, 매 세션 덮어쓴다(앞에 쌓지 않는다).** 이력은 `docs/archive/sessions.md`, 원칙은 `docs/PRINCIPLES.md`, 결정·함정은 메모리.
-> 갱신: 2026-10-20 밤 (전체 점검: 변화 감지 컬럼 폭 · 내부자 거래 발행사 검증 · research 이중 실행 · CI vitest)
+> 갱신: 2026-10-21 저녁 (브랜드 마크 교체: 미드나이트 + Q 모노그램)
 
 ## NOW
+- **브랜드 마크(10-21, 메모리 `brand_mark_midnight_q_1021`)**: 미드나이트 패널 + 흰 Q 고리 + 하늘색 꼬리. 원본 `fe/src/app/icon.svg`, 파비콘·애플·PWA는 `scripts/gen-icons.mjs`가 굽는다, 헤더 BrandLink는 마크 + 「Quant Port」, 홈 OG는 같은 톤. 사이트 UI `--brand`(#2563EB)는 그대로.
 - **코드는 GitHub에 있다** — `jjmin333/quant-port` public, `master`. 10-10에 09-15 이후 미커밋 전부를 3개 커밋으로 push(비밀값 점검 끝: `be/.env`·`be/secrets/`·워치독 설정은 git 밖). 이후 작업도 커밋·push 한다. 클라우드 세션 규칙은 `AGENTS.md` 「Cloud sessions」(배포는 PC 세션만).
 - 사업화 단계표는 `docs/BUSINESS_REVIEW.md` §9(+「2차 검토 반영」), 경쟁사는 `docs/COMPETITORS.md`.
 - **메뉴**(10-10 결정 A + 10-12 요청 3, 메모리 `menu_sections_1010`): 실시간 차트 · **AI 점수 순위** · **종목 스크리너** · **오늘의 변화**(내 종목 배지) · 뉴스(국내·해외) · 실적(국내·해외·서프라이즈) + 보유·관심·메모장. 업종·스타일만 메뉴에서 보류(주소·사이트맵 산다). 태블릿 768~1023px에 접힌 아이콘 레일(햄버거는 드로어).

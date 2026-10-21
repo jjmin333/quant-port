@@ -3256,3 +3256,4 @@
 - 2026-10-20 밤: 전체 점검 — change_detect magnitude 범위 초과(10-18·19 실패) → 108 DECIMAL(20,4) · EDGAR Form 4 발행사 CIK 검증(회사가 보고자인 공시가 MDT 등에 붙던 것) · research_verdict 하루 두 번 → SlotGate · CI에 vitest · FE 미사용 import 정리 · 배포 api+fe, worker-stock은 financials_domestic 뒤
 - 2026-10-21: EDGAR 내부자 오귀속 행 삭제(회사명 대조 → issuerCik 확인, 406공시·109종목·1,079행, 백업 be/backups/insider_misattributed_20261021.sql) · worker-stock 01:55 재생성(warnings_sync 잘림 → catchup 재실행)
 - 2026-10-21: 종목 미리보기 창 — 신규 상장 종목의 무한 로딩 차트를 「거래일이 쌓이면 차트가 표시됩니다」로, 이력 20일 미만이면 점수 없음 사유 표시 · fe 재빌드·워커 재생성(이미지 일치), health 200
+- 2026-10-21: 로고·홈 링크 미리보기 교체 — 6도형×6톤 시안 중 「미드나이트 + Q」 선택, icon.svg·favicon·apple·PWA 아이콘·헤더(◆ QUANT PORT → 마크 + Quant Port)·opengraph-image · fe 재빌드(api 동반 재생성), health 200, 공개 도메인 OG·favicon 새 것 확인
