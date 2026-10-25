@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"sort"
@@ -236,8 +237,13 @@ func (s *EarningsPreviewService) RunBatchNow(ctx context.Context, market string)
 				log.Printf("earnings preview: feature budget — %v (나머지는 규칙 문장)", err)
 				llmOn = false
 			} else {
-				lastCall = time.Now()
 				res, err := client.GenerateEarningsPreview(ctx, string(factsJSON))
+				// 같은 llm_kr/us 버킷을 요약·브리핑도 쓴다 — 간격에 걸리면 한 번 기다렸다 다시.
+				if errors.Is(err, apibudget.ErrPacing) && s.sleep(ctx, interval) {
+					res, err = client.GenerateEarningsPreview(ctx, string(factsJSON))
+				}
+				// 간격은 응답이 끝난 뒤부터 잰다 — 예산이 마지막 호출을 응답 뒤에 기록한다(10-23·24 하나 걸러 ErrPacing).
+				lastCall = time.Now()
 				switch {
 				case err != nil:
 					log.Printf("earnings preview %s llm: %v", t.Symbol, err)

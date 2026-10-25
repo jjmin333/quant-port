@@ -19,9 +19,10 @@ type FinnhubNewsClient struct {
 }
 
 func NewFinnhubNewsClient(apiKey string, httpClient *http.Client, budget *apibudget.Manager) *FinnhubNewsClient {
+	apiKey = strings.TrimSpace(apiKey)
 	return &FinnhubNewsClient{
-		apiKey:     strings.TrimSpace(apiKey),
-		httpClient: httpClient,
+		apiKey:     apiKey,
+		httpClient: withFinnhubToken(httpClient, apiKey),
 		budget:     budget,
 	}
 }
@@ -57,9 +58,8 @@ func (c *FinnhubNewsClient) MarketNews(ctx context.Context, category string) ([]
 	}
 
 	u := fmt.Sprintf(
-		"https://finnhub.io/api/v1/news?category=%s&token=%s",
+		"https://finnhub.io/api/v1/news?category=%s",
 		url.QueryEscape(category),
-		url.QueryEscape(c.apiKey),
 	)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -106,11 +106,10 @@ func (c *FinnhubNewsClient) CompanyNews(ctx context.Context, symbol, from, to st
 	}
 
 	u := fmt.Sprintf(
-		"https://finnhub.io/api/v1/company-news?symbol=%s&from=%s&to=%s&token=%s",
+		"https://finnhub.io/api/v1/company-news?symbol=%s&from=%s&to=%s",
 		url.QueryEscape(symbol),
 		url.QueryEscape(from),
 		url.QueryEscape(to),
-		url.QueryEscape(c.apiKey),
 	)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {

@@ -3262,3 +3262,4 @@
 - 2026-10-21 밤: QP-21 ① — 국내 일봉 20:10 재적재 잡 `daily_close_refresh_domestic`(첫 실행 4,281종목·36분, 삼성전자 10-21 222,500 → 224,000), 시세 칸·머리의 「정규장 종가」 삭제 · 배포 fe+api·worker-market(이미지 일치), health 200 · worker-stock은 financials_domestic 중이라 그대로
 - 2026-10-22: QP-03 nginx 알려진 Host만(IP 직접 접속 444 확인) · QP-06 nginx 로그 시각·cf IP·Host·referer·UA · QP-14 QA 계정 2개(admin 1)로 로그인·관리자 화면 점검 → 예시 관심 목록 점수를 실제 점수로 · QP-20 UI 색 시안 전달 · QP-09 안 함 · QP-22 레이트 리밋이 전부 172.18.0.1(결정 대기) · 배포 nginx 재생성·api(restart.ps1 -ApiOnly), health 200
 - 2026-10-22: QP-20 UI 색 A 미드나이트 네이비 적용(--brand #2F3E73/#A5B4FC, --brand-foreground 신설, text-white 72곳) · 밝음·어두움·모바일 확인, 대비 9.4 · 배포 fe(+api), health 200
+- 2026-10-26: 도커 로그 점검 — Finnhub 키를 X-Finnhub-Token 헤더로(오류 URL에 키 평문 노출 수정) · 실적 프리뷰 LLM 간격을 응답 뒤부터 + ErrPacing 1회 재시도 · 배포 api+worker-content+worker-market(worker-stock은 ext_metrics_overseas 뒤)

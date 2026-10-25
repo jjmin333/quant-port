@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/enact/quant-port/be/internal/marketdata/apibudget"
@@ -45,10 +44,7 @@ func (c *FinnhubClient) ListUSExchangeTradedProducts(ctx context.Context) ([]mod
 		}
 	}
 
-	u := fmt.Sprintf(
-		"https://finnhub.io/api/v1/stock/symbol?exchange=US&token=%s",
-		url.QueryEscape(c.apiKey),
-	)
+	u := "https://finnhub.io/api/v1/stock/symbol?exchange=US"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err

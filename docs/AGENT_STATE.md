@@ -1,9 +1,10 @@
 # Agent State
 
 > 현재 상태만 담는다. **150줄 이하, 매 세션 덮어쓴다(앞에 쌓지 않는다).** 이력은 `docs/archive/sessions.md`, 원칙은 `docs/PRINCIPLES.md`, 결정·함정은 메모리.
-> 갱신: 2026-10-22 새벽 (원본 IP 차단·nginx 로그·QA 계정·UI 색 시안)
+> 갱신: 2026-10-26 새벽 (로그 점검: Finnhub 키 헤더화·실적 프리뷰 간격)
 
 ## NOW
+- **로그 점검(10-26)**: 48시간 nginx 5xx 0 · api/워커 panic 0. ① Finnhub 키가 타임아웃 오류 URL째 api 로그에 평문으로 남았다(10-24 news general) → marketdata Finnhub 클라이언트가 `X-Finnhub-Token` 헤더로 보낸다(`withFinnhubToken`, URL에 token 없음). service `EarningsClient`(캘린더·서프라이즈)는 여전히 쿼리+`redactFinnhubToken`. ② 실적 프리뷰가 하나 걸러 `llm_kr/us min interval not elapsed`로 규칙 문장에 떨어졌다(간격을 호출 시작부터 쟀다) → 응답 뒤부터 재고 ErrPacing이면 한 번 기다렸다 다시. 남은 것: 홈·리포트 React #418(스택이 React 내부뿐, 재현 못 함) · Gemini 타임아웃은 재시도로 흡수
 - **UI 색(10-22, 시안 A)**: `--brand` 네이비 #2F3E73 / 어두움 #A5B4FC, 채운 브랜드 바탕 위 글자는 반드시 `--brand-foreground`(흰색 / #0B1220) — `text-white`를 쓰면 어두운 화면에서 안 보인다
 - **nginx(10-22)**: 알려진 Host만(www·apex·localhost·127.0.0.1·nginx), 그 밖 80 → 444 · 443 → ssl_reject_handshake. 로그 형식 끝에 `시각 cf=실제IP host= ref= ua=`(앞 다섯 칸은 그대로). **QA 계정** `qae2eqauser`·`qae2eqaadmin`(admin) — 비밀번호 `be/secrets/qa-accounts.json`, 로그인 QA는 http://localhost 로(공개 도메인에 비밀번호 입력 금지)
 - **국내 종가 20:10 재적재(10-21 QP-21 ①)**: `daily_close_refresh_domestic`(worker-market — close-domestic이 20:10 KST 거래일에 큐, fetch가 실행, 만회는 오늘 20:10 뒤 성공이 없을 때만). 15:50 적재는 임시값. 시세 칸 「정규장 종가」 줄 삭제(KRX 단독 종가 원천 없음). 남은 차이: Toss 시세 API의 현재가·전일 종가가 일봉과 다른 종목(LG에너지솔루션 시세 411,500 vs 일봉 412,500)
@@ -83,6 +84,7 @@
 - **관리자 화면·게시·답글은 브라우저로 못 봤다**(관리자 계정 로그인 불가) — 사용자가 `/admin/bots`에서 한 번 올려 보기
 
 ## NEXT
+- 10-26 다음 실적 프리뷰 회차(09:50·12:30·22:10 KST) 로그에 `min interval not elapsed`가 없는지 · Finnhub 401/키 문자열이 로그에 없는지(`docker logs quant-port-api 2>&1 | grep -c token=`)
 - 10-22 20:10 `daily_close_refresh_domestic` 정시 실행·약 30분·커버리지 ≥ 4,280 · 다음 날 00:25 점수가 고쳐진 종가를 쓰는지 · 시세 API 전일 종가 ≠ 일봉 종가인 종목이 얼마나 되는지 세기
 - **작업 티켓 = `docs/TICKETS_2026-10-21.md`**(진행 현황 표). 남은 Claude 몫 없음 — 사용자 몫 QP-01 측정·03 원본 IP·08 소셜·09 알림 채널·14 QA 계정·15 텔레그램·17 이전·20 UI 색 + QP-21 결정. 10-22 07:30 growth 크롤에서 경고 452 → 100 이하인지(시험 글 noindex·허브 분류) · `client_errors:2026-10-22` 상위 5
 - 10-21 07:00 research_verdict가 한 번만 · insider_overseas 뒤 지운 공시(MDT `0001999371-26-022968` 등)가 다시 들어오지 않았는지 · 10-22 00:25 점수에서 MDT·AXP·UBER 심리 축이 바뀌었는지

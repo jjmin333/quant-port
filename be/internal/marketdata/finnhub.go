@@ -19,7 +19,35 @@ type FinnhubClient struct {
 }
 
 func NewFinnhubClient(apiKey string, httpClient *http.Client, budget *apibudget.Manager) *FinnhubClient {
-	return &FinnhubClient{apiKey: strings.TrimSpace(apiKey), httpClient: httpClient, budget: budget}
+	apiKey = strings.TrimSpace(apiKey)
+	return &FinnhubClient{apiKey: apiKey, httpClient: withFinnhubToken(httpClient, apiKey), budget: budget}
+}
+
+// withFinnhubToken sends the key as the X-Finnhub-Token header instead of
+// ?token=. 쿼리에 두면 타임아웃 때 *url.Error가 URL째 로그에 키를 남긴다
+// (10-24 news general 타임아웃 실측). Finnhub 요청은 전부 이 클라이언트를 탄다.
+func withFinnhubToken(hc *http.Client, key string) *http.Client {
+	if hc == nil {
+		hc = http.DefaultClient
+	}
+	c := *hc
+	base := c.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	c.Transport = finnhubAuth{base: base, key: key}
+	return &c
+}
+
+type finnhubAuth struct {
+	base http.RoundTripper
+	key  string
+}
+
+func (t finnhubAuth) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context())
+	r.Header.Set("X-Finnhub-Token", t.key)
+	return t.base.RoundTrip(r)
 }
 
 func (c *FinnhubClient) Enabled() bool {
@@ -71,9 +99,8 @@ func (c *FinnhubClient) QuoteBatch(ctx context.Context, symbols []string) (map[s
 
 func (c *FinnhubClient) quoteNoBudget(ctx context.Context, symbol string) (Quote, error) {
 	u := fmt.Sprintf(
-		"https://finnhub.io/api/v1/quote?symbol=%s&token=%s",
+		"https://finnhub.io/api/v1/quote?symbol=%s",
 		url.QueryEscape(symbol),
-		url.QueryEscape(c.apiKey),
 	)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {

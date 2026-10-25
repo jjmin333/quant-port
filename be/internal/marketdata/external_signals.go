@@ -106,8 +106,7 @@ func (c *FinnhubClient) Metrics(ctx context.Context, symbol string) (FinnhubMetr
 	var payload struct {
 		Metric map[string]any `json:"metric"`
 	}
-	u := fmt.Sprintf("https://finnhub.io/api/v1/stock/metric?symbol=%s&metric=all&token=%s",
-		url.QueryEscape(symbol), url.QueryEscape(c.apiKey))
+	u := "https://finnhub.io/api/v1/stock/metric?metric=all&symbol=" + url.QueryEscape(symbol)
 	if err := getJSON(ctx, c.httpClient, c.budget, apibudget.ProviderFinnhubMetrics, u, &payload); err != nil {
 		return out, err
 	}
@@ -167,8 +166,7 @@ func (c *FinnhubClient) Recommendation(ctx context.Context, symbol string) ([]Fi
 		Sell       int    `json:"sell"`
 		StrongSell int    `json:"strongSell"`
 	}
-	u := fmt.Sprintf("https://finnhub.io/api/v1/stock/recommendation?symbol=%s&token=%s",
-		url.QueryEscape(symbol), url.QueryEscape(c.apiKey))
+	u := "https://finnhub.io/api/v1/stock/recommendation?symbol=" + url.QueryEscape(symbol)
 	if err := getJSON(ctx, c.httpClient, c.budget, apibudget.ProviderFinnhubMetrics, u, &rows); err != nil {
 		return nil, err
 	}
