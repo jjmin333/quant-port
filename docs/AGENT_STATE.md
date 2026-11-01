@@ -1,7 +1,7 @@
 # Agent State
 
 > 현재 상태만 담는다. **150줄 이하, 매 세션 덮어쓴다(앞에 쌓지 않는다).** 이력은 `docs/archive/sessions.md`, 원칙은 `docs/PRINCIPLES.md`, 결정·함정은 메모리.
-> 갱신: 2026-11-01 (공개 저장소 점검)
+> 갱신: 2026-11-02 (공개 저장소 점검·이력 정리)
 
 ## NOW
 - **공개 저장소 점검(11-01)**: gitleaks 이력·작업 트리 — 추적 파일에 실제 키 없음(오탐 3: 토스 스펙 예시·시험 픽스처). 문서의 원본 IP·옛 관리자 비밀번호·소유자 이메일 가림, OCR 시험이 `testdata/`에 쓰던 디버그 덤프 145개 삭제(시험은 `t.TempDir()`), Next 템플릿 잔재 public 파일 삭제, README 셋 현행화. 11-02 관리자 판정은 `users.role`만(`model.IsAdminRole`, 아이디 하드코딩 제거, 배포 api — 워커는 인증 경로가 없어 재생성 안 함, 이미지 id 다름). **이 저장소는 공개다 — 운영 IP·비밀번호·계정 정보는 문서에 쓰지 말고 메모리에.** 남은 조치는 메모리 `public_repo_audit_1101`
@@ -41,7 +41,7 @@
 - 없음
 
 ## PENDING — 사용자 승인/행동 필요
-- **공개 저장소 후속(11-01, 메모리 `public_repo_audit_1101`)**: DB 비밀번호 교체 · git 이력 정리(force push) 여부 · OCR 시험 스크린샷 교체 여부
+- **공개 저장소 후속(11-01, 메모리 `public_repo_audit_1101`)**: DB 비밀번호 교체 · OCR 시험 스크린샷 교체 여부 · (git 이력은 11-02 다시 써서 force push 완료 — 다른 클론은 새로 받아야 하고, 옛 커밋 SHA 직접 링크는 GitHub 지원 요청 전까지 열린다)
 - **QP-22 레이트 리밋 IP**: BE가 공개 방문자 전부를 172.18.0.1로 본다(nginx XFF = Docker NAT 주소). `CF-Connecting-IP` 사용 여부 결정 + 공유기 포워딩을 Cloudflare IP 대역으로 제한(사용자) · QP-15 텔레그램 채널 용도 설명 후 결정
 - **Cloudflare**: `/api/v1/` 캐시 규칙 Edge TTL을 「헤더 없으면 우회」로(현재 헤더 없는 200을 캐시). 코드는 `DefaultNoStore`로 이미 방어(메모리 `cloudflare_caches_headerless_api`)
 - **측정 연결(3주+)**: GSC 서비스 계정 JSON(`be/secrets/`)·`GROWTH_GA4_PROPERTY_ID`·`GROWTH_BING_API_KEY`·GA 내부 트래픽 필터 · 네이버 서치어드바이저 사이트맵 제출(새 페이지 포함).
