@@ -30,7 +30,7 @@ func (u User) Public() UserPublic {
 		Email:       u.Email,
 		DisplayName: u.DisplayName,
 		Role:        role,
-		IsAdmin:     IsAdminUser(u.Email, role),
+		IsAdmin:     IsAdminRole(role),
 	}
 }
 

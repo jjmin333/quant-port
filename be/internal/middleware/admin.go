@@ -22,7 +22,7 @@ func RequireAdmin(users *repository.UserRepo) func(http.Handler) http.Handler {
 				response.Error(w, http.StatusUnauthorized, "authentication required")
 				return
 			}
-			if !model.IsAdminUser(user.Email, user.Role) {
+			if !model.IsAdminRole(user.Role) {
 				response.Error(w, http.StatusForbidden, "admin access required")
 				return
 			}
@@ -38,7 +38,7 @@ func MarkAdmin(users *repository.UserRepo) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if userID, ok := authctx.UserID(r.Context()); ok {
-				if user, err := users.GetByID(r.Context(), userID); err == nil && model.IsAdminUser(user.Email, user.Role) {
+				if user, err := users.GetByID(r.Context(), userID); err == nil && model.IsAdminRole(user.Role) {
 					r = r.WithContext(authctx.WithAdmin(r.Context()))
 				}
 			}

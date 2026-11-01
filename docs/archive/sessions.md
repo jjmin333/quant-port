@@ -3264,3 +3264,4 @@
 - 2026-10-22: QP-20 UI 색 A 미드나이트 네이비 적용(--brand #2F3E73/#A5B4FC, --brand-foreground 신설, text-white 72곳) · 밝음·어두움·모바일 확인, 대비 9.4 · 배포 fe(+api), health 200
 - 2026-10-26: 도커 로그 점검 — Finnhub 키를 X-Finnhub-Token 헤더로(오류 URL에 키 평문 노출 수정) · 실적 프리뷰 LLM 간격을 응답 뒤부터 + ErrPacing 1회 재시도 · 배포 api+worker-content+worker-market+worker-stock(ext_metrics_overseas 05:41 끝난 뒤, 이미지 일치)
 - 2026-11-01: 공개 저장소 점검 — 비밀값 유출 없음(gitleaks 이력·트리), 문서의 원본 IP·옛 비밀번호·이메일 가림, OCR 디버그 덤프 145개 삭제·시험 출력 TempDir, 템플릿 잔재 public 파일·README 현행화 · 배포 fe
+- 2026-11-02: 관리자 판정을 users.role만으로(아이디 jjmin321 하드코딩·가입 시 admin 부여 제거) · 미배포(운영 role 확인 대기)

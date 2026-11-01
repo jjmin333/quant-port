@@ -41,7 +41,7 @@
 - 없음
 
 ## PENDING — 사용자 승인/행동 필요
-- **공개 저장소 후속(11-01, 메모리 `public_repo_audit_1101`)**: DB 비밀번호 교체 · 관리자 아이디 하드코딩 제거 여부 · git 이력 정리(force push) 여부 · OCR 시험 스크린샷 교체 여부
+- **공개 저장소 후속(11-01, 메모리 `public_repo_audit_1101`)**: DB 비밀번호 교체 · **관리자 하드코딩 제거는 커밋만, api 미배포** — 운영 users에서 본인 계정 role=admin 확인 뒤 `restart.ps1 -ApiOnly` · git 이력 정리(force push) 여부 · OCR 시험 스크린샷 교체 여부
 - **QP-22 레이트 리밋 IP**: BE가 공개 방문자 전부를 172.18.0.1로 본다(nginx XFF = Docker NAT 주소). `CF-Connecting-IP` 사용 여부 결정 + 공유기 포워딩을 Cloudflare IP 대역으로 제한(사용자) · QP-15 텔레그램 채널 용도 설명 후 결정
 - **Cloudflare**: `/api/v1/` 캐시 규칙 Edge TTL을 「헤더 없으면 우회」로(현재 헤더 없는 200을 캐시). 코드는 `DefaultNoStore`로 이미 방어(메모리 `cloudflare_caches_headerless_api`)
 - **측정 연결(3주+)**: GSC 서비스 계정 JSON(`be/secrets/`)·`GROWTH_GA4_PROPERTY_ID`·`GROWTH_BING_API_KEY`·GA 내부 트래픽 필터 · 네이버 서치어드바이저 사이트맵 제출(새 페이지 포함).

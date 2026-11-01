@@ -35,14 +35,10 @@ func NewUserRepo(db *sql.DB) *UserRepo {
 
 func (r *UserRepo) Create(ctx context.Context, email, displayName, passwordHash string) (*model.User, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
-	role := model.RoleUser
-	if model.IsAdminUser(email, "") {
-		role = model.RoleAdmin
-	}
 	res, err := r.db.ExecContext(ctx, `
 		INSERT INTO users (email, display_name, password_hash, role)
 		VALUES (?, ?, ?, ?)
-	`, email, strings.TrimSpace(displayName), passwordHash, role)
+	`, email, strings.TrimSpace(displayName), passwordHash, model.RoleUser)
 	if err != nil {
 		if isDuplicateKey(err) {
 			return nil, duplicateUserErr(err)

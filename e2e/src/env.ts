@@ -28,10 +28,8 @@ export function apiPath(path: string): string {
 /**
  * 관리자 계정은 **환경변수로만** 받는다.
  *
- * BE는 `model.DefaultAdminEmail`과 일치하는 이메일로 가입하면 그 계정을 관리자로
- * 만든다(`repository.UserRepo.Create`). 테스트가 그 이메일로 가입을 시도하면
- * 실제 관리자 계정을 만들어 버리거나 남의 계정을 건드리게 된다 — 그래서 관리자
- * 계정은 **절대 테스트가 만들지 않고**, 주어졌을 때만 관리자 테스트를 돌린다.
+ * 관리자는 `users.role`로만 정해진다(`model.IsAdminRole`) — 가입으로는 관리자가 될 수
+ * 없으니 테스트가 만들지 못하고, 주어졌을 때만 관리자 테스트를 돌린다.
  */
 export const ADMIN_EMAIL = (process.env.E2E_ADMIN_EMAIL ?? "").trim();
 export const ADMIN_PASSWORD = (process.env.E2E_ADMIN_PASSWORD ?? "").trim();
