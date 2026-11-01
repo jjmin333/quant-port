@@ -21,8 +21,7 @@ func TestTossUserAllQty19Lines(t *testing.T) {
 	}
 	for _, name := range fixtures {
 		path := filepath.Join("..", "..", "..", "testdata", "import", name)
-		dir := filepath.Dir(path)
-		work := filepath.Join(dir, "scan_"+name)
+		work := t.TempDir()
 		pre := filepath.Join(work, "pre.png")
 		result := ParseHoldingsImage(engine, path, pre, work)
 		for _, l := range result.Lines {

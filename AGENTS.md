@@ -19,6 +19,7 @@
 1. **Overwrite** the sections of `docs/AGENT_STATE.md`: NOW / BLOCKERS / PENDING / DECISIONS / VERIFY / NEXT / BACKLOG. Delete finished items. Write state, not a narrative. Paths, numbers and how-it-works belong in code, memory or release notes. Stay ≤150 lines.
 2. Append **one line** to `docs/archive/sessions.md`: `- YYYY-MM-DD: <what changed> · <deploy state>`.
 3. A new durable rule goes in `docs/PRINCIPLES.md`. A user decision or ops trap goes in memory. Never in the state file.
+4. **This repo is public.** Tracked files (state, archive, release notes, mockups) must not contain server IPs, passwords, account credentials, personal emails, or real user/portfolio data — put those in memory (outside git).
 
 ---
 

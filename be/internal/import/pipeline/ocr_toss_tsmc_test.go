@@ -20,8 +20,7 @@ func TestTossTSMCXOVRFullTextPipeline(t *testing.T) {
 	if !engine.Available() {
 		t.Skip("tesseract")
 	}
-	dir := filepath.Dir(path)
-	work := filepath.Join(dir, "ocr_toss_tsmc_test")
+	work := t.TempDir()
 	scaled := filepath.Join(work, "scaled_x2.png")
 	_ = imageutil.UpscaleFile(path, scaled, 2)
 	pre := filepath.Join(work, "preprocessed.png")

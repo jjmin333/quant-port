@@ -1,9 +1,10 @@
 # Agent State
 
 > 현재 상태만 담는다. **150줄 이하, 매 세션 덮어쓴다(앞에 쌓지 않는다).** 이력은 `docs/archive/sessions.md`, 원칙은 `docs/PRINCIPLES.md`, 결정·함정은 메모리.
-> 갱신: 2026-10-26 새벽 (로그 점검: Finnhub 키 헤더화·실적 프리뷰 간격)
+> 갱신: 2026-11-01 (공개 저장소 점검)
 
 ## NOW
+- **공개 저장소 점검(11-01)**: gitleaks 이력·작업 트리 — 추적 파일에 실제 키 없음(오탐 3: 토스 스펙 예시·시험 픽스처). 문서의 원본 IP·옛 관리자 비밀번호·소유자 이메일 가림, OCR 시험이 `testdata/`에 쓰던 디버그 덤프 145개 삭제(시험은 `t.TempDir()`), Next 템플릿 잔재 public 파일 삭제, README 셋 현행화. **이 저장소는 공개다 — 운영 IP·비밀번호·계정 정보는 문서에 쓰지 말고 메모리에.** 남은 조치는 메모리 `public_repo_audit_1101`
 - **로그 점검(10-26)**: 48시간 nginx 5xx 0 · api/워커 panic 0. ① Finnhub 키가 타임아웃 오류 URL째 api 로그에 평문으로 남았다(10-24 news general) → marketdata Finnhub 클라이언트가 `X-Finnhub-Token` 헤더로 보낸다(`withFinnhubToken`, URL에 token 없음). service `EarningsClient`(캘린더·서프라이즈)는 여전히 쿼리+`redactFinnhubToken`. ② 실적 프리뷰가 하나 걸러 `llm_kr/us min interval not elapsed`로 규칙 문장에 떨어졌다(간격을 호출 시작부터 쟀다) → 응답 뒤부터 재고 ErrPacing이면 한 번 기다렸다 다시. 남은 것: 홈·리포트 React #418(스택이 React 내부뿐, 재현 못 함) · Gemini 타임아웃은 재시도로 흡수
 - **UI 색(10-22, 시안 A)**: `--brand` 네이비 #2F3E73 / 어두움 #A5B4FC, 채운 브랜드 바탕 위 글자는 반드시 `--brand-foreground`(흰색 / #0B1220) — `text-white`를 쓰면 어두운 화면에서 안 보인다
 - **nginx(10-22)**: 알려진 Host만(www·apex·localhost·127.0.0.1·nginx), 그 밖 80 → 444 · 443 → ssl_reject_handshake. 로그 형식 끝에 `시각 cf=실제IP host= ref= ua=`(앞 다섯 칸은 그대로). **QA 계정** `qae2eqauser`·`qae2eqaadmin`(admin) — 비밀번호 `be/secrets/qa-accounts.json`, 로그인 QA는 http://localhost 로(공개 도메인에 비밀번호 입력 금지)
@@ -40,6 +41,7 @@
 - 없음
 
 ## PENDING — 사용자 승인/행동 필요
+- **공개 저장소 후속(11-01, 메모리 `public_repo_audit_1101`)**: DB 비밀번호 교체 · 관리자 아이디 하드코딩 제거 여부 · git 이력 정리(force push) 여부 · OCR 시험 스크린샷 교체 여부
 - **QP-22 레이트 리밋 IP**: BE가 공개 방문자 전부를 172.18.0.1로 본다(nginx XFF = Docker NAT 주소). `CF-Connecting-IP` 사용 여부 결정 + 공유기 포워딩을 Cloudflare IP 대역으로 제한(사용자) · QP-15 텔레그램 채널 용도 설명 후 결정
 - **Cloudflare**: `/api/v1/` 캐시 규칙 Edge TTL을 「헤더 없으면 우회」로(현재 헤더 없는 200을 캐시). 코드는 `DefaultNoStore`로 이미 방어(메모리 `cloudflare_caches_headerless_api`)
 - **측정 연결(3주+)**: GSC 서비스 계정 JSON(`be/secrets/`)·`GROWTH_GA4_PROPERTY_ID`·`GROWTH_BING_API_KEY`·GA 내부 트래픽 필터 · 네이버 서치어드바이저 사이트맵 제출(새 페이지 포함).
@@ -48,7 +50,7 @@
 - 운영 서버 이전(OCI) · 데이터 원천 법률 검토(`docs/DATA_SOURCES_LICENSE.md`: Toss 시세 재배포, 네이버 컨센서스, FnGuide, Reddit) · 사업자 등록 후 개인정보처리방침 운영자 정보.
 - 행안부 법정동코드 활용신청 · 운영 DB 변경(`088` 중복 인덱스, `ranking_snapshot_entries` DROP) · Cloudflare sitemap 캐시·Tunnel 결정.
 - 외부 유통(텔레그램 채널·네이버 블로그) 게시 승인.
-- **원본 서버가 IP로 직접 열린다**(10-20 점검): nginx `server_name _`가 아무 Host에나 사이트 전체를 준다(`Host: <원본 IP>` → 200, 실제로 `http://<원본 IP>/`에서 클라이언트 오류 보고가 왔다). Cloudflare WAF·캐시를 우회하는 길 — 기본 서버 `return 444` + 공유기 포워딩을 Cloudflare IP로 제한(또는 Tunnel). nginx 변경이라 승인 필요.
+- **원본 서버가 IP로 직접 열린다**(10-20 점검): nginx `server_name _`가 아무 Host에나 사이트 전체를 준다(`Host: <원본 IP>` → 200, 실제로 원본 IP 주소로 클라이언트 오류 보고가 왔다). Cloudflare WAF·캐시를 우회하는 길 — 기본 서버 `return 444` + 공유기 포워딩을 Cloudflare IP로 제한(또는 Tunnel). nginx 변경이라 승인 필요.
 - 중복 인덱스 DROP: `financial_periods.idx_financial_symbol_period`(= `uk_financial_period`, 위 `088`) · `research_revisions.idx_rr_call`(= `uniq_rr_call_rev`).
 
 ## DECISIONS (현재 영향 있는 것만 — 원문은 메모리)

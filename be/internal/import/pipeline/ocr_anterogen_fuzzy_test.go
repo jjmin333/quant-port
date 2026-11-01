@@ -35,8 +35,7 @@ func TestLiveFuzzyAllOCRNameCandidates(t *testing.T) {
 	if !engine.Available() {
 		t.Skip("tesseract")
 	}
-	dir := filepath.Dir(path)
-	work := filepath.Join(dir, "scan_fuzzy")
+	work := t.TempDir()
 	pre := filepath.Join(work, "pre.png")
 	result := ParseHoldingsImage(engine, path, pre, work)
 

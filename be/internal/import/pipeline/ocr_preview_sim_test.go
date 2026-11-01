@@ -45,8 +45,7 @@ func TestFullImportPreviewSimulation(t *testing.T) {
 	var texts []string
 	for _, name := range fixtures {
 		path := filepath.Join("..", "..", "..", "testdata", "import", name)
-		dir := filepath.Dir(path)
-		work := filepath.Join(dir, "scan_"+name)
+		work := t.TempDir()
 		pre := filepath.Join(work, "pre.png")
 		result := ParseHoldingsImage(engine, path, pre, work)
 		parsed = append(parsed, result.Lines...)

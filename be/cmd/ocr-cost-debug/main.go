@@ -4,7 +4,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/enact/quant-port/be/internal/import/costestimate"
 	"github.com/enact/quant-port/be/internal/import/ocr"
@@ -17,8 +16,12 @@ func main() {
 		os.Exit(1)
 	}
 	src := os.Args[1]
-	work := filepath.Join(filepath.Dir(src), "ocr_cost_debug_work")
-	_ = os.MkdirAll(work, 0o755)
+	work, err := os.MkdirTemp("", "ocr-cost-debug-")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Println("work dir:", work)
 
 	engine := ocr.DefaultEngine()
 	if !engine.Available() {

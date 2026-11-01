@@ -20,8 +20,7 @@ func TestOverseasFixtureFinanceDebug(t *testing.T) {
 	if !engine.Available() {
 		t.Skip("tesseract")
 	}
-	work := filepath.Join(filepath.Dir(path), "ocr_fin_debug")
-	_ = os.MkdirAll(work, 0o755)
+	work := t.TempDir()
 	pre := filepath.Join(work, "pre.png")
 	_ = imageutil.UpscaleFile(path, pre, 2)
 	lines := ParseHoldingsImage(engine, path, pre, work).Lines

@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -16,9 +15,8 @@ func TestOverseasCombinedMeteRow(t *testing.T) {
 	if !engine.Available() {
 		t.Skip()
 	}
-	work := filepath.Join(filepath.Dir(path), "ocr_mete_debug")
+	work := t.TempDir()
 	pre := filepath.Join(work, "pre.png")
-	_ = os.MkdirAll(work, 0o755)
 	_ = imageutil.UpscaleFile(path, pre, 2)
 
 	var combined []textparse.ParsedLine

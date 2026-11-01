@@ -18,8 +18,7 @@ func TestDumpDomesticOCRLines(t *testing.T) {
 	if _, err := os.Stat(path); err != nil {
 		t.Skip(path)
 	}
-	dir := filepath.Dir(path)
-	work := filepath.Join(dir, "scan_dump")
+	work := t.TempDir()
 	pre := filepath.Join(work, "pre.png")
 	result := ParseHoldingsImage(engine, path, pre, work)
 	for i, raw := range result.OCRTexts {

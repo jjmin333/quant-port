@@ -17,9 +17,12 @@ func main() {
 		os.Exit(1)
 	}
 	src := os.Args[1]
-	dir := filepath.Dir(src)
-	work := filepath.Join(dir, "ocr_debug_work")
-	_ = os.MkdirAll(work, 0o755)
+	work, err := os.MkdirTemp("", "ocr-debug-")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Println("work dir:", work)
 
 	engine := ocr.DefaultEngine()
 	if !engine.Available() {

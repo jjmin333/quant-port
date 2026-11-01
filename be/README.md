@@ -1,25 +1,33 @@
 # Quant Port API (Go)
 
-Go 기반 REST API 서버입니다. 현재는 목업 데이터를 반환하며, MySQL·Redis 연결 틀과 `/api/v1` 라우트가 준비되어 있습니다.
+REST API(`/api/v1`)와 배치 워커. MySQL이 원본, Redis는 캐시·한도·잠금이다.
 
 ## 구조
 
 ```
 be/
-├── cmd/api/           # 진입점
-├── docs/
-│   └── toss-openapi.json   # 토스증권 Open API spec (연동 시 참조)
+├── cmd/
+│   ├── api/            HTTP 서버
+│   ├── worker/         배치 워커 — WORKER_ROLES(쉼표 목록)로 역할을 고른다
+│   └── …               일회성 백필·시드·디버그 도구
 ├── internal/
-│   ├── config/        # 환경 설정
-│   ├── handler/       # HTTP 핸들러
-│   ├── middleware/    # CORS, 로깅, recover
-│   ├── mock/          # 목업 데이터 (추후 repository로 교체)
-│   ├── model/         # 도메인 모델
-│   ├── repository/    # MySQL, Redis
-│   ├── server/        # 라우터·서버
-│   └── service/       # 비즈니스 로직
-├── migrations/        # DB 마이그레이션 (추가 예정)
-└── pkg/response/      # JSON 응답 헬퍼
+│   ├── server/         라우터 (router.go)
+│   ├── handler/        HTTP 핸들러
+│   ├── middleware/     인증·레이트 리밋·실제 IP·로깅
+│   ├── service/        비즈니스 로직
+│   ├── repository/     MySQL·Redis 접근, 테이블별 *IfNeeded 마이그레이션
+│   ├── model/          도메인 타입
+│   ├── workers/        예약 잡 (종가·실적·공시·점수·뉴스 …)
+│   ├── toss/           토스증권 Open API 클라이언트 (토큰·한도 그룹·페일오버)
+│   ├── marketdata/     외부 시세·뉴스·지표 클라이언트와 호출 예산(apibudget)
+│   ├── llm/            LLM 요약·브리핑 프롬프트와 클라이언트
+│   ├── translate/      뉴스 제목 번역 사슬
+│   ├── import/         보유 종목 스크린샷 OCR 가져오기
+│   ├── growth/         SEO 크롤·검색 콘솔 지표
+│   └── config/         환경 변수
+├── migrations/         번호순 SQL
+├── docs/               배치 일정·API 한도·토스 스펙 기준본
+└── pkg/response/       JSON 응답 헬퍼
 ```
 
 ## 실행
@@ -45,14 +53,7 @@ Tesseract·health 검증 포함. 로그: `docker logs -f quant-port-api`
 
 ## API (v1)
 
-| Method | Path | 설명 |
-|--------|------|------|
-| GET | `/api/v1/quotes/indices` | 시장 지수 |
-| GET | `/api/v1/quotes?filter=&q=` | 종목 시세 목록 |
-| GET | `/api/v1/quotes/{symbol}` | 종목 상세 |
-| GET | `/api/v1/quotes/{symbol}/orderbook` | 호가 |
-| GET | `/api/v1/quotes/{symbol}/trades` | 체결 |
-| GET | `/api/v1/quotes/{symbol}/candles?interval=5m` | 차트 캔들 |
+전체 라우트는 [`internal/server/router.go`](internal/server/router.go)가 원본이다. 공개 조회(시세·종목·점수·뉴스·실적), 로그인 사용자(보유·관심·메모), 관리자(`/admin/*`, `RequireAdmin`)로 나뉜다.
 
 ## 토스증권 Open API
 
@@ -68,13 +69,4 @@ Tesseract·health 검증 포함. 로그: `docker logs -f quant-port-api`
 
 스펙 전문: [`docs/toss-openapi.json`](docs/toss-openapi.json) · 요약: [`docs/README.md`](docs/README.md)
 
-`config.Load().Toss.Enabled()` 로 credentials 설정 여부를 확인합니다. 연동 클라이언트는 추후 `internal/toss/` 에 추가합니다.
-
-## 다음 단계
-
-- [ ] `internal/toss/` OAuth 토큰 + REST 클라이언트
-- [ ] MySQL 스키마·마이그레이션 (`migrations/`)
-- [ ] repository/service에서 mock → 토스 API 교체
-- [ ] WebSocket 실시간 시세 (토스 WS 지원 시)
-- [ ] 키움 등 추가 증권사 연동
-- [ ] 인증·사용자별 관심/보유 종목
+`config.Load().Toss.Enabled()` 로 credentials 설정 여부를 확인합니다. 클라이언트는 `internal/toss/`.

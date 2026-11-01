@@ -19,9 +19,7 @@ func TestParseHoldingsImageRejectsNonBrokerageChatFixture(t *testing.T) {
 	if !engine.Available() {
 		t.Skip("tesseract")
 	}
-	dir := filepath.Dir(path)
-	work := filepath.Join(dir, "ocr_non_broker_test")
-	_ = os.MkdirAll(work, 0o755)
+	work := t.TempDir()
 	scaled := filepath.Join(work, "scaled_x2.png")
 	_ = imageutil.UpscaleFile(path, scaled, 2)
 	pre := filepath.Join(work, "preprocessed.png")

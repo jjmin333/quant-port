@@ -20,8 +20,7 @@ func TestTossTSMCXOVRFinanceDebug(t *testing.T) {
 	if !engine.Available() {
 		t.Skip("tesseract")
 	}
-	dir := filepath.Dir(path)
-	work := filepath.Join(dir, "ocr_toss_tsmc_test")
+	work := t.TempDir()
 	pre := filepath.Join(work, "preprocessed.png")
 
 	result := ParseHoldingsImage(engine, path, pre, work)

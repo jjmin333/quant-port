@@ -27,8 +27,7 @@ func TestTossUserAnterogenScan(t *testing.T) {
 		if _, err := os.Stat(path); err != nil {
 			t.Skip(path)
 		}
-		dir := filepath.Dir(path)
-		work := filepath.Join(dir, "scan_"+name)
+		work := t.TempDir()
 		pre := filepath.Join(work, "pre.png")
 		result := ParseHoldingsImage(engine, path, pre, work)
 		all = append(all, result.Lines...)

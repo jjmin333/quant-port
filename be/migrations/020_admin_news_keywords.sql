@@ -2,7 +2,6 @@ ALTER TABLE users ADD COLUMN role VARCHAR(16) NOT NULL DEFAULT 'user' AFTER disp
 
 CREATE INDEX idx_users_role ON users (role);
 
-UPDATE users SET role = 'admin' WHERE email = '(관리자 이메일)';
 
 CREATE TABLE news_poll_keywords (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
