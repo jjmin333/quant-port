@@ -3266,3 +3266,4 @@
 - 2026-11-01: 공개 저장소 점검 — 비밀값 유출 없음(gitleaks 이력·트리), 문서의 원본 IP·옛 비밀번호·이메일 가림, OCR 디버그 덤프 145개 삭제·시험 출력 TempDir, 템플릿 잔재 public 파일·README 현행화 · 배포 fe
 - 2026-11-02: 관리자 판정을 users.role만으로(아이디 하드코딩·가입 시 admin 부여 제거) · 배포 api(health 200, panic 0, 관리자 API 비로그인 401)
 - 2026-11-02: git 이력 다시 쓰기(원본 IP·옛 관리자 비밀번호·옛 이메일 152곳, 작성자 1건) → master force push, 최종 트리 동일 · 배포 없음(코드 변경 없음)
+- 2026-11-05: 망 교체로 공개 도메인 522·Toss IP 403 진단, CORS의 옛 IP 제거, compose에 cloudflared(프로필 tunnel) 추가 · 배포 api(health 200, panic 0), 터널·Toss IP는 사용자 대기

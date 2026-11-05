@@ -1,7 +1,7 @@
 # Agent State
 
 > 현재 상태만 담는다. **150줄 이하, 매 세션 덮어쓴다(앞에 쌓지 않는다).** 이력은 `docs/archive/sessions.md`, 원칙은 `docs/PRINCIPLES.md`, 결정·함정은 메모리.
-> 갱신: 2026-11-02 (공개 저장소 점검·이력 정리)
+> 갱신: 2026-11-05 (망 교체 — 공개 도메인 522)
 
 ## NOW
 - **공개 저장소 점검(11-01)**: gitleaks 이력·작업 트리 — 추적 파일에 실제 키 없음(오탐 3: 토스 스펙 예시·시험 픽스처). 문서의 원본 IP·옛 관리자 비밀번호·소유자 이메일 가림, OCR 시험이 `testdata/`에 쓰던 디버그 덤프 145개 삭제(시험은 `t.TempDir()`), Next 템플릿 잔재 public 파일 삭제, README 셋 현행화. 11-02 관리자 판정은 `users.role`만(`model.IsAdminRole`, 아이디 하드코딩 제거, 배포 api — 워커는 인증 경로가 없어 재생성 안 함, 이미지 id 다름). **이 저장소는 공개다 — 운영 IP·비밀번호·계정 정보는 문서에 쓰지 말고 메모리에.** 남은 조치는 메모리 `public_repo_audit_1101`
@@ -38,7 +38,7 @@
 - **봇 초안 · 게시 계정(10-16, 메모리 `bot_drafts_personas_1016`)**: worker-stock `bot_drafts` 잡이 KST 3시간마다(00·03·…·21시) 브리핑 많이 언급된 종목·오늘의 변화·2일 안 실적 프리뷰에서 가중 랜덤으로 커뮤니티 5 · 리포트 2 초안(짧은/긴 글)을 `bot_drafts`에 쌓는다. 미게시 24시간 뒤 삭제, 24시간 안 같은 종목 제외. **10-19부터 LLM 다시 쓰기**(`service/bot_rewrite.go`): 템플릿(facts, 사건·등락에 날짜)을 저장하고 초안마다 **작성자 유형**(`service/bot_archetypes.go` — 커뮤니티: 한 줄·감정형·초보 질문·직장인·뉴스 공유·숫자 정리·신중파·장문 분석, 리포트: 짧은 메모·체크리스트·정석·컬럼·위험 점검, 가중 랜덤, `bot_drafts.archetype`)을 뽑고 게시 계정은 아무거나 배정 → 자산 전용 키 `llm_sub` + 기능 버킷 `llm_feat_bot`(80콜·30만)으로 그 유형대로 다시 씀(유형마다 길이 검증 범위가 다르다 — 한 줄은 5자부터). 계정별 말투(`persona_style`)는 10-19 오후 사용자 결정으로 쓰지 않는다(열은 남김). 출력 숫자가 facts에 없거나(한 자리 정수만 허용) 권유 표현·길이 이탈이면 버리고 note에 이유. 503·시간 초과는 멈추고 다음 회차가 12시간 안 템플릿을 이어 씀. 게시 계정 `badge` = 서비스 뱃지 키 목록(`model.CommunityBadgeCatalog`, 활동 뱃지 계산도 같은 목록), `persona_style` = 말투. 게시 계정 글 조회수는 `/admin/personas/posts/{kind}/{id}/views`로 지정(실제 사용자 글은 404). 관리자 `/admin/bots`(탭 둘) → 「편집해서 게시」가 `/community/new?draft=` · `/reports/new?draft=`를 열고 **게시 계정**(users `role='persona'`, `badge`, `@persona.invalid`, 빈 비밀번호)을 골라 올린다. 쓰기는 기존 핸들러를 `/admin/personas/{id}/as/...`(ActAs, persona만 통과) 아래 재사용 — 쿨다운·리포트 하루 5건·종목 30일 규칙 그대로. 게시 계정은 관리자가 고른 뱃지만(활동 계산 없음, 「운영」 표시 없음 — 사용자 결정). 같은 화면에 게시 계정 글의 7일 댓글 + 그 계정으로 답글.
 
 ## BLOCKERS
-- 없음
+- **공개 도메인 522(11-05~)**: 망 교체로 원본이 공유기 NAT 뒤·새 공인 IP — Cloudflare가 원본에 못 닿고 Toss도 허용 IP 403. 복구는 사용자 몫: Cloudflare Tunnel 토큰(`.env` `CLOUDFLARE_TUNNEL_TOKEN`, compose `cloudflared` 프로필 `tunnel` 준비됨) + Toss 허용 IP 재등록. 절차는 메모리 `cloudflare_522_origin_ip_changed`
 
 ## PENDING — 사용자 승인/행동 필요
 - **공개 저장소 후속(11-01, 메모리 `public_repo_audit_1101`)**: DB 비밀번호 교체 · OCR 시험 스크린샷 교체 여부 · (git 이력은 11-02 다시 써서 force push 완료 — 다른 클론은 새로 받아야 하고, 옛 커밋 SHA 직접 링크는 GitHub 지원 요청 전까지 열린다)
