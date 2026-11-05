@@ -64,7 +64,7 @@ Tesseract·health 검증 포함. 로그: `docker logs -f quant-port-api`
 | `TOSS_API_BASE_URL` | API 베이스 URL (기본: `https://openapi.tossinvest.com`) |
 | `TOSS_PRIMARY_CLIENT_ID` | Open API client_id — 기본 키 (`TOSS_CLIENT_ID` 별칭) |
 | `TOSS_PRIMARY_CLIENT_SECRET` | Open API client_secret (`TOSS_CLIENT_SECRET` 별칭) |
-| `TOSS_SECONDARY_CLIENT_ID` | 예비 client_id. PRIMARY 한도 그룹이 소진되면 그 그룹만 이 키로 넘긴다 |
+| `TOSS_SECONDARY_CLIENT_ID` | **현재 읽지 않음**(11-05부터 PRIMARY만). 예전엔 PRIMARY 한도 그룹이 소진되면 그 그룹만 이 키로 넘겼다 |
 | `TOSS_SECONDARY_CLIENT_SECRET` | 예비 client_secret |
 
 스펙 전문: [`docs/toss-openapi.json`](docs/toss-openapi.json) · 요약: [`docs/README.md`](docs/README.md)

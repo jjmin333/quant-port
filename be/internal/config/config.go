@@ -431,12 +431,13 @@ func (c *Config) Addr() string {
 	return fmt.Sprintf("%s:%d", c.Host, c.Port)
 }
 
-// loadTossConfig reads the primary OAuth app (used for every call) and an
-// optional secondary used only when a rate-limit group on primary is
-// exhausted. Preferred names are TOSS_PRIMARY_* / TOSS_SECONDARY_*.
-// TOSS_CLIENT_ID / TOSS_CLIENT_SECRET remain aliases for primary so existing
-// single-key env files keep working. TOSS_KR_* / TOSS_US_* are last-resort
-// aliases from a brief naming experiment and are not documented.
+// loadTossConfig reads the primary OAuth app only. Preferred names are
+// TOSS_PRIMARY_*; TOSS_CLIENT_* and TOSS_KR_* remain aliases.
+//
+// **SECONDARY는 읽지 않는다**(2026-11-05 사용자 결정). 망 교체 뒤 SECONDARY 앱의
+// 허용 IP가 막혀 시세 스트림이 403으로 계속 끊겼고, 사용자가 PRIMARY만 쓰기로 했다.
+// failover 코드(`toss/client.go`)는 그대로라, 다시 쓰려면 아래 두 필드에
+// firstEnv("TOSS_SECONDARY_CLIENT_ID", …)를 되돌리면 된다.
 func loadTossConfig() TossConfig {
 	return TossConfig{
 		BaseURL: getEnv("TOSS_API_BASE_URL", "https://openapi.tossinvest.com"),
@@ -449,14 +450,6 @@ func loadTossConfig() TossConfig {
 			"TOSS_PRIMARY_CLIENT_SECRET",
 			"TOSS_CLIENT_SECRET",
 			"TOSS_KR_CLIENT_SECRET",
-		),
-		SecondaryClientID: firstEnv(
-			"TOSS_SECONDARY_CLIENT_ID",
-			"TOSS_US_CLIENT_ID",
-		),
-		SecondaryClientSecret: firstEnv(
-			"TOSS_SECONDARY_CLIENT_SECRET",
-			"TOSS_US_CLIENT_SECRET",
 		),
 		StreamEnabled: getEnvBool("TOSS_STREAM_ENABLED", false),
 	}

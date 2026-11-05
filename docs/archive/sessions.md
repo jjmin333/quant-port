@@ -3268,3 +3268,4 @@
 - 2026-11-02: git 이력 다시 쓰기(원본 IP·옛 관리자 비밀번호·옛 이메일 152곳, 작성자 1건) → master force push, 최종 트리 동일 · 배포 없음(코드 변경 없음)
 - 2026-11-05: 망 교체로 공개 도메인 522·Toss IP 403 진단, CORS의 옛 IP 제거, compose에 cloudflared(프로필 tunnel) 추가 · 배포 api(health 200, panic 0), 터널·Toss IP는 사용자 대기
 - 2026-11-05: Cloudflare Tunnel 가동 — 공개 도메인 복구(www·health·API·sitemap 200, 원본 IP·포트 의존 제거) · cloudflared 기동, Toss 허용 IP는 사용자 대기
+- 2026-11-05: Toss SECONDARY 키 미사용(loadTossConfig가 PRIMARY만 읽음, failover 코드는 유지) · 배포 api+워커 4(이미지 일치, panic 0, Toss 403 0, 공개 health 200)

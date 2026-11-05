@@ -19,11 +19,12 @@ func TestLoadTossConfig_primaryPreferredOverLegacy(t *testing.T) {
 	if cfg.ClientID != "primary-id" || cfg.ClientSecret != "primary-secret" {
 		t.Fatalf("primary = %q / %q, want PRIMARY_* vars", cfg.ClientID, cfg.ClientSecret)
 	}
-	if cfg.SecondaryClientID != "secondary-id" || cfg.SecondaryClientSecret != "secondary-secret" {
-		t.Fatalf("secondary = %q / %q, want SECONDARY_* vars", cfg.SecondaryClientID, cfg.SecondaryClientSecret)
+	if !cfg.Enabled() {
+		t.Fatal("primary should be enabled")
 	}
-	if !cfg.Enabled() || !cfg.SecondaryEnabled() {
-		t.Fatal("both keys should be enabled")
+	// 11-05부터 PRIMARY만 쓴다 — SECONDARY env가 있어도 무시.
+	if cfg.SecondaryEnabled() {
+		t.Fatal("secondary must be ignored even when SECONDARY_* vars are set")
 	}
 }
 

@@ -6,7 +6,7 @@
 - **Base URL:** `https://openapi.tossinvest.com`
 - **인증:** `POST /oauth2/token` — OAuth 2.0 Client Credentials
   - `TOSS_PRIMARY_CLIENT_ID` / `TOSS_PRIMARY_CLIENT_SECRET` → 기본 키 (`TOSS_CLIENT_ID` / `TOSS_CLIENT_SECRET` 도 같은 자리의 별칭)
-  - `TOSS_SECONDARY_CLIENT_ID` / `TOSS_SECONDARY_CLIENT_SECRET` → 한도 초과 시에만 쓰는 예비 키
+  - `TOSS_SECONDARY_CLIENT_ID` / `TOSS_SECONDARY_CLIENT_SECRET` → 현재 읽지 않음(11-05부터 PRIMARY만, `loadTossConfig`)
   - 한도 그룹(`MARKET_DATA` 등)별로 PRIMARY가 소진되면 그 그룹만 SECONDARY로 붙고, 리셋 후 PRIMARY로 돌아온다
 - **계좌 API:** `X-Tossinvest-Account` 헤더 (`GET /api/v1/accounts`의 `accountSeq`)
 
